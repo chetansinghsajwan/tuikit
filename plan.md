@@ -351,6 +351,10 @@ Kanata stays standalone. On WSL2 a Linux kanata cannot see the Windows keyboard,
 1. `git-panel` standalone binary; retire lazygit.
 1. Retire fzf and neovim configs in scope (after confirming neovim).
 
+## Usage design (decided)
+
+One behaviour grammar for every tool: Space leader with a which-key menu, `Space Space` palette, `?` keys, shared verbs, Esc/q rules, registry in `ui::keys`, one user key config. Full text, key table and rollout: `docs/usage-design.md`. Not implemented yet.
+
 ## Working preferences
 
 - Confirm the approach with the user before implementing; don't split files into several without being asked.
