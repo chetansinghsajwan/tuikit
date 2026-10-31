@@ -2,7 +2,7 @@
 //! `git-panel` panel with its own table; the others share movement, the global actions and
 //! the common ones, plus what is specific to the pane.
 
-use ui::keys::{Action, action, basic};
+use ui::keys::{Action, Group, action, basic};
 
 /// Switching panes and the like: given to the Files panel too.
 pub const GLOBAL: &[Action] = &[
@@ -12,6 +12,19 @@ pub const GLOBAL: &[Action] = &[
     basic("focus.branches", "branches pane", "focus the branches pane", &["2"]),
     basic("focus.commits", "commits pane", "focus the commits pane", &["3"]),
     basic("focus.stashes", "stashes pane", "focus the stashes pane", &["4"]),
+    action("remote.fetch", "fetch", "fetch every remote and prune what is gone there", &["leader r f"]),
+    action("remote.pull", "pull", "pull the upstream into the checked-out branch", &["leader r p"]),
+    action("remote.push", "push", "push the checked-out branch (the first push sets its upstream on origin)", &["leader r P"]),
+    action("remote.force_push", "force push", "push with --force-with-lease (asks first)", &["leader r F"]),
+    action("op.continue", "continue", "continue the stopped merge, rebase, cherry-pick or revert once conflicts are resolved and staged", &["leader o c"]),
+    action("op.abort", "abort", "give up the stopped merge, rebase, cherry-pick or revert", &["leader o a"]),
+];
+
+/// Names for the menus behind `leader r` and `leader o` (and `leader z` in Commits).
+pub const GROUPS: &[Group] = &[
+    Group { prefix: "leader r", name: "remote" },
+    Group { prefix: "leader o", name: "operation" },
+    Group { prefix: "leader z", name: "reset" },
 ];
 
 /// Movement, the diff scroll and quitting, for the list panes.
@@ -31,11 +44,25 @@ const COMMON: &[Action] = &[
 ];
 
 const BRANCHES: &[Action] = &[
-    action("branch.checkout", "check out", "switch to the branch (a remote branch becomes a tracking branch, a tag detaches HEAD)", &["enter", "leader o"]),
+    action("branch.checkout", "check out", "switch to the branch (a remote branch becomes a tracking branch, a tag detaches HEAD)", &["enter", "leader k"]),
     action("branch.new", "new branch", "create a branch at HEAD and switch to it", &["n", "leader n"]),
-    action("branch.delete", "delete branch", "delete the local branch (asks first)", &["d", "leader d"]),
+    action("branch.delete", "delete", "delete the local branch, tag or remote branch (asks first)", &["d", "leader d"]),
     action("branch.force_delete", "force-delete branch", "delete the local branch even if it is not merged (asks first)", &["D"]),
     action("branch.merge", "merge", "merge the branch into the checked-out one (asks first)", &["M", "leader m"]),
+    action("branch.rebase", "rebase onto", "replay the checked-out branch on top of this one (asks first)", &["B", "leader b"]),
+    action("branch.rename", "rename", "rename the local branch", &["R", "leader e"]),
+];
+
+const COMMITS: &[Action] = &[
+    action("commit.checkout", "check out", "check out the commit (detached HEAD)", &["enter", "leader k"]),
+    action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
+    action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
+    action("commit.reword", "reword", "change the message of the last commit", &["w", "leader w"]),
+    action("commit.branch", "new branch here", "create a branch at the commit and switch to it", &["b", "leader n"]),
+    action("commit.tag", "tag", "create a tag at the commit", &["t", "leader t"]),
+    action("commit.reset_soft", "reset soft", "move the branch here, keep the index and the work tree", &["leader z s"]),
+    action("commit.reset_mixed", "reset mixed", "move the branch here, keep the work tree", &["leader z m"]),
+    action("commit.reset_hard", "reset hard", "move the branch here and throw changes away (asks first)", &["leader z h"]),
 ];
 
 const STASHES: &[Action] = &[
@@ -49,6 +76,7 @@ const STASHES: &[Action] = &[
 pub fn pane_actions(pane: usize) -> Vec<Action> {
     let own: &[Action] = match pane {
         0 => BRANCHES,
+        1 => COMMITS,
         2 => STASHES,
         _ => &[],
     };

@@ -1,4 +1,4 @@
-use git_core::{CommitInfo, RefInfo, RefKind, Repo, StashInfo};
+use git_core::{CommitInfo, Operation, RefInfo, RefKind, Repo, ResetMode, StashInfo};
 use git_panel::{Action as PanelAction, Panel};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
@@ -40,12 +40,35 @@ const ORDER: [Focus; 4] = [Focus::Files, Focus::Branches, Focus::Commits, Focus:
 enum PromptKind {
     NewBranch,
     NewStash,
+    /// Rename this local branch.
+    RenameBranch(String),
+    /// A branch at this commit.
+    BranchAt(String),
+    /// A tag at this commit.
+    TagAt(String),
+    /// A new message for the last commit.
+    Reword,
 }
 
 enum Confirm {
     DeleteBranch { name: String, force: bool },
     Merge(String),
     DropStash(usize),
+    Rebase(String),
+    Revert(String),
+    Reset { oid: String, mode: ResetMode },
+    ForcePush,
+    /// Delete a tag.
+    DeleteTag(String),
+    /// Delete a branch on its remote (`origin/topic`).
+    DeleteRemote(String),
+}
+
+/// A git command talking to a remote, running on its own thread.
+struct Job {
+    label: String,
+    done: String,
+    handle: std::thread::JoinHandle<Result<(), git_core::Error>>,
 }
 
 enum Mode {
@@ -84,6 +107,8 @@ pub struct App {
     /// The keymaps of the Branches, Commits and Stashes panes (the Files pane has its own).
     maps: [Keymap; 3],
     help: Option<ui::keys::Help>,
+    /// A fetch, pull or push in progress.
+    job: Option<Job>,
 }
 
 impl App {
@@ -91,7 +116,7 @@ impl App {
     pub fn new(dir: &Path) -> Option<App> {
         let repo = Repo::discover(dir)?;
         let root = repo.root().to_path_buf();
-        let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec())?;
+        let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
         files.set_title("Files");
         let mut app = App {
             root,
@@ -108,8 +133,9 @@ impl App {
             preview: None,
             pscroll: 0,
             pheight: 10,
-            maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), &[])),
+            maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
+            job: None,
         };
         app.reload_all();
         Some(app)
@@ -235,6 +261,12 @@ impl App {
             "quit" => return Quit::Yes,
             "help" => self.help = Some(ui::keys::Help::default()),
             "palette" => return Quit::Palette,
+            "remote.fetch" => self.remote("fetching", "fetched", |r| r.fetch()),
+            "remote.pull" => self.remote("pulling", "pulled", |r| r.pull()),
+            "remote.push" => self.remote("pushing", "pushed", |r| r.push(false)),
+            "remote.force_push" => self.mode = Mode::Confirm(Confirm::ForcePush),
+            "op.continue" => self.run("continued".to_string(), |r| r.continue_operation()),
+            "op.abort" => self.run("aborted".to_string(), |r| r.abort_operation()),
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
             "nav.up" | "nav.down" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
@@ -257,6 +289,46 @@ impl App {
             self.pane_action(id);
         }
         Quit::No
+    }
+
+    /// Run a git command that talks to a remote on its own thread; the screen shows `label …`
+    /// and `tick` finishes it. One at a time.
+    fn remote(&mut self, label: &str, done: &str, f: impl FnOnce(&Repo) -> Result<(), git_core::Error> + Send + 'static) {
+        if self.job.is_some() {
+            self.say("busy: wait for the current remote command", true);
+            return;
+        }
+        let root = self.root.clone();
+        let handle = std::thread::spawn(move || match Repo::discover(&root) {
+            Some(repo) => f(&repo),
+            None => Err(git_core::Error("the repository is gone".into())),
+        });
+        self.job = Some(Job { label: label.to_string(), done: done.to_string(), handle });
+    }
+
+    /// Call between events: finishes a remote command that ended. `true` when the screen should be redrawn.
+    pub fn tick(&mut self) -> bool {
+        if self.job.as_ref().is_some_and(|j| j.handle.is_finished()) {
+            let job = self.job.take().expect("checked above");
+            match job.handle.join() {
+                Ok(Ok(())) => self.say(job.done, false),
+                Ok(Err(e)) => self.say(e.to_string(), true),
+                Err(_) => self.say("the remote command crashed", true),
+            }
+            self.reload_all();
+            return true;
+        }
+        self.job.is_some()
+    }
+
+    /// The operation that stopped and waits (conflicts), shown in the status line.
+    fn operation_name(&self) -> Option<&'static str> {
+        match self.repo.operation()? {
+            Operation::Merge => Some("MERGING"),
+            Operation::Rebase => Some("REBASING"),
+            Operation::CherryPick => Some("CHERRY-PICKING"),
+            Operation::Revert => Some("REVERTING"),
+        }
     }
 
     fn set_focus(&mut self, focus: Focus) {
@@ -332,11 +404,24 @@ impl App {
                         }
                     }
                     "branch.new" => self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default()),
-                    "branch.delete" | "branch.force_delete" => {
-                        if b.kind != RefKind::Branch || b.is_head {
-                            self.say("only a local branch that is not checked out can be deleted", true);
+                    "branch.delete" | "branch.force_delete" => match b.kind {
+                        RefKind::Tag => self.mode = Mode::Confirm(Confirm::DeleteTag(b.name)),
+                        RefKind::Remote => self.mode = Mode::Confirm(Confirm::DeleteRemote(b.name)),
+                        RefKind::Branch if b.is_head => self.say("the checked-out branch cannot be deleted", true),
+                        RefKind::Branch => self.mode = Mode::Confirm(Confirm::DeleteBranch { name: b.name, force: id == "branch.force_delete" }),
+                    },
+                    "branch.rebase" => {
+                        if b.is_head {
+                            self.say("cannot rebase a branch onto itself", true);
                         } else {
-                            self.mode = Mode::Confirm(Confirm::DeleteBranch { name: b.name, force: id == "branch.force_delete" });
+                            self.mode = Mode::Confirm(Confirm::Rebase(b.name));
+                        }
+                    }
+                    "branch.rename" => {
+                        if b.kind == RefKind::Branch {
+                            self.mode = Mode::Prompt(PromptKind::RenameBranch(b.name.clone()), Input::new(b.name));
+                        } else {
+                            self.say("only a local branch can be renamed", true);
                         }
                     }
                     "branch.merge" => {
@@ -346,6 +431,33 @@ impl App {
                             self.mode = Mode::Confirm(Confirm::Merge(b.name));
                         }
                     }
+                    _ => {}
+                }
+            }
+            Focus::Commits => {
+                let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
+                match id {
+                    "commit.checkout" => {
+                        let oid = k.oid.clone();
+                        self.run(format!("checked out {}", k.short), move |r| r.checkout_commit(&oid));
+                    }
+                    "commit.cherry_pick" => {
+                        let oid = k.oid.clone();
+                        self.run(format!("cherry-picked {}", k.short), move |r| r.cherry_pick(&oid));
+                    }
+                    "commit.revert" => self.mode = Mode::Confirm(Confirm::Revert(k.oid)),
+                    "commit.reword" => {
+                        if self.lists[1].cursor == 0 {
+                            self.mode = Mode::Prompt(PromptKind::Reword, Input::new(k.subject));
+                        } else {
+                            self.say("only the last commit can be reworded here", true);
+                        }
+                    }
+                    "commit.branch" => self.mode = Mode::Prompt(PromptKind::BranchAt(k.oid), Input::default()),
+                    "commit.tag" => self.mode = Mode::Prompt(PromptKind::TagAt(k.oid), Input::default()),
+                    "commit.reset_soft" => self.run(format!("reset (soft) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Soft)),
+                    "commit.reset_mixed" => self.run(format!("reset (mixed) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Mixed)),
+                    "commit.reset_hard" => self.mode = Mode::Confirm(Confirm::Reset { oid: k.oid, mode: ResetMode::Hard }),
                     _ => {}
                 }
             }
@@ -377,6 +489,22 @@ impl App {
                         let v = value.clone();
                         self.run("stashed the changes".to_string(), move |r| r.stash_push(&v));
                     }
+                    PromptKind::RenameBranch(old) => {
+                        let v = value.clone();
+                        self.run(format!("renamed {old} to {value}"), move |r| r.rename_branch(&old, &v));
+                    }
+                    PromptKind::BranchAt(oid) => {
+                        let v = value.clone();
+                        self.run(format!("created {value}"), move |r| r.create_branch_at(&v, &oid));
+                    }
+                    PromptKind::TagAt(oid) => {
+                        let v = value.clone();
+                        self.run(format!("tagged {value}"), move |r| r.create_tag(&v, &oid));
+                    }
+                    PromptKind::Reword => {
+                        let v = value.clone();
+                        self.run("reworded the last commit".to_string(), move |r| r.amend(Some(&v)));
+                    }
                 }
             }
             _ => {
@@ -400,6 +528,21 @@ impl App {
                 self.run(format!("merged {name}"), move |r| r.merge(&n));
             }
             Confirm::DropStash(i) => self.run(format!("dropped stash@{{{i}}}"), move |r| r.stash_drop(i)),
+            Confirm::Rebase(name) => {
+                let n = name.clone();
+                self.run(format!("rebased onto {name}"), move |r| r.rebase(&n));
+            }
+            Confirm::Revert(oid) => self.run("reverted".to_string(), move |r| r.revert(&oid)),
+            Confirm::Reset { oid, mode } => self.run("reset (hard)".to_string(), move |r| r.reset(&oid, mode)),
+            Confirm::ForcePush => self.remote("force-pushing", "force-pushed", |r| r.push(true)),
+            Confirm::DeleteTag(name) => {
+                let n = name.clone();
+                self.run(format!("deleted tag {name}"), move |r| r.delete_tag(&n));
+            }
+            Confirm::DeleteRemote(name) => {
+                let n = name.clone();
+                self.remote("deleting", "deleted", move |r| r.delete_remote_branch(&n));
+            }
         }
     }
 
@@ -566,6 +709,10 @@ impl App {
                 let label = match kind {
                     PromptKind::NewBranch => "new branch: ",
                     PromptKind::NewStash => "stash message: ",
+                    PromptKind::RenameBranch(_) => "rename to: ",
+                    PromptKind::BranchAt(_) => "new branch here: ",
+                    PromptKind::TagAt(_) => "tag name: ",
+                    PromptKind::Reword => "message: ",
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
                 ui::prompt::line(theme, label, input.value())
@@ -575,12 +722,25 @@ impl App {
                     Confirm::DeleteBranch { name, force } => format!("{} branch {name}? (y/n)", if *force { "Force-delete" } else { "Delete" }),
                     Confirm::Merge(name) => format!("Merge {name} into {}? (y/n)", self.files.branch()),
                     Confirm::DropStash(i) => format!("Drop stash@{{{i}}}? (y/n)"),
+                    Confirm::Rebase(name) => format!("Rebase {} onto {name}? (y/n)", self.files.branch()),
+                    Confirm::Revert(_) => "Revert this commit? (y/n)".to_string(),
+                    Confirm::Reset { .. } => "Reset hard to this commit and lose uncommitted changes? (y/n)".to_string(),
+                    Confirm::ForcePush => format!("Force-push {} (with lease)? (y/n)", self.files.branch()),
+                    Confirm::DeleteTag(name) => format!("Delete tag {name}? (y/n)"),
+                    Confirm::DeleteRemote(name) => format!("Delete {name} on the remote? (y/n)"),
                 };
                 Line::from(Span::styled(q, Style::new().fg(c.warning.into())))
             }
+            Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
             Mode::Normal => match &self.message {
                 Some((m, err)) => Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into()))),
-                None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
+                None => match self.operation_name() {
+                    Some(op) => Line::from(vec![
+                        Span::styled(format!("{op} "), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)),
+                        Span::styled("resolve the conflicts and stage them, then space o c continues, space o a aborts", Style::new().fg(c.muted.into())),
+                    ]),
+                    None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
+                },
             },
         };
         Paragraph::new(line).render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
@@ -589,8 +749,8 @@ impl App {
     fn hints(&self) -> &'static str {
         match self.focus {
             Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  space space commands  ? keys",
-            Focus::Branches => "enter checkout  n new  d/D delete  M merge  space space commands  ? keys",
-            Focus::Commits => "j/k move  ctrl-d/u scroll the diff  space space commands  ? keys",
+            Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  space r fetch/pull/push  space space commands  ? keys",
+            Focus::Commits => "enter checkout  C cherry-pick  R revert  w reword  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  space space commands  ? keys",
         }
     }
@@ -827,5 +987,157 @@ mod tests {
 
     fn press_raw(app: &mut App, c: char) {
         app.handle_event(&key(KeyCode::Char(c)));
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_event(&key(KeyCode::Char(c)));
+        }
+        app.handle_event(&key(KeyCode::Enter));
+    }
+
+    fn commit_file(d: &Path, name: &str, body: &str, msg: &str) {
+        fs::write(d.join(name), body).unwrap();
+        git(d, &["add", name]);
+        git(d, &["commit", "-qm", msg]);
+    }
+
+    #[test]
+    fn commit_actions_check_out_tag_branch_reword_reset_and_revert() {
+        let d = repo("commits");
+        commit_file(&d, "b.txt", "two\n", "second");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "3");
+        // Reword the last commit.
+        press(&mut app, "w");
+        for _ in 0..6 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "reworded");
+        assert_eq!(app.commits[0].subject, "reworded", "{:?}", app.message);
+        // Tag and branch at the first commit.
+        press(&mut app, "j");
+        press(&mut app, "t");
+        type_text(&mut app, "v0");
+        assert!(app.branches.iter().any(|b| b.name == "v0"), "{:?}", app.message);
+        press(&mut app, "b");
+        type_text(&mut app, "from-first");
+        assert_eq!(app.repo.branch().as_deref(), Some("from-first"));
+        // Check out the head commit of main again (detached), then cherry-pick the reworded one elsewhere.
+        press(&mut app, "k");
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.repo.branch(), None, "a detached HEAD");
+        git(&d, &["switch", "-q", "main"]);
+        app.reload_all();
+        // Revert asks first; reset hard asks first, soft does not.
+        press(&mut app, "R");
+        assert!(matches!(app.mode, Mode::Confirm(Confirm::Revert(_))));
+        press(&mut app, "y");
+        assert_eq!(app.commits.len(), 3, "{:?}", app.message);
+        app.lists[1].cursor = 2;
+        press(&mut app, " ");
+        press(&mut app, "z");
+        press(&mut app, "h");
+        assert!(matches!(app.mode, Mode::Confirm(Confirm::Reset { .. })));
+        press(&mut app, "y");
+        assert_eq!(app.commits.len(), 1, "{:?}", app.message);
+    }
+
+    #[test]
+    fn branches_rebase_rename_and_delete_tags() {
+        let d = repo("branchops");
+        git(&d, &["switch", "-q", "-c", "feat"]);
+        commit_file(&d, "f.txt", "f\n", "feature");
+        git(&d, &["switch", "-q", "main"]);
+        commit_file(&d, "m.txt", "m\n", "main moves");
+        git(&d, &["tag", "v9"]);
+        git(&d, &["switch", "-q", "feat"]);
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        let at = |app: &App, name: &str| app.branches.iter().position(|b| b.name == name).unwrap();
+        // Rebase feat onto main.
+        app.lists[0].cursor = at(&app, "main");
+        press(&mut app, "B");
+        assert!(matches!(app.mode, Mode::Confirm(Confirm::Rebase(_))));
+        press(&mut app, "y");
+        assert!(d.join("m.txt").exists() && d.join("f.txt").exists(), "{:?}", app.message);
+        // Rename it.
+        app.lists[0].cursor = at(&app, "feat");
+        press(&mut app, "R");
+        for _ in 0..4 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "topic");
+        assert!(app.branches.iter().any(|b| b.name == "topic"), "{:?}", app.message);
+        // A tag is deleted through the same key, with a confirmation.
+        app.lists[0].cursor = at(&app, "v9");
+        press(&mut app, "d");
+        assert!(matches!(app.mode, Mode::Confirm(Confirm::DeleteTag(_))));
+        press(&mut app, "y");
+        assert!(app.branches.iter().all(|b| b.name != "v9"));
+    }
+
+    #[test]
+    fn remote_commands_run_in_the_background_and_report() {
+        let d = repo("remote");
+        let remote = std::env::temp_dir().join(format!("git-ui-remote-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&remote);
+        fs::create_dir_all(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        git(&d, &["remote", "add", "origin", remote.to_str().unwrap()]);
+        let mut app = App::new(&d).unwrap();
+        let wait = |app: &mut App| {
+            for _ in 0..500 {
+                if !app.tick() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        // Space r P pushes (the first push sets the upstream) without blocking the screen.
+        press_raw(&mut app, ' ');
+        press_raw(&mut app, 'r');
+        press_raw(&mut app, 'P');
+        assert!(app.job.is_some());
+        wait(&mut app);
+        assert_eq!(app.message.as_ref().map(|(m, e)| (m.as_str(), *e)), Some(("pushed", false)), "{:?}", app.message);
+        assert!(app.repo.has_upstream());
+        // Fetch and pull report too; force push asks first.
+        for k in ['f', 'p'] {
+            press_raw(&mut app, ' ');
+            press_raw(&mut app, 'r');
+            press_raw(&mut app, k);
+            wait(&mut app);
+        }
+        assert_eq!(app.message.as_ref().map(|(m, _)| m.as_str()), Some("pulled"));
+        press_raw(&mut app, ' ');
+        press_raw(&mut app, 'r');
+        press_raw(&mut app, 'F');
+        assert!(matches!(app.mode, Mode::Confirm(Confirm::ForcePush)));
+        press(&mut app, "n");
+        assert!(app.job.is_none());
+    }
+
+    #[test]
+    fn a_stopped_operation_shows_in_the_status_line_and_can_be_aborted() {
+        let d = repo("stopped");
+        git(&d, &["switch", "-q", "other"]);
+        commit_file(&d, "b.txt", "other\n", "other");
+        git(&d, &["switch", "-q", "main"]);
+        commit_file(&d, "b.txt", "main\n", "main");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        let other = app.branches.iter().position(|b| b.name == "other").unwrap();
+        app.lists[0].cursor = other;
+        press(&mut app, "M");
+        press(&mut app, "y"); // the merge conflicts
+        assert_eq!(app.operation_name(), Some("MERGING"), "{:?}", app.message);
+        press(&mut app, "j"); // clears the failure message the merge left
+        let shown = screen(&mut app).join("\n");
+        assert!(shown.contains("MERGING"), "{shown}");
+        press_raw(&mut app, ' ');
+        press_raw(&mut app, 'o');
+        press_raw(&mut app, 'a');
+        assert_eq!(app.operation_name(), None, "{:?}", app.message);
     }
 }

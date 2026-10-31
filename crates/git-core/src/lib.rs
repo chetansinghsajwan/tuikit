@@ -10,7 +10,7 @@ mod worktree;
 pub use history::{CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo};
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
-pub use worktree::Side;
+pub use worktree::{Operation, ResetMode, Side};
 
 use std::path::{Path, PathBuf};
 
@@ -482,5 +482,117 @@ mod tests {
         r.stash_push("").unwrap();
         r.stash_drop(0).unwrap();
         assert!(Repo::discover(&d).unwrap().stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn commit_operations_tags_and_amend() {
+        let d = repo("commitops");
+        let r = Repo::discover(&d).unwrap();
+        fs::write(d.join("b.txt"), "second\n").unwrap();
+        git(&d, &["commit", "-qam", "second"]);
+        let second = Repo::discover(&d).unwrap().commits(5).unwrap()[0].oid.clone();
+        let first = Repo::discover(&d).unwrap().commits(5).unwrap()[1].oid.clone();
+        // A branch and a tag at the first commit.
+        r.create_tag("v1", &first).unwrap();
+        r.create_branch_at("old", &first).unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().branch().as_deref(), Some("old"));
+        assert_eq!(fs::read_to_string(d.join("b.txt")).unwrap(), "b\n");
+        r.rename_branch("old", "older").unwrap();
+        assert!(Repo::discover(&d).unwrap().refs().unwrap().iter().any(|x| x.name == "older"));
+        // Cherry-pick the second commit onto it, then undo that with a revert.
+        r.cherry_pick(&second).unwrap();
+        assert_eq!(fs::read_to_string(d.join("b.txt")).unwrap(), "second\n");
+        r.revert("HEAD").unwrap();
+        assert_eq!(fs::read_to_string(d.join("b.txt")).unwrap(), "b\n");
+        // Reset: soft keeps the changes staged, hard drops them.
+        r.reset(&first, ResetMode::Soft).unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().commits(5).unwrap().len(), 1);
+        r.reset(&first, ResetMode::Hard).unwrap();
+        assert!(Repo::discover(&d).unwrap().status().unwrap().is_empty());
+        // Amend: reword, then add a staged change without changing the message.
+        r.amend(Some("renamed first")).unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "renamed first");
+        assert!(r.amend(Some(" ")).is_err());
+        fs::write(d.join("a.txt"), "amended\n").unwrap();
+        git(&d, &["add", "a.txt"]);
+        r.amend(None).unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "renamed first");
+        assert!(Repo::discover(&d).unwrap().status().unwrap().is_empty());
+        r.delete_tag("v1").unwrap();
+        assert!(Repo::discover(&d).unwrap().refs().unwrap().iter().all(|x| x.name != "v1"));
+        // Rebase a feature branch onto main, which has moved on.
+        r.checkout_ref("main", RefKind::Branch).unwrap();
+        r.create_branch("feat").unwrap();
+        fs::write(d.join("f.txt"), "f\n").unwrap();
+        git(&d, &["add", "f.txt"]);
+        git(&d, &["commit", "-qm", "feature"]);
+        r.checkout_ref("main", RefKind::Branch).unwrap();
+        fs::write(d.join("c.txt"), "c\n").unwrap();
+        git(&d, &["add", "c.txt"]);
+        git(&d, &["commit", "-qm", "main moves"]);
+        r.checkout_ref("feat", RefKind::Branch).unwrap();
+        r.rebase("main").unwrap();
+        assert!(d.join("c.txt").exists() && d.join("f.txt").exists());
+        assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "feature");
+    }
+
+    #[test]
+    fn stopped_operations_are_seen_continued_and_aborted() {
+        let d = repo("stopped");
+        let r = Repo::discover(&d).unwrap();
+        git(&d, &["checkout", "-q", "-b", "other"]);
+        fs::write(d.join("b.txt"), "other\n").unwrap();
+        git(&d, &["commit", "-qam", "other"]);
+        let other = Repo::discover(&d).unwrap().commits(1).unwrap()[0].oid.clone();
+        git(&d, &["checkout", "-q", "main"]);
+        fs::write(d.join("b.txt"), "main\n").unwrap();
+        git(&d, &["commit", "-qam", "main"]);
+        assert_eq!(r.operation(), None);
+        assert!(r.cherry_pick(&other).is_err(), "the pick conflicts");
+        assert_eq!(Repo::discover(&d).unwrap().operation(), Some(Operation::CherryPick));
+        Repo::discover(&d).unwrap().abort_operation().unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().operation(), None);
+        assert!(r.merge("other").is_err());
+        assert_eq!(Repo::discover(&d).unwrap().operation(), Some(Operation::Merge));
+        // Resolve and continue.
+        fs::write(d.join("b.txt"), "resolved\n").unwrap();
+        git(&d, &["add", "b.txt"]);
+        Repo::discover(&d).unwrap().continue_operation().unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().operation(), None);
+        assert!(r.continue_operation().is_err());
+    }
+
+    #[test]
+    fn fetch_pull_and_push_against_a_local_remote() {
+        let d = repo("net");
+        let remote = std::env::temp_dir().join(format!("git-core-remote-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&remote);
+        fs::create_dir_all(&remote).unwrap();
+        git(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        git(&d, &["remote", "add", "origin", remote.to_str().unwrap()]);
+        let r = Repo::discover(&d).unwrap();
+        assert!(!r.has_upstream());
+        // The first push sets the upstream.
+        r.push(false).unwrap();
+        assert!(Repo::discover(&d).unwrap().has_upstream());
+        // A second clone pushes a commit; fetch and pull bring it here.
+        let other = std::env::temp_dir().join(format!("git-core-clone-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&other);
+        git(&std::env::temp_dir(), &["clone", "-q", remote.to_str().unwrap(), other.to_str().unwrap()]);
+        fs::write(other.join("n.txt"), "n\n").unwrap();
+        git(&other, &["add", "n.txt"]);
+        git(&other, &["commit", "-qm", "from the clone"]);
+        git(&other, &["push", "-q"]);
+        r.fetch().unwrap();
+        r.pull().unwrap();
+        assert!(d.join("n.txt").exists());
+        // Force push with lease and deleting a remote branch.
+        git(&d, &["checkout", "-q", "-b", "topic"]);
+        Repo::discover(&d).unwrap().push(false).unwrap();
+        assert!(Repo::discover(&d).unwrap().refs().unwrap().iter().any(|x| x.name == "origin/topic"));
+        Repo::discover(&d).unwrap().push(true).unwrap();
+        git(&d, &["checkout", "-q", "main"]);
+        Repo::discover(&d).unwrap().delete_remote_branch("origin/topic").unwrap();
+        assert!(Repo::discover(&d).unwrap().delete_remote_branch("nonsense").is_err());
     }
 }

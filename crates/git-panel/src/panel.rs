@@ -106,15 +106,16 @@ fn kind_char(k: Kind) -> char {
 impl Panel {
     /// The panel for the repository containing `path`; `None` if there is none.
     pub fn new(path: &Path) -> Option<Panel> {
-        Panel::with_actions(path, "space", Vec::new())
+        Panel::with_actions(path, "space", Vec::new(), &[])
     }
 
     /// The panel with a leader key and the host's own `actions` added to its keymap (they come
     /// back as `Action::Command(id)`).
-    pub fn with_actions(path: &Path, leader: &str, actions: Vec<ui::keys::Action>) -> Option<Panel> {
+    pub fn with_actions(path: &Path, leader: &str, actions: Vec<ui::keys::Action>, groups: &[ui::keys::Group]) -> Option<Panel> {
         let repo = Repo::discover(path)?;
         let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(actions).collect();
-        let keymap = ui::keys::Keymap::new(leader, &all, keys::GROUPS);
+        let all_groups: Vec<ui::keys::Group> = keys::GROUPS.iter().chain(groups).cloned().collect();
+        let keymap = ui::keys::Keymap::new(leader, &all, &all_groups);
         let root = repo.root().to_path_buf();
         let mut p = Panel {
             repo,
@@ -317,6 +318,13 @@ impl Panel {
                 } else {
                     self.say("nothing staged to commit (stage with s)", true);
                 }
+            }
+            "commit.amend" => {
+                if self.rows.iter().any(|r| matches!(r, Row::File { section: Section::Staged, .. })) {
+                    let r = self.repo.amend(None);
+                    return self.finish("amended the last commit", r);
+                }
+                self.say("nothing staged to add to the last commit", true);
             }
             "view.refresh" => {
                 self.refresh();
@@ -730,7 +738,7 @@ mod tests {
         assert_eq!(press(&mut p, " "), Action::Palette);
         assert_eq!(press(&mut p, "?"), Action::Help);
         let extra = vec![ui::keys::Action { id: "pane.next", name: "next pane", desc: "x", basic: true, keys: &["tab"] }];
-        let mut p = Panel::with_actions(&d, "space", extra).unwrap();
+        let mut p = Panel::with_actions(&d, "space", extra, &[]).unwrap();
         assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))), Action::Command("pane.next"));
         // The rows for a palette: the basic keys are marked.
         assert!(p.keys_rows().iter().any(|r| r.id == "nav.down" && r.basic) && p.keys_rows().iter().any(|r| r.id == "commit.new" && !r.basic));

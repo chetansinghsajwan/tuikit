@@ -10,6 +10,26 @@ use gix::bstr::ByteSlice;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// How far `Repo::reset` goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetMode {
+    /// Keep the index and the work tree.
+    Soft,
+    /// Keep the work tree, reset the index.
+    Mixed,
+    /// Reset both: changes are lost.
+    Hard,
+}
+
+/// An operation that stopped and waits for you (usually on conflicts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation {
+    Merge,
+    Rebase,
+    CherryPick,
+    Revert,
+}
+
 /// Which comparison a file diff shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -162,6 +182,188 @@ impl Repo {
     /// Drop stash entry `index`.
     pub fn stash_drop(&self, index: usize) -> Result<(), Error> {
         self.git(&["stash", "drop", &format!("stash@{{{index}}}")], &[]).map(|_| ())
+    }
+
+    /// Like `git`, for commands that talk to a remote: never prompts (the TUI owns the
+    /// terminal), and ssh runs in batch mode so a passphrase prompt cannot take over the screen
+    /// (keys in an agent still work).
+    fn git_net(&self, args: &[&str]) -> Result<String, Error> {
+        let base = std::env::var("GIT_SSH_COMMAND").ok().or_else(|| {
+            let out = Command::new("git").current_dir(&self.root).args(["config", "--get", "core.sshCommand"]).output().ok()?;
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            (!s.is_empty()).then_some(s)
+        });
+        let ssh = format!("{} -o BatchMode=yes", base.unwrap_or_else(|| "ssh".into()));
+        let out = Command::new("git")
+            .current_dir(&self.root)
+            .args(["--no-pager"])
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_EDITOR", "true")
+            .env("GIT_SSH_COMMAND", ssh)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(err)?;
+        if out.status.success() {
+            return Ok(format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+        }
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        Err(Error(msg.lines().last().unwrap_or("git failed").to_string()))
+    }
+
+    /// Whether the checked-out branch tracks a remote branch.
+    pub fn has_upstream(&self) -> bool {
+        Command::new("git")
+            .current_dir(&self.root)
+            .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    /// Fetch every remote and prune what is gone there.
+    pub fn fetch(&self) -> Result<(), Error> {
+        self.git_net(&["fetch", "--all", "--prune"]).map(|_| ())
+    }
+
+    /// Pull the upstream into the checked-out branch (a fast-forward or a merge, as git is configured).
+    pub fn pull(&self) -> Result<(), Error> {
+        self.git_net(&["pull"]).map(|_| ())
+    }
+
+    /// Push the checked-out branch; the first push of a branch sets its upstream on `origin`.
+    /// `force` uses `--force-with-lease`.
+    pub fn push(&self, force: bool) -> Result<(), Error> {
+        let mut args = vec!["push"];
+        if force {
+            args.push("--force-with-lease");
+        }
+        if !self.has_upstream() {
+            let branch = self.branch().ok_or_else(|| Error("HEAD is detached: nothing to push".into()))?;
+            args.extend(["--set-upstream", "origin"]);
+            return self.git_net(&[args.as_slice(), &[branch.as_str()]].concat()).map(|_| ());
+        }
+        self.git_net(&args).map(|_| ())
+    }
+
+    /// Check out a commit (detached HEAD).
+    pub fn checkout_commit(&self, oid: &str) -> Result<(), Error> {
+        self.git(&["switch", "--detach", oid], &[]).map(|_| ())
+    }
+
+    /// Create a branch at `oid` and switch to it.
+    pub fn create_branch_at(&self, name: &str, oid: &str) -> Result<(), Error> {
+        if name.trim().is_empty() {
+            return Err(Error("empty branch name".into()));
+        }
+        self.git(&["switch", "-c", name, oid], &[]).map(|_| ())
+    }
+
+    pub fn rename_branch(&self, old: &str, new: &str) -> Result<(), Error> {
+        if new.trim().is_empty() {
+            return Err(Error("empty branch name".into()));
+        }
+        self.git(&["branch", "-m", old, new], &[]).map(|_| ())
+    }
+
+    /// Delete a tag.
+    pub fn delete_tag(&self, name: &str) -> Result<(), Error> {
+        self.git(&["tag", "-d", name], &[]).map(|_| ())
+    }
+
+    /// Create a tag at `oid` (a lightweight one).
+    pub fn create_tag(&self, name: &str, oid: &str) -> Result<(), Error> {
+        if name.trim().is_empty() {
+            return Err(Error("empty tag name".into()));
+        }
+        self.git(&["tag", name, oid], &[]).map(|_| ())
+    }
+
+    /// Delete a branch on its remote (`origin/topic` runs `git push origin --delete topic`).
+    pub fn delete_remote_branch(&self, remote_ref: &str) -> Result<(), Error> {
+        let (remote, branch) = remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
+        self.git_net(&["push", remote, "--delete", branch]).map(|_| ())
+    }
+
+    /// Apply the changes of a commit on top of HEAD.
+    pub fn cherry_pick(&self, oid: &str) -> Result<(), Error> {
+        self.git(&["cherry-pick", oid], &[]).map(|_| ())
+    }
+
+    /// Add a commit that undoes `oid`.
+    pub fn revert(&self, oid: &str) -> Result<(), Error> {
+        self.git(&["revert", "--no-edit", oid], &[]).map(|_| ())
+    }
+
+    /// Move the branch to `oid`: `Soft` keeps the index and the work tree, `Mixed` keeps only
+    /// the work tree, `Hard` throws both away.
+    pub fn reset(&self, oid: &str, mode: ResetMode) -> Result<(), Error> {
+        let flag = match mode {
+            ResetMode::Soft => "--soft",
+            ResetMode::Mixed => "--mixed",
+            ResetMode::Hard => "--hard",
+        };
+        self.git(&["reset", flag, oid], &[]).map(|_| ())
+    }
+
+    /// Replay the checked-out branch on top of `onto`.
+    pub fn rebase(&self, onto: &str) -> Result<(), Error> {
+        self.git(&["rebase", onto], &[]).map(|_| ())
+    }
+
+    /// Change the last commit: with a message, reword it (and take what is staged); without,
+    /// add what is staged to it and keep the message.
+    pub fn amend(&self, message: Option<&str>) -> Result<(), Error> {
+        match message {
+            Some(m) if m.trim().is_empty() => Err(Error("empty commit message".into())),
+            Some(m) => self.git(&["commit", "-q", "--amend", "-m", m], &[]).map(|_| ()),
+            None => self.git(&["commit", "-q", "--amend", "--no-edit"], &[]).map(|_| ()),
+        }
+    }
+
+    /// The operation under way that stopped (a conflict, say), if any.
+    pub fn operation(&self) -> Option<Operation> {
+        let dir = self.git_dir()?;
+        if dir.join("rebase-merge").exists() || dir.join("rebase-apply").exists() {
+            Some(Operation::Rebase)
+        } else if dir.join("MERGE_HEAD").exists() {
+            Some(Operation::Merge)
+        } else if dir.join("CHERRY_PICK_HEAD").exists() {
+            Some(Operation::CherryPick)
+        } else if dir.join("REVERT_HEAD").exists() {
+            Some(Operation::Revert)
+        } else {
+            None
+        }
+    }
+
+    fn git_dir(&self) -> Option<PathBuf> {
+        let out = Command::new("git").current_dir(&self.root).args(["rev-parse", "--absolute-git-dir"]).output().ok()?;
+        out.status.success().then(|| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
+    }
+
+    /// Continue the stopped operation once the conflicts are resolved and staged.
+    pub fn continue_operation(&self) -> Result<(), Error> {
+        match self.operation() {
+            Some(Operation::Rebase) => self.git(&["rebase", "--continue"], &[]),
+            Some(Operation::Merge) => self.git(&["merge", "--continue"], &[]),
+            Some(Operation::CherryPick) => self.git(&["cherry-pick", "--continue"], &[]),
+            Some(Operation::Revert) => self.git(&["revert", "--continue"], &[]),
+            None => Err(Error("nothing to continue".into())),
+        }
+        .map(|_| ())
+    }
+
+    /// Give up the stopped operation and go back to how things were.
+    pub fn abort_operation(&self) -> Result<(), Error> {
+        match self.operation() {
+            Some(Operation::Rebase) => self.git(&["rebase", "--abort"], &[]),
+            Some(Operation::Merge) => self.git(&["merge", "--abort"], &[]),
+            Some(Operation::CherryPick) => self.git(&["cherry-pick", "--abort"], &[]),
+            Some(Operation::Revert) => self.git(&["revert", "--abort"], &[]),
+            None => Err(Error("nothing to abort".into())),
+        }
+        .map(|_| ())
     }
 
     /// Commit what is staged. Returns `short-hash subject`.

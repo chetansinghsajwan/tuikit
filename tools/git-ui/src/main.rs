@@ -61,7 +61,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                 })?;
             }
             if !event::poll(Duration::from_millis(200))? {
-                dirty = false;
+                dirty = app.tick();
                 continue;
             }
             let ev = event::read()?;
