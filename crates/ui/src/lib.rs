@@ -11,6 +11,7 @@ pub mod list;
 pub mod popup;
 pub mod prompt;
 pub mod pane;
+pub mod tabs;
 pub mod theme;
 
 pub use pane::Pane;

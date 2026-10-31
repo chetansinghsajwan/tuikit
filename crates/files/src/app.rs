@@ -20,6 +20,10 @@ use ui::{Pane, Theme};
 /// The standalone app's own actions, added to the panel's keymap.
 const ACTIONS: &[ui::keys::Action] = &[
     ui::keys::Action { id: "tab.new", name: "new tab", desc: "open a new tab in the same folder", basic: false, keys: &["leader t n"] },
+    ui::keys::Action { id: "tab.reopen", name: "reopen tab", desc: "bring back the tab closed last", basic: false, keys: &["leader t r"] },
+    ui::keys::Action { id: "tab.duplicate", name: "duplicate tab", desc: "open a copy of this tab next to it", basic: false, keys: &["leader t d"] },
+    ui::keys::Action { id: "tab.move_left", name: "move tab left", desc: "move this tab one place left", basic: false, keys: &["leader t ["] },
+    ui::keys::Action { id: "tab.move_right", name: "move tab right", desc: "move this tab one place right", basic: false, keys: &["leader t ]"] },
     ui::keys::Action { id: "tab.close", name: "close tab", desc: "close this tab (q closes it too, and quits on the last)", basic: false, keys: &["leader t c"] },
     ui::keys::Action { id: "tab.next", name: "next tab", desc: "switch to the next tab", basic: false, keys: &["]", "leader t l"] },
     ui::keys::Action { id: "tab.prev", name: "previous tab", desc: "switch to the previous tab", basic: false, keys: &["[", "leader t h"] },
@@ -46,8 +50,7 @@ struct Preview {
 struct App {
     opts: Options,
     theme: Theme,
-    tabs: Vec<Panel>,
-    active: usize,
+    tabs: ui::tabs::Tabs<Panel>,
     preview: Option<Preview>,
     show_meta: bool,
     /// The keys help, while it is open.
@@ -59,7 +62,7 @@ struct App {
 pub fn run(opts: Options) -> io::Result<u8> {
     let dir = opts.dir.canonicalize()?;
     let panel_opts = panel_opts(&opts);
-    let mut app = App { theme: Theme::load(), tabs: vec![Panel::new(dir, panel_opts)], active: 0, preview: None, help: None, show_meta: true, meta: None, dirsize: None, opts };
+    let mut app = App { theme: Theme::load(), tabs: ui::tabs::Tabs::new(Panel::new(dir, panel_opts)), preview: None, help: None, show_meta: true, meta: None, dirsize: None, opts };
 
     // Draw on the controlling terminal so stdout stays free for the caller.
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
@@ -68,7 +71,7 @@ pub fn run(opts: Options) -> io::Result<u8> {
     let result = app.event_loop(&mut term);
     let _ = leave(&mut term);
     if let Some(file) = &app.opts.cwd_file {
-        fs::write(file, app.tabs[app.active].root().as_os_str().as_encoded_bytes())?;
+        fs::write(file, app.tabs.active().root().as_os_str().as_encoded_bytes())?;
     }
     result
 }
@@ -100,7 +103,7 @@ fn suspended<T>(term: &mut Term, f: impl FnOnce() -> T) -> io::Result<T> {
 
 impl App {
     fn panel(&mut self) -> &mut Panel {
-        &mut self.tabs[self.active]
+        self.tabs.active_mut()
     }
 
     fn event_loop(&mut self, term: &mut Term) -> io::Result<u8> {
@@ -148,9 +151,7 @@ impl App {
             match code {
                 KeyCode::Char(c @ '1'..='9') => {
                     let i = *c as usize - '1' as usize;
-                    if i < self.tabs.len() {
-                        self.active = i;
-                    }
+                    self.tabs.goto(i);
                     return Ok(None);
                 }
                 _ => {}
@@ -172,10 +173,7 @@ impl App {
                 self.panel().refresh();
             }
             Action::Close => {
-                if self.tabs.len() > 1 {
-                    self.tabs.remove(self.active);
-                    self.active = self.active.min(self.tabs.len() - 1);
-                } else {
+                if self.tabs.close().is_none() {
                     return Ok(Some(0));
                 }
             }
@@ -203,7 +201,7 @@ impl App {
             Action::Command(id) => self.command(id),
             Action::Help => self.help = Some(ui::keys::Help::default()),
             Action::Palette => {
-                let rows = self.tabs[self.active].keys_rows();
+                let rows = self.tabs.active().keys_rows();
                 if let Some(id) = overlay(term, || ui::keys::choose(&rows, "Commands"))? {
                     let action = self.panel().run(id);
                     return self.act(action, term);
@@ -219,19 +217,26 @@ impl App {
         match id {
             "tab.new" => {
                 let root = self.panel().root().to_path_buf();
-                self.tabs.push(Panel::new(root, panel_opts(&self.opts)));
-                self.active = self.tabs.len() - 1;
+                self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
             }
+            "tab.reopen" => {
+                if !self.tabs.reopen() {
+                    self.panel().notify("no closed tab to reopen", false);
+                }
+            }
+            "tab.duplicate" => {
+                let root = self.panel().root().to_path_buf();
+                self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
+            }
+            "tab.move_left" => self.tabs.move_active(-1),
+            "tab.move_right" => self.tabs.move_active(1),
             "tab.close" => {
-                if self.tabs.len() > 1 {
-                    self.tabs.remove(self.active);
-                    self.active = self.active.min(self.tabs.len() - 1);
-                } else {
+                if self.tabs.close().is_none() {
                     self.panel().notify("this is the last tab (q quits)", false);
                 }
             }
-            "tab.next" => self.active = (self.active + 1) % self.tabs.len(),
-            "tab.prev" => self.active = (self.active + self.tabs.len() - 1) % self.tabs.len(),
+            "tab.next" => self.tabs.next(),
+            "tab.prev" => self.tabs.prev(),
             "view.properties" => self.show_meta = !self.show_meta,
             _ => {}
         }
@@ -257,32 +262,30 @@ impl App {
         } else {
             (body, None)
         };
-        self.tabs[self.active].render(list, buf, &theme, true);
+        self.tabs.active_mut().render(list, buf, &theme, true);
         if let Some(area) = preview {
             self.render_preview(area, buf);
         }
-        if let Some(menu) = self.tabs[self.active].menu() {
+        if let Some(menu) = self.tabs.active().menu() {
             ui::keys::render_menu(area, buf, &theme, &menu);
         }
         if let Some(help) = self.help.as_mut() {
-            let rows = self.tabs[self.active].keys_rows();
+            let rows = self.tabs.active().keys_rows();
             help.render(area, buf, &theme, "Keys", &rows);
         }
     }
 
     fn tab_bar(&self, area: Rect, buf: &mut Buffer) {
-        let c = &self.theme.colors;
-        let mut spans = Vec::new();
-        for (i, tab) in self.tabs.iter().enumerate() {
-            let name = tab.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
-            let style = if i == self.active { Style::new().fg(c.accent.into()).bold() } else { Style::new().fg(c.muted.into()) };
-            spans.push(Span::styled(format!(" {} {name} ", i + 1), style));
-        }
-        Paragraph::new(Line::from(spans)).render(area, buf);
+        let labels: Vec<ui::tabs::Label> = self
+            .tabs
+            .iter()
+            .map(|tab| ui::tabs::Label::new(tab.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into())))
+            .collect();
+        ui::tabs::render(area, buf, &self.theme, &labels, self.tabs.active_index(), true);
     }
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        let current = self.tabs[self.active].current().map(Path::to_path_buf);
+        let current = self.tabs.active().current().map(Path::to_path_buf);
         let theme = self.theme.clone();
         let area = self.render_meta(area, buf, current.as_deref());
         let title = current.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();

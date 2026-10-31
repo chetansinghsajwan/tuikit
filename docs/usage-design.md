@@ -82,3 +82,7 @@ git    Space ▸  c commit   p push/pull ▸   b branches   z stash ▸   r reba
 
 - `files`: Space toggles a folder (use Enter, `l`, `h`), `c` cycles columns, `m` bookmarks, `S` greps, `i` toggles properties: these become leader entries.
 - `git-ui`: `c` commits in the Files pane (stays: a verb in git), `M` merges (leader).
+
+## Tabs (decided 2026-11-01)
+
+One tab system for every tool, in `ui::tabs`: the model `Tabs<T>` (open next to the active tab, close with the last tab protected, reopen the last closed ones (10 kept), next/prev with wrap, goto, move left/right, duplicate) and the strip `render` (one row: numbered labels, the active one bold accent and underlined, a `●` marker for unsaved changes, an optional icon). When the labels do not fit, a window around the active tab is shown with `‹N` and `N›` for the tabs out of view. Keys, in every tool that has tabs: `Space t` ▸ `n` new, `c` close, `l`/`h` next/previous, `r` reopen, `d` duplicate, `[`/`]` move; `[` and `]` alone switch, `1`-`9` jump (a tool without number jumps shows no numbers: helix's buffers).
