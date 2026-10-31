@@ -115,14 +115,75 @@ mod tests {
         let d = tmp("dir");
         fs::write(d.join("z.txt"), "x").unwrap();
         fs::create_dir(d.join("sub")).unwrap();
-        for n in ["1", "2", "3"] {
+        for n in ["1", "2", "3", "4"] {
             fs::write(d.join("sub").join(n), "x").unwrap();
         }
-        let lines = preview(&d, &Theme::default(), &Options::default()).unwrap();
-        let text: Vec<String> = lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
-        assert!(text[0].contains("sub"));
-        assert_eq!(text.iter().filter(|l| l.contains('…')).count(), 1);
-        assert!(text.last().unwrap().contains("z.txt"));
+        let text = |h| -> Vec<String> { preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None }).unwrap().iter().map(flat).collect() };
+        // Room for everything: all three files show, no marker.
+        let all = text(None);
+        assert!(all[0].contains("sub") && all.last().unwrap().contains("z.txt"), "{all:?}");
+        assert_eq!(all.len(), 6, "{all:?}");
+        assert!(!all.iter().any(|l| l.contains('…')));
+        // Too little room: two entries under the folder, then how many more.
+        let few = text(Some(5));
+        assert!(few.len() <= 5 && few.iter().any(|l| l.contains("… 2 more")), "{few:?}");
+        assert!(few.last().unwrap().contains("z.txt"), "{few:?}");
+    }
+
+    #[test]
+    fn deeper_levels_show_when_there_is_room_and_fewer_when_not() {
+        let d = tmp("deep");
+        for p in ["a/b", "a/c"] {
+            fs::create_dir_all(d.join(p)).unwrap();
+        }
+        for f in ["a/b/f1.txt", "a/b/f2.txt", "a/b/f3.txt", "a/b/f4.txt", "a/b/f5.txt", "a/c/g.txt"] {
+            fs::write(d.join(f), "x").unwrap();
+        }
+        let text = |h| -> Vec<String> { preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None }).unwrap().iter().map(flat).collect() };
+        let all = text(Some(40));
+        assert!(all.iter().any(|l| l.contains("f3.txt")) && all.iter().any(|l| l.contains("g.txt")), "{all:?}");
+        // Short: two per folder at every level, and it fits.
+        let few = text(Some(8));
+        assert!(few.len() <= 8, "{few:?}");
+        assert!(few.iter().any(|l| l.contains("f1.txt")) && !few.iter().any(|l| l.contains("f3.txt")), "{few:?}");
+        assert!(few.iter().any(|l| l.contains("more")), "{few:?}");
+        // Very short: the rows are cut to the room.
+        let tiny = text(Some(2));
+        assert!(tiny.len() <= 2, "{tiny:?}");
+    }
+
+    #[test]
+    fn single_folder_chains_merge_and_empty_folders_collapse() {
+        let d = tmp("empties");
+        fs::create_dir_all(d.join("one/two/three")).unwrap();
+        fs::write(d.join("one/two/three/f.txt"), "x").unwrap();
+        fs::create_dir(d.join("solo")).unwrap(); // one empty folder
+        for n in ["e1", "e2", "e3"] {
+            fs::create_dir_all(d.join("pile").join(n)).unwrap();
+        }
+        fs::write(d.join("file.txt"), "x").unwrap();
+        let text: Vec<String> = preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap().iter().map(flat).collect();
+        // `one/two/three` is one row with its file under it.
+        assert!(text.iter().any(|l| l.contains("one/two/three")), "{text:?}");
+        // `pile` only holds empty folders: its listing is one line (and it merges into nothing).
+        assert!(text.iter().any(|l| l.contains("· 3 empty folders")), "{text:?}");
+        // One empty folder is shown by name, marked, after the files.
+        let solo = text.iter().position(|l| l.contains("solo") && l.contains("(empty)")).expect("solo");
+        let file = text.iter().position(|l| l.contains("file.txt")).unwrap();
+        assert!(solo > file, "empty folders go last: {text:?}");
+        // Folders with content come first.
+        assert!(text[0].contains("one/two/three"), "{text:?}");
+    }
+
+    #[test]
+    fn a_huge_folder_is_cut_and_says_so() {
+        let d = tmp("huge");
+        for i in 0..260 {
+            fs::write(d.join(format!("f{i:03}")), "x").unwrap();
+        }
+        let text: Vec<String> = preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap().iter().map(flat).collect();
+        assert_eq!(text.len(), 201, "{}", text.len());
+        assert!(text.last().unwrap().contains("more not shown"), "{:?}", text.last());
     }
 
     fn git_repo(name: &str) -> std::path::PathBuf {
