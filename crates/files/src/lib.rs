@@ -5,6 +5,7 @@
 pub mod ops;
 pub mod bookmarks;
 pub mod meta;
+pub mod keys;
 mod panel;
 
 pub use panel::{Action, Linemode, Panel, PanelOptions, Search};

@@ -4,6 +4,7 @@
 
 pub mod ansi;
 pub mod icons;
+pub mod keys;
 mod icons_data;
 pub mod layout;
 pub mod list;

@@ -17,6 +17,14 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use ui::{Pane, Theme};
 
+/// The standalone app's own actions, added to the panel's keymap.
+const ACTIONS: &[ui::keys::Action] = &[
+    ui::keys::Action { id: "tab.new", name: "new tab", desc: "open a new tab in the same folder", keys: &["leader t n"] },
+    ui::keys::Action { id: "tab.next", name: "next tab", desc: "switch to the next tab", keys: &["]"] },
+    ui::keys::Action { id: "tab.prev", name: "previous tab", desc: "switch to the previous tab", keys: &["["] },
+    ui::keys::Action { id: "view.properties", name: "properties", desc: "show or hide the properties pane", keys: &["leader v i"] },
+];
+
 pub struct Options {
     pub dir: PathBuf,
     pub chooser_file: Option<PathBuf>,
@@ -47,7 +55,7 @@ struct App {
 
 pub fn run(opts: Options) -> io::Result<u8> {
     let dir = opts.dir.canonicalize()?;
-    let panel_opts = PanelOptions { hidden: opts.hidden, git: opts.git, linemode: files::Linemode::Full, ..PanelOptions::default() };
+    let panel_opts = panel_opts(&opts);
     let mut app = App { theme: Theme::load(), tabs: vec![Panel::new(dir, panel_opts)], active: 0, preview: None, show_meta: true, meta: None, dirsize: None, opts };
 
     // Draw on the controlling terminal so stdout stays free for the caller.
@@ -120,31 +128,14 @@ impl App {
         if *kind == KeyEventKind::Release {
             return Ok(None);
         }
-        if !self.panel().is_busy() && !modifiers.contains(KeyModifiers::CONTROL) {
+        // Tab numbers are the one raw key the app keeps (not while a prompt or a leader menu is open).
+        if !self.panel().is_busy() && self.panel().menu().is_none() && !modifiers.contains(KeyModifiers::CONTROL) {
             match code {
-                KeyCode::Char('i') => {
-                    self.show_meta = !self.show_meta;
-                    return Ok(None);
-                }
-                KeyCode::Char('t') => {
-                    let root = self.panel().root().to_path_buf();
-                    self.tabs.push(Panel::new(root, PanelOptions { hidden: self.opts.hidden, git: self.opts.git, linemode: files::Linemode::Full, ..PanelOptions::default() }));
-                    self.active = self.tabs.len() - 1;
-                    return Ok(None);
-                }
                 KeyCode::Char(c @ '1'..='9') => {
                     let i = *c as usize - '1' as usize;
                     if i < self.tabs.len() {
                         self.active = i;
                     }
-                    return Ok(None);
-                }
-                KeyCode::Char('[') => {
-                    self.active = (self.active + self.tabs.len() - 1) % self.tabs.len();
-                    return Ok(None);
-                }
-                KeyCode::Char(']') => {
-                    self.active = (self.active + 1) % self.tabs.len();
                     return Ok(None);
                 }
                 _ => {}
@@ -194,9 +185,25 @@ impl App {
                 self.report(result);
                 self.panel().refresh();
             }
+            Action::Command(id) => self.command(id),
             Action::None | Action::Created(..) | Action::Moved(_) | Action::Deleted(_) => {}
         }
         Ok(None)
+    }
+
+    /// An action of the app itself (tabs, the properties pane).
+    fn command(&mut self, id: &str) {
+        match id {
+            "tab.new" => {
+                let root = self.panel().root().to_path_buf();
+                self.tabs.push(Panel::new(root, panel_opts(&self.opts)));
+                self.active = self.tabs.len() - 1;
+            }
+            "tab.next" => self.active = (self.active + 1) % self.tabs.len(),
+            "tab.prev" => self.active = (self.active + self.tabs.len() - 1) % self.tabs.len(),
+            "view.properties" => self.show_meta = !self.show_meta,
+            _ => {}
+        }
     }
 
     fn report(&mut self, result: Result<(), String>) {
@@ -222,6 +229,9 @@ impl App {
         self.tabs[self.active].render(list, buf, &theme, true);
         if let Some(area) = preview {
             self.render_preview(area, buf);
+        }
+        if let Some(menu) = self.tabs[self.active].menu() {
+            ui::keys::render_menu(area, buf, &theme, &menu);
         }
     }
 
@@ -344,4 +354,9 @@ impl App {
         meta::render(split, buf, &self.theme, meta, self.dirsize.as_ref().map(DirSize::state));
         Rect { height: area.height - height, ..area }
     }
+}
+
+/// The panel options of a tab: the standalone app's columns and its own actions.
+fn panel_opts(o: &Options) -> PanelOptions {
+    PanelOptions { hidden: o.hidden, git: o.git, linemode: files::Linemode::Full, actions: ACTIONS.to_vec(), ..PanelOptions::default() }
 }

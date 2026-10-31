@@ -1,10 +1,11 @@
 use crate::bookmarks::{self, Bookmarks};
+use crate::keys;
 use crate::meta;
 use crate::ops;
 use git_core::{Kind, Repo, Status};
 use ignore::WalkBuilder;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -30,11 +31,16 @@ pub struct PanelOptions {
     /// Pastes of at least this many bytes run in the background with a progress line
     /// (`None`: always at once).
     pub background_bytes: Option<u64>,
+    /// The leader key (a key name, see `ui::keys`).
+    pub leader: String,
+    /// Actions of the host (tabs, a properties pane, ...) added to the keymap; the panel
+    /// returns `Action::Command(id)` when one runs.
+    pub actions: Vec<ui::keys::Action>,
 }
 
 impl Default for PanelOptions {
     fn default() -> Self {
-        PanelOptions { hidden: false, git: true, linemode: Linemode::Off, bookmarks: bookmarks::default_path(), background_bytes: Some(8 << 20) }
+        PanelOptions { hidden: false, git: true, linemode: Linemode::Off, bookmarks: bookmarks::default_path(), background_bytes: Some(8 << 20), leader: "space".into(), actions: Vec::new() }
     }
 }
 
@@ -96,6 +102,8 @@ pub enum Action {
     Deleted(Vec<PathBuf>),
     /// The user asked to search: the host runs `pick` and calls `reveal` with the result.
     Search(Search),
+    /// An action the panel does not own (a host registered it in `PanelOptions::actions`): the host runs it.
+    Command(&'static str),
     /// Rename these paths together by editing their names in a text editor.
     BulkRename(Vec<PathBuf>),
     /// Open this path with this command (typed in the `open with` prompt).
@@ -236,6 +244,7 @@ pub struct Panel {
     /// Last result or error, shown in the footer until the next key.
     message: Option<(String, bool)>,
     bookmarks: Bookmarks,
+    keymap: ui::keys::Keymap,
     /// Folder sizes counted in the background for the size column.
     dir_sizes: std::collections::HashMap<PathBuf, meta::DirSize>,
     /// What was last drawn for them, to know when a redraw is due.
@@ -252,6 +261,8 @@ impl Panel {
         let root = root.into();
         let root = root.canonicalize().unwrap_or(root);
         let opts_bookmarks = opts.bookmarks.clone();
+        let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(opts.actions.iter().cloned()).collect();
+        let keymap = ui::keys::Keymap::new(&opts.leader, &all, keys::GROUPS);
         let mut p = Panel {
             root,
             opts,
@@ -266,6 +277,7 @@ impl Panel {
             clip: None,
             message: None,
             bookmarks: Bookmarks::load(opts_bookmarks),
+            keymap,
             dir_sizes: std::collections::HashMap::new(),
             sizes_shown: Vec::new(),
             job: None,
@@ -459,7 +471,6 @@ impl Panel {
     }
 
     fn normal_key(&mut self, key: &KeyEvent) -> Action {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if let Some(job) = &self.job {
             if key.code == KeyCode::Esc {
                 job.progress.cancel.store(true, Ordering::Relaxed);
@@ -471,25 +482,41 @@ impl Panel {
                 return Action::None;
             }
         }
-        match key.code {
-            KeyCode::Esc => {
-                if self.marked.is_empty() {
-                    return Action::Close;
-                }
-                self.marked.clear();
-            }
-            KeyCode::Char('q') => return Action::Close,
-            KeyCode::Char('c') if ctrl => return Action::Close,
-            KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
-            KeyCode::Char('p') if ctrl => self.move_by(-1),
-            KeyCode::Char('n') if ctrl => self.move_by(1),
-            KeyCode::PageUp => self.move_by(-(self.page as isize)),
-            KeyCode::PageDown => self.move_by(self.page as isize),
-            KeyCode::Home | KeyCode::Char('g') => self.cursor = 0,
-            KeyCode::End | KeyCode::Char('G') => self.cursor = self.rows.len().saturating_sub(1),
-            KeyCode::Left | KeyCode::Char('h') => self.left(),
-            KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => {
+        match self.keymap.feed(key) {
+            ui::keys::Feed::Run(id) => self.run(id),
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+        }
+    }
+
+    /// The which-key menu while a leader sequence is under way.
+    pub fn menu(&self) -> Option<ui::keys::Menu> {
+        self.keymap.menu()
+    }
+
+    /// The actions this panel offers (its own and the host's), for a palette or help.
+    pub fn actions(&self) -> &[ui::keys::Action] {
+        self.keymap.actions()
+    }
+
+    /// The keys bound to an action, as shown.
+    pub fn keys_of(&self, id: &str) -> String {
+        self.keymap.keys_of(id)
+    }
+
+    /// Run an action by id (what a key, the leader menu or a palette resolves to).
+    pub fn run(&mut self, id: &'static str) -> Action {
+        if !keys::owns(id) {
+            return Action::Command(id);
+        }
+        match id {
+            "nav.up" => self.move_by(-1),
+            "nav.down" => self.move_by(1),
+            "nav.page_up" => self.move_by(-(self.page as isize)),
+            "nav.page_down" => self.move_by(self.page as isize),
+            "nav.top" => self.cursor = 0,
+            "nav.bottom" => self.cursor = self.rows.len().saturating_sub(1),
+            "tree.out" => self.left(),
+            "item.open" => {
                 if let Some(row) = self.rows.get(self.cursor) {
                     if row.is_dir {
                         self.toggle(Some(true));
@@ -498,13 +525,7 @@ impl Panel {
                     }
                 }
             }
-            KeyCode::Char(' ') => self.toggle(None),
-            KeyCode::Char('.') => {
-                self.opts.hidden = !self.opts.hidden;
-                self.rebuild();
-            }
-            KeyCode::Char('R') => self.refresh(),
-            KeyCode::Tab => {
+            "item.mark" => {
                 if let Some(path) = self.current().map(Path::to_path_buf) {
                     if !self.marked.remove(&path) {
                         self.marked.insert(path);
@@ -512,61 +533,73 @@ impl Panel {
                     self.move_by(1);
                 }
             }
-            KeyCode::Char('a') => self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default()),
-            KeyCode::Char('r') => {
+            "item.new" => self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default()),
+            "item.rename" => {
                 if let Some(row) = self.rows.get(self.cursor) {
                     self.mode = Mode::Prompt(PromptKind::Rename(row.path.clone()), Input::new(row.name.clone()));
                 }
             }
-            KeyCode::Char(c @ ('d' | 'D')) => {
+            "item.delete" | "item.delete_forever" => {
                 let targets = self.targets();
                 if !targets.is_empty() {
-                    self.mode = Mode::Confirm(if c == 'd' { ConfirmKind::Trash } else { ConfirmKind::Delete }, targets);
+                    self.mode = Mode::Confirm(if id == "item.delete" { ConfirmKind::Trash } else { ConfirmKind::Delete }, targets);
                 }
             }
-            KeyCode::Char(c @ ('y' | 'x')) => {
+            "item.yank" | "item.cut" => {
                 let paths = self.targets();
                 if !paths.is_empty() {
-                    let n = paths.len();
-                    self.clip = Some(Clip { paths, cut: c == 'x' });
+                    let (n, cut) = (paths.len(), id == "item.cut");
+                    self.clip = Some(Clip { paths, cut });
                     self.marked.clear();
-                    self.say(format!("{} {n} item{}", if c == 'x' { "cut" } else { "yanked" }, if n == 1 { "" } else { "s" }), false);
+                    self.say(format!("{} {n} item{}", if cut { "cut" } else { "yanked" }, if n == 1 { "" } else { "s" }), false);
                 }
             }
-            KeyCode::Char('p') => return self.paste(),
-            KeyCode::Char('m') => self.mode = Mode::Bookmark(BookmarkOp::Set),
-            KeyCode::Char('\'') => self.mode = Mode::Bookmark(BookmarkOp::Jump),
-            KeyCode::Char('M') => self.mode = Mode::Bookmark(BookmarkOp::Delete),
-            KeyCode::Char('c') => {
-                self.opts.linemode = self.opts.linemode.next();
-                self.say(self.opts.linemode.label(), false);
+            "item.paste" => return self.paste(),
+            "item.open_with" => {
+                if let Some(row) = self.rows.get(self.cursor) {
+                    self.mode = Mode::Prompt(PromptKind::OpenWith(row.path.clone()), Input::default());
+                }
             }
-            KeyCode::Char('/') => return Action::Search(Search::Files),
-            KeyCode::Char('S') => return Action::Search(Search::Grep),
-            KeyCode::Char('B') => {
+            "item.bulk_rename" => {
                 let t = self.targets();
                 if !t.is_empty() {
                     return Action::BulkRename(t);
                 }
             }
-            KeyCode::Char('O') => {
-                if let Some(row) = self.rows.get(self.cursor) {
-                    self.mode = Mode::Prompt(PromptKind::OpenWith(row.path.clone()), Input::default());
-                }
+            "search.files" => return Action::Search(Search::Files),
+            "search.grep" => return Action::Search(Search::Grep),
+            "view.hidden" => {
+                self.opts.hidden = !self.opts.hidden;
+                self.rebuild();
             }
-            KeyCode::Char('L') => {
+            "view.columns" => {
+                self.opts.linemode = self.opts.linemode.next();
+                self.say(self.opts.linemode.label(), false);
+            }
+            "view.refresh" => self.refresh(),
+            "root.into" => {
                 if let Some(row) = self.rows.get(self.cursor).filter(|r| r.is_dir) {
                     let dir = row.path.clone();
                     self.set_root(dir);
                 }
             }
-            KeyCode::Char('H') => {
+            "root.up" => {
                 if let Some(parent) = self.root.parent().map(Path::to_path_buf) {
                     let old = self.root.clone();
                     self.set_root(parent);
                     self.reveal(&old);
                 }
             }
+            "bookmark.set" => self.mode = Mode::Bookmark(BookmarkOp::Set),
+            "bookmark.jump" => self.mode = Mode::Bookmark(BookmarkOp::Jump),
+            "bookmark.delete" => self.mode = Mode::Bookmark(BookmarkOp::Delete),
+            "back" => {
+                if self.marked.is_empty() {
+                    return Action::Close;
+                }
+                self.marked.clear();
+            }
+            "quit" => return Action::Close,
             _ => {}
         }
         Action::None
@@ -967,6 +1000,7 @@ impl Panel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
     use std::fs;
     use std::process::Command;
 
@@ -986,12 +1020,20 @@ mod tests {
         Event::Key(KeyEvent::new(c, KeyModifiers::NONE))
     }
 
+    /// Type a leader sequence: the leader key, then each key of `seq`.
+    fn leader(p: &mut Panel, seq: &str) {
+        p.handle_event(&key(KeyCode::Char(' ')));
+        for c in seq.chars() {
+            p.handle_event(&key(KeyCode::Char(c)));
+        }
+    }
+
     fn names(p: &Panel) -> Vec<String> {
         p.rows.iter().map(|r| format!("{}{}", "  ".repeat(r.depth.into()), r.name)).collect()
     }
 
     fn panel(d: &Path) -> Panel {
-        Panel::new(d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None })
+        Panel::new(d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() })
     }
 
     #[test]
@@ -1237,20 +1279,20 @@ mod tests {
     fn bookmarks_save_jump_and_delete() {
         let d = tree("bookmarks");
         let mut p = panel(&d);
-        p.handle_event(&key(KeyCode::Char('m')));
+        leader(&mut p, "bs");
         p.handle_event(&key(KeyCode::Char('a'))); // bookmark a = docs
-        p.handle_event(&key(KeyCode::Char('\'')));
+        leader(&mut p, "bj");
         p.handle_event(&key(KeyCode::Char('a')));
         assert_eq!(p.root(), d.join("docs"));
-        p.handle_event(&key(KeyCode::Char('H'))); // up again
+        leader(&mut p, "ch"); // up again
         assert_eq!(p.root(), d);
-        p.handle_event(&key(KeyCode::Char('M')));
+        leader(&mut p, "bd");
         p.handle_event(&key(KeyCode::Char('a'))); // delete it
-        p.handle_event(&key(KeyCode::Char('\'')));
+        leader(&mut p, "bj");
         p.handle_event(&key(KeyCode::Char('a')));
         assert_eq!(p.root(), d, "a deleted bookmark goes nowhere");
         // The footer waits for the key and lists the bookmarks.
-        p.handle_event(&key(KeyCode::Char('m')));
+        leader(&mut p, "bs");
         assert!(p.is_busy());
         p.handle_event(&key(KeyCode::Esc));
     }
@@ -1259,7 +1301,7 @@ mod tests {
     fn columns_show_size_and_time_for_files_when_wide() {
         let d = tree("columns");
         std::fs::write(d.join("README.md"), vec![b'x'; 2048]).unwrap();
-        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None });
+        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
         let area = Rect::new(0, 0, 70, 8);
         let mut buf = Buffer::empty(area);
         p.render(area, &mut buf, &Theme::default(), true);
@@ -1277,7 +1319,7 @@ mod tests {
     fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
         let d = tree("linemode");
         std::fs::write(d.join("src/main.rs"), vec![b'x'; 3000]).unwrap();
-        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None });
+        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
         let area = Rect::new(0, 0, 70, 8);
         let draw = |p: &mut Panel| {
             let mut buf = Buffer::empty(area);
@@ -1295,10 +1337,10 @@ mod tests {
         let text = draw(&mut p);
         // src holds main.rs (3000 B) and a deeper file: counted, no `+` left.
         assert!(text.iter().any(|l| l.contains("src") && l.contains("2.9K") && !l.contains('+')), "{text:?}");
-        p.handle_event(&key(KeyCode::Char('c')));
+        leader(&mut p, "vc");
         let text = draw(&mut p);
         assert!(text.iter().any(|l| l.contains("src") && l.contains("rwx")), "{text:?}");
-        p.handle_event(&key(KeyCode::Char('c')));
+        leader(&mut p, "vc");
         let text = draw(&mut p);
         assert!(!text.iter().any(|l| l.contains("rwx") || l.contains("KiB")), "{text:?}");
     }
@@ -1307,7 +1349,7 @@ mod tests {
     fn a_big_paste_runs_in_the_background_and_reports_when_done() {
         let d = tree("bgpaste");
         std::fs::write(d.join("big.bin"), vec![7u8; 3 << 20]).unwrap();
-        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: Some(0) });
+        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: Some(0), leader: "space".into(), actions: Vec::new() });
         let find = |p: &mut Panel, name: &str| {
             let rows = p.rows.iter().position(|r| r.name == name).unwrap();
             p.cursor = rows;
@@ -1341,5 +1383,41 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(d.join("docs/src/main.rs").is_file() && d.join("src/main.rs").is_file());
+    }
+
+    #[test]
+    fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
+        let d = tree("leader");
+        let mut p = panel(&d);
+        assert!(p.menu().is_none());
+        p.handle_event(&key(KeyCode::Char(' ')));
+        let menu = p.menu().expect("the leader starts a sequence");
+        let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
+        for want in ["find", "grep", "view", "bookmarks", "cd", "open with"] {
+            assert!(names.contains(&want), "{want} in {names:?}");
+        }
+        // The popup is drawn over the screen by the host.
+        let area = Rect::new(0, 0, 60, 16);
+        let mut buf = Buffer::empty(area);
+        ui::keys::render_menu(area, &mut buf, &Theme::default(), &menu);
+        let text: String = (0..16).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+        assert!(text.contains("grep") && text.contains("bookmarks"), "{text}");
+        // A group opens a deeper menu; Esc closes it without doing anything.
+        p.handle_event(&key(KeyCode::Char('v')));
+        assert_eq!(p.menu().unwrap().title, "space v");
+        p.handle_event(&key(KeyCode::Esc));
+        assert!(p.menu().is_none());
+        // Space on a folder row does not expand it any more (Enter, l and h do).
+        let rows = p.rows.len();
+        p.handle_event(&key(KeyCode::Char(' ')));
+        p.handle_event(&key(KeyCode::Char('z'))); // not bound: the sequence ends
+        assert_eq!(p.rows.len(), rows);
+        assert!(p.menu().is_none());
+        // Host actions come back as commands; the leader key is configurable.
+        let acts = vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", keys: &["leader t n"] }];
+        let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: ",".into(), actions: acts });
+        p.handle_event(&key(KeyCode::Char(',')));
+        p.handle_event(&key(KeyCode::Char('t')));
+        assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::Command("tab.new"));
     }
 }
