@@ -68,19 +68,54 @@ fn run(cli: Cli) -> io::Result<u8> {
     execute!(term.0.backend_mut(), EnterAlternateScreen)?;
     let theme = ui::Theme::load();
 
-    let chosen = loop {
+    let mut help: Option<ui::keys::Help> = None;
+    let chosen = 'outer: loop {
         term.0.draw(|f| {
             let area = f.area();
             panel.render(area, f.buffer_mut(), &theme);
+            if let Some(menu) = panel.menu() {
+                ui::keys::render_menu(area, f.buffer_mut(), &theme, &menu);
+            }
+            if let Some(h) = help.as_mut() {
+                h.render(area, f.buffer_mut(), &theme, "Keys", &panel.keys_rows());
+            }
         })?;
         if event::poll(Duration::from_millis(200))? {
             let ev = event::read()?;
-            if let Event::Key(_) = ev {
-                match panel.handle_event(&ev) {
-                    Action::Open(path) => break Some(path),
-                    Action::Close => break None,
-                    Action::Changed | Action::None => {}
+            let Event::Key(key) = &ev else { continue };
+            if let Some(h) = help.as_mut() {
+                if !h.key(key) {
+                    help = None;
                 }
+                continue;
+            }
+            let mut action = panel.handle_event(&ev);
+            loop {
+                match action {
+                    Action::Open(path) => break 'outer Some(path),
+                    Action::Close => break 'outer None,
+                    Action::Help => help = Some(ui::keys::Help::default()),
+                    Action::Palette => {
+                        // Inside zellij `pick` is a floating pane over this one; elsewhere it takes the terminal.
+                        let popup = ui::popup::wanted(false);
+                        if !popup {
+                            disable_raw_mode()?;
+                            execute!(term.0.backend_mut(), LeaveAlternateScreen)?;
+                        }
+                        let picked = ui::keys::choose(&panel.keys_rows(), "Commands");
+                        if !popup {
+                            enable_raw_mode()?;
+                            execute!(term.0.backend_mut(), EnterAlternateScreen)?;
+                            term.0.clear()?;
+                        }
+                        if let Some(id) = picked {
+                            action = panel.run(id);
+                            continue;
+                        }
+                    }
+                    Action::Changed | Action::None | Action::Command(_) => {}
+                }
+                break;
             }
         }
     };

@@ -69,8 +69,25 @@ fn run(cli: Cli) -> io::Result<u8> {
             if matches!(ev, Event::Resize(..)) {
                 continue;
             }
-            match app.handle_event(&ev) {
-                Quit::No => {}
+            let mut quit = app.handle_event(&ev);
+            // The palette: inside zellij `pick` is a floating pane over this screen, so the screen
+            // stays; elsewhere it takes the terminal for a moment.
+            while quit == Quit::Palette {
+                let popup = ui::popup::wanted(false);
+                if !popup {
+                    leave(&mut term)?;
+                }
+                let picked = ui::keys::choose(&app.keys_rows(), "Commands");
+                if !popup {
+                    enter(&mut term)?;
+                }
+                quit = match picked {
+                    Some(id) => app.run_palette(id),
+                    None => Quit::No,
+                };
+            }
+            match quit {
+                Quit::No | Quit::Palette => {}
                 Quit::Yes => return Ok(()),
                 Quit::Edit(path) => {
                     leave(&mut term)?;

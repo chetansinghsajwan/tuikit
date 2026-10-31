@@ -1,6 +1,7 @@
 use git_core::{Kind, Repo, Side};
+use crate::keys;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -18,6 +19,13 @@ pub enum Action {
     Open(PathBuf),
     /// Leave the panel (Esc, `q`).
     Close,
+    /// The user asked for the command palette: the host lists `actions()` with
+    /// `ui::keys::choose` and runs the pick with `run`.
+    Palette,
+    /// The user asked for the keys help: the host shows `ui::keys::Help`.
+    Help,
+    /// An action the panel does not own (the host registered it with `Panel::with_actions`).
+    Command(&'static str),
     /// The repository changed (stage, unstage, discard, commit): hosts may want
     /// to refresh their own views.
     Changed,
@@ -80,6 +88,7 @@ pub struct Panel {
     pheight: usize,
     /// Title of the list pane instead of `git: <branch>`.
     title: Option<String>,
+    keymap: ui::keys::Keymap,
 }
 
 fn kind_char(k: Kind) -> char {
@@ -97,7 +106,15 @@ fn kind_char(k: Kind) -> char {
 impl Panel {
     /// The panel for the repository containing `path`; `None` if there is none.
     pub fn new(path: &Path) -> Option<Panel> {
+        Panel::with_actions(path, "space", Vec::new())
+    }
+
+    /// The panel with a leader key and the host's own `actions` added to its keymap (they come
+    /// back as `Action::Command(id)`).
+    pub fn with_actions(path: &Path, leader: &str, actions: Vec<ui::keys::Action>) -> Option<Panel> {
         let repo = Repo::discover(path)?;
+        let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(actions).collect();
+        let keymap = ui::keys::Keymap::new(leader, &all, keys::GROUPS);
         let root = repo.root().to_path_buf();
         let mut p = Panel {
             repo,
@@ -115,6 +132,7 @@ impl Panel {
             pscroll: 0,
             pheight: 10,
             title: None,
+            keymap,
         };
         p.refresh();
         Some(p)
@@ -189,7 +207,7 @@ impl Panel {
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
     }
 
-    fn run(&mut self, what: &str, result: Result<(), git_core::Error>) -> Action {
+    fn finish(&mut self, what: &str, result: Result<(), git_core::Error>) -> Action {
         match result {
             Ok(()) => {
                 self.say(what, false);
@@ -219,7 +237,7 @@ impl Panel {
                 return match key.code {
                     KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
                         let r = self.repo.discard(&rela, untracked);
-                        self.run(if untracked { "deleted" } else { "discarded" }, r)
+                        self.finish(if untracked { "deleted" } else { "discarded" }, r)
                     }
                     _ => Action::None,
                 };
@@ -227,32 +245,42 @@ impl Panel {
             Mode::Normal => {}
         }
         self.message = None;
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => return Action::Close,
-            KeyCode::Char('c') if ctrl => return Action::Close,
-            KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
-            KeyCode::Char('p') if ctrl => self.move_by(-1),
-            KeyCode::Char('n') if ctrl => self.move_by(1),
-            KeyCode::PageUp => self.move_by(-(self.page as isize)),
-            KeyCode::PageDown => self.move_by(self.page as isize),
-            KeyCode::Home | KeyCode::Char('g') => self.cursor = 0,
-            KeyCode::End | KeyCode::Char('G') => self.cursor = self.items.len().saturating_sub(1),
-            KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
-            KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
-            KeyCode::Enter => {
+        match self.keymap.feed(key) {
+            ui::keys::Feed::Run(id) => self.run(id),
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+        }
+    }
+
+    /// The which-key menu while a leader sequence is under way.
+    pub fn menu(&self) -> Option<ui::keys::Menu> {
+        self.keymap.menu()
+    }
+
+    /// Every action with its keys, for the palette and the help.
+    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
+        self.keymap.rows()
+    }
+
+    /// Run an action by id (what a key, the leader menu or a palette resolves to).
+    pub fn run(&mut self, id: &'static str) -> Action {
+        if !keys::owns(id) {
+            return Action::Command(id);
+        }
+        match id {
+            "nav.up" => self.move_by(-1),
+            "nav.down" => self.move_by(1),
+            "nav.page_up" => self.move_by(-(self.page as isize)),
+            "nav.page_down" => self.move_by(self.page as isize),
+            "nav.top" => self.cursor = 0,
+            "nav.bottom" => self.cursor = self.items.len().saturating_sub(1),
+            "preview.down" => self.pscroll += (self.pheight / 2).max(1),
+            "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "item.open" => {
                 if let Some((_, rela, _)) = self.current() {
                     return Action::Open(self.root.join(rela));
                 }
             }
-            KeyCode::Char(' ') => {
-                if let Some((section, rela, _)) = self.current() {
-                    let rela = rela.to_path_buf();
-                    return if section == Section::Staged { self.unstage(rela) } else { self.stage(rela) };
-                }
-            }
-            KeyCode::Char('s') => {
+            "change.stage" => {
                 if let Some((section, rela, _)) = self.current() {
                     if section != Section::Staged {
                         let rela = rela.to_path_buf();
@@ -260,21 +288,21 @@ impl Panel {
                     }
                 }
             }
-            KeyCode::Char('u') => {
+            "change.unstage" => {
                 if let Some((Section::Staged, rela, _)) = self.current() {
                     let rela = rela.to_path_buf();
                     return self.unstage(rela);
                 }
             }
-            KeyCode::Char('a') => {
+            "change.stage_all" => {
                 let r = self.repo.stage_all();
-                return self.run("staged everything", r);
+                return self.finish("staged everything", r);
             }
-            KeyCode::Char('A') => {
+            "change.unstage_all" => {
                 let r = self.repo.unstage_all();
-                return self.run("unstaged everything", r);
+                return self.finish("unstaged everything", r);
             }
-            KeyCode::Char('x') => {
+            "change.discard" => {
                 // Discard: only work-tree changes, never the staged ones.
                 if let Some((section, rela, _)) = self.current() {
                     match section {
@@ -283,17 +311,20 @@ impl Panel {
                     }
                 }
             }
-            KeyCode::Char('c') => {
+            "commit.new" => {
                 if self.rows.iter().any(|r| matches!(r, Row::File { section: Section::Staged, .. })) {
                     self.mode = Mode::Commit(Input::default());
                 } else {
-                    self.say("nothing staged to commit (stage with s or Space)", true);
+                    self.say("nothing staged to commit (stage with s)", true);
                 }
             }
-            KeyCode::Char('r') => {
+            "view.refresh" => {
                 self.refresh();
                 self.say("refreshed", false);
             }
+            "palette" => return Action::Palette,
+            "help" => return Action::Help,
+            "quit" => return Action::Close,
             _ => {}
         }
         Action::None
@@ -301,12 +332,12 @@ impl Panel {
 
     fn stage(&mut self, rela: PathBuf) -> Action {
         let r = self.repo.stage(std::slice::from_ref(&rela));
-        self.run("staged", r)
+        self.finish("staged", r)
     }
 
     fn unstage(&mut self, rela: PathBuf) -> Action {
         let r = self.repo.unstage(std::slice::from_ref(&rela));
-        self.run("unstaged", r)
+        self.finish("unstaged", r)
     }
 
     fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Action {
@@ -511,6 +542,7 @@ impl Panel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
     use std::fs;
     use std::process::Command;
 
@@ -590,14 +622,14 @@ mod tests {
     }
 
     #[test]
-    fn space_stages_and_unstages_and_the_cursor_stays_on_the_file() {
+    fn s_and_u_stage_and_unstage_and_the_cursor_stays_on_the_file() {
         let d = repo("toggle");
         let mut p = Panel::new(&d).unwrap();
         on(&mut p, "new.txt");
-        assert_eq!(press(&mut p, " "), Action::Changed);
+        assert_eq!(press(&mut p, "s"), Action::Changed);
         assert_eq!(p.current().map(|(s, f, _)| (s, f.to_path_buf())), Some((Section::Staged, PathBuf::from("new.txt"))));
         assert!(p.repo.status().unwrap().get(Path::new("new.txt")).unwrap().staged == Some(Kind::Added));
-        assert_eq!(press(&mut p, " "), Action::Changed); // toggles back
+        assert_eq!(press(&mut p, "u"), Action::Changed); // and back
         assert_eq!(p.current().map(|(s, ..)| s), Some(Section::Untracked));
         // `s` only stages, `u` only unstages.
         on(&mut p, "a.txt");
@@ -682,5 +714,25 @@ mod tests {
         let mut p = Panel::new(&d).unwrap();
         assert!(draw(&mut p).join("\n").contains("clean: nothing to commit"));
         assert_eq!(press(&mut p, "j"), Action::None); // navigation on an empty list is harmless
+    }
+
+    #[test]
+    fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the_host() {
+        let d = repo("leader");
+        let mut p = Panel::new(&d).unwrap();
+        assert_eq!(press(&mut p, " "), Action::None);
+        let menu = p.menu().expect("a leader menu");
+        let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
+        for want in ["stage", "unstage", "commit", "discard", "commands"] {
+            assert!(names.contains(&want), "{want} in {names:?}");
+        }
+        // Space then Space is the palette; `?` is the help; the host's own actions come back as commands.
+        assert_eq!(press(&mut p, " "), Action::Palette);
+        assert_eq!(press(&mut p, "?"), Action::Help);
+        let extra = vec![ui::keys::Action { id: "pane.next", name: "next pane", desc: "x", basic: true, keys: &["tab"] }];
+        let mut p = Panel::with_actions(&d, "space", extra).unwrap();
+        assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))), Action::Command("pane.next"));
+        // The rows for a palette: the basic keys are marked.
+        assert!(p.keys_rows().iter().any(|r| r.id == "nav.down" && r.basic) && p.keys_rows().iter().any(|r| r.id == "commit.new" && !r.basic));
     }
 }

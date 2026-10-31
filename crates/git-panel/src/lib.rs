@@ -4,6 +4,7 @@
 //! standalone binary. Reads use `git-core` (gix); changes run the `git` command
 //! line through `git-core`.
 
+pub mod keys;
 mod panel;
 
 pub use panel::{Action, Panel};

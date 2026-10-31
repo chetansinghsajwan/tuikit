@@ -4,5 +4,6 @@
 //! line), `git-panel` (the files pane), `pv` (previews) and `ui` (every look).
 
 mod app;
+mod keys;
 
 pub use app::{App, Quit};

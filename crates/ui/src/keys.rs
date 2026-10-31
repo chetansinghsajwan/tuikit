@@ -112,6 +112,16 @@ pub struct Action {
     pub keys: &'static [&'static str],
 }
 
+/// An action that shows in the command palette.
+pub const fn action(id: &'static str, name: &'static str, desc: &'static str, keys: &'static [&'static str]) -> Action {
+    Action { id, name, desc, basic: false, keys }
+}
+
+/// A basic action (movement and keys everyone knows): left out of the palette, kept in `?`.
+pub const fn basic(id: &'static str, name: &'static str, desc: &'static str, keys: &'static [&'static str]) -> Action {
+    Action { id, name, desc, basic: true, keys }
+}
+
 /// A name for the menu behind a key prefix: `leader v` is "view".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Group {

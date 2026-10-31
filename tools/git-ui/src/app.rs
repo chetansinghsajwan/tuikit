@@ -1,7 +1,7 @@
 use git_core::{CommitInfo, RefInfo, RefKind, Repo, StashInfo};
 use git_panel::{Action as PanelAction, Panel};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -9,6 +9,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
+use ui::keys::{Feed, Keymap};
 use ui::{Pane, Theme};
 
 /// How many commits the log pane loads.
@@ -21,6 +22,9 @@ pub enum Quit {
     Yes,
     /// Open this file in the editor (the host suspends the screen), then call `edited`.
     Edit(PathBuf),
+    /// The user asked for the command palette: the host runs `ui::keys::choose` over
+    /// `App::keys_rows` and passes the pick to `App::run_palette`.
+    Palette,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +81,9 @@ pub struct App {
     preview: Option<Preview>,
     pscroll: usize,
     pheight: usize,
+    /// The keymaps of the Branches, Commits and Stashes panes (the Files pane has its own).
+    maps: [Keymap; 3],
+    help: Option<ui::keys::Help>,
 }
 
 impl App {
@@ -84,7 +91,7 @@ impl App {
     pub fn new(dir: &Path) -> Option<App> {
         let repo = Repo::discover(dir)?;
         let root = repo.root().to_path_buf();
-        let mut files = Panel::new(dir)?;
+        let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec())?;
         files.set_title("Files");
         let mut app = App {
             root,
@@ -101,6 +108,8 @@ impl App {
             preview: None,
             pscroll: 0,
             pheight: 10,
+            maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), &[])),
+            help: None,
         };
         app.reload_all();
         Some(app)
@@ -180,6 +189,12 @@ impl App {
         if *kind == KeyEventKind::Release {
             return Quit::No;
         }
+        if let Some(help) = self.help.as_mut() {
+            if !help.key(key) {
+                self.help = None;
+            }
+            return Quit::No;
+        }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Prompt(kind, input) => {
                 self.prompt_key(kind, input, ev, key);
@@ -191,34 +206,62 @@ impl App {
             }
             Mode::Normal => {}
         }
-        if self.focus == Focus::Files && self.files.is_typing() {
-            return self.files_event(ev);
-        }
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        self.message = None;
-        match key.code {
-            KeyCode::Char('q') => return Quit::Yes,
-            KeyCode::Char('c') if ctrl => return Quit::Yes,
-            KeyCode::Tab => {
-                self.focus_by(1);
-                return Quit::No;
-            }
-            KeyCode::BackTab => {
-                self.focus_by(-1);
-                return Quit::No;
-            }
-            KeyCode::Char(c @ '1'..='4') => {
-                self.focus = ORDER[c as usize - '1' as usize];
-                self.pscroll = 0;
-                return Quit::No;
-            }
-            _ => {}
-        }
+        // The Files pane is the git panel: it has its own keys (and the global ones as commands).
         if self.focus == Focus::Files {
             return self.files_event(ev);
         }
-        self.list_key(key);
+        self.message = None;
+        let li = Self::list_index(self.focus).expect("a list pane");
+        match self.maps[li].feed(key) {
+            Feed::Run(id) => self.run_id(id),
+            Feed::Pending | Feed::Cancelled | Feed::Unbound => Quit::No,
+        }
+    }
+
+    /// Run an action by id: what a key, the leader menu or the palette resolves to.
+    pub fn run_id(&mut self, id: &'static str) -> Quit {
+        let focus = self.focus;
+        let last = self.len(focus).saturating_sub(1);
+        let li = Self::list_index(focus);
+        let mut moved = true;
+        match id {
+            "focus.next" => self.focus_by(1),
+            "focus.prev" => self.focus_by(-1),
+            "focus.files" => self.set_focus(Focus::Files),
+            "focus.branches" => self.set_focus(Focus::Branches),
+            "focus.commits" => self.set_focus(Focus::Commits),
+            "focus.stashes" => self.set_focus(Focus::Stashes),
+            "back" => self.set_focus(Focus::Files),
+            "quit" => return Quit::Yes,
+            "help" => self.help = Some(ui::keys::Help::default()),
+            "palette" => return Quit::Palette,
+            "preview.down" => self.pscroll += (self.pheight / 2).max(1),
+            "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "nav.up" | "nav.down" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
+                if let Some(li) = li {
+                    let st = &mut self.lists[li];
+                    st.cursor = match id {
+                        "nav.up" => st.cursor.saturating_sub(1),
+                        "nav.down" => (st.cursor + 1).min(last),
+                        "nav.page_up" => st.cursor.saturating_sub(10),
+                        "nav.page_down" => (st.cursor + 10).min(last),
+                        "nav.top" => 0,
+                        _ => last,
+                    };
+                    self.pscroll = 0;
+                }
+            }
+            _ => moved = false,
+        }
+        if !moved {
+            self.pane_action(id);
+        }
         Quit::No
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        self.focus = focus;
+        self.pscroll = 0;
     }
 
     fn focus_by(&mut self, delta: isize) {
@@ -228,64 +271,59 @@ impl App {
     }
 
     fn files_event(&mut self, ev: &Event) -> Quit {
-        match self.files.handle_event(ev) {
+        let action = self.files.handle_event(ev);
+        self.files_action(action)
+    }
+
+    fn files_action(&mut self, action: PanelAction) -> Quit {
+        match action {
             PanelAction::Close => Quit::Yes,
             PanelAction::Open(path) => Quit::Edit(path),
             PanelAction::Changed => {
                 self.reload_history();
                 Quit::No
             }
+            PanelAction::Palette => Quit::Palette,
+            PanelAction::Help => {
+                self.help = Some(ui::keys::Help::default());
+                Quit::No
+            }
+            PanelAction::Command(id) => self.run_id(id),
             PanelAction::None => Quit::No,
         }
     }
 
-    fn list_key(&mut self, key: &KeyEvent) {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let focus = self.focus;
-        let Some(li) = Self::list_index(focus) else { return };
-        let last = self.len(focus).saturating_sub(1);
-        let st = &mut self.lists[li];
-        match key.code {
-            KeyCode::Esc => {
-                self.focus = Focus::Files;
-                return;
-            }
-            KeyCode::Down | KeyCode::Char('j') => st.cursor = (st.cursor + 1).min(last),
-            KeyCode::Up | KeyCode::Char('k') => st.cursor = st.cursor.saturating_sub(1),
-            KeyCode::Char('n') if ctrl => st.cursor = (st.cursor + 1).min(last),
-            KeyCode::Char('p') if ctrl => st.cursor = st.cursor.saturating_sub(1),
-            KeyCode::PageDown => st.cursor = (st.cursor + 10).min(last),
-            KeyCode::PageUp => st.cursor = st.cursor.saturating_sub(10),
-            KeyCode::Home | KeyCode::Char('g') => st.cursor = 0,
-            KeyCode::End | KeyCode::Char('G') => st.cursor = last,
-            KeyCode::Char('d') if ctrl => {
-                self.pscroll += (self.pheight / 2).max(1);
-                return;
-            }
-            KeyCode::Char('u') if ctrl => {
-                self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1));
-                return;
-            }
-            _ => {
-                self.focus_action(key);
-                return;
-            }
+    /// Every action of the focused pane with its keys, for the palette and the help.
+    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
+        match Self::list_index(self.focus) {
+            Some(li) => self.maps[li].rows(),
+            None => self.files.keys_rows(),
         }
-        self.pscroll = 0;
     }
 
-    /// The keys that act on the highlighted branch or stash.
-    fn focus_action(&mut self, key: &KeyEvent) {
+    /// Run the action the palette picked.
+    pub fn run_palette(&mut self, id: &'static str) -> Quit {
+        match self.focus {
+            Focus::Files => {
+                let action = self.files.run(id);
+                self.files_action(action)
+            }
+            _ => self.run_id(id),
+        }
+    }
+
+    /// The actions that act on the highlighted branch or stash.
+    fn pane_action(&mut self, id: &str) {
         match self.focus {
             Focus::Branches => {
                 let Some(b) = self.branches.get(self.lists[0].cursor).cloned() else {
-                    if key.code == KeyCode::Char('n') {
+                    if id == "branch.new" {
                         self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default());
                     }
                     return;
                 };
-                match key.code {
-                    KeyCode::Enter | KeyCode::Char(' ') => {
+                match id {
+                    "branch.checkout" => {
                         if b.is_head {
                             self.say(format!("already on {}", b.name), false);
                         } else {
@@ -293,15 +331,15 @@ impl App {
                             self.run(format!("switched to {}", b.name), move |r| r.checkout_ref(&name, kind));
                         }
                     }
-                    KeyCode::Char('n') => self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default()),
-                    KeyCode::Char(c @ ('d' | 'D')) => {
+                    "branch.new" => self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default()),
+                    "branch.delete" | "branch.force_delete" => {
                         if b.kind != RefKind::Branch || b.is_head {
                             self.say("only a local branch that is not checked out can be deleted", true);
                         } else {
-                            self.mode = Mode::Confirm(Confirm::DeleteBranch { name: b.name, force: c == 'D' });
+                            self.mode = Mode::Confirm(Confirm::DeleteBranch { name: b.name, force: id == "branch.force_delete" });
                         }
                     }
-                    KeyCode::Char('M') => {
+                    "branch.merge" => {
                         if b.is_head {
                             self.say("cannot merge a branch into itself", true);
                         } else {
@@ -313,11 +351,11 @@ impl App {
             }
             Focus::Stashes => {
                 let cur = self.stashes.get(self.lists[2].cursor).map(|s| s.index);
-                match (key.code, cur) {
-                    (KeyCode::Char('n'), _) => self.mode = Mode::Prompt(PromptKind::NewStash, Input::default()),
-                    (KeyCode::Char('a') | KeyCode::Enter, Some(i)) => self.run(format!("applied stash@{{{i}}}"), move |r| r.stash_apply(i)),
-                    (KeyCode::Char('p'), Some(i)) => self.run(format!("popped stash@{{{i}}}"), move |r| r.stash_pop(i)),
-                    (KeyCode::Char('d'), Some(i)) => self.mode = Mode::Confirm(Confirm::DropStash(i)),
+                match (id, cur) {
+                    ("stash.new", _) => self.mode = Mode::Prompt(PromptKind::NewStash, Input::default()),
+                    ("stash.apply", Some(i)) => self.run(format!("applied stash@{{{i}}}"), move |r| r.stash_apply(i)),
+                    ("stash.pop", Some(i)) => self.run(format!("popped stash@{{{i}}}"), move |r| r.stash_pop(i)),
+                    ("stash.drop", Some(i)) => self.mode = Mode::Confirm(Confirm::DropStash(i)),
                     _ => {}
                 }
             }
@@ -385,6 +423,19 @@ impl App {
             f => self.render_preview(f, right, buf, &theme),
         }
         self.render_status(status, buf, &theme);
+        let menu = match self.focus {
+            Focus::Files => self.files.menu(),
+            f => Self::list_index(f).and_then(|i| self.maps[i].menu()),
+        };
+        if let Some(menu) = menu {
+            ui::keys::render_menu(area, buf, &theme, &menu);
+        }
+        if self.help.is_some() {
+            let rows = self.keys_rows();
+            if let Some(h) = self.help.as_mut() {
+                h.render(area, buf, &theme, "Keys", &rows);
+            }
+        }
     }
 
     fn render_list(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
@@ -537,10 +588,10 @@ impl App {
 
     fn hints(&self) -> &'static str {
         match self.focus {
-            Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  tab/1-4 panes  q quit",
-            Focus::Branches => "enter checkout  n new  d/D delete  M merge  ctrl-d/u scroll  tab/1-4 panes  q quit",
-            Focus::Commits => "j/k move  ctrl-d/u scroll the diff  esc files  tab/1-4 panes  q quit",
-            Focus::Stashes => "n new  a apply  p pop  d drop  ctrl-d/u scroll  tab/1-4 panes  q quit",
+            Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  space space commands  ? keys",
+            Focus::Branches => "enter checkout  n new  d/D delete  M merge  space space commands  ? keys",
+            Focus::Commits => "j/k move  ctrl-d/u scroll the diff  space space commands  ? keys",
+            Focus::Stashes => "n new  a apply  p pop  d drop  space space commands  ? keys",
         }
     }
 }
@@ -581,6 +632,7 @@ fn ago(time: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
     use std::fs;
     use std::process::Command;
     use std::sync::Once;
@@ -735,5 +787,45 @@ mod tests {
         app.handle_event(&key(KeyCode::Enter));
         assert_eq!(app.commits.len(), 2, "{:?}", app.message);
         assert_eq!(app.commits[0].subject, "second");
+    }
+
+    #[test]
+    fn the_leader_menu_palette_and_help_work_in_every_pane() {
+        let d = repo("leader");
+        let mut app = App::new(&d).unwrap();
+        // Files pane: its own table; Space then Space asks the host for the palette.
+        press_raw(&mut app, ' ');
+        assert!(app.files.menu().is_some());
+        assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Quit::Palette);
+        let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
+        assert!(ids.contains(&"commit.new") && ids.contains(&"focus.branches"), "{ids:?}");
+        // Branches pane: the leader menu lists the branch actions, a leader key runs one.
+        press(&mut app, "2");
+        press_raw(&mut app, ' ');
+        let menu = match app.focus { Focus::Branches => app.maps[0].menu().unwrap(), _ => panic!() };
+        let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"new branch") && names.contains(&"merge") && names.contains(&"commands"), "{names:?}");
+        press_raw(&mut app, 'n');
+        assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));
+        app.handle_event(&key(KeyCode::Esc));
+        // The palette rows of a pane hold the basic keys too (they are filtered when shown).
+        let rows = app.keys_rows();
+        assert!(rows.iter().any(|r| r.id == "nav.down" && r.basic) && rows.iter().any(|r| r.id == "branch.merge" && !r.basic));
+        // The palette's pick runs in the pane; `?` opens the help, any other key closes it with Esc.
+        assert_eq!(app.run_palette("branch.new"), Quit::No);
+        assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));
+        app.handle_event(&key(KeyCode::Esc));
+        press(&mut app, "?");
+        assert!(app.help.is_some());
+        app.handle_event(&key(KeyCode::Esc));
+        assert!(app.help.is_none());
+        // Stash pane has its own actions.
+        press(&mut app, "4");
+        let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
+        assert!(ids.contains(&"stash.apply") && !ids.contains(&"branch.merge"), "{ids:?}");
+    }
+
+    fn press_raw(app: &mut App, c: char) {
+        app.handle_event(&key(KeyCode::Char(c)));
     }
 }
