@@ -394,6 +394,41 @@ impl Panel {
         }
     }
 
+    /// The folder rows that enclose row `at`, outermost first (what stays pinned above it).
+    fn ancestors(&self, at: usize) -> Vec<usize> {
+        let Some(row) = self.rows.get(at) else { return Vec::new() };
+        let mut need = row.depth;
+        let mut found = Vec::new();
+        for i in (0..at).rev() {
+            if need == 0 {
+                break;
+            }
+            if self.rows[i].is_dir && self.rows[i].depth < need {
+                found.push(i);
+                need = self.rows[i].depth;
+            }
+        }
+        found.reverse();
+        found
+    }
+
+    /// The pinned folder rows when `offset` is the first scrolling row; at least one row scrolls.
+    fn pinned(&self, offset: usize) -> Vec<usize> {
+        let mut p = self.ancestors(offset);
+        let keep = self.page.saturating_sub(1);
+        if p.len() > keep {
+            p.drain(..p.len() - keep);
+        }
+        p
+    }
+
+    /// The rows drawn, top to bottom: the pinned folders, then the rows from `offset`.
+    fn visible(&self) -> Vec<usize> {
+        let pinned = self.pinned(self.offset);
+        let take = self.page.saturating_sub(pinned.len());
+        pinned.into_iter().chain(self.offset..(self.offset + take).min(self.rows.len())).collect()
+    }
+
     /// Path under the cursor.
     pub fn current(&self) -> Option<&Path> {
         self.rows.get(self.cursor).map(|r| r.path.as_path())
@@ -839,7 +874,7 @@ impl Panel {
             return;
         }
         let mut running = self.dir_sizes.values().filter(|d| !d.state().1).count();
-        let visible: Vec<PathBuf> = self.rows.iter().skip(self.offset).take(self.page).filter(|r| r.is_dir).map(|r| r.path.clone()).collect();
+        let visible: Vec<PathBuf> = self.visible().into_iter().map(|i| &self.rows[i]).filter(|r| r.is_dir).map(|r| r.path.clone()).collect();
         for p in visible {
             if running >= 3 {
                 break;
@@ -853,7 +888,7 @@ impl Panel {
 
     /// The folder sizes of the visible rows and how far each count is.
     fn size_signature(&self) -> Vec<(PathBuf, (u64, bool))> {
-        self.rows.iter().skip(self.offset).take(self.page).filter_map(|r| self.dir_sizes.get(&r.path).map(|d| (r.path.clone(), d.state()))).collect()
+        self.visible().into_iter().map(|i| &self.rows[i]).filter_map(|r| self.dir_sizes.get(&r.path).map(|d| (r.path.clone(), d.state()))).collect()
     }
 
     /// Call between events: starts more folder counts and says whether something on
@@ -934,18 +969,24 @@ impl Panel {
         }
 
         self.page = usize::from(inner.height).max(1);
+        // The folders above the top row stay pinned at the top while scrolling, so the path is
+        // never lost; they take rows from the window, which the scrolling accounts for.
         if self.cursor < self.offset {
             self.offset = self.cursor;
-        } else if self.cursor >= self.offset + self.page {
-            self.offset = self.cursor + 1 - self.page;
+        } else {
+            while self.cursor >= self.offset + self.page - self.pinned(self.offset).len() {
+                self.offset += 1;
+            }
         }
 
         let rows = ui::list::Rows::new(area, inner);
         self.count_visible_dirs();
         let sizes = &self.dir_sizes;
+        let shown = self.visible();
 
-        for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
-            let y = inner.y + (i - self.offset) as u16;
+        for (k, &i) in shown.iter().enumerate() {
+            let row = &self.rows[i];
+            let y = inner.y + k as u16;
             let area = rows.content(y);
             let selected = i == self.cursor;
             let git = self.git_state(row);
@@ -1431,5 +1472,31 @@ mod tests {
         p.handle_event(&key(KeyCode::Char(',')));
         p.handle_event(&key(KeyCode::Char('t')));
         assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::Command("tab.new"));
+    }
+
+    #[test]
+    fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
+        let d = tree("pinned");
+        std::fs::create_dir_all(d.join("src/deep/er")).unwrap();
+        for i in 0..30 {
+            std::fs::write(d.join(format!("src/deep/er/f{i:02}.txt")), "x").unwrap();
+        }
+        let mut p = panel(&d);
+        p.reveal(&d.join("src/deep/er/f29.txt"));
+        let area = Rect::new(0, 0, 40, 8);
+        let mut buf = Buffer::empty(area);
+        p.render(area, &mut buf, &Theme::default(), true);
+        let text: Vec<String> = (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+        // Border, then the folders above the first scrolling row, outermost first, then files.
+        assert!(text[1].contains("src") && !text[1].contains("deep"), "{text:#?}");
+        assert!(text[2].contains("deep") && text[3].contains("er"), "{text:#?}");
+        assert!(text.iter().any(|l| l.contains("f29.txt")), "the cursor row stays in view: {text:#?}");
+        assert_eq!(text.iter().filter(|l| l.contains("src")).count(), 1, "nothing is drawn twice: {text:#?}");
+        // At the top nothing is pinned.
+        p.handle_event(&key(KeyCode::Char('g')));
+        let mut buf = Buffer::empty(area);
+        p.render(area, &mut buf, &Theme::default(), true);
+        let text: Vec<String> = (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+        assert!(text[1].contains("docs"), "{text:#?}");
     }
 }

@@ -276,11 +276,8 @@ impl App {
     }
 
     fn tab_bar(&self, area: Rect, buf: &mut Buffer) {
-        let labels: Vec<ui::tabs::Label> = self
-            .tabs
-            .iter()
-            .map(|tab| ui::tabs::Label::new(tab.root().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into())))
-            .collect();
+        let roots: Vec<&Path> = self.tabs.iter().map(|tab| tab.root()).collect();
+        let labels: Vec<ui::tabs::Label> = ui::tabs::short_titles(&roots).into_iter().map(ui::tabs::Label::new).collect();
         ui::tabs::render(area, buf, &self.theme, &labels, self.tabs.active_index(), true);
     }
 

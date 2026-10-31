@@ -299,7 +299,7 @@ pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
         input.push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
     }
     let mut child = Command::new("pick")
-        .args(["--no-preview", "--flat", "--separator", "--header-lines", "1", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
+        .args(["--no-preview", "--flat", "--header-lines", "1", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -315,30 +315,60 @@ pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
     rows.iter().find(|r| r.id == id).map(|r| r.id)
 }
 
-/// The `?` help: a scrollable popup listing every action with its keys.
-#[derive(Debug, Default, Clone, Copy)]
+/// The `?` help: a scrollable popup listing every action with its keys. `/` starts a search
+/// that filters the rows by name, keys or description.
+#[derive(Debug, Default, Clone)]
 pub struct Help {
     scroll: usize,
+    query: String,
+    searching: bool,
 }
 
 impl Help {
     /// Handle a key while the help is open; `false` closes it.
     pub fn key(&mut self, key: &KeyEvent) -> bool {
+        if self.searching {
+            match key.code {
+                KeyCode::Esc => {
+                    self.query.clear();
+                    self.searching = false;
+                }
+                KeyCode::Enter => self.searching = false,
+                KeyCode::Backspace => {
+                    self.query.pop();
+                }
+                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => self.query.push(c),
+                KeyCode::Down => self.scroll += 1,
+                KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
+                _ => {}
+            }
+            self.scroll = 0.max(self.scroll);
+            return true;
+        }
         match key.code {
+            KeyCode::Char('/') => self.searching = true,
             KeyCode::Down | KeyCode::Char('j') => self.scroll += 1,
             KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
             KeyCode::PageDown => self.scroll += 10,
             KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(10),
             KeyCode::Home | KeyCode::Char('g') => self.scroll = 0,
+            // Esc first clears a finished search, then closes.
+            KeyCode::Esc if !self.query.is_empty() => self.query.clear(),
             KeyCode::Esc | KeyCode::Char('q' | '?') => return false,
             _ => {}
         }
         true
     }
 
+    /// The rows that match the search (all of them with none).
+    fn matching<'a>(&self, rows: &'a [Row]) -> Vec<&'a Row> {
+        let q = self.query.to_lowercase();
+        rows.iter().filter(|r| q.is_empty() || r.name.to_lowercase().contains(&q) || r.keys.to_lowercase().contains(&q) || r.desc.to_lowercase().contains(&q)).collect()
+    }
+
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, title: &str, rows: &[Row]) {
         let rect = crate::layout::popup(theme, area);
-        if rect.width < 20 || rect.height < 5 {
+        if rect.width < 20 || rect.height < 6 {
             return;
         }
         let c = &theme.colors;
@@ -346,17 +376,31 @@ impl Help {
         let pane = crate::Pane::new(theme).title(title).focused(true);
         let inner = pane.inner(rect);
         pane.render(rect, buf);
-        let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(inner.width as usize / 2);
-        let page = usize::from(inner.height).max(1);
-        self.scroll = self.scroll.min(rows.len().saturating_sub(page));
-        for (i, r) in rows.iter().skip(self.scroll).take(page).enumerate() {
+        // The search line and a rule under it, then the rows.
+        let hint = if self.searching { String::new() } else if self.query.is_empty() { "/ to search".to_string() } else { String::new() };
+        let line = if self.searching || !self.query.is_empty() { crate::prompt::line(theme, "/ ", &self.query) } else { Line::from(Span::styled(hint, Style::new().fg(c.muted.into()))) };
+        Paragraph::new(line).render(Rect { height: 1, ..inner }, buf);
+        if self.searching {
+            crate::prompt::cursor(buf, Rect { height: 1, ..inner }, "/ ", self.query.chars().count());
+        }
+        buf.set_string(rect.x, inner.y + 1, format!("├{}┤", "─".repeat(usize::from(rect.width).saturating_sub(2))), Style::new().fg(c.border_focused.into()));
+        let list = Rect { y: inner.y + 2, height: inner.height.saturating_sub(2), ..inner };
+        let shown = self.matching(rows);
+        if shown.is_empty() {
+            buf.set_string(list.x, list.y, "no match", Style::new().fg(c.muted.into()));
+            return;
+        }
+        let keys_w = shown.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(inner.width as usize / 2);
+        let page = usize::from(list.height).max(1);
+        self.scroll = self.scroll.min(shown.len().saturating_sub(page));
+        for (i, r) in shown.iter().skip(self.scroll).take(page).enumerate() {
             let line = Line::from(vec![
                 Span::styled(format!("{:<keys_w$}", r.keys), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)),
                 Span::styled("  ", Style::new()),
                 Span::styled(r.name.to_string(), Style::new().fg(c.accent.into())),
                 Span::styled(format!("  {}", r.desc), Style::new().fg(c.muted.into())),
             ]);
-            Paragraph::new(line).render(Rect { y: inner.y + i as u16, height: 1, ..inner }, buf);
+            Paragraph::new(line).render(Rect { y: list.y + i as u16, height: 1, ..list }, buf);
         }
     }
 }
@@ -518,5 +562,39 @@ mod tests {
         render_menu(area, &mut buf, &Theme::default(), &m.menu().unwrap());
         let text: String = (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
         assert!(text.contains("space") && text.contains("find") && text.contains("view") && text.contains('▸'), "{text}");
+    }
+
+    #[test]
+    fn help_search_filters_rows_and_esc_clears_before_closing() {
+        let m = map();
+        let rows = m.rows();
+        let area = Rect::new(0, 0, 80, 24);
+        let text = |h: &mut Help| {
+            let mut buf = Buffer::empty(area);
+            h.render(area, &mut buf, &Theme::default(), "Keys", &rows);
+            (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect::<String>()
+        };
+        let mut help = Help::default();
+        assert!(text(&mut help).contains("/ to search"));
+        help.key(&k('/'));
+        for c in "hidden".chars() {
+            help.key(&k(c));
+        }
+        let t = text(&mut help);
+        assert!(t.contains("/ hidden") && t.contains("toggle hidden files") && !t.contains("half a page"), "{t}");
+        // Enter keeps the filter, Esc clears it, a second Esc closes.
+        help.key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(text(&mut help).contains("/ hidden"));
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(help.key(&esc));
+        assert!(text(&mut help).contains("half a page"));
+        assert!(!help.key(&esc));
+        // Nothing matches: say so.
+        let mut help = Help::default();
+        help.key(&k('/'));
+        help.key(&k('z'));
+        help.key(&k('z'));
+        help.key(&k('z'));
+        assert!(text(&mut help).contains("no match"));
     }
 }

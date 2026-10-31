@@ -22,13 +22,30 @@ pub fn quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
+/// The `--y` percent that centers a floating pane `p` percent tall in about `rows` rows.
+/// Zellij turns the percentages into rows by rounding the height up and the offset down (minus
+/// one row), which leaves the pane too high when it is just half the leftover; this picks the
+/// smallest percent whose offset reaches the middle of the leftover room.
+pub fn vertical_offset(p: u16, rows: u16) -> u16 {
+    let (r, p) = (i32::from(rows), i32::from(p));
+    let height = (r * p + 99) / 100;
+    let want = ((r - height).max(0) + 1) / 2;
+    for y in 0..=(100 - p) {
+        if (r * y / 100 - 1).max(0) >= want {
+            return y as u16;
+        }
+    }
+    (100 - p) as u16
+}
+
 /// Arguments for `zellij`: a floating pane `percent` of the screen, centered,
 /// that runs `exe args...` with input from `input` (if any) and output to
 /// `out`, then records the exit code in `code`.
 #[allow(clippy::too_many_arguments)]
-pub fn zellij_args(exe: &Path, args: &[OsString], cwd: &Path, input: Option<&Path>, out: &Path, code: &Path, percent: u16, env: &[(String, String)]) -> Vec<String> {
+pub fn zellij_args(exe: &Path, args: &[OsString], cwd: &Path, input: Option<&Path>, out: &Path, code: &Path, percent: u16, rows: Option<u16>, env: &[(String, String)]) -> Vec<String> {
     let p = percent.clamp(10, 100);
-    let offset = (100 - p) / 2;
+    let offset = rows.map_or((100 - p) / 2, |r| vertical_offset(p, r));
+    let side = (100 - p) / 2;
     let q = |s: &OsStr| quote(&s.to_string_lossy());
 
     let mut script = String::new();
@@ -51,7 +68,7 @@ pub fn zellij_args(exe: &Path, args: &[OsString], cwd: &Path, input: Option<&Pat
     v.extend(["--borderless".into(), "true".into()]);
     v.extend(["--cwd".into(), cwd.to_string_lossy().into_owned()]);
     v.extend(["--width".into(), format!("{p}%"), "--height".into(), format!("{p}%")]);
-    v.extend(["--x".into(), format!("{offset}%"), "--y".into(), format!("{offset}%")]);
+    v.extend(["--x".into(), format!("{side}%"), "--y".into(), format!("{offset}%")]);
     v.extend(["--".into(), "sh".into(), "-c".into(), script]);
     v
 }
@@ -81,7 +98,9 @@ fn run_in(dir: &Path, args: Vec<OsString>, percent: u16) -> io::Result<i32> {
     let exe = std::env::current_exe()?;
     let cwd = std::env::current_dir()?;
     let env: Vec<(String, String)> = FORWARD_ENV.iter().filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v))).collect();
-    let zargs = zellij_args(&exe, &args, &cwd, has_input.then_some(input.as_path()), &out, &code, percent, &env);
+    // About as many rows as the pane the tool runs in has: used to center the popup vertically.
+    let rows = ratatui::crossterm::terminal::size().ok().map(|(_, r)| r);
+    let zargs = zellij_args(&exe, &args, &cwd, has_input.then_some(input.as_path()), &out, &code, percent, rows, &env);
 
     let status = Command::new("zellij").args(&zargs).stdout(std::process::Stdio::null()).status()?;
     if !status.success() {
@@ -118,6 +137,7 @@ mod tests {
             Path::new("/t/out"),
             Path::new("/t/code"),
             80,
+            None,
             &[("PATH".into(), "/a:/b".into())],
         );
         let has = |a: &str, b: &str| z.windows(2).any(|w| w[0] == a && w[1] == b);
@@ -130,7 +150,7 @@ mod tests {
             "PATH='/a:/b' '/bin/pick' '--files' 'my dir' '--title' 'it'\\''s' --no-popup < '/t/in' > '/t/out'; echo $? > '/t/code'"
         );
         // No piped input: no redirect from `in`. Other sizes are centered too.
-        let z = zellij_args(Path::new("/bin/pick"), &[], Path::new("/w"), None, Path::new("/o"), Path::new("/c"), 60, &[]);
+        let z = zellij_args(Path::new("/bin/pick"), &[], Path::new("/w"), None, Path::new("/o"), Path::new("/c"), 60, None, &[]);
         assert!(!z.last().unwrap().contains(" < ") && z.windows(2).any(|w| w[0] == "--x" && w[1] == "20%"));
     }
 
@@ -138,5 +158,21 @@ mod tests {
     fn popup_applies_only_inside_zellij_and_can_be_turned_off() {
         // Flag off always wins; the environment cases are covered by the end-to-end run.
         assert!(!wanted(true));
+    }
+
+    #[test]
+    fn the_vertical_offset_leaves_about_equal_room_above_and_below() {
+        // Zellij: offset rows = rows * y / 100 - 1 (at least 0), height rows = rows * p / 100 rounded up.
+        for rows in [24u16, 30, 37, 40, 50, 60, 100] {
+            for p in [60u16, 80, 90] {
+                let y = vertical_offset(p, rows);
+                let height = (i32::from(rows) * i32::from(p) + 99) / 100;
+                let top = (i32::from(rows) * i32::from(y) / 100 - 1).max(0);
+                let bottom = i32::from(rows) - top - height;
+                assert!((top - bottom).abs() <= 2, "rows {rows} p {p}: y {y} top {top} bottom {bottom}");
+            }
+        }
+        // Full height needs no offset.
+        assert_eq!(vertical_offset(100, 40), 0);
     }
 }

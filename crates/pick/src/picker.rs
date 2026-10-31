@@ -129,7 +129,7 @@ impl Picker {
             preview_cmd: None,
             expect: Vec::new(),
             header: Vec::new(),
-            separator: false,
+            separator: true,
             tree_on: false,
             tree: None,
             tree_dirty: true,
@@ -555,9 +555,10 @@ impl Picker {
         // A rule under the prompt, then the header lines, then the list.
         let sep = u16::from(self.separator && inner.height > 3);
         if sep == 1 {
-            let wide = Rect { x: inner.x.saturating_sub(1).max(area.x + 1), width: inner.width + 2, ..inner };
-            let rule = "─".repeat(usize::from(wide.width));
-            buf.set_string(wide.x, inner.y + 1, rule, Style::new().fg(c.border.into()));
+            // The rule joins the pane's side borders (`├───┤`), in the focused border color.
+            let y = inner.y + 1;
+            let rule = format!("├{}┤", "─".repeat(usize::from(area.width).saturating_sub(2)));
+            buf.set_string(area.x, y, rule, Style::new().fg(c.border_focused.into()));
         }
         let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep));
         for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
@@ -659,7 +660,6 @@ impl Picker {
                     let mut spans = vec![
                         Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into())),
                         Span::styled("│ ".repeat(usize::from(*depth)), Style::new().fg(c.muted.into())),
-                        Span::raw("  "),
                     ];
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
@@ -1355,8 +1355,8 @@ mod tree_tests {
         }
         let l = lines(&mut p);
         // Row 0 is the border, 1 the prompt: the list starts at 2 with the merged folder `src/ui`, then files.
-        assert!(l[2].contains(" src/ui"), "{l:#?}");
-        assert!(l[3].contains(".rs"), "{l:#?}");
+        assert!(l[3].contains(" src/ui"), "{l:#?}");
+        assert!(l[4].contains(".rs"), "{l:#?}");
         // The cursor row is on screen and nothing is drawn twice.
         assert!(l.iter().any(|r| r.contains("f30.rs")), "{l:#?}");
         assert_eq!(l.iter().filter(|r| r.contains(" src/ui")).count(), 1, "{l:#?}");

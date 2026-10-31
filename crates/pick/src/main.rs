@@ -54,9 +54,9 @@ struct Cli {
     /// whitespace); accepting still prints the whole line.
     #[arg(long, value_name = "N")]
     with_nth: Option<usize>,
-    /// Draw a rule between the query line and what is under it.
+    /// No rule between the query line and the results.
     #[arg(long)]
-    separator: bool,
+    no_separator: bool,
     /// Treat the first N stdin lines as a fixed header above the list.
     #[arg(long, value_name = "N", default_value_t = 0)]
     header_lines: usize,
@@ -140,7 +140,7 @@ fn run(cli: Cli) -> io::Result<u8> {
     if cli.git.is_some() {
         picker.set_icon(ui::icons::GIT);
     }
-    picker.set_separator(cli.separator);
+    picker.set_separator(!cli.no_separator);
     if let Some(title) = &cli.title {
         picker.set_title(title.clone());
     }

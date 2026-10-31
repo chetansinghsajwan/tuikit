@@ -139,6 +139,40 @@ impl Label {
     }
 }
 
+/// Titles for tabs showing `paths`: the file or folder name, and where two tabs would read
+/// the same, as many parent folders as it takes to tell them apart (`src/lib.rs` and
+/// `ui/lib.rs`). A path with no name (`/`) is shown as `/`.
+pub fn short_titles(paths: &[&std::path::Path]) -> Vec<String> {
+    let comps: Vec<Vec<String>> = paths.iter().map(|p| p.components().filter_map(|c| match c {
+        std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+        _ => None,
+    }).collect()).collect();
+    // How many trailing components each path shows; raised for the paths that still clash.
+    let mut depth = vec![1usize; paths.len()];
+    let title = |i: usize, d: usize| -> String {
+        let c = &comps[i];
+        if c.is_empty() {
+            return "/".to_string();
+        }
+        c[c.len().saturating_sub(d)..].join("/")
+    };
+    for _ in 0..64 {
+        let titles: Vec<String> = (0..paths.len()).map(|i| title(i, depth[i])).collect();
+        let mut changed = false;
+        for i in 0..paths.len() {
+            let clashes = (0..paths.len()).any(|j| j != i && titles[j] == titles[i]);
+            if clashes && depth[i] < comps[i].len() {
+                depth[i] += 1;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    (0..paths.len()).map(|i| title(i, depth[i])).collect()
+}
+
 /// The text cells of a label, `[number] [icon] title [marker]` between single spaces.
 fn parts(i: usize, l: &Label, numbers: bool) -> Vec<(String, Part)> {
     let mut v = vec![(" ".to_string(), Part::Gap)];
@@ -366,5 +400,18 @@ mod tests {
         render(Rect::new(0, 0, 12, 1), &mut buf, &Theme::default(), &labels(&["a-very-long-file-name.rs"]), 0, true);
         let text = row(&buf, 12);
         assert!(text.contains('…') && text.chars().count() <= 12, "{text:?}");
+    }
+
+    #[test]
+    fn equal_names_get_just_enough_parent_folders() {
+        use std::path::Path;
+        let t = |ps: &[&str]| short_titles(&ps.iter().map(|p| Path::new(*p)).collect::<Vec<_>>());
+        assert_eq!(t(&["/a/src/lib.rs", "/a/ui/lib.rs", "/a/main.rs"]), vec!["src/lib.rs", "ui/lib.rs", "main.rs"]);
+        // Deeper clashes need more levels, and only for the paths that clash.
+        assert_eq!(t(&["/x/a/b/lib.rs", "/x/c/b/lib.rs", "/x/other.rs"]), vec!["a/b/lib.rs", "c/b/lib.rs", "other.rs"]);
+        // Identical paths cannot be told apart: the whole path is shown for both.
+        assert_eq!(t(&["/p/q.rs", "/p/q.rs"]), vec!["p/q.rs", "p/q.rs"]);
+        assert_eq!(t(&["/"]), vec!["/"]);
+        assert_eq!(t(&[]), Vec::<String>::new());
     }
 }
