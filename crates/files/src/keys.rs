@@ -39,6 +39,8 @@ pub const ACTIONS: &[Action] = &[
     a!("bookmark.set", "save bookmark", "save the folder under the cursor under a key you type", ["leader b s"]),
     a!("bookmark.jump", "go to bookmark", "make a bookmarked folder the root", ["leader b j"]),
     a!("bookmark.delete", "delete bookmark", "delete a bookmark", ["leader b d"]),
+    a!("palette", "commands", "search every action by name and run it", ["leader space"]),
+    a!("help", "keys", "list every action with its keys", ["?"]),
     a!("back", "back", "clear the marks, else close", ["esc"]),
     a!("quit", "quit", "close the explorer", ["q", "ctrl-c"]),
 ];

@@ -1,6 +1,6 @@
 # Usage design: one experience across all terminal tools
 
-Status: decided (user, 2026-10-31). Step 1 done: `ui::keys` (engine, which-key popup) and the `files` migration; the palette, `?`, the other tools and the Nix key config are still to do. Applies to every tool built so far (`files`, `pick`, `pv` where interactive, `git-ui`, `git-panel`, the diagnostics panel, the helix docks and popups) and to every future tool.
+Status: decided (user, 2026-10-31). Done: `ui::keys` (engine, which-key popup), the `files` migration, the palette (`Space Space`) and `?` help; still to do: the other tools, the shared leader setting and the Nix key config. Applies to every tool built so far (`files`, `pick`, `pv` where interactive, `git-ui`, `git-panel`, the diagnostics panel, the helix docks and popups) and to every future tool.
 
 The look is shared through the `ui` crate. This document is the same idea for behaviour: what keys do, how actions are found, how a tool is embedded.
 

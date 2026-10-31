@@ -49,6 +49,8 @@ struct App {
     active: usize,
     preview: Option<Preview>,
     show_meta: bool,
+    /// The keys help, while it is open.
+    help: Option<ui::keys::Help>,
     meta: Option<(PathBuf, Option<Meta>)>,
     dirsize: Option<DirSize>,
 }
@@ -56,7 +58,7 @@ struct App {
 pub fn run(opts: Options) -> io::Result<u8> {
     let dir = opts.dir.canonicalize()?;
     let panel_opts = panel_opts(&opts);
-    let mut app = App { theme: Theme::load(), tabs: vec![Panel::new(dir, panel_opts)], active: 0, preview: None, show_meta: true, meta: None, dirsize: None, opts };
+    let mut app = App { theme: Theme::load(), tabs: vec![Panel::new(dir, panel_opts)], active: 0, preview: None, help: None, show_meta: true, meta: None, dirsize: None, opts };
 
     // Draw on the controlling terminal so stdout stays free for the caller.
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
@@ -129,6 +131,12 @@ impl App {
             return Ok(None);
         }
         // Tab numbers are the one raw key the app keeps (not while a prompt or a leader menu is open).
+        if let (Some(help), Event::Key(key)) = (self.help.as_mut(), ev) {
+            if !help.key(key) {
+                self.help = None;
+            }
+            return Ok(None);
+        }
         if !self.panel().is_busy() && self.panel().menu().is_none() && !modifiers.contains(KeyModifiers::CONTROL) {
             match code {
                 KeyCode::Char(c @ '1'..='9') => {
@@ -186,6 +194,14 @@ impl App {
                 self.panel().refresh();
             }
             Action::Command(id) => self.command(id),
+            Action::Help => self.help = Some(ui::keys::Help::default()),
+            Action::Palette => {
+                let rows = self.tabs[self.active].keys_rows();
+                if let Some(id) = suspended(term, || ui::keys::choose(&rows, "Commands"))? {
+                    let action = self.panel().run(id);
+                    return self.act(action, term);
+                }
+            }
             Action::None | Action::Created(..) | Action::Moved(_) | Action::Deleted(_) => {}
         }
         Ok(None)
@@ -232,6 +248,10 @@ impl App {
         }
         if let Some(menu) = self.tabs[self.active].menu() {
             ui::keys::render_menu(area, buf, &theme, &menu);
+        }
+        if let Some(help) = self.help.as_mut() {
+            let rows = self.tabs[self.active].keys_rows();
+            help.render(area, buf, &theme, "Keys", &rows);
         }
     }
 

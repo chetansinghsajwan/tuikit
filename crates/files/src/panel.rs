@@ -102,6 +102,11 @@ pub enum Action {
     Deleted(Vec<PathBuf>),
     /// The user asked to search: the host runs `pick` and calls `reveal` with the result.
     Search(Search),
+    /// The user asked for the command palette: the host lists `actions()` with `ui::keys::choose`
+    /// and runs the pick with `run`.
+    Palette,
+    /// The user asked for the keys help: the host shows `ui::keys::Help`.
+    Help,
     /// An action the panel does not own (a host registered it in `PanelOptions::actions`): the host runs it.
     Command(&'static str),
     /// Rename these paths together by editing their names in a text editor.
@@ -498,6 +503,11 @@ impl Panel {
         self.keymap.actions()
     }
 
+    /// Every action with its keys, for the palette and the help.
+    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
+        self.keymap.rows()
+    }
+
     /// The keys bound to an action, as shown.
     pub fn keys_of(&self, id: &str) -> String {
         self.keymap.keys_of(id)
@@ -599,6 +609,8 @@ impl Panel {
                 }
                 self.marked.clear();
             }
+            "palette" => return Action::Palette,
+            "help" => return Action::Help,
             "quit" => return Action::Close,
             _ => {}
         }

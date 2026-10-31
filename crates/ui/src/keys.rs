@@ -262,6 +262,98 @@ impl Keymap {
     }
 }
 
+/// One action as the palette and the help list it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// The keys bound to it, as shown (`space v c`, `j / down`).
+    pub keys: String,
+    pub desc: &'static str,
+}
+
+impl Keymap {
+    /// Every action, in the order the tool declared them.
+    pub fn rows(&self) -> Vec<Row> {
+        self.actions.iter().map(|a| Row { id: a.id, name: a.name, keys: self.keys_of(a.id), desc: a.desc }).collect()
+    }
+}
+
+/// Let the user pick one of `rows` by name with the shared picker (`pick`, which must be
+/// on `PATH`): the palette. `None` when cancelled or when `pick` is unavailable. The caller
+/// gives the terminal to it first (leave the alternate screen, as for any external program).
+pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0);
+    let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24);
+    let mut input = String::new();
+    for r in rows {
+        input.push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
+    }
+    let mut child = Command::new("pick")
+        .args(["--no-preview", "--flat", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .ok()?;
+    child.stdin.take()?.write_all(input.as_bytes()).ok()?;
+    let out = child.wait_with_output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let id = text.lines().next()?.rsplit('\t').next()?;
+    rows.iter().find(|r| r.id == id).map(|r| r.id)
+}
+
+/// The `?` help: a scrollable popup listing every action with its keys.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Help {
+    scroll: usize,
+}
+
+impl Help {
+    /// Handle a key while the help is open; `false` closes it.
+    pub fn key(&mut self, key: &KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') => self.scroll += 1,
+            KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
+            KeyCode::PageDown => self.scroll += 10,
+            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(10),
+            KeyCode::Home | KeyCode::Char('g') => self.scroll = 0,
+            KeyCode::Esc | KeyCode::Char('q' | '?') => return false,
+            _ => {}
+        }
+        true
+    }
+
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, title: &str, rows: &[Row]) {
+        let rect = crate::layout::popup(theme, area);
+        if rect.width < 20 || rect.height < 5 {
+            return;
+        }
+        let c = &theme.colors;
+        Clear.render(rect, buf);
+        let pane = crate::Pane::new(theme).title(title).focused(true);
+        let inner = pane.inner(rect);
+        pane.render(rect, buf);
+        let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(inner.width as usize / 2);
+        let page = usize::from(inner.height).max(1);
+        self.scroll = self.scroll.min(rows.len().saturating_sub(page));
+        for (i, r) in rows.iter().skip(self.scroll).take(page).enumerate() {
+            let line = Line::from(vec![
+                Span::styled(format!("{:<keys_w$}", r.keys), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)),
+                Span::styled("  ", Style::new()),
+                Span::styled(r.name.to_string(), Style::new().fg(c.accent.into())),
+                Span::styled(format!("  {}", r.desc), Style::new().fg(c.muted.into())),
+            ]);
+            Paragraph::new(line).render(Rect { y: inner.y + i as u16, height: 1, ..inner }, buf);
+        }
+    }
+}
+
 /// Draw the which-key popup at the bottom right of `area`: a pane titled with the keys
 /// typed so far, one row per option (`key  name`, groups marked with `▸`).
 pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
@@ -391,6 +483,23 @@ mod tests {
         for (seq, id) in &m.bindings {
             assert!(keys.insert(seq.clone()), "key shared by {id}");
         }
+    }
+
+    #[test]
+    fn rows_and_help_list_every_action_with_its_keys() {
+        let m = map();
+        let rows = m.rows();
+        assert_eq!(rows.len(), ACTIONS.len());
+        let hidden = rows.iter().find(|r| r.id == "view.hidden").unwrap();
+        assert_eq!(hidden.keys, ". / space v h");
+        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(area);
+        let mut help = Help::default();
+        help.render(area, &mut buf, &Theme::default(), "Keys", &rows);
+        let text: String = (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+        assert!(text.contains("Keys") && text.contains("space v c") && text.contains("toggle hidden files"), "{text}");
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(help.key(&k('j')) && !help.key(&esc));
     }
 
     #[test]
