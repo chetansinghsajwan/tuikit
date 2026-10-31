@@ -1,6 +1,6 @@
 //! Tabs, the same in every tool: a model ([`Tabs`]) that owns the list and the active
 //! tab, and a strip ([`render`]) that draws it: numbered labels, the active one bold in
-//! the accent color and underlined, a marker for unsaved changes, and when the labels do
+//! the accent color, a marker for unsaved changes, and when the labels do
 //! not fit a window around the active tab with `‹N` / `N›` for the ones out of view.
 //!
 //! The strip is one row. Keys come from each tool's action registry (`Space t n/c/l/h`,
@@ -205,7 +205,7 @@ fn width(parts: &[(String, Part)]) -> usize {
 
 fn spans(parts: Vec<(String, Part)>, active: bool, theme: &Theme) -> Vec<Span<'static>> {
     let c = &theme.colors;
-    let base = if active { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { Style::new().fg(c.muted.into()) };
+    let base = if active { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD) } else { Style::new().fg(c.muted.into()) };
     parts
         .into_iter()
         .map(|(text, part)| {
@@ -367,11 +367,11 @@ mod tests {
         render(area, &mut buf, &Theme::default(), &ls, 1, true);
         let text = row(&buf, 60);
         assert_eq!(text, " 1 README.md  2 good.nix ●");
-        // The active label is bold and underlined, the other is not.
+        // The active label is bold, the other is not.
         let active = (0..60).find(|&x| buf[(x, 0)].symbol() == "g").unwrap();
-        assert!(buf[(active, 0)].modifier.contains(Modifier::UNDERLINED | Modifier::BOLD));
+        assert!(buf[(active, 0)].modifier.contains(Modifier::BOLD));
         let other = (0..60).find(|&x| buf[(x, 0)].symbol() == "R").unwrap();
-        assert!(!buf[(other, 0)].modifier.contains(Modifier::UNDERLINED));
+        assert!(!buf[(other, 0)].modifier.contains(Modifier::BOLD) && !buf[(active, 0)].modifier.contains(Modifier::UNDERLINED));
         // Without numbers the labels are plain.
         let mut buf = Buffer::empty(area);
         render(area, &mut buf, &Theme::default(), &ls, 0, false);
