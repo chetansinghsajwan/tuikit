@@ -94,9 +94,9 @@ mod popup_tests {
     #[test]
     fn popup_is_centered_and_follows_the_percent_token() {
         let mut t = Theme::default();
-        assert_eq!(t.layout.popup_percent, 80);
+        assert_eq!(t.layout.popup_percent, 90);
         let p = popup(&t, Rect::new(0, 0, 100, 50));
-        assert_eq!((p.x, p.y, p.width, p.height), (10, 5, 80, 40));
+        assert_eq!((p.x, p.y, p.width, p.height), (5, 2, 90, 45));
         t.layout.popup_percent = 100;
         assert_eq!(popup(&t, Rect::new(0, 0, 100, 50)), Rect::new(0, 0, 100, 50));
         t.layout.popup_percent = 50;

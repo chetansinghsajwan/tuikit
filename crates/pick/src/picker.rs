@@ -85,6 +85,8 @@ pub struct Picker {
     expect: Vec<(String, KeyEvent)>,
     /// Fixed lines under the prompt (`--header-lines`).
     header: Vec<String>,
+    /// A rule between the prompt and what is under it (`--separator`).
+    separator: bool,
     /// Preview rows visible at the last render, for paging.
     pheight: usize,
     /// Show path candidates as a directory hierarchy (see `set_tree`).
@@ -127,6 +129,7 @@ impl Picker {
             preview_cmd: None,
             expect: Vec::new(),
             header: Vec::new(),
+            separator: false,
             tree_on: false,
             tree: None,
             tree_dirty: true,
@@ -156,6 +159,10 @@ impl Picker {
     }
 
     /// Fixed lines shown under the prompt, e.g. a table's column names.
+    pub fn set_separator(&mut self, on: bool) {
+        self.separator = on;
+    }
+
     pub fn set_header(&mut self, lines: Vec<String>) {
         self.header = lines;
     }
@@ -545,12 +552,18 @@ impl Picker {
         }
         ui::prompt::cursor(buf, prompt_area, "> ", self.input.visual_cursor());
 
-        // Header lines sit between the prompt and the list.
-        let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2));
-        for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
-            buf.set_stringn(inner.x + 2, inner.y + 1 + i as u16, h, usize::from(inner.width.saturating_sub(2)), Style::new().fg(c.muted.into()));
+        // A rule under the prompt, then the header lines, then the list.
+        let sep = u16::from(self.separator && inner.height > 3);
+        if sep == 1 {
+            let wide = Rect { x: inner.x.saturating_sub(1).max(area.x + 1), width: inner.width + 2, ..inner };
+            let rule = "─".repeat(usize::from(wide.width));
+            buf.set_string(wide.x, inner.y + 1, rule, Style::new().fg(c.border.into()));
         }
-        let list = Rect { y: inner.y + 1 + header_rows, height: inner.height - 1 - header_rows, ..inner };
+        let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep));
+        for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
+            buf.set_stringn(inner.x + 2, inner.y + 1 + sep + i as u16, h, usize::from(inner.width.saturating_sub(2)), Style::new().fg(c.muted.into()));
+        }
+        let list = Rect { y: inner.y + 1 + sep + header_rows, height: inner.height - 1 - sep - header_rows, ..inner };
         let rows = ui::list::Rows::new(area, inner);
         self.page = u32::from(list.height).max(1);
         self.refresh_tree();

@@ -105,6 +105,9 @@ pub struct Action {
     /// Short name, shown in menus and the palette.
     pub name: &'static str,
     pub desc: &'static str,
+    /// Navigation and other keys everyone knows: left out of the command palette (the `?`
+    /// help still lists them).
+    pub basic: bool,
     /// Default bindings (see the module docs for the syntax).
     pub keys: &'static [&'static str],
 }
@@ -270,29 +273,33 @@ pub struct Row {
     /// The keys bound to it, as shown (`space v c`, `j / down`).
     pub keys: String,
     pub desc: &'static str,
+    pub basic: bool,
 }
 
 impl Keymap {
     /// Every action, in the order the tool declared them.
     pub fn rows(&self) -> Vec<Row> {
-        self.actions.iter().map(|a| Row { id: a.id, name: a.name, keys: self.keys_of(a.id), desc: a.desc }).collect()
+        self.actions.iter().map(|a| Row { id: a.id, name: a.name, keys: self.keys_of(a.id), desc: a.desc, basic: a.basic }).collect()
     }
 }
 
 /// Let the user pick one of `rows` by name with the shared picker (`pick`, which must be
-/// on `PATH`): the palette. `None` when cancelled or when `pick` is unavailable. The caller
-/// gives the terminal to it first (leave the alternate screen, as for any external program).
+/// on `PATH`): the command palette. Basic rows (movement and the like) are left out, the
+/// columns have labels and a rule separates the search line from the results. `None` when
+/// cancelled or when `pick` is unavailable. Inside zellij `pick` is a floating pane over the
+/// tool, so the caller keeps its screen; elsewhere it gives the terminal to `pick` first.
 pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
     use std::io::Write;
     use std::process::{Command, Stdio};
-    let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0);
-    let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24);
-    let mut input = String::new();
-    for r in rows {
+    let rows: Vec<&Row> = rows.iter().filter(|r| !r.basic).collect();
+    let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0).max("Command".len());
+    let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24).max("Keys".len());
+    let mut input = format!("{:<name_w$}  {:<keys_w$}  Description\n", "Command", "Keys");
+    for r in &rows {
         input.push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
     }
     let mut child = Command::new("pick")
-        .args(["--no-preview", "--flat", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
+        .args(["--no-preview", "--flat", "--separator", "--header-lines", "1", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -394,11 +401,11 @@ mod tests {
     }
 
     const ACTIONS: [Action; 5] = [
-        Action { id: "nav.down", name: "down", desc: "move down", keys: &["j", "down"] },
-        Action { id: "view.columns", name: "columns", desc: "cycle the columns", keys: &["leader v c"] },
-        Action { id: "view.hidden", name: "hidden", desc: "toggle hidden files", keys: &[".", "leader v h"] },
-        Action { id: "find", name: "find", desc: "find files", keys: &["/", "leader f"] },
-        Action { id: "page.down", name: "page down", desc: "half a page", keys: &["ctrl-d"] },
+        Action { id: "nav.down", name: "down", desc: "move down", basic: false, keys: &["j", "down"] },
+        Action { id: "view.columns", name: "columns", desc: "cycle the columns", basic: false, keys: &["leader v c"] },
+        Action { id: "view.hidden", name: "hidden", desc: "toggle hidden files", basic: false, keys: &[".", "leader v h"] },
+        Action { id: "find", name: "find", desc: "find files", basic: false, keys: &["/", "leader f"] },
+        Action { id: "page.down", name: "page down", desc: "half a page", basic: false, keys: &["ctrl-d"] },
     ];
     const GROUPS: [Group; 1] = [Group { prefix: "leader v", name: "view" }];
 

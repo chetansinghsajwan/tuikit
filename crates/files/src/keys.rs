@@ -5,28 +5,35 @@ use ui::keys::{Action, Group};
 
 macro_rules! a {
     ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
-        Action { id: $id, name: $name, desc: $desc, keys: &[$($k),*] }
+        Action { id: $id, name: $name, desc: $desc, basic: false, keys: &[$($k),*] }
+    };
+}
+
+/// A basic action: movement and keys everyone knows. Kept out of the command palette.
+macro_rules! b {
+    ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
+        Action { id: $id, name: $name, desc: $desc, basic: true, keys: &[$($k),*] }
     };
 }
 
 /// What the panel itself does.
 pub const ACTIONS: &[Action] = &[
-    a!("nav.up", "up", "move the cursor up", ["k", "up", "ctrl-p"]),
-    a!("nav.down", "down", "move the cursor down", ["j", "down", "ctrl-n"]),
-    a!("nav.page_up", "page up", "move a page up", ["pageup"]),
-    a!("nav.page_down", "page down", "move a page down", ["pagedown"]),
-    a!("nav.top", "top", "go to the first row", ["g", "home"]),
-    a!("nav.bottom", "bottom", "go to the last row", ["G", "end"]),
-    a!("tree.out", "collapse", "collapse the folder, or go to the parent folder's row", ["h", "left"]),
-    a!("item.open", "open", "open the file, or expand the folder", ["enter", "l", "right"]),
-    a!("item.mark", "mark", "mark or unmark the row for a multi-row action", ["tab"]),
-    a!("item.new", "new", "create a file (a trailing / makes a folder)", ["a"]),
-    a!("item.rename", "rename", "rename the row", ["r"]),
-    a!("item.delete", "delete", "move the marked rows to the trash (asks first)", ["d"]),
+    b!("nav.up", "up", "move the cursor up", ["k", "up", "ctrl-p"]),
+    b!("nav.down", "down", "move the cursor down", ["j", "down", "ctrl-n"]),
+    b!("nav.page_up", "page up", "move a page up", ["pageup"]),
+    b!("nav.page_down", "page down", "move a page down", ["pagedown"]),
+    b!("nav.top", "top", "go to the first row", ["g", "home"]),
+    b!("nav.bottom", "bottom", "go to the last row", ["G", "end"]),
+    b!("tree.out", "collapse", "collapse the folder, or go to the parent folder's row", ["h", "left"]),
+    b!("item.open", "open", "open the file, or expand the folder", ["enter", "l", "right"]),
+    b!("item.mark", "mark", "mark or unmark the row for a multi-row action", ["tab"]),
+    a!("item.new", "new", "create a file (a trailing / makes a folder)", ["a", "leader n"]),
+    a!("item.rename", "rename", "rename the row", ["r", "leader r"]),
+    a!("item.delete", "delete", "move the marked rows to the trash (asks first)", ["d", "leader d"]),
     a!("item.delete_forever", "delete forever", "delete the marked rows permanently (asks first)", ["D"]),
-    a!("item.yank", "copy", "copy the marked rows", ["y"]),
-    a!("item.cut", "cut", "cut the marked rows", ["x"]),
-    a!("item.paste", "paste", "paste into the folder under the cursor", ["p"]),
+    a!("item.yank", "copy", "copy the marked rows", ["y", "leader y"]),
+    a!("item.cut", "cut", "cut the marked rows", ["x", "leader x"]),
+    a!("item.paste", "paste", "paste into the folder under the cursor", ["p", "leader p"]),
     a!("item.open_with", "open with", "open the row with a command you type", ["leader o"]),
     a!("item.bulk_rename", "bulk rename", "rename the marked rows together in your editor", ["leader B"]),
     a!("search.files", "find", "find files by name (the picker)", ["/", "leader f"]),
@@ -39,10 +46,10 @@ pub const ACTIONS: &[Action] = &[
     a!("bookmark.set", "save bookmark", "save the folder under the cursor under a key you type", ["leader b s"]),
     a!("bookmark.jump", "go to bookmark", "make a bookmarked folder the root", ["leader b j"]),
     a!("bookmark.delete", "delete bookmark", "delete a bookmark", ["leader b d"]),
-    a!("palette", "commands", "search every action by name and run it", ["leader space"]),
+    b!("palette", "commands", "search every action by name and run it", ["leader space"]),
     a!("help", "keys", "list every action with its keys", ["?"]),
-    a!("back", "back", "clear the marks, else close", ["esc"]),
-    a!("quit", "quit", "close the explorer", ["q", "ctrl-c"]),
+    b!("back", "back", "clear the marks, else close", ["esc"]),
+    b!("quit", "quit", "close the explorer", ["q", "ctrl-c", "leader q"]),
 ];
 
 pub const GROUPS: &[Group] = &[

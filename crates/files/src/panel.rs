@@ -1426,7 +1426,7 @@ mod tests {
         assert_eq!(p.rows.len(), rows);
         assert!(p.menu().is_none());
         // Host actions come back as commands; the leader key is configurable.
-        let acts = vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", keys: &["leader t n"] }];
+        let acts = vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false, keys: &["leader t n"] }];
         let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: ",".into(), actions: acts });
         p.handle_event(&key(KeyCode::Char(',')));
         p.handle_event(&key(KeyCode::Char('t')));

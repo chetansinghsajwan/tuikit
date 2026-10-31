@@ -19,10 +19,11 @@ use ui::{Pane, Theme};
 
 /// The standalone app's own actions, added to the panel's keymap.
 const ACTIONS: &[ui::keys::Action] = &[
-    ui::keys::Action { id: "tab.new", name: "new tab", desc: "open a new tab in the same folder", keys: &["leader t n"] },
-    ui::keys::Action { id: "tab.next", name: "next tab", desc: "switch to the next tab", keys: &["]"] },
-    ui::keys::Action { id: "tab.prev", name: "previous tab", desc: "switch to the previous tab", keys: &["["] },
-    ui::keys::Action { id: "view.properties", name: "properties", desc: "show or hide the properties pane", keys: &["leader v i"] },
+    ui::keys::Action { id: "tab.new", name: "new tab", desc: "open a new tab in the same folder", basic: false, keys: &["leader t n"] },
+    ui::keys::Action { id: "tab.close", name: "close tab", desc: "close this tab (q closes it too, and quits on the last)", basic: false, keys: &["leader t c"] },
+    ui::keys::Action { id: "tab.next", name: "next tab", desc: "switch to the next tab", basic: false, keys: &["]", "leader t l"] },
+    ui::keys::Action { id: "tab.prev", name: "previous tab", desc: "switch to the previous tab", basic: false, keys: &["[", "leader t h"] },
+    ui::keys::Action { id: "view.properties", name: "properties", desc: "show or hide the properties pane", basic: false, keys: &["leader v i"] },
 ];
 
 pub struct Options {
@@ -81,6 +82,12 @@ fn enter(term: &mut Term) -> io::Result<()> {
 fn leave(term: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(term.backend_mut(), LeaveAlternateScreen)
+}
+
+/// Run `f`, which opens `pick`: inside zellij that is a floating pane over this screen, so the
+/// screen stays; elsewhere `pick` takes the terminal, so give it up first.
+fn overlay<T>(term: &mut Term, f: impl FnOnce() -> T) -> io::Result<T> {
+    if ui::popup::wanted(false) { Ok(f()) } else { suspended(term, f) }
 }
 
 /// Give the terminal to `f` (an editor, `pick`, ...) and take it back afterwards.
@@ -174,7 +181,7 @@ impl App {
             }
             Action::Search(kind) => {
                 let root = self.panel().root().to_path_buf();
-                if let Some(found) = suspended(term, || search(kind, &root))? {
+                if let Some(found) = overlay(term, || search(kind, &root))? {
                     self.panel().reveal(&found);
                 }
             }
@@ -197,7 +204,7 @@ impl App {
             Action::Help => self.help = Some(ui::keys::Help::default()),
             Action::Palette => {
                 let rows = self.tabs[self.active].keys_rows();
-                if let Some(id) = suspended(term, || ui::keys::choose(&rows, "Commands"))? {
+                if let Some(id) = overlay(term, || ui::keys::choose(&rows, "Commands"))? {
                     let action = self.panel().run(id);
                     return self.act(action, term);
                 }
@@ -214,6 +221,14 @@ impl App {
                 let root = self.panel().root().to_path_buf();
                 self.tabs.push(Panel::new(root, panel_opts(&self.opts)));
                 self.active = self.tabs.len() - 1;
+            }
+            "tab.close" => {
+                if self.tabs.len() > 1 {
+                    self.tabs.remove(self.active);
+                    self.active = self.active.min(self.tabs.len() - 1);
+                } else {
+                    self.panel().notify("this is the last tab (q quits)", false);
+                }
             }
             "tab.next" => self.active = (self.active + 1) % self.tabs.len(),
             "tab.prev" => self.active = (self.active + self.tabs.len() - 1) % self.tabs.len(),
