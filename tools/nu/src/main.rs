@@ -1,6 +1,7 @@
 use clap::Parser;
 use nu::{App, Quit};
 use nu_core::Backend;
+use nu_core::bluetooth::Bluetooth;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
@@ -12,11 +13,11 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Connections on one screen: Wi-Fi (more kinds to come), through NetworkManager.
+/// Connections on one screen: Wi-Fi through NetworkManager and Bluetooth through BlueZ.
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
-    /// Use a pretend radio with a few networks instead of NetworkManager (to try the screen).
+    /// Use pretend radios (a few networks and devices) instead of NetworkManager and BlueZ, to try the screen.
     #[arg(long)]
     fake: bool,
 }
@@ -45,18 +46,21 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> io::Result<u8> {
-    let backend: Arc<dyn Backend> = if cli.fake {
-        Arc::new(nu_core::fake::Fake::new())
+    // Each radio that cannot be reached shows why in its own pane.
+    let (wifi, bt): (Arc<dyn Backend>, Arc<dyn Bluetooth>) = if cli.fake {
+        (Arc::new(nu_core::fake::Fake::new()), Arc::new(nu_core::fake::FakeBluetooth::new()))
     } else {
-        match nu_core::nm::Nm::system() {
+        let wifi: Arc<dyn Backend> = match nu_core::nm::Nm::system() {
             Ok(nm) => Arc::new(nm),
-            Err(e) => {
-                eprintln!("nu: {e} (is NetworkManager running? `nu --fake` shows the screen without it)");
-                return Ok(2);
-            }
-        }
+            Err(e) => Arc::new(nu_core::Unavailable(format!("{e} (try `nu --fake` to see the screen)"))),
+        };
+        let bt: Arc<dyn Bluetooth> = match nu_core::bluez::BlueZ::system() {
+            Ok(b) => Arc::new(b),
+            Err(e) => Arc::new(nu_core::Unavailable(e.to_string())),
+        };
+        (wifi, bt)
     };
-    let mut app = App::new(backend);
+    let mut app = App::new(wifi, bt);
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
     let mut term: Term = Terminal::new(CrosstermBackend::new(tty))?;
     enter(&mut term)?;

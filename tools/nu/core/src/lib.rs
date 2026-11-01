@@ -2,6 +2,8 @@
 //! backend talks to NetworkManager over D-Bus (`nm`); a fake one (`fake`) serves tests and
 //! UIs. Other kinds of link (Bluetooth, wired, VPN) get their own backends later.
 
+pub mod bluetooth;
+pub mod bluez;
 pub mod fake;
 pub mod nm;
 
@@ -100,6 +102,61 @@ pub trait Backend: Send + Sync {
     fn disconnect(&self) -> Result<()>;
     /// Delete the saved connection(s) of `ssid`.
     fn forget(&self, ssid: &str) -> Result<()>;
+}
+
+/// A backend that could not start (no D-Bus, no NetworkManager, no BlueZ): every call reports
+/// why, so a UI can still show its panes with the reason.
+pub struct Unavailable(pub String);
+
+impl Backend for Unavailable {
+    fn status(&self) -> Result<Status> {
+        Err(Error(self.0.clone()))
+    }
+    fn networks(&self) -> Result<Vec<Network>> {
+        Err(Error(self.0.clone()))
+    }
+    fn scan(&self) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn set_enabled(&self, _: bool) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn connect(&self, _: &str, _: Option<&str>) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn disconnect(&self) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn forget(&self, _: &str) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+}
+
+impl bluetooth::Bluetooth for Unavailable {
+    fn status(&self) -> Result<bluetooth::BtStatus> {
+        Err(Error(self.0.clone()))
+    }
+    fn devices(&self) -> Result<Vec<bluetooth::Device>> {
+        Err(Error(self.0.clone()))
+    }
+    fn scan(&self, _: bool) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn set_powered(&self, _: bool) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn connect(&self, _: &str) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn disconnect(&self, _: &str) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn set_trusted(&self, _: &str, _: bool) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
+    fn remove(&self, _: &str) -> Result<()> {
+        Err(Error(self.0.clone()))
+    }
 }
 
 /// Order for display: the connected network first, then by strength, then by name.

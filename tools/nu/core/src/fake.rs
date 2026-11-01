@@ -1,5 +1,6 @@
 //! A pretend radio with a few networks, for tests and for trying the UI without hardware.
 
+use crate::bluetooth::{Bluetooth, BtStatus, Device, Kind};
 use crate::{Backend, Error, Network, Result, Security, Status, merge};
 use std::sync::Mutex;
 
@@ -106,6 +107,115 @@ impl Backend for Fake {
             }
             None => Err(Error(format!("no saved connection for {ssid}"))),
         }
+    }
+}
+
+/// A pretend Bluetooth adapter with a few devices.
+pub struct FakeBluetooth {
+    state: Mutex<BtState>,
+}
+
+struct BtState {
+    powered: bool,
+    discovering: bool,
+    devices: Vec<Device>,
+    log: Vec<String>,
+}
+
+impl FakeBluetooth {
+    /// `Headphones` (paired, in range), `Keyboard` (paired, connected), `Phone` and `Speaker`
+    /// (in range, not paired) and `Old mouse` (paired, away).
+    pub fn new() -> FakeBluetooth {
+        let d = |name: &str, kind: Kind, paired: bool, connected: bool, rssi: Option<i16>| Device { address: format!("00:11:22:33:44:{:02X}", name.len()), name: name.into(), kind, paired, trusted: paired, connected, rssi };
+        FakeBluetooth {
+            state: Mutex::new(BtState {
+                powered: true,
+                discovering: false,
+                devices: vec![d("Headphones", Kind::Audio, true, false, Some(-58)), d("Keyboard", Kind::Keyboard, true, true, Some(-47)), d("Phone", Kind::Phone, false, false, Some(-72)), d("Speaker", Kind::Audio, false, false, Some(-80)), d("Old mouse", Kind::Mouse, true, false, None)],
+                log: Vec::new(),
+            }),
+        }
+    }
+
+    pub fn log(&self) -> Vec<String> {
+        self.state.lock().expect("fake state").log.clone()
+    }
+}
+
+impl Default for FakeBluetooth {
+    fn default() -> Self {
+        FakeBluetooth::new()
+    }
+}
+
+impl Bluetooth for FakeBluetooth {
+    fn status(&self) -> Result<BtStatus> {
+        let s = self.state.lock().expect("fake state");
+        Ok(BtStatus { adapter: Some("hci0".into()), powered: s.powered, discovering: s.discovering })
+    }
+
+    fn devices(&self) -> Result<Vec<Device>> {
+        let s = self.state.lock().expect("fake state");
+        if !s.powered {
+            return Ok(Vec::new());
+        }
+        let mut v: Vec<Device> = s.devices.iter().filter(|d| d.paired || d.connected || d.rssi.is_some()).cloned().collect();
+        crate::bluetooth::sort(&mut v);
+        Ok(v)
+    }
+
+    fn scan(&self, on: bool) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("scan {on}"));
+        s.discovering = on;
+        Ok(())
+    }
+
+    fn set_powered(&self, on: bool) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("powered {on}"));
+        s.powered = on;
+        if !on {
+            s.devices.iter_mut().for_each(|d| d.connected = false);
+        }
+        Ok(())
+    }
+
+    fn connect(&self, address: &str) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("connect {address}"));
+        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        if d.rssi.is_none() && !d.connected {
+            return Err(Error("the device is not in range".into()));
+        }
+        d.paired = true;
+        d.trusted = true;
+        d.connected = true;
+        Ok(())
+    }
+
+    fn disconnect(&self, address: &str) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("disconnect {address}"));
+        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        d.connected = false;
+        Ok(())
+    }
+
+    fn set_trusted(&self, address: &str, on: bool) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("trusted {address} {on}"));
+        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        d.trusted = on;
+        Ok(())
+    }
+
+    fn remove(&self, address: &str) -> Result<()> {
+        let mut s = self.state.lock().expect("fake state");
+        s.log.push(format!("remove {address}"));
+        let before = s.devices.len();
+        s.devices.retain(|d| d.address != address);
+        if s.devices.len() == before { Err(Error(format!("{address} is not known"))) } else { Ok(()) }
     }
 }
 

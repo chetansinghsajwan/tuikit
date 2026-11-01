@@ -15,6 +15,9 @@ const fn rgb(c: u32) -> Color {
     Color::Rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
+/// The Bluetooth rune, for the Bluetooth pane.
+pub const BLUETOOTH: Icon = Icon { glyph: "\u{f293}", color: rgb(0x3b82f6) };
+
 /// A Wi-Fi symbol, for the Wi-Fi pane.
 pub const WIFI: Icon = Icon { glyph: "\u{f1eb}", color: rgb(0x59c2ff) };
 
@@ -44,7 +47,9 @@ pub fn for_title(title: &str) -> Option<Icon> {
     let t = title.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| t.contains(w));
     let icon = |glyph: &'static str, color: u32| Some(Icon { glyph, color: rgb(color) });
-    if has(&["wi-fi", "wifi"]) {
+    if has(&["bluetooth"]) {
+        Some(BLUETOOTH)
+    } else if has(&["wi-fi", "wifi"]) {
         Some(WIFI)
     } else if has(&["propert"]) {
         icon("\u{f05a}", 0x59c2ff)
