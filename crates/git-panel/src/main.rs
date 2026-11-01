@@ -102,7 +102,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                             disable_raw_mode()?;
                             execute!(term.0.backend_mut(), LeaveAlternateScreen)?;
                         }
-                        let picked = ui::keys::choose(&panel.keys_rows(), "Commands");
+                        let picked = ui::keys::choose("git-panel", &panel.keys_rows(), "Commands");
                         if !popup {
                             enable_raw_mode()?;
                             execute!(term.0.backend_mut(), EnterAlternateScreen)?;

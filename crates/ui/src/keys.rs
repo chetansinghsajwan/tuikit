@@ -294,14 +294,15 @@ impl Keymap {
 }
 
 /// Let the user pick one of `rows` by name with the shared picker (`pick`, which must be
-/// on `PATH`): the command palette. Basic rows (movement and the like) are left out, the
+/// on `PATH`): the command palette of `tool`. Basic rows (movement and the like) are left out, the
 /// columns have labels and a rule separates the search line from the results. `None` when
 /// cancelled or when `pick` is unavailable. Inside zellij `pick` is a floating pane over the
 /// tool, so the caller keeps its screen; elsewhere it gives the terminal to `pick` first.
-pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
+pub fn choose(tool: &str, rows: &[Row], title: &str) -> Option<&'static str> {
     use std::io::Write;
     use std::process::{Command, Stdio};
-    let rows: Vec<&Row> = rows.iter().filter(|r| !r.basic).collect();
+    // The commands run last come first (like VS Code and Zed), the rest in the tool's order.
+    let rows: Vec<&Row> = crate::recent::order(rows.iter().filter(|r| !r.basic).collect(), &crate::recent::load(tool), |r| r.id);
     let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0).max("Command".len());
     let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24).max("Keys".len());
     let mut input = format!("{:<name_w$}  {:<keys_w$}  Description\n", "Command", "Keys");
@@ -322,7 +323,9 @@ pub fn choose(rows: &[Row], title: &str) -> Option<&'static str> {
     }
     let text = String::from_utf8_lossy(&out.stdout);
     let id = text.lines().next()?.rsplit('\t').next()?;
-    rows.iter().find(|r| r.id == id).map(|r| r.id)
+    let picked = rows.iter().find(|r| r.id == id).map(|r| r.id)?;
+    crate::recent::record(tool, picked);
+    Some(picked)
 }
 
 /// The `?` help: a scrollable popup listing every action with its keys. `/` starts a search

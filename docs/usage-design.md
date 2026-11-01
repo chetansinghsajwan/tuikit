@@ -86,3 +86,7 @@ git    Space ▸  c commit   p push/pull ▸   b branches   z stash ▸   r reba
 ## Tabs (decided 2026-11-01)
 
 One tab system for every tool, in `ui::tabs`: the model `Tabs<T>` (open next to the active tab, close with the last tab protected, reopen the last closed ones (10 kept), next/prev with wrap, goto, move left/right, duplicate) and the strip `render` (one row: numbered labels, the active one bold accent, a `●` marker for unsaved changes, an optional icon). When the labels do not fit, a window around the active tab is shown with `‹N` and `N›` for the tabs out of view. Keys, in every tool that has tabs: `Space t` ▸ `n` new, `c` close, `l`/`h` next/previous, `r` reopen, `d` duplicate, `[`/`]` move; `[` and `]` alone switch, `1`-`9` jump (a tool without number jumps shows no numbers: helix's buffers).
+
+## Recently used commands (decided 2026-11-01)
+
+Every command palette lists the commands run last first (newest first), then the rest in the tool's own order, like VS Code and Zed. The history is one small file, `$XDG_STATE_HOME/ui/recent` (`~/.local/state/ui/recent`), `tool<TAB>id` lines, 20 kept per tool (`ui::recent`; `UI_RECENT_FILE` moves it). The palette of a new tool gets this by passing its name to `ui::keys::choose(tool, rows, title)`.

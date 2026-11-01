@@ -108,7 +108,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                 if !popup {
                     leave(&mut term)?;
                 }
-                let picked = ui::keys::choose(&app.keys_rows(), "Commands");
+                let picked = ui::keys::choose("nu", &app.keys_rows(), "Commands");
                 if !popup {
                     enter(&mut term)?;
                 }

@@ -202,7 +202,7 @@ impl App {
             Action::Help => self.help = Some(ui::keys::Help::default()),
             Action::Palette => {
                 let rows = self.tabs.active().keys_rows();
-                if let Some(id) = overlay(term, || ui::keys::choose(&rows, "Commands"))? {
+                if let Some(id) = overlay(term, || ui::keys::choose("files", &rows, "Commands"))? {
                     let action = self.panel().run(id);
                     return self.act(action, term);
                 }
