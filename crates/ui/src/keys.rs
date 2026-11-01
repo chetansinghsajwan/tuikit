@@ -291,17 +291,17 @@ impl Keymap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
     pub id: &'static str,
-    pub name: &'static str,
+    pub name: std::borrow::Cow<'static, str>,
     /// The keys bound to it, as shown (`space v c`, `j / down`).
     pub keys: String,
-    pub desc: &'static str,
+    pub desc: std::borrow::Cow<'static, str>,
     pub basic: bool,
 }
 
 impl Keymap {
     /// Every action, in the order the tool declared them.
     pub fn rows(&self) -> Vec<Row> {
-        self.actions.iter().map(|a| Row { id: a.id, name: a.name, keys: self.keys_of(a.id), desc: a.desc, basic: a.basic }).collect()
+        self.actions.iter().map(|a| Row { id: a.id, name: a.name.into(), keys: self.keys_of(a.id), desc: a.desc.into(), basic: a.basic }).collect()
     }
 }
 

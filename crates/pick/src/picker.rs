@@ -57,7 +57,12 @@ struct Preview {
     lines: Vec<Line<'static>>,
 }
 
+/// A candidate source that runs again for each query (a language server answering as you type).
+/// It gets the query, where to push candidates, and a flag that is set when the query changes again.
+pub type LiveSource = Box<dyn Fn(&str, Injector<Candidate>, Arc<AtomicBool>) + Send + Sync>;
+
 pub struct Picker {
+    live: Option<LiveSource>,
     opts: PickerOptions,
     nucleo: Nucleo<Candidate>,
     matcher: Matcher,
@@ -112,6 +117,7 @@ impl Picker {
             None
         };
         let mut picker = Picker {
+            live: None,
             nucleo: Nucleo::new(config, notify, None, 1),
             matcher: Matcher::new(Config::DEFAULT),
             input: Input::new(opts.query.clone()),
@@ -139,6 +145,12 @@ impl Picker {
         };
         picker.reparse();
         picker
+    }
+
+    /// Take the candidates from `source` for the current query and every later one.
+    pub fn set_live(&mut self, source: LiveSource) {
+        self.live = Some(source);
+        self.reparse();
     }
 
     /// Where candidates are pushed in `Mode::Fuzzy`. (Grep mode feeds itself.)
@@ -281,6 +293,18 @@ impl Picker {
 
     fn reparse(&mut self) {
         let q = self.input.value().to_string();
+        if let Some(live) = &self.live {
+            // The source does the filtering: stop the old request, drop its results, ask again.
+            self.cancel.store(true, Ordering::Relaxed);
+            self.cancel = Arc::new(AtomicBool::new(false));
+            self.nucleo.restart(true);
+            live(&q, self.nucleo.injector(), self.cancel.clone());
+            self.last_query = q;
+            self.cursor = 0;
+            self.offset = 0;
+            self.tree_dirty = true;
+            return;
+        }
         match self.opts.mode {
             Mode::Fuzzy => {
                 let append = q.starts_with(&self.last_query) && !self.last_query.is_empty();
@@ -531,7 +555,7 @@ impl Picker {
             (s.item_count(), s.matched_item_count())
         };
         // In grep mode every item matches, so only the item count is meaningful.
-        let count = if self.opts.mode == Mode::Grep { format!("{snap_total}") } else { format!("{snap_matched}/{snap_total}") };
+        let count = if self.opts.mode == Mode::Grep || self.live.is_some() { format!("{snap_total}") } else { format!("{snap_matched}/{snap_total}") };
         let title = self.title.as_deref().unwrap_or(if self.opts.mode == Mode::Grep { "grep" } else { "pick" });
         let mut pane = Pane::new(theme).title(title).focused(true);
         // An explicit icon, else one that fits the title (`Files`, `History`, `Branches`, ...).
@@ -811,6 +835,36 @@ mod tests {
             p.handle_event(&key(KeyCode::Down));
         }
         assert_eq!(p.cursor, 2);
+    }
+
+    #[test]
+    fn a_live_source_is_asked_again_for_every_query_and_its_results_are_not_refiltered() {
+        let mut p = picker(&[], false, PathBuf::new());
+        // The source answers with two entries that contain the query, and none for an empty one.
+        p.set_live(Box::new(|q, inj, _cancel| {
+            if !q.is_empty() {
+                for suffix in ["one", "two"] {
+                    inj.push(Candidate::plain(format!("{q}-{suffix}")), |c, cols| cols[0] = c.display.as_str().into());
+                }
+            }
+        }));
+        type_str(&mut p, "ab");
+        for _ in 0..50 {
+            p.nucleo.tick(10);
+            if p.nucleo.snapshot().item_count() == 2 {
+                break;
+            }
+        }
+        let names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
+        assert_eq!(names.len(), 2, "{names:?}");
+        assert!(names.iter().all(|n| n.starts_with("ab-")), "{names:?}");
+        // Another character: the old answers are gone, the new ones are in.
+        type_str(&mut p, "c");
+        for _ in 0..50 {
+            p.nucleo.tick(10);
+        }
+        let names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
+        assert!(names.iter().all(|n| n.starts_with("abc-")) && names.len() == 2, "{names:?}");
     }
 
     #[test]
