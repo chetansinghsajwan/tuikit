@@ -90,3 +90,8 @@ One tab system for every tool, in `ui::tabs`: the model `Tabs<T>` (open next to 
 ## Recently used commands (decided 2026-11-01)
 
 Every command palette lists the commands run last first (newest first), then the rest in the tool's own order, like VS Code and Zed. The history is one small file, `$XDG_STATE_HOME/ui/recent` (`~/.local/state/ui/recent`), `tool<TAB>id` lines, 20 kept per tool (`ui::recent`; `UI_RECENT_FILE` moves it). The palette of a new tool gets this by passing its name to `ui::keys::choose(tool, rows, title)`.
+
+## Movement with Ctrl, unbound keys, outside changes
+- `hjkl` move by one; with Ctrl, `j`/`k` move five rows. In text, Ctrl+`h`/`l` jump by words and stop at the end of a line first.
+- A leader sequence that ends on a key nothing is bound to says so in the footer ("space z is not bound"); it never fails silently.
+- Tools that show files or git state follow changes made outside them (`ui::watch`), without polling.
