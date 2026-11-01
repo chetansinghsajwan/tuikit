@@ -368,6 +368,8 @@ impl Picker {
             KeyCode::Down => self.move_by(1),
             KeyCode::Char('p') if ctrl => self.move_by(-1),
             KeyCode::Char('n') if ctrl => self.move_by(1),
+            KeyCode::Char('k') if ctrl => self.move_by(-5),
+            KeyCode::Char('j') if ctrl => self.move_by(5),
             KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
             KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
             KeyCode::PageUp => self.move_by(-i64::from(self.page)),

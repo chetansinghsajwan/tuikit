@@ -585,6 +585,8 @@ impl Panel {
         match id {
             "nav.up" => self.move_by(-1),
             "nav.down" => self.move_by(1),
+            "nav.up5" => self.move_by(-5),
+            "nav.down5" => self.move_by(5),
             "nav.page_up" => self.move_by(-(self.page as isize)),
             "nav.page_down" => self.move_by(self.page as isize),
             "nav.top" => self.cursor = 0,

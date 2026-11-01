@@ -274,12 +274,14 @@ impl App {
             "op.abort" => self.run("aborted".to_string(), |r| r.abort_operation()),
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
-            "nav.up" | "nav.down" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
+            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
                 if let Some(li) = li {
                     let st = &mut self.lists[li];
                     st.cursor = match id {
                         "nav.up" => st.cursor.saturating_sub(1),
                         "nav.down" => (st.cursor + 1).min(last),
+                        "nav.up5" => st.cursor.saturating_sub(5),
+                        "nav.down5" => (st.cursor + 5).min(last),
                         "nav.page_up" => st.cursor.saturating_sub(10),
                         "nav.page_down" => (st.cursor + 10).min(last),
                         "nav.top" => 0,

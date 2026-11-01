@@ -304,6 +304,8 @@ impl App {
         match id {
             "nav.up" => st.cursor = st.cursor.saturating_sub(1),
             "nav.down" => st.cursor = (st.cursor + 1).min(last),
+            "nav.up5" => st.cursor = st.cursor.saturating_sub(5),
+            "nav.down5" => st.cursor = (st.cursor + 5).min(last),
             "nav.page_up" => st.cursor = st.cursor.saturating_sub(10),
             "nav.page_down" => st.cursor = (st.cursor + 10).min(last),
             "nav.top" => st.cursor = 0,

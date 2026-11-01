@@ -7,6 +7,8 @@ use ui::keys::{Action, action, basic};
 const COMMON: &[Action] = &[
     basic("nav.up", "up", "move the cursor up", &["k", "up", "ctrl-p"]),
     basic("nav.down", "down", "move the cursor down", &["j", "down", "ctrl-n"]),
+    basic("nav.up5", "up 5", "move the cursor up five rows", &["ctrl-k"]),
+    basic("nav.down5", "down 5", "move the cursor down five rows", &["ctrl-j"]),
     basic("nav.page_up", "page up", "move a page up", &["pageup"]),
     basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
     basic("nav.top", "top", "go to the first entry", &["g", "home"]),
