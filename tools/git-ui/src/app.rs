@@ -109,6 +109,8 @@ pub struct App {
     help: Option<ui::keys::Help>,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
+    /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
+    watch: Option<ui::watch::Watch>,
 }
 
 impl App {
@@ -116,6 +118,8 @@ impl App {
     pub fn new(dir: &Path) -> Option<App> {
         let repo = Repo::discover(dir)?;
         let root = repo.root().to_path_buf();
+        let watch = ui::watch::Watch::new(&root, || {});
+        
         let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
         files.set_title("Files");
         let mut app = App {
@@ -136,6 +140,7 @@ impl App {
             maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
             job: None,
+            watch,
         };
         app.reload_all();
         Some(app)
@@ -315,6 +320,10 @@ impl App {
 
     /// Call between events: finishes a remote command that ended. `true` when the screen should be redrawn.
     pub fn tick(&mut self) -> bool {
+        if self.watch.as_ref().is_some_and(|w| w.take()) {
+            self.reload_all();
+            return true;
+        }
         if self.job.as_ref().is_some_and(|j| j.handle.is_finished()) {
             let job = self.job.take().expect("checked above");
             match job.handle.join() {

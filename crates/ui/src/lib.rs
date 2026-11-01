@@ -14,6 +14,7 @@ pub mod recent;
 pub mod pane;
 pub mod tabs;
 pub mod theme;
+pub mod watch;
 
 pub use pane::Pane;
 pub use theme::{Theme, mix};
