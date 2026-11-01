@@ -6,6 +6,7 @@ mod commit;
 mod config;
 mod dir;
 mod git;
+pub mod markdown;
 mod text;
 
 use ratatui::text::Line;
@@ -62,9 +63,25 @@ impl std::fmt::Display for Error {
     }
 }
 
+/// Markdown files show rendered (no markup) unless a line is to be focused, which needs the source.
+fn rendered_markdown(name: &Path, text: &[u8], theme: &Theme, opts: &Options) -> Option<Vec<Line<'static>>> {
+    if !markdown::is_markdown(name) || opts.focus.is_some() {
+        return None;
+    }
+    let text = std::str::from_utf8(text).ok()?;
+    let mut lines = markdown::render(text, theme, opts.width.unwrap_or(80));
+    if let Some(h) = opts.height {
+        lines.truncate(usize::from(h));
+    }
+    Some(lines)
+}
+
 /// Preview text that is not (as shown) on disk, e.g. an editor buffer with
 /// unsaved changes. `name` only picks the syntax; there are no git marks.
 pub fn preview_text(name: &Path, text: &[u8], theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+    if let Some(lines) = rendered_markdown(name, text, theme, opts) {
+        return Ok(lines);
+    }
     text::render_bytes(name, text, theme, opts, false)
 }
 
@@ -74,6 +91,13 @@ pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'s
     if meta.is_dir() {
         dir::render(path, theme, opts)
     } else if meta.is_file() {
+        if markdown::is_markdown(path) && opts.focus.is_none() {
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path)?, 1 << 20), &mut buf)?;
+            if let Some(lines) = rendered_markdown(path, &buf, theme, opts) {
+                return Ok(lines);
+            }
+        }
         text::render(path, theme, opts)
     } else {
         Err(Error::NotFound)
@@ -344,7 +368,7 @@ mod tests {
         let d = tmp("md");
         let md = d.join("r.md");
         fs::write(&md, "# Title\n\nsome **bold** and `code` text\n\n- item\n").unwrap();
-        let lines = preview(&md, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
+        let lines = preview(&md, &Theme::default(), &Options { width: None, height: None, git: false, focus: Some(1) }).unwrap();
         // More than one color among the spans of the file: it is highlighted, not plain.
         let colors: std::collections::HashSet<_> = lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
         assert!(colors.len() >= 3, "{colors:?}");
