@@ -418,7 +418,7 @@ impl Help {
     }
 }
 
-/// Draw the which-key popup at the bottom right of `area`: a pane titled with the keys
+/// Draw the which-key popup in the centre of `area`: a pane titled with the keys
 /// typed so far, one row per option (`key  name`, groups marked with `▸`).
 pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     if menu.entries.is_empty() || area.width < 12 || area.height < 4 {
@@ -431,7 +431,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     let pad = 2 + 2 * theme.layout.padding_x;
     let width = (body_w as u16 + pad).min(area.width);
     let height = (menu.entries.len() as u16 + 2).min(area.height.saturating_sub(1));
-    let rect = Rect { x: area.right() - width, y: area.bottom().saturating_sub(height + 1), width, height };
+    let rect = Rect { x: area.x + (area.width - width) / 2, y: area.y + (area.height - height) / 2, width, height };
     Clear.render(rect, buf);
     let pane = crate::Pane::new(theme).title(&menu.title).focused(true);
     let inner = pane.inner(rect);
