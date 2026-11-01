@@ -1,0 +1,15 @@
+[package]
+name = "nu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+nu-core = { version = "0.1.0", path = "core" }
+ratatui = "0.30.2"
+tui-input = "0.15.5"
+ui = { version = "0.1.0", path = "../../crates/ui" }
+
+[[bin]]
+name = "nu"
+path = "src/main.rs"
