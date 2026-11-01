@@ -445,6 +445,7 @@ dependencies = [
  "crossterm_winapi",
  "derive_more",
  "document-features",
+ "filedescriptor",
  "mio",
  "parking_lot",
  "rustix",
@@ -2545,6 +2546,7 @@ name = "pick"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "crossterm",
  "git-core",
  "grep",
  "ignore",
