@@ -40,6 +40,7 @@ pub const ACTIONS: &[Action] = &[
     a!("search.files", "find everywhere", "find files by name in the root and every subfolder (the picker)", ["leader f"]),
     a!("search.grep", "grep", "search file contents (the picker)", ["leader s"]),
     a!("view.hidden", "hidden files", "show or hide dot files", [".", "leader v h"]),
+    a!("view.ignored", "ignored files", "show or hide the entries .gitignore and the other ignore files hide", ["I", "leader v I"]),
     a!("view.columns", "columns", "cycle the columns: permissions, size and time / size and time / permissions and time / off", ["leader v c"]),
     a!("view.refresh", "refresh", "reread the folders and the git status", ["R", "leader v r"]),
     a!("root.into", "cd into", "make the folder under the cursor the root", ["leader c l"]),

@@ -271,6 +271,10 @@ pub struct Panel {
     pending: Option<Action>,
     /// Something finished by itself since the last `tick`.
     redraw: bool,
+    /// Show the entries that .gitignore and the other ignore files hide (toggle with `I`).
+    show_ignored: bool,
+    /// How many entries of the shown folders the ignore files hide now (the title says so).
+    ignored_hidden: usize,
 }
 
 impl Panel {
@@ -299,6 +303,8 @@ impl Panel {
             sizes_shown: Vec::new(),
             job: None,
             pending: None,
+            show_ignored: false,
+            ignored_hidden: 0,
             redraw: false,
         };
         p.refresh();
@@ -320,6 +326,7 @@ impl Panel {
         self.git = if self.opts.git { Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s))) } else { None };
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         self.rows.clear();
+        self.ignored_hidden = 0;
         let root = self.root.clone();
         self.build(&root, 0);
         if let Some(path) = keep {
@@ -331,7 +338,7 @@ impl Panel {
     }
 
     fn children(&self, dir: &Path) -> Vec<Row> {
-        let walk = WalkBuilder::new(dir).max_depth(Some(1)).hidden(!self.opts.hidden).filter_entry(|e| e.file_name() != ".git").build();
+        let walk = WalkBuilder::new(dir).max_depth(Some(1)).hidden(!self.opts.hidden).git_ignore(!self.show_ignored).git_global(!self.show_ignored).git_exclude(!self.show_ignored).ignore(!self.show_ignored).parents(!self.show_ignored).filter_entry(|e| e.file_name() != ".git").build();
         let mut out: Vec<Row> = walk
             .flatten()
             .filter(|e| e.depth() == 1)
@@ -350,7 +357,12 @@ impl Panel {
     }
 
     fn build(&mut self, dir: &Path, depth: u16) {
-        for mut row in self.children(dir) {
+        let rows = self.children(dir);
+        if !self.show_ignored {
+            let all = std::fs::read_dir(dir).map(|d| d.flatten().filter(|e| e.file_name() != ".git" && (self.opts.hidden || !e.file_name().to_string_lossy().starts_with('.'))).count()).unwrap_or(0);
+            self.ignored_hidden += all.saturating_sub(rows.len());
+        }
+        for mut row in rows {
             row.depth = depth;
             let open = row.is_dir && self.expanded.contains(&row.path);
             let path = row.path.clone();
@@ -631,6 +643,10 @@ impl Panel {
             "search.files" => return Action::Search(Search::Files),
             "search.here" => return Action::Search(Search::Here(self.target_dir())),
             "search.grep" => return Action::Search(Search::Grep),
+            "view.ignored" => {
+                self.show_ignored = !self.show_ignored;
+                self.rebuild();
+            }
             "view.hidden" => {
                 self.opts.hidden = !self.opts.hidden;
                 self.rebuild();
@@ -976,7 +992,8 @@ impl Panel {
         let c = &theme.colors;
         let title = self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
         let icon = ui::icons::dir(&title, true);
-        let pane = Pane::new(theme).title(&title).icon(icon).focused(focused);
+        let shown = if self.ignored_hidden > 0 { format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden) } else { title.clone() };
+        let pane = Pane::new(theme).title(&shown).icon(icon).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 4 {
@@ -1192,6 +1209,11 @@ mod tests {
 
         let mut p = Panel::new(&d, PanelOptions::default());
         assert!(!names(&p).contains(&"docs".to_string()), "gitignored folder is hidden: {:?}", names(&p));
+        assert_eq!(p.ignored_hidden, 1);
+        p.handle_event(&key(KeyCode::Char('I')));
+        assert!(names(&p).contains(&"docs".to_string()));
+        assert_eq!(p.ignored_hidden, 0);
+        p.handle_event(&key(KeyCode::Char('I')));
 
         let area = Rect::new(0, 0, 30, 8);
         let mut buf = Buffer::empty(area);
