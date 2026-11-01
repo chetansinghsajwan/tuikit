@@ -248,6 +248,11 @@ impl Panel {
         self.message = None;
         match self.keymap.feed(key) {
             ui::keys::Feed::Run(id) => self.run(id),
+            ui::keys::Feed::NoBinding => {
+                let seq = self.keymap.rejected().to_string();
+                self.say(format!("{seq} is not bound"), true);
+                Action::None
+            }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
         }
     }

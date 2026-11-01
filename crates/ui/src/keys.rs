@@ -136,8 +136,10 @@ pub enum Feed {
     Run(&'static str),
     /// A sequence is under way (see `Keymap::menu`).
     Pending,
-    /// A started sequence ended without an action (Esc, or a key nothing is bound to): the key is used up.
+    /// A started sequence was cancelled with Esc: the key is used up.
     Cancelled,
+    /// A started sequence met a key nothing is bound to (`Keymap::rejected` names the sequence): the key is used up.
+    NoBinding,
     /// Not bound: the key is the caller's.
     Unbound,
 }
@@ -166,13 +168,15 @@ pub struct Keymap {
     groups: Vec<(Vec<Chord>, &'static str)>,
     bindings: Vec<(Vec<Chord>, &'static str)>,
     pending: Vec<Chord>,
+    /// The last sequence that ended on a key nothing was bound to.
+    rejected: String,
 }
 
 impl Keymap {
     /// A keymap for `actions`, with `leader` (a key name) standing for `leader` in bindings.
     pub fn new(leader: &str, actions: &[Action], groups: &[Group]) -> Keymap {
         let leader = Chord::parse(leader).unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
-        let mut map = Keymap { leader, actions: actions.to_vec(), groups: Vec::new(), bindings: Vec::new(), pending: Vec::new() };
+        let mut map = Keymap { leader, actions: actions.to_vec(), groups: Vec::new(), bindings: Vec::new(), pending: Vec::new(), rejected: String::new() };
         for g in groups {
             if let Some(seq) = map.sequence(g.prefix) {
                 map.groups.push((seq, g.name));
@@ -215,6 +219,11 @@ impl Keymap {
         shown.join(" / ")
     }
 
+    /// The sequence behind the last `Feed::NoBinding` (`space z`), for the warning.
+    pub fn rejected(&self) -> &str {
+        &self.rejected
+    }
+
     /// Whether a multi-key sequence has been started.
     pub fn is_pending(&self) -> bool {
         !self.pending.is_empty()
@@ -241,8 +250,11 @@ impl Keymap {
             return Feed::Pending;
         }
         let started = n > 1;
+        if started {
+            self.rejected = self.pending.iter().map(Chord::label).collect::<Vec<_>>().join(" ");
+        }
         self.pending.clear();
-        if started { Feed::Cancelled } else { Feed::Unbound }
+        if started { Feed::NoBinding } else { Feed::Unbound }
     }
 
     /// The menu for a started sequence, or `None` when nothing is pending.
@@ -494,7 +506,8 @@ mod tests {
         assert_eq!(m.feed(&k('c')), Feed::Run("view.columns"));
         // A wrong key ends the sequence and is used up; Esc cancels too.
         m.feed(&k(' '));
-        assert_eq!(m.feed(&k('q')), Feed::Cancelled);
+        assert_eq!(m.feed(&k('q')), Feed::NoBinding);
+        assert_eq!(m.rejected(), "space q");
         assert!(!m.is_pending());
         m.feed(&k(' '));
         assert_eq!(m.feed(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)), Feed::Cancelled);

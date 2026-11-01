@@ -161,6 +161,16 @@ enum ConfirmKind {
     Delete,
 }
 
+impl ConfirmKind {
+    /// Pressing the key that asked (`d`, `D`) again confirms.
+    fn confirm_key(self) -> char {
+        match self {
+            ConfirmKind::Trash => 'd',
+            ConfirmKind::Delete => 'D',
+        }
+    }
+}
+
 /// Waiting for the key that names a bookmark.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BookmarkOp {
@@ -524,6 +534,11 @@ impl Panel {
         }
         match self.keymap.feed(key) {
             ui::keys::Feed::Run(id) => self.run(id),
+            ui::keys::Feed::NoBinding => {
+                let seq = self.keymap.rejected().to_string();
+                self.say(format!("{seq} is not bound"), true);
+                Action::None
+            }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
         }
     }
@@ -697,7 +712,8 @@ impl Panel {
 
     fn confirm_key(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>, key: &KeyEvent) -> Action {
         match key.code {
-            KeyCode::Char('y' | 'Y') | KeyCode::Enter => self.delete(kind, targets),
+            KeyCode::Char(c) if c == kind.confirm_key() => self.delete(kind, targets),
+            KeyCode::Enter => self.delete(kind, targets),
             _ => Action::None,
         }
     }
@@ -921,7 +937,7 @@ impl Panel {
                     format!("{} items", targets.len())
                 };
                 let verb = if *kind == ConfirmKind::Trash { "Trash" } else { "Delete permanently" };
-                Some(Line::from(Span::styled(format!("{verb} {what}? (y/n)"), Style::new().fg(c.warning.into()))))
+                Some(Line::from(Span::styled(format!("{verb} {what}? ({} again, Esc cancels)", kind.confirm_key()), Style::new().fg(c.warning.into()))))
             }
             Mode::Bookmark(op) => {
                 let verb = match op {
@@ -1260,7 +1276,7 @@ mod tests {
     }
 
     #[test]
-    fn d_asks_first_and_deletes_the_marked_items_only_on_yes() {
+    fn d_asks_first_and_deletes_the_marked_items_only_when_pressed_again() {
         let d = tree("delete");
         let mut p = panel(&d);
         cursor_on(&mut p, "docs");
@@ -1273,7 +1289,7 @@ mod tests {
         assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::None);
         assert!(d.join("docs").exists() && d.join("README.md").exists());
         p.handle_event(&key(KeyCode::Char('D')));
-        let got = p.handle_event(&key(KeyCode::Char('y')));
+        let got = p.handle_event(&key(KeyCode::Char('D')));
         assert_eq!(got, Action::Deleted(vec![d.join("README.md"), d.join("docs")]));
         assert!(!d.join("docs").exists() && !d.join("README.md").exists());
         assert!(p.marked.is_empty());
@@ -1321,7 +1337,7 @@ mod tests {
         p.handle_event(&key(KeyCode::Esc));
         cursor_on(&mut p, "README.md");
         p.handle_event(&key(KeyCode::Char('D')));
-        assert!(draw(&mut p).contains("Delete permanently README.md? (y/n)"));
+        assert!(draw(&mut p).contains("README.md? (D"));
         p.handle_event(&key(KeyCode::Char('n')));
         p.handle_event(&key(KeyCode::Char('y')));
         p.handle_event(&key(KeyCode::Char('p')));

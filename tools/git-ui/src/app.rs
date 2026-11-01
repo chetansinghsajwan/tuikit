@@ -240,6 +240,11 @@ impl App {
         let li = Self::list_index(self.focus).expect("a list pane");
         match self.maps[li].feed(key) {
             Feed::Run(id) => self.run_id(id),
+            Feed::NoBinding => {
+                let seq = self.maps[li].rejected().to_string();
+                self.say(format!("{seq} is not bound"), true);
+                Quit::No
+            }
             Feed::Pending | Feed::Cancelled | Feed::Unbound => Quit::No,
         }
     }

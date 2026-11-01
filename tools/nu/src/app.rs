@@ -238,8 +238,14 @@ impl App {
             Mode::Normal => {}
         }
         self.message = None;
-        match self.maps[Self::pane(self.focus)].feed(key) {
+        let pane = Self::pane(self.focus);
+        match self.maps[pane].feed(key) {
             Feed::Run(id) => self.run(id),
+            Feed::NoBinding => {
+                let seq = self.maps[pane].rejected().to_string();
+                self.say(format!("{seq} is not bound"), true);
+                Quit::No
+            }
             Feed::Pending | Feed::Cancelled | Feed::Unbound => Quit::No,
         }
     }
