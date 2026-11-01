@@ -46,18 +46,18 @@ pub fn spawn_lines_with(inj: Injector<Candidate>, reader: impl BufRead + Send + 
 
 /// Files under `root` (respects .gitignore), as paths relative to `root`. With
 /// `dirs`, folders are included too, marked with a trailing `/`.
-pub fn spawn_files(inj: Injector<Candidate>, root: PathBuf, dirs: bool) {
-    walk(inj, root, true, dirs);
+pub fn spawn_files(inj: Injector<Candidate>, root: PathBuf, dirs: bool, max_depth: Option<usize>) {
+    walk(inj, root, true, dirs, max_depth);
 }
 
 /// Only the folders under `root`, marked with a trailing `/`.
 pub fn spawn_dirs(inj: Injector<Candidate>, root: PathBuf) {
-    walk(inj, root, false, true);
+    walk(inj, root, false, true, None);
 }
 
-fn walk(inj: Injector<Candidate>, root: PathBuf, files: bool, dirs: bool) {
+fn walk(inj: Injector<Candidate>, root: PathBuf, files: bool, dirs: bool, max_depth: Option<usize>) {
     thread::spawn(move || {
-        for entry in ignore::WalkBuilder::new(&root).hidden(false).filter_entry(|e| e.file_name() != ".git").build().flatten() {
+        for entry in ignore::WalkBuilder::new(&root).hidden(false).max_depth(max_depth).filter_entry(|e| e.file_name() != ".git").build().flatten() {
             let Some(ft) = entry.file_type() else { continue };
             if entry.depth() == 0 || !((files && ft.is_file()) || (dirs && ft.is_dir())) {
                 continue;

@@ -37,6 +37,9 @@ struct Cli {
     /// With `--files`, include folders too (marked with a trailing `/`).
     #[arg(long)]
     dirs: bool,
+    /// With `--files`, go at most this many folder levels down (1: only DIR itself).
+    #[arg(long, value_name = "N", requires = "files")]
+    max_depth: Option<usize>,
     /// With `--files`, list only folders (marked with a trailing `/`).
     #[arg(long, requires = "files", conflicts_with = "dirs")]
     only_dirs: bool,
@@ -153,7 +156,7 @@ fn run(cli: Cli) -> io::Result<u8> {
     }
     match (&cli.files, cli.git, mode) {
         (Some(_), _, _) if cli.only_dirs => source::spawn_dirs(picker.injector(), root),
-        (Some(_), _, _) => source::spawn_files(picker.injector(), root, cli.dirs),
+        (Some(_), _, _) => source::spawn_files(picker.injector(), root, cli.dirs, cli.max_depth),
         (None, Some(what), _) => source::spawn_git(picker.injector(), root, what.into()),
         (None, None, Mode::Grep) => {} // the picker runs the search itself
         (None, None, Mode::Fuzzy) => {

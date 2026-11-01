@@ -850,7 +850,7 @@ mod source_tests {
         for (dirs, want) in [(false, 1u32), (true, 2u32)] {
             let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root: d.clone(), preview: false, git: false, query: String::new() };
             let mut p = Picker::new(opts, Arc::new(|| {}));
-            crate::source::spawn_files(p.injector(), d.clone(), dirs);
+            crate::source::spawn_files(p.injector(), d.clone(), dirs, None);
             for _ in 0..200 {
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 p.nucleo.tick(10);

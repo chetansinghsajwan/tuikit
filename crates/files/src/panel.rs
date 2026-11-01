@@ -130,10 +130,12 @@ fn is_executable(path: &Path) -> bool {
 }
 
 /// What to search for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Search {
     /// File names under the root.
     Files,
+    /// Names in this folder only, not in its subfolders.
+    Here(PathBuf),
     /// File contents under the root.
     Grep,
 }
@@ -627,6 +629,7 @@ impl Panel {
                 }
             }
             "search.files" => return Action::Search(Search::Files),
+            "search.here" => return Action::Search(Search::Here(self.target_dir())),
             "search.grep" => return Action::Search(Search::Grep),
             "view.hidden" => {
                 self.opts.hidden = !self.opts.hidden;
@@ -641,6 +644,15 @@ impl Panel {
                 if let Some(row) = self.rows.get(self.cursor).filter(|r| r.is_dir) {
                     let dir = row.path.clone();
                     self.set_root(dir);
+                }
+            }
+            "root.focus" => {
+                // The folder the cursor row sits in becomes the root: its siblings only, no other branches.
+                if let Some(path) = self.current().map(Path::to_path_buf) {
+                    if let Some(dir) = path.parent().map(Path::to_path_buf) {
+                        self.set_root(dir);
+                        self.reveal(&path);
+                    }
                 }
             }
             "root.up" => {
@@ -1462,7 +1474,7 @@ mod tests {
         p.handle_event(&key(KeyCode::Char(' ')));
         let menu = p.menu().expect("the leader starts a sequence");
         let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
-        for want in ["find", "grep", "view", "bookmarks", "cd", "open with"] {
+        for want in ["find everywhere", "grep", "view", "bookmarks", "cd", "open with"] {
             assert!(names.contains(&want), "{want} in {names:?}");
         }
         // The popup is drawn over the screen by the host.

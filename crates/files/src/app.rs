@@ -179,7 +179,7 @@ impl App {
             }
             Action::Search(kind) => {
                 let root = self.panel().root().to_path_buf();
-                if let Some(found) = overlay(term, || search(kind, &root))? {
+                if let Some(found) = overlay(term, || search(&kind, &root))? {
                     self.panel().reveal(&found);
                 }
             }
@@ -341,17 +341,27 @@ fn open_with(cmd: &str, path: &Path) -> Result<(), String> {
 }
 
 /// Run `pick` over `root` and return the chosen path.
-fn search(kind: Search, root: &Path) -> Option<PathBuf> {
-    let flag = if kind == Search::Files { "--files" } else { "--grep" };
-    let out = Command::new("pick").arg(flag).arg(".").current_dir(root).stdin(Stdio::null()).stderr(Stdio::inherit()).output().ok()?;
+fn search(kind: &Search, root: &Path) -> Option<PathBuf> {
+    let (flag, dir) = match kind {
+        Search::Files => ("--files", root),
+        Search::Grep => ("--grep", root),
+        Search::Here(dir) => ("--files", dir.as_path()),
+    };
+    let mut cmd = Command::new("pick");
+    cmd.arg(flag).arg(".");
+    if matches!(kind, Search::Here(_)) {
+        // Names in this folder only: its files and its folders, not what is below them.
+        cmd.args(["--dirs", "--max-depth", "1", "--flat"]);
+    }
+    let out = cmd.current_dir(dir).stdin(Stdio::null()).stderr(Stdio::inherit()).output().ok()?;
     if !out.status.success() {
         return None;
     }
     let text = String::from_utf8_lossy(&out.stdout);
     let line = text.lines().next()?;
     // Grep results are `path:line:col:text`.
-    let path = if kind == Search::Grep { line.split(':').next()? } else { line };
-    Some(root.join(path))
+    let path = if *kind == Search::Grep { line.split(':').next()? } else { line };
+    Some(dir.join(path.trim_end_matches('/')))
 }
 
 /// Edit the names in `$EDITOR`, then rename. Returns how many items changed.
