@@ -37,6 +37,7 @@ const COMMON: &[Action] = &[
     basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
     basic("nav.top", "top", "go to the first row", &["g", "home"]),
     basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
+    basic("view.zoom", "zoom", "let the focused pane fill the screen (again to go back)", &["z"]),
     basic("preview.down", "scroll diff down", "scroll the preview down", &["ctrl-d"]),
     basic("preview.up", "scroll diff up", "scroll the preview up", &["ctrl-u"]),
     basic("back", "back to files", "focus the files pane", &["esc"]),
@@ -57,6 +58,8 @@ const BRANCHES: &[Action] = &[
 
 const COMMITS: &[Action] = &[
     action("commit.checkout", "check out", "check out the commit (detached HEAD)", &["enter", "leader k"]),
+    action("view.graph", "graph", "show or hide the commit graph (lanes, merges, branch labels)", &["leader g"]),
+    action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["leader a"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
     action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
     action("commit.reword", "reword", "change the message of the last commit", &["w", "leader w"]),

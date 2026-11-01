@@ -2,11 +2,13 @@
 //! and per-line changes, on `gix`. Used by `pv`, `pick`, the files panel and
 //! `git-panel` so none of them talk to git themselves.
 
+mod graph;
 mod history;
 mod lines;
 mod status;
 mod worktree;
 
+pub use graph::{GraphRow, graph};
 pub use history::{CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo};
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
@@ -70,6 +72,11 @@ impl Repo {
     /// local branches, remotes and tags, newest first.
     pub fn refs(&self) -> Result<Vec<RefInfo>, Error> {
         history::refs(&self.repo)
+    }
+
+    /// Up to `limit` commits reachable from any branch, tag or `HEAD`, newest first, children before parents.
+    pub fn commits_all(&self, limit: usize) -> Result<Vec<CommitInfo>, Error> {
+        history::commits_all(&self.repo, limit)
     }
 
     /// Up to `limit` commits reachable from `HEAD`, newest first.

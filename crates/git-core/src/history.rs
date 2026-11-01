@@ -125,6 +125,37 @@ pub(crate) fn commits(repo: &gix::Repository, limit: usize) -> Result<Vec<Commit
     Ok(out)
 }
 
+pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<CommitInfo>, Error> {
+    use gix::revision::walk::Sorting;
+    use gix::traverse::commit::simple::CommitTimeOrder;
+    let mut tips: Vec<gix::ObjectId> = Vec::new();
+    if let Ok(head) = repo.head_commit() {
+        tips.push(head.id);
+    }
+    for r in repo.references().map_err(err)?.all().map_err(err)?.flatten() {
+        let mut r = r;
+        if r.name().category().is_some_and(|c| matches!(c, gix::reference::Category::LocalBranch | gix::reference::Category::RemoteBranch | gix::reference::Category::Tag)) {
+            if let Ok(id) = r.peel_to_id() {
+                if repo.find_commit(id.detach()).is_ok() {
+                    tips.push(id.detach());
+                }
+            }
+        }
+    }
+    tips.sort();
+    tips.dedup();
+    if tips.is_empty() {
+        return Ok(Vec::new());
+    }
+    let walk = repo.rev_walk(tips).sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst)).all().map_err(err)?;
+    let mut out = Vec::new();
+    for info in walk.take(limit) {
+        let info = info.map_err(err)?;
+        out.push(commit_info(&info.object().map_err(err)?)?);
+    }
+    Ok(out)
+}
+
 pub(crate) fn stashes(repo: &gix::Repository) -> Result<Vec<StashInfo>, Error> {
     let Some(stash) = repo.try_find_reference("refs/stash").map_err(err)? else { return Ok(Vec::new()) };
     let mut log = stash.log_iter();

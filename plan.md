@@ -457,3 +457,9 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - `pv`: `.md` files preview rendered (headings, lists, quotes, code, links, wrapped); with a focus line (grep hits) the source is shown.
 - Not done: workspace symbols (`Space S`) stay on helix's picker (the server is queried per keystroke; the shared picker has no live source yet); no `?` for helix's own editor mode.
 - macOS: `nu` builds its native backends on macOS without a flag. Not compilable here: the first Mac build may report errors.
+
+## Graph in gu, live pick sources, helix key help
+- `git-core::graph(&[CommitInfo]) -> Vec<GraphRow>` (lane drawing, two cells per lane: `●`, `│`, `├ ┤ ╮ ╭ ╯ ╰ ┼`, `─`; lane = colour index; pure function, 3 tests) and `Repo::commits_all(limit)` (every branch, remote branch and tag plus HEAD, newest first by commit time).
+- `gu` Commits pane: graph column (on by default, `leader g` toggles, width capped at 24 cells), labels for the refs at each commit (checked-out branch bold green, branches blue, remotes muted, tags yellow), `leader a` switches between the checked-out branch and every branch, `z` zooms the focused list pane to the whole screen (no other panes, no preview; again to go back). The small pane problem: zoom, not a separate screen.
+- `pick`: `Picker::set_live(source)` (`LiveSource`: query, injector, cancel flag): the list is whatever the source pushes for the current query, asked again on every change (nucleo restarts; the fuzzy filter is off). Helix workspace symbols (`Space S`) use it with the language servers' `workspace/symbol` (checked against rust-analyzer).
+- helix `Space H`: the keys of the current mode in the shared searchable help (`ui::preview::KeysHelp`); `ui::keys::Row` name and desc are `Cow<'static, str>` so hosts can build rows at run time.

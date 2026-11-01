@@ -14,6 +14,8 @@ use ui::{Pane, Theme};
 
 /// How many commits the log pane loads.
 const LOG_LIMIT: usize = 500;
+/// Most cells (two per lane) the graph column may take.
+const GRAPH_MAX: usize = 24;
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
@@ -109,6 +111,15 @@ pub struct App {
     help: Option<ui::keys::Help>,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
+    /// The commit graph column in the Commits pane, and whether it covers every branch.
+    graph: bool,
+    all_branches: bool,
+    graph_rows: Vec<git_core::GraphRow>,
+    graph_w: usize,
+    /// The refs (branches, tags) pointing at each commit, by hash, for the labels.
+    labels: std::collections::HashMap<String, Vec<RefInfo>>,
+    /// The focused list pane fills the screen.
+    zoom: bool,
     /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
     watch: Option<ui::watch::Watch>,
 }
@@ -140,6 +151,12 @@ impl App {
             maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
             job: None,
+            graph: true,
+            all_branches: false,
+            graph_rows: Vec::new(),
+            graph_w: 0,
+            labels: Default::default(),
+            zoom: false,
             watch,
         };
         app.reload_all();
@@ -161,7 +178,14 @@ impl App {
         };
         refs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time)));
         self.branches = refs;
-        self.commits = self.repo.commits(LOG_LIMIT).unwrap_or_default();
+        let commits = if self.all_branches { self.repo.commits_all(LOG_LIMIT) } else { self.repo.commits(LOG_LIMIT) };
+        self.commits = commits.unwrap_or_default();
+        self.graph_rows = if self.graph { git_core::graph(&self.commits) } else { Vec::new() };
+        self.graph_w = self.graph_rows.iter().map(|r| r.cells.len()).max().unwrap_or(0).min(GRAPH_MAX);
+        self.labels.clear();
+        for r in &self.branches {
+            self.labels.entry(r.oid.clone()).or_default().push(r.clone());
+        }
         self.stashes = self.repo.stashes().unwrap_or_default();
         for (i, len) in [self.branches.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
@@ -277,6 +301,16 @@ impl App {
             "remote.force_push" => self.mode = Mode::Confirm(Confirm::ForcePush),
             "op.continue" => self.run("continued".to_string(), |r| r.continue_operation()),
             "op.abort" => self.run("aborted".to_string(), |r| r.abort_operation()),
+            "view.graph" => {
+                self.graph = !self.graph;
+                self.reload_history();
+            }
+            "view.all" => {
+                self.all_branches = !self.all_branches;
+                self.reload_history();
+                self.say(if self.all_branches { "every branch" } else { "the checked-out branch" }, false);
+            }
+            "view.zoom" => self.zoom = !self.zoom,
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
             "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
@@ -569,6 +603,13 @@ impl App {
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         let [left, right] = ui::layout::main_preview(&theme, body);
+        // A zoomed list pane takes the whole body: no other panes, no preview.
+        if self.zoom && Self::list_index(self.focus).is_some() {
+            self.render_list(self.focus, body, buf, &theme);
+            self.render_status(status, buf, &theme);
+            self.render_overlays(area, buf, &theme);
+            return;
+        }
 
         // The focused pane takes the room; the others show a few rows.
         let constraints = ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(5) });
@@ -582,17 +623,22 @@ impl App {
             f => self.render_preview(f, right, buf, &theme),
         }
         self.render_status(status, buf, &theme);
+        self.render_overlays(area, buf, &theme);
+    }
+
+    /// The which-key menu and the keys help, over everything else.
+    fn render_overlays(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let menu = match self.focus {
             Focus::Files => self.files.menu(),
             f => Self::list_index(f).and_then(|i| self.maps[i].menu()),
         };
         if let Some(menu) = menu {
-            ui::keys::render_menu(area, buf, &theme, &menu);
+            ui::keys::render_menu(area, buf, theme, &menu);
         }
         if self.help.is_some() {
             let rows = self.keys_rows();
             if let Some(h) = self.help.as_mut() {
-                h.render(area, buf, &theme, "Keys", &rows);
+                h.render(area, buf, theme, "Keys", &rows);
             }
         }
     }
@@ -663,13 +709,40 @@ impl App {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
                 let author = Span::styled(format!("{} ", initials(&k.author)), Style::new().fg(author_color(theme, &k.author)));
-                (Line::from(vec![Span::styled(format!("{} ", k.short), muted), author, Span::styled(k.subject.clone(), fg)]), ago(k.time))
+                let mut spans = Vec::new();
+                if let Some(row) = self.graph_rows.get(i) {
+                    spans.extend(self.graph_spans(row, theme));
+                }
+                spans.push(Span::styled(format!("{} ", k.short), muted));
+                // Branches and tags that point here, as labels.
+                for r in self.labels.get(&k.oid).into_iter().flatten() {
+                    let style = match (r.is_head, r.kind) {
+                        (true, _) => Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD),
+                        (_, RefKind::Branch) => Style::new().fg(c.info.into()),
+                        (_, RefKind::Remote) => muted,
+                        (_, RefKind::Tag) => Style::new().fg(c.warning.into()),
+                    };
+                    spans.push(Span::styled(format!("{} ", r.name), style));
+                }
+                spans.push(author);
+                spans.push(Span::styled(k.subject.clone(), fg));
+                (Line::from(spans), ago(k.time))
             }
             _ => {
                 let s = &self.stashes[i];
                 (Line::from(vec![Span::styled(format!("{} ", s.index), muted), Span::styled(s.message.clone(), fg)]), ago(s.time))
             }
         }
+    }
+
+    /// The graph cells of a row as coloured spans, padded to the width of the column.
+    fn graph_spans(&self, row: &git_core::GraphRow, theme: &Theme) -> Vec<Span<'static>> {
+        let c = &theme.colors;
+        let palette = [c.accent, c.success, c.warning, c.info, c.error, c.git.renamed];
+        let mut spans: Vec<Span<'static>> = row.cells.iter().take(self.graph_w).map(|(ch, lane)| Span::styled(ch.to_string(), Style::new().fg(palette[lane % palette.len()].into()))).collect();
+        let used = spans.len();
+        spans.push(Span::raw(" ".repeat(self.graph_w.saturating_sub(used) + 1)));
+        spans
     }
 
     /// The rev to preview for the highlighted entry of a list pane.
@@ -869,7 +942,7 @@ mod tests {
         for title in ["Files", "Branches", "Commits", "Stashes"] {
             assert!(all.contains(title), "{title} in\n{all}");
         }
-        assert!(all.contains("first commit") && all.contains("main") && all.contains("other"), "{all}");
+        assert!(all.contains("first") && all.contains("main") && all.contains("other"), "{all}");
     }
 
     #[test]
