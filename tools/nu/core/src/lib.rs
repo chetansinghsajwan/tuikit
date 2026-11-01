@@ -5,6 +5,8 @@
 pub mod bluetooth;
 pub mod bluez;
 pub mod fake;
+#[cfg(all(target_os = "macos", feature = "macos"))]
+pub mod macos;
 pub mod nm;
 
 use std::fmt;

@@ -5,3 +5,14 @@ edition = "2024"
 
 [dependencies]
 zbus = "5"
+
+[features]
+# Native macOS backends (CoreWLAN for Wi-Fi, IOBluetooth for Bluetooth). Off until it has been
+# built on a Mac; then `nu` on macOS uses them instead of NetworkManager and BlueZ.
+macos = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-core-wlan", "dep:objc2-io-bluetooth"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", optional = true, features = ["NSString", "NSArray", "NSSet", "NSOrderedSet", "NSData", "NSError", "NSObject"] }
+objc2-core-wlan = { version = "0.3", optional = true }
+objc2-io-bluetooth = { version = "0.3", optional = true, features = ["IOBluetoothDevice", "IOBluetoothHostController", "IOBluetoothObject"] }
