@@ -1097,7 +1097,7 @@ impl App {
                     }
                     RefRow::Folder { key, name, depth, count } => {
                         let arrow = if self.folded.contains(key) { "▸" } else { "▾" };
-                        (Line::from(vec![Span::raw("  ".repeat(*depth)), Span::styled(format!("{arrow} {name}"), accent), Span::styled(format!("  {count}"), muted)]), String::new())
+                        (Line::from(vec![Span::styled("│ ".repeat(*depth), muted), Span::styled(format!("{arrow} {name}"), accent), Span::styled(format!("  {count}"), muted)]), String::new())
                     }
                     RefRow::Item { index, name, depth } => {
                         let b = &self.branches[*index];
@@ -1108,8 +1108,8 @@ impl App {
                         } else {
                             fg
                         };
-                        // Two spaces more than the folder above, so a ref sits under its folder's name.
-                        (Line::from(vec![Span::raw("  ".repeat(*depth)), Span::styled(name.clone(), style)]), ago(b.time))
+                        // Indentation guides, like the files tree: a thin line at each level.
+                        (Line::from(vec![Span::styled("│ ".repeat(*depth), muted), Span::styled(name.clone(), style)]), ago(b.time))
                     }
                 }
             }
