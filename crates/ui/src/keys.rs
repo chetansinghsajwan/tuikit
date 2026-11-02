@@ -403,6 +403,7 @@ impl Help {
         if rect.width < 20 || rect.height < 6 {
             return;
         }
+        crate::dim::dim(buf, area, theme);
         let c = &theme.colors;
         Clear.render(rect, buf);
         let pane = crate::Pane::new(theme).title(title).focused(true);
@@ -451,6 +452,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     if menu.entries.is_empty() || area.width < 12 || area.height < 4 {
         return;
     }
+    crate::dim::dim(buf, area, theme);
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
     // A fixed size, so the popup does not jump between levels (smaller only on a small screen).

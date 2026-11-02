@@ -95,3 +95,6 @@ Every command palette lists the commands run last first (newest first), then the
 - `hjkl` move by one; with Ctrl, `j`/`k` move five rows. In text, Ctrl+`h`/`l` jump by words and stop at the end of a line first.
 - A leader sequence that ends on a key nothing is bound to says so in the footer ("space z is not bound"); it never fails silently.
 - Tools that show files or git state follow changes made outside them (`ui::watch`), without polling.
+
+## Popups dim what is behind them
+A popup (Quick Keys, keys help, palette overlays inside helix, pickers, the git panel, the Markdown view) dims the screen behind it: colours move 55 % toward the background (`ui::dim`, `KEEP` = 45), default-colour text gets the terminal's dim attribute. A terminal cannot blur. Pickers started as a separate zellij pane (`pick` from `files`) cannot dim their parent.
