@@ -864,7 +864,7 @@ impl App {
             Screen::Commits => 1,
             Screen::Refs => 2,
         };
-        ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, false);
+        ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, true);
         let rest = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
         match self.screen {
             Screen::Status => self.render_panes(rest, buf),
@@ -1289,7 +1289,7 @@ mod tests {
         commit_file(&d, "b.txt", "b\n", "add feature alpha");
         commit_file(&d, "c.txt", "c\n", "fix bug beta");
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "3");
+        press(&mut app, "2");
         assert_eq!(app.commits.len(), 3);
         // By message: only the matching commit, its parent moved to the first commit.
         press(&mut app, " ");
@@ -1348,11 +1348,11 @@ mod tests {
         }
         assert!(!all.contains("Stashes") && !all.contains("Branches"), "{all}");
         // Refs: the branches (and tags, remotes) and the stashes.
-        press(&mut app, "2");
+        press(&mut app, "3");
         let all = screen(&mut app).join("\n");
         assert!(all.contains("Stashes") && all.contains("main") && all.contains("other"), "{all}");
         // Commits: the graph with the refs as pills.
-        press(&mut app, "3");
+        press(&mut app, "2");
         let all = screen(&mut app).join("\n");
         assert!(all.contains("●") && all.contains("main") && all.contains("other"), "{all}");
     }
@@ -1361,12 +1361,12 @@ mod tests {
     fn focus_moves_with_tab_and_digits_and_q_quits() {
         let d = repo("focus");
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "3");
+        press(&mut app, "2");
         assert_eq!((app.screen, app.focus), (Screen::Commits, Focus::Commits));
         // Commits has one pane: Tab stays. Refs has two: Tab and Shift-Tab move between them.
         app.handle_event(&key(KeyCode::Tab));
         assert_eq!(app.focus, Focus::Commits);
-        press(&mut app, "2");
+        press(&mut app, "3");
         assert_eq!((app.screen, app.focus), (Screen::Refs, Focus::Branches));
         app.handle_event(&key(KeyCode::Tab));
         assert_eq!(app.focus, Focus::Stashes);
@@ -1383,7 +1383,7 @@ mod tests {
     fn branches_checkout_create_and_delete() {
         let d = repo("branches");
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "2");
+        press(&mut app, "3");
         // main (checked out) is first, `other` second: j then Enter switches.
         press(&mut app, "j");
         app.handle_event(&key(KeyCode::Enter));
@@ -1453,7 +1453,7 @@ mod tests {
         press(&mut app, "c");
         press(&mut app, "second");
         app.handle_event(&key(KeyCode::Enter));
-        press(&mut app, "3"); // the commits load when their tab is shown
+        press(&mut app, "2"); // the commits load when their tab is shown
         assert_eq!(app.commits.len(), 2, "{:?}", app.message);
         assert_eq!(app.commits[0].subject, "second");
     }
@@ -1469,7 +1469,7 @@ mod tests {
         let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
         assert!(ids.contains(&"commit.new") && ids.contains(&"focus.branches"), "{ids:?}");
         // Branches pane: the leader menu lists the branch actions, a leader key runs one.
-        press(&mut app, "2");
+        press(&mut app, "3");
         press_raw(&mut app, ' ');
         let menu = match app.focus { Focus::Branches => app.maps[0].menu().unwrap(), _ => panic!() };
         let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
@@ -1516,7 +1516,7 @@ mod tests {
         let d = repo("commits");
         commit_file(&d, "b.txt", "two\n", "second");
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "3");
+        press(&mut app, "2");
         // Reword the last commit.
         press(&mut app, "w");
         for _ in 0..6 {
@@ -1562,7 +1562,7 @@ mod tests {
         git(&d, &["tag", "v9"]);
         git(&d, &["switch", "-q", "feat"]);
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "2");
+        press(&mut app, "3");
         let at = |app: &App, name: &str| app.branches.iter().position(|b| b.name == name).unwrap();
         // Rebase feat onto main.
         app.lists[0].cursor = at(&app, "main");
@@ -1635,7 +1635,7 @@ mod tests {
         git(&d, &["switch", "-q", "main"]);
         commit_file(&d, "b.txt", "main\n", "main");
         let mut app = App::new(&d).unwrap();
-        press(&mut app, "2");
+        press(&mut app, "3");
         let other = app.branches.iter().position(|b| b.name == "other").unwrap();
         app.lists[0].cursor = other;
         press(&mut app, "M");
