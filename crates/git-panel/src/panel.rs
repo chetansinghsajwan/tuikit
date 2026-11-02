@@ -302,13 +302,16 @@ impl Panel {
                     return self.unstage(rela);
                 }
             }
-            "change.stage_all" => {
+            "change.toggle_all" => {
+                // Everything staged already (nothing left to stage): take it all back out.
+                let open = self.rows.iter().any(|r| matches!(r, Row::File { section: Section::Conflicts | Section::Unstaged | Section::Untracked, .. }));
+                let staged = self.rows.iter().any(|r| matches!(r, Row::File { section: Section::Staged, .. }));
+                if staged && !open {
+                    let r = self.repo.unstage_all();
+                    return self.finish("unstaged everything", r);
+                }
                 let r = self.repo.stage_all();
                 return self.finish("staged everything", r);
-            }
-            "change.unstage_all" => {
-                let r = self.repo.unstage_all();
-                return self.finish("unstaged everything", r);
             }
             "change.discard" => {
                 // Discard: only work-tree changes, never the staged ones.
@@ -650,10 +653,11 @@ mod tests {
         on(&mut p, "a.txt");
         assert_eq!(press(&mut p, "u"), Action::None);
         assert_eq!(press(&mut p, "s"), Action::Changed);
-        assert_eq!(press(&mut p, "A"), Action::Changed);
-        assert!(p.items.iter().all(|&i| !matches!(&p.rows[i], Row::File { section: Section::Staged, .. })));
+        // `a` toggles: it stages everything while something is left, and unstages it all once all is staged.
         assert_eq!(press(&mut p, "a"), Action::Changed);
         assert!(p.items.iter().all(|&i| matches!(&p.rows[i], Row::File { section: Section::Staged, .. })));
+        assert_eq!(press(&mut p, "a"), Action::Changed);
+        assert!(p.items.iter().all(|&i| !matches!(&p.rows[i], Row::File { section: Section::Staged, .. })));
     }
 
     #[test]

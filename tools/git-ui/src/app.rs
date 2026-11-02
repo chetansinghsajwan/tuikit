@@ -1135,7 +1135,7 @@ impl App {
             return "/ search  n N next  space f filter  p diff  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
         }
         match self.focus {
-            Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
+            Focus::Files => "s stage  u unstage  a all (toggle)  x discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
             Focus::Commits => "enter checkout  C cherry-pick  R revert  w reword  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
