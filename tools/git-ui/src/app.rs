@@ -292,6 +292,8 @@ impl App {
             RefKind::Tag => 2,
         };
         refs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time)));
+        // The row the cursor is on, by identity (before the refs change under it).
+        let keep = self.ref_row_id(self.lists[0].cursor);
         self.branches = refs;
         // The commits are only loaded while their tab is shown.
         let limit = TAB_LOG_LIMIT;
@@ -318,7 +320,7 @@ impl App {
         }
         self.refs_w = self.commits.iter().map(|k| pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default()).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
         self.stashes = self.repo.stashes().unwrap_or_default();
-        self.build_ref_rows();
+        self.build_ref_rows(keep);
         for (i, len) in [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
         }
@@ -371,6 +373,14 @@ impl App {
 
     // ---- the refs tree ----------------------------------------------------
 
+    /// What identifies row `i` of the Refs tree across reloads: the key of a section or folder, the kind and name of a ref.
+    fn ref_row_id(&self, i: usize) -> Option<String> {
+        match self.ref_rows.get(i)? {
+            RefRow::Section { key, .. } | RefRow::Folder { key, .. } => Some(key.clone()),
+            RefRow::Item { index, .. } => self.branches.get(*index).map(|r| format!("{:?}:{}", r.kind, r.name)),
+        }
+    }
+
     /// The ref under the cursor of the Refs pane (`None` on a section or a folder).
     fn current_ref(&self) -> Option<&RefInfo> {
         match self.ref_rows.get(self.lists[0].cursor)? {
@@ -381,15 +391,15 @@ impl App {
 
     /// Lay the refs out as a tree: Branches, Remotes and Tags, each with its names split at `/` into folders
     /// (`feature/login` under `feature`, `origin/main` under `origin`). Folded sections and folders hide what is in them.
-    fn build_ref_rows(&mut self) {
-        let keep = self.ref_rows.get(self.lists[0].cursor).cloned();
+    fn build_ref_rows(&mut self, keep: Option<String>) {
         let mut rows = Vec::new();
         for (kind, label, tag) in [(RefKind::Branch, "Branches", "b"), (RefKind::Remote, "Remotes", "r"), (RefKind::Tag, "Tags", "t")] {
             let mut items: Vec<(usize, &RefInfo)> = self.branches.iter().enumerate().filter(|(_, r)| r.kind == kind).collect();
             if items.is_empty() {
                 continue;
             }
-            items.sort_by_key(|(_, r)| r.name.to_lowercase());
+            // Plain name order: the same folder stays together, `Feature/` and `feature/` are two folders.
+            items.sort_by(|a, b| a.1.name.cmp(&b.1.name));
             let section = tag.to_string();
             rows.push(RefRow::Section { key: section.clone(), label, count: items.len() });
             if self.folded.contains(&section) {
@@ -425,7 +435,7 @@ impl App {
         }
         // The cursor stays on the same row when it is still there.
         self.ref_rows = rows;
-        let at = keep.and_then(|k| self.ref_rows.iter().position(|r| *r == k)).unwrap_or(self.lists[0].cursor);
+        let at = keep.and_then(|k| (0..self.ref_rows.len()).find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str()))).unwrap_or(self.lists[0].cursor);
         self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
     }
 
@@ -764,7 +774,8 @@ impl App {
                         if !self.folded.remove(&key) {
                             self.folded.insert(key);
                         }
-                        self.build_ref_rows();
+                        let keep = self.ref_row_id(self.lists[0].cursor);
+                        self.build_ref_rows(keep);
                         return;
                     }
                 }
@@ -803,7 +814,9 @@ impl App {
                             RefKind::Tag => PromptKind::RenameTag(b.name.clone()),
                             RefKind::Remote => PromptKind::RenameRemoteBranch(b.name.clone()),
                         };
-                        self.mode = Mode::Prompt(kind, Input::new(b.name));
+                        // A remote branch is renamed without its remote (`topic`, not `origin/topic`).
+                        let shown = if b.kind == RefKind::Remote { b.name.split_once('/').map(|(_, n)| n.to_string()).unwrap_or_default() } else { b.name };
+                        self.mode = Mode::Prompt(kind, Input::new(shown));
                     }
                     "branch.merge" => {
                         if b.is_head {
@@ -940,12 +953,12 @@ impl App {
                         let value = value.trim_end_matches('/').to_string();
                         let pairs: Vec<(String, String)> = self.branches.iter().filter(|r| r.kind == kind && r.name.starts_with(&format!("{prefix}/"))).map(|r| (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..]))).collect();
                         let n = pairs.len();
-                        self.run(format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }), move |r| {
-                            for (old, new) in &pairs {
-                                if kind == RefKind::Tag { r.rename_tag(old, new)?; } else { r.rename_branch(old, new)?; }
-                            }
-                            Ok(())
-                        });
+                        // The names are checked and the renames are all or none (`Repo::rename_many`).
+                        if value.is_empty() || value.starts_with('/') || value.contains("//") {
+                            self.say("the folder name is empty or has an empty part", true);
+                        } else {
+                            self.run(format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }), move |r| r.rename_many(kind, &pairs));
+                        }
                     }
                     PromptKind::BranchAt(oid) => {
                         let v = value.clone();
@@ -1610,6 +1623,53 @@ mod tests {
         press(&mut app, "1");
         assert_eq!((app.screen, app.focus), (Screen::Status, Focus::Files));
         assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
+    }
+
+    #[test]
+    fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
+        let d = repo("cursor");
+        git(&d, &["branch", "Feature/a"]);
+        git(&d, &["branch", "feature/b"]);
+        git(&d, &["branch", "Feature/c"]);
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "3");
+        // `Feature/` and `feature/` are two folders, each once.
+        let folders: Vec<String> = app.ref_rows.iter().filter_map(|r| if let RefRow::Folder { name, .. } = r { Some(name.clone()) } else { None }).collect();
+        assert_eq!(folders, vec!["Feature".to_string(), "feature".to_string()]);
+        // A new branch sorts before the one under the cursor: the cursor stays on its ref.
+        app.lists[0].cursor = ref_row(&app, "other");
+        git(&d, &["branch", "aaa"]);
+        app.reload_all();
+        assert_eq!(app.current_ref().map(|b| b.name.as_str()), Some("other"));
+        // A folder rename that cannot be done as a whole does nothing at all.
+        git(&d, &["branch", "taken-a"]);
+        app.reload_all();
+        app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature")).unwrap();
+        press(&mut app, "R");
+        for _ in 0..7 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "x");
+        assert!(app.branches.iter().any(|b| b.name == "x/a") && app.branches.iter().any(|b| b.name == "x/c"), "{:?}", app.message);
+        let before: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
+        app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x")).unwrap();
+        press(&mut app, "R");
+        for _ in 0..1 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "feature"); // `feature/b` exists, but x/a -> feature/a and x/c -> feature/c are free
+        let after: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
+        assert_ne!(before, after);
+        // A name that is not valid says so and changes nothing.
+        let snapshot = after.clone();
+        app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+        press(&mut app, "R");
+        for _ in 0..7 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "bad name");
+        assert!(app.message.as_ref().is_some_and(|(_, e)| *e), "{:?}", app.message);
+        assert_eq!(app.branches.iter().map(|b| b.name.clone()).collect::<Vec<_>>(), snapshot);
     }
 
     #[test]

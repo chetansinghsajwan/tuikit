@@ -3,7 +3,7 @@
 //! line, as lazygit does, so hooks, signing and every edge case behave exactly as
 //! the user's git does.
 
-use crate::history::{FilePatch, hunks};
+use crate::history::{FilePatch, RefKind, hunks};
 use crate::lines::head_blob;
 use crate::{Error, Kind, Repo, err};
 use gix::bstr::ByteSlice;
@@ -260,25 +260,78 @@ impl Repo {
     }
 
     pub fn rename_branch(&self, old: &str, new: &str) -> Result<(), Error> {
-        if new.trim().is_empty() {
-            return Err(Error("empty branch name".into()));
-        }
+        self.check_branch_name(new)?;
         self.git(&["branch", "-m", old, new], &[]).map(|_| ())
     }
 
-    /// Rename a tag: a new tag at the same object, then the old one goes (an annotated tag keeps its message).
-    pub fn rename_tag(&self, old: &str, new: &str) -> Result<(), Error> {
-        if new.trim().is_empty() {
-            return Err(Error("empty tag name".into()));
+    /// Whether `name` is usable as a branch name (`git check-ref-format`: no leading `-`, no `..`, no spaces, ...).
+    pub fn check_branch_name(&self, name: &str) -> Result<(), Error> {
+        if name.starts_with('-') {
+            return Err(Error(format!("\"{name}\" is not a valid branch name")));
         }
-        self.git(&["tag", new, old], &[])?;
-        self.git(&["tag", "-d", old], &[]).map(|_| ())
+        self.git(&["check-ref-format", &format!("refs/heads/{name}")], &[]).map(|_| ()).map_err(|_| Error(format!("\"{name}\" is not a valid branch name")))
+    }
+
+    /// Whether `name` is usable as a tag name.
+    pub fn check_tag_name(&self, name: &str) -> Result<(), Error> {
+        if name.starts_with('-') {
+            return Err(Error(format!("\"{name}\" is not a valid tag name")));
+        }
+        self.git(&["check-ref-format", &format!("refs/tags/{name}")], &[]).map(|_| ()).map_err(|_| Error(format!("\"{name}\" is not a valid tag name")))
+    }
+
+    /// Rename a tag: a new tag at the same commit with the same message (an annotated tag is made again; its
+    /// tagger and date are the rename's), then the old one goes. If the old one cannot go, the new one is removed again.
+    pub fn rename_tag(&self, old: &str, new: &str) -> Result<(), Error> {
+        self.check_tag_name(new)?;
+        if old == new {
+            return Err(Error("the new name is the old name".into()));
+        }
+        let full = format!("refs/tags/{old}");
+        if self.git(&["cat-file", "-t", &full], &[])?.trim() == "tag" {
+            let message = self.git(&["for-each-ref", "--format=%(contents)", &full], &[])?;
+            self.git(&["tag", "-a", "-m", message.trim_end(), new, &format!("{full}^{{}}")], &[])?;
+        } else {
+            self.git(&["tag", new, &full], &[])?;
+        }
+        if let Err(e) = self.git(&["tag", "-d", old], &[]) {
+            let _ = self.git(&["tag", "-d", new], &[]);
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Rename several branches (or tags) at once, all or none: every new name is checked first (valid, not taken, not
+    /// used twice), and if one rename fails the ones already done are undone.
+    pub fn rename_many(&self, kind: RefKind, pairs: &[(String, String)]) -> Result<(), Error> {
+        let rename = |old: &str, new: &str| if kind == RefKind::Tag { self.rename_tag(old, new) } else { self.rename_branch(old, new) };
+        let taken: std::collections::HashSet<String> = self.refs()?.into_iter().filter(|r| r.kind == kind).map(|r| r.name).collect();
+        let leaving: std::collections::HashSet<&str> = pairs.iter().map(|(old, _)| old.as_str()).collect();
+        let mut news = std::collections::HashSet::new();
+        for (_, new) in pairs {
+            if kind == RefKind::Tag { self.check_tag_name(new)? } else { self.check_branch_name(new)? }
+            if !news.insert(new.as_str()) {
+                return Err(Error(format!("\"{new}\" would be used twice")));
+            }
+            if taken.contains(new) && !leaving.contains(new.as_str()) {
+                return Err(Error(format!("\"{new}\" already exists")));
+            }
+        }
+        for (i, (old, new)) in pairs.iter().enumerate() {
+            if let Err(e) = rename(old, new) {
+                for (old, new) in pairs[..i].iter().rev() {
+                    let _ = rename(new, old);
+                }
+                return Err(e);
+            }
+        }
+        Ok(())
     }
 
     /// Rename a remote (`git remote rename`): its branches, tracking settings and `origin/...` refs follow.
     pub fn rename_remote(&self, old: &str, new: &str) -> Result<(), Error> {
-        if new.trim().is_empty() {
-            return Err(Error("empty remote name".into()));
+        if new.trim().is_empty() || new.starts_with('-') || new.contains(char::is_whitespace) {
+            return Err(Error(format!("\"{new}\" is not a valid remote name")));
         }
         self.git(&["remote", "rename", old, new], &[]).map(|_| ())
     }
@@ -286,8 +339,13 @@ impl Repo {
     /// Rename a branch on its remote (`origin/old` to `new`: push the commit under the new name, then delete the old one).
     pub fn rename_remote_branch(&self, remote_ref: &str, new: &str) -> Result<(), Error> {
         let (remote, old) = remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
-        if new.trim().is_empty() {
-            return Err(Error("empty branch name".into()));
+        if old == "HEAD" {
+            return Err(Error("origin/HEAD is not a branch".into()));
+        }
+        self.check_branch_name(new)?;
+        // The same name would push nothing and then delete the branch.
+        if new == old {
+            return Err(Error("the new name is the old name".into()));
         }
         self.git_net(&["push", remote, &format!("{remote_ref}:refs/heads/{new}")])?;
         self.git_net(&["push", remote, "--delete", old]).map(|_| ())

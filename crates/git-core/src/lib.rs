@@ -605,6 +605,7 @@ mod tests {
         Repo::discover(&d).unwrap().push(true).unwrap();
         git(&d, &["checkout", "-q", "main"]);
         Repo::discover(&d).unwrap().delete_remote_branch("origin/topic").unwrap();
+        assert!(Repo::discover(&d).unwrap().delete_remote_branch("nonsense").is_err());
         // Renaming: a remote branch (push the new name, delete the old), a tag, and the remote itself.
         git(&d, &["checkout", "-q", "-b", "old-name"]);
         Repo::discover(&d).unwrap().push(false).unwrap();
@@ -619,6 +620,33 @@ mod tests {
         let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
         assert!(names.contains(&"t2".to_string()) && !names.contains(&"t1".to_string()));
         assert!(r.rename_tag("t2", "t2").is_err() && r.rename_tag("nope", "t3").is_err());
+        assert!(r.rename_tag("t2", "-f").is_err() && r.rename_tag("t2", "a b").is_err());
+        // An annotated tag keeps its message under the new name; a failed rename leaves the old tag alone.
+        git(&d, &["tag", "-a", "ann", "-m", "release notes"]);
+        r.rename_tag("ann", "ann2").unwrap();
+        let body = std::process::Command::new("git").args(["tag", "-n9", "-l", "ann2"]).current_dir(&d).output().unwrap();
+        assert!(String::from_utf8_lossy(&body.stdout).contains("release notes"));
+        assert!(!Repo::discover(&d).unwrap().refs().unwrap().iter().any(|x| x.name == "ann"));
+        // Remote branches: not onto themselves (that would delete them), not HEAD, not an invalid name.
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"origin/new-name".to_string()), "{names:?}");
+        assert!(r.rename_remote_branch("origin/new-name", "new-name").is_err());
+        assert!(r.rename_remote_branch("origin/HEAD", "x").is_err() && r.rename_remote_branch("origin/new-name", "bad name").is_err());
+        assert!(r.rename_branch("main", "-x").is_err());
+        // Several at once: all or none.
+        git(&d, &["branch", "grp/a"]);
+        git(&d, &["branch", "grp/b"]);
+        git(&d, &["branch", "taken"]);
+        let r = Repo::discover(&d).unwrap();
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+        assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "taken")]).is_err());
+        assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "same"), pair("grp/b", "same")]).is_err());
+        assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "bad name")]).is_err());
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"grp/a".to_string()) && names.contains(&"grp/b".to_string()) && !names.contains(&"new/a".to_string()), "{names:?}");
+        r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "new/b")]).unwrap();
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"new/a".to_string()) && names.contains(&"new/b".to_string()) && !names.contains(&"grp/a".to_string()));
         r.rename_remote("origin", "upstream").unwrap();
         let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
         assert!(names.contains(&"upstream/main".to_string()), "{names:?}");
