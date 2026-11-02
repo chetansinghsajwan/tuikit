@@ -1072,6 +1072,9 @@ impl App {
         let panes = Layout::vertical(constraints).split(left);
         for (pane, f) in panes.iter().zip(REFS_PANES) {
             self.render_list(f, *pane, buf, &theme);
+            if f != self.focus {
+                ui::dim::dim_to(buf, *pane, &theme, ui::dim::KEEP_INACTIVE);
+            }
         }
         self.render_preview(self.focus, right, buf, &theme);
         self.render_status(status, buf, &theme);

@@ -96,5 +96,5 @@ Every command palette lists the commands run last first (newest first), then the
 - A leader sequence that ends on a key nothing is bound to says so in the footer ("space z is not bound"); it never fails silently.
 - Tools that show files or git state follow changes made outside them (`ui::watch`), without polling.
 
-## Popups dim what is behind them
+## Popups dim what is behind them (and panes without the focus dim a little: `KEEP_INACTIVE` = 62, in helix the editor or the docks, in `gu` and `nu` the pane without the focus)
 A popup (Quick Keys, keys help, palette overlays inside helix, pickers, the git panel, the Markdown view) dims the screen behind it: colours move 72 % toward the background (`ui::dim`, `KEEP` = 28), default-colour text gets the terminal's dim attribute. A terminal cannot blur. Pickers started as a separate zellij pane (`pick` from `files`) cannot dim their parent.

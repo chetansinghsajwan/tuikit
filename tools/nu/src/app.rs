@@ -444,6 +444,12 @@ impl App {
         let panes = Layout::vertical(constraints).split(left);
         self.render_wifi(panes[0], buf, &theme);
         self.render_bluetooth(panes[1], buf, &theme);
+        // The pane without the focus is dimmed a little.
+        for (f, pane) in ORDER.iter().zip(panes.iter()) {
+            if *f != self.focus {
+                ui::dim::dim_to(buf, *pane, &theme, ui::dim::KEEP_INACTIVE);
+            }
+        }
         match self.focus {
             Focus::Wifi => self.details_wifi(right, buf, &theme),
             Focus::Bluetooth => self.details_bluetooth(right, buf, &theme),
