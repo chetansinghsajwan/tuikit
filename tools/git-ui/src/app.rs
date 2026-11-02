@@ -99,6 +99,15 @@ enum Mode {
     Confirm(Confirm),
 }
 
+/// A row of the Refs tree: a section (Branches, Remotes, Tags), a folder (`feature/`, `origin/`) or a ref.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RefRow {
+    Section { key: String, label: &'static str, count: usize },
+    Folder { key: String, name: String, depth: usize, count: usize },
+    /// `index` into `branches`; `name` is the last path part.
+    Item { index: usize, name: String, depth: usize },
+}
+
 /// What narrows the commit list. The graph is drawn from what is left.
 #[derive(Default, Clone)]
 struct Filter {
@@ -200,6 +209,9 @@ pub struct App {
     graph_w: usize,
     /// Width of the refs column in the Commits table.
     refs_w: usize,
+    /// The refs as the tree the Refs pane shows, and which sections and folders are folded.
+    ref_rows: Vec<RefRow>,
+    folded: std::collections::HashSet<String>,
     /// The refs (branches, tags) pointing at each commit, by hash, for the labels.
     labels: std::collections::HashMap<String, Vec<RefInfo>>,
     screen: Screen,
@@ -244,6 +256,8 @@ impl App {
             graph_rows: Vec::new(),
             graph_w: 0,
             refs_w: 0,
+            ref_rows: Vec::new(),
+            folded: Default::default(),
             labels: Default::default(),
             screen: Screen::Status,
             detail: false,
@@ -252,6 +266,10 @@ impl App {
             watch,
         };
         app.reload_all();
+        // The Refs pane starts on the checked-out branch.
+        if let Some(i) = app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head)) {
+            app.lists[0].cursor = i;
+        }
         Some(app)
     }
 
@@ -295,7 +313,8 @@ impl App {
         }
         self.refs_w = self.commits.iter().map(|k| pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default()).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
         self.stashes = self.repo.stashes().unwrap_or_default();
-        for (i, len) in [self.branches.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
+        self.build_ref_rows();
+        for (i, len) in [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
         }
         self.preview = None;
@@ -330,7 +349,7 @@ impl App {
     fn len(&self, focus: Focus) -> usize {
         match focus {
             Focus::Files => 0,
-            Focus::Branches => self.branches.len(),
+            Focus::Branches => self.ref_rows.len(),
             Focus::Commits => self.commits.len(),
             Focus::Stashes => self.stashes.len(),
         }
@@ -343,6 +362,66 @@ impl App {
             Err(e) => self.say(e.to_string(), true),
         }
         self.reload_all();
+    }
+
+    // ---- the refs tree ----------------------------------------------------
+
+    /// The ref under the cursor of the Refs pane (`None` on a section or a folder).
+    fn current_ref(&self) -> Option<&RefInfo> {
+        match self.ref_rows.get(self.lists[0].cursor)? {
+            RefRow::Item { index, .. } => self.branches.get(*index),
+            _ => None,
+        }
+    }
+
+    /// Lay the refs out as a tree: Branches, Remotes and Tags, each with its names split at `/` into folders
+    /// (`feature/login` under `feature`, `origin/main` under `origin`). Folded sections and folders hide what is in them.
+    fn build_ref_rows(&mut self) {
+        let keep = self.ref_rows.get(self.lists[0].cursor).cloned();
+        let mut rows = Vec::new();
+        for (kind, label, tag) in [(RefKind::Branch, "Branches", "b"), (RefKind::Remote, "Remotes", "r"), (RefKind::Tag, "Tags", "t")] {
+            let mut items: Vec<(usize, &RefInfo)> = self.branches.iter().enumerate().filter(|(_, r)| r.kind == kind).collect();
+            if items.is_empty() {
+                continue;
+            }
+            items.sort_by_key(|(_, r)| r.name.to_lowercase());
+            let section = tag.to_string();
+            rows.push(RefRow::Section { key: section.clone(), label, count: items.len() });
+            if self.folded.contains(&section) {
+                continue;
+            }
+            // The folders open above the previous ref, to emit only the ones that changed.
+            let mut open: Vec<String> = Vec::new();
+            let mut hidden_under: Option<usize> = None;
+            for (index, r) in items {
+                let parts: Vec<&str> = r.name.split('/').collect();
+                let (folders, leaf) = parts.split_at(parts.len() - 1);
+                let common = open.iter().zip(folders.iter()).take_while(|(a, b)| a.as_str() == **b).count();
+                open.truncate(common);
+                if hidden_under.is_some_and(|d| d > common) {
+                    hidden_under = None;
+                }
+                for (d, name) in folders.iter().enumerate().skip(common) {
+                    open.push((*name).to_string());
+                    if hidden_under.is_some() {
+                        continue;
+                    }
+                    let key = format!("{section}/{}", open.join("/"));
+                    let count = self.branches.iter().filter(|b| b.kind == kind && b.name.starts_with(&format!("{}/", open.join("/")))).count();
+                    rows.push(RefRow::Folder { key: key.clone(), name: (*name).to_string(), depth: d + 1, count });
+                    if self.folded.contains(&key) {
+                        hidden_under = Some(d + 1);
+                    }
+                }
+                if hidden_under.is_none() {
+                    rows.push(RefRow::Item { index, name: leaf[0].to_string(), depth: folders.len() + 1 });
+                }
+            }
+        }
+        // The cursor stays on the same row when it is still there.
+        self.ref_rows = rows;
+        let at = keep.and_then(|k| self.ref_rows.iter().position(|r| *r == k)).unwrap_or(self.lists[0].cursor);
+        self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
     }
 
     // ---- tabs and search --------------------------------------------------
@@ -656,7 +735,18 @@ impl App {
     fn pane_action(&mut self, id: &str) {
         match self.focus {
             Focus::Branches => {
-                let Some(b) = self.branches.get(self.lists[0].cursor).cloned() else {
+                // On a section or folder the Enter key folds or unfolds it.
+                if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) = self.ref_rows.get(self.lists[0].cursor) {
+                    if id == "branch.checkout" {
+                        let key = key.clone();
+                        if !self.folded.remove(&key) {
+                            self.folded.insert(key);
+                        }
+                        self.build_ref_rows();
+                        return;
+                    }
+                }
+                let Some(b) = self.current_ref().cloned() else {
                     if id == "branch.new" {
                         self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default());
                     }
@@ -947,7 +1037,7 @@ impl App {
 
     fn render_list(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let (title, n) = match which {
-            Focus::Branches => ("Refs", self.branches.len()),
+            Focus::Branches => ("Refs", self.ref_rows.len()),
             Focus::Commits => ("Commits", self.commits.len()),
             _ => ("Stashes", self.stashes.len()),
         };
@@ -999,15 +1089,29 @@ impl App {
         let muted = Style::new().fg(c.muted.into());
         match which {
             Focus::Branches => {
-                let b = &self.branches[i];
-                let name = if b.is_head {
-                    Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD)
-                } else if b.kind == RefKind::Branch {
-                    fg
-                } else {
-                    muted
-                };
-                (Line::from(Span::styled(b.name.clone(), name)), ago(b.time))
+                let accent = Style::new().fg(c.accent.into());
+                match &self.ref_rows[i] {
+                    RefRow::Section { key, label, count } => {
+                        let arrow = if self.folded.contains(key) { "▸" } else { "▾" };
+                        (Line::from(vec![Span::styled(format!("{arrow} {label}"), accent.add_modifier(Modifier::BOLD)), Span::styled(format!("  {count}"), muted)]), String::new())
+                    }
+                    RefRow::Folder { key, name, depth, count } => {
+                        let arrow = if self.folded.contains(key) { "▸" } else { "▾" };
+                        (Line::from(vec![Span::raw("  ".repeat(*depth)), Span::styled(format!("{arrow} {name}"), accent), Span::styled(format!("  {count}"), muted)]), String::new())
+                    }
+                    RefRow::Item { index, name, depth } => {
+                        let b = &self.branches[*index];
+                        let style = if b.is_head {
+                            Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD)
+                        } else if b.kind == RefKind::Tag {
+                            Style::new().fg(c.warning.into())
+                        } else {
+                            fg
+                        };
+                        // Two spaces more than the folder above, so a ref sits under its folder's name.
+                        (Line::from(vec![Span::raw("  ".repeat(*depth)), Span::styled(name.clone(), style)]), ago(b.time))
+                    }
+                }
             }
             Focus::Commits => {
                 let k = &self.commits[i];
@@ -1064,7 +1168,7 @@ impl App {
     /// The rev to preview for the highlighted entry of a list pane.
     fn current_rev(&self, which: Focus) -> Option<String> {
         match which {
-            Focus::Branches => self.branches.get(self.lists[0].cursor).map(|b| b.name.clone()),
+            Focus::Branches => self.current_ref().map(|b| b.name.clone()),
             Focus::Commits => self.commits.get(self.lists[1].cursor).map(|c| c.oid.clone()),
             Focus::Stashes => self.stashes.get(self.lists[2].cursor).map(|s| format!("stash@{{{}}}", s.index)),
             Focus::Files => None,
@@ -1308,6 +1412,11 @@ mod tests {
         d.canonicalize().unwrap()
     }
 
+    /// The row of the Refs tree that shows the ref called `name`.
+    fn ref_row(app: &App, name: &str) -> usize {
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].name == name)).unwrap_or_else(|| panic!("no ref {name}"))
+    }
+
     fn key(code: KeyCode) -> Event {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
     }
@@ -1453,6 +1562,38 @@ mod tests {
     }
 
     #[test]
+    fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
+        let d = repo("reftree");
+        git(&d, &["branch", "feature/login"]);
+        git(&d, &["branch", "feature/signup/form"]);
+        git(&d, &["tag", "v1"]);
+        let mut app = App::new(&d).unwrap();
+        let shape = |app: &App| -> Vec<String> {
+            app.ref_rows
+                .iter()
+                .map(|r| match r {
+                    RefRow::Section { label, .. } => label.to_string(),
+                    RefRow::Folder { name, depth, .. } => format!("{}{name}/", " ".repeat(*depth)),
+                    RefRow::Item { name, depth, .. } => format!("{}{name}", " ".repeat(*depth)),
+                })
+                .collect()
+        };
+        assert_eq!(shape(&app), vec!["Branches", " feature/", "  login", "  signup/", "   form", " main", " other", "Tags", " v1"]);
+        // Enter on a folder folds it; the cursor stays on the folder.
+        press(&mut app, "3");
+        app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(shape(&app), vec!["Branches", " feature/", " main", " other", "Tags", " v1"]);
+        assert!(matches!(app.ref_rows[app.lists[0].cursor], RefRow::Folder { .. }));
+        // Enter again unfolds it, a section folds all its refs.
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.ref_rows.len(), 9);
+        app.lists[0].cursor = 0;
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(shape(&app), vec!["Branches", "Tags", " v1"]);
+    }
+
+    #[test]
     fn branches_checkout_create_and_delete() {
         let d = repo("branches");
         let mut app = App::new(&d).unwrap();
@@ -1467,14 +1608,13 @@ mod tests {
         app.handle_event(&key(KeyCode::Enter));
         assert_eq!(head(&d), "topic");
         // Delete `other` (not checked out) with a confirmation.
-        let other = app.branches.iter().position(|b| b.name == "other").unwrap();
-        app.lists[0].cursor = other;
+        app.lists[0].cursor = ref_row(&app, "other");
         press(&mut app, "d");
         assert!(matches!(app.mode, Mode::Confirm(_)));
         press(&mut app, "y");
         assert!(app.branches.iter().all(|b| b.name != "other"), "{:?}", app.branches);
         // The checked-out branch cannot be deleted.
-        app.lists[0].cursor = app.branches.iter().position(|b| b.is_head).unwrap();
+        app.lists[0].cursor = ref_row(&app, "topic");
         press(&mut app, "d");
         assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
     }
@@ -1645,7 +1785,7 @@ mod tests {
         git(&d, &["switch", "-q", "feat"]);
         let mut app = App::new(&d).unwrap();
         press(&mut app, "3");
-        let at = |app: &App, name: &str| app.branches.iter().position(|b| b.name == name).unwrap();
+        let at = |app: &App, name: &str| ref_row(app, name);
         // Rebase feat onto main.
         app.lists[0].cursor = at(&app, "main");
         press(&mut app, "B");
@@ -1718,8 +1858,7 @@ mod tests {
         commit_file(&d, "b.txt", "main\n", "main");
         let mut app = App::new(&d).unwrap();
         press(&mut app, "3");
-        let other = app.branches.iter().position(|b| b.name == "other").unwrap();
-        app.lists[0].cursor = other;
+        app.lists[0].cursor = ref_row(&app, "other");
         press(&mut app, "M");
         press(&mut app, "y"); // the merge conflicts
         assert_eq!(app.operation_name(), Some("MERGING"), "{:?}", app.message);
