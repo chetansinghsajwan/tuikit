@@ -266,6 +266,33 @@ impl Repo {
         self.git(&["branch", "-m", old, new], &[]).map(|_| ())
     }
 
+    /// Rename a tag: a new tag at the same object, then the old one goes (an annotated tag keeps its message).
+    pub fn rename_tag(&self, old: &str, new: &str) -> Result<(), Error> {
+        if new.trim().is_empty() {
+            return Err(Error("empty tag name".into()));
+        }
+        self.git(&["tag", new, old], &[])?;
+        self.git(&["tag", "-d", old], &[]).map(|_| ())
+    }
+
+    /// Rename a remote (`git remote rename`): its branches, tracking settings and `origin/...` refs follow.
+    pub fn rename_remote(&self, old: &str, new: &str) -> Result<(), Error> {
+        if new.trim().is_empty() {
+            return Err(Error("empty remote name".into()));
+        }
+        self.git(&["remote", "rename", old, new], &[]).map(|_| ())
+    }
+
+    /// Rename a branch on its remote (`origin/old` to `new`: push the commit under the new name, then delete the old one).
+    pub fn rename_remote_branch(&self, remote_ref: &str, new: &str) -> Result<(), Error> {
+        let (remote, old) = remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
+        if new.trim().is_empty() {
+            return Err(Error("empty branch name".into()));
+        }
+        self.git_net(&["push", remote, &format!("{remote_ref}:refs/heads/{new}")])?;
+        self.git_net(&["push", remote, "--delete", old]).map(|_| ())
+    }
+
     /// Delete a tag.
     pub fn delete_tag(&self, name: &str) -> Result<(), Error> {
         self.git(&["tag", "-d", name], &[]).map(|_| ())

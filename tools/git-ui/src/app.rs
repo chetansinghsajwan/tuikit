@@ -56,6 +56,11 @@ enum PromptKind {
     NewStash,
     /// Rename this local branch.
     RenameBranch(String),
+    /// Rename this tag, this remote branch (`origin/topic`), this remote, or every branch or tag under a folder.
+    RenameTag(String),
+    RenameRemoteBranch(String),
+    RenameRemote(String),
+    RenameFolder { kind: RefKind, prefix: String },
     /// A branch at this commit.
     BranchAt(String),
     /// A tag at this commit.
@@ -735,6 +740,23 @@ impl App {
     fn pane_action(&mut self, id: &str) {
         match self.focus {
             Focus::Branches => {
+                // Renaming a folder renames everything under it (a remote folder renames the remote itself).
+                if id == "branch.rename" {
+                    if let Some(RefRow::Folder { key, depth, .. }) = self.ref_rows.get(self.lists[0].cursor).cloned() {
+                        let (section, path) = key.split_once('/').unwrap_or(("", &key));
+                        match section {
+                            "b" => self.mode = Mode::Prompt(PromptKind::RenameFolder { kind: RefKind::Branch, prefix: path.to_string() }, Input::new(path.to_string())),
+                            "t" => self.mode = Mode::Prompt(PromptKind::RenameFolder { kind: RefKind::Tag, prefix: path.to_string() }, Input::new(path.to_string())),
+                            _ if depth == 1 => self.mode = Mode::Prompt(PromptKind::RenameRemote(path.to_string()), Input::new(path.to_string())),
+                            _ => self.say("rename a remote branch itself, a remote folder is only part of its name", true),
+                        }
+                        return;
+                    }
+                    if matches!(self.ref_rows.get(self.lists[0].cursor), Some(RefRow::Section { .. })) {
+                        self.say("pick a ref or a folder to rename", true);
+                        return;
+                    }
+                }
                 // On a section or folder the Enter key folds or unfolds it.
                 if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) = self.ref_rows.get(self.lists[0].cursor) {
                     if id == "branch.checkout" {
@@ -776,11 +798,12 @@ impl App {
                         }
                     }
                     "branch.rename" => {
-                        if b.kind == RefKind::Branch {
-                            self.mode = Mode::Prompt(PromptKind::RenameBranch(b.name.clone()), Input::new(b.name));
-                        } else {
-                            self.say("only a local branch can be renamed", true);
-                        }
+                        let kind = match b.kind {
+                            RefKind::Branch => PromptKind::RenameBranch(b.name.clone()),
+                            RefKind::Tag => PromptKind::RenameTag(b.name.clone()),
+                            RefKind::Remote => PromptKind::RenameRemoteBranch(b.name.clone()),
+                        };
+                        self.mode = Mode::Prompt(kind, Input::new(b.name));
                     }
                     "branch.merge" => {
                         if b.is_head {
@@ -899,6 +922,30 @@ impl App {
                     PromptKind::RenameBranch(old) => {
                         let v = value.clone();
                         self.run(format!("renamed {old} to {value}"), move |r| r.rename_branch(&old, &v));
+                    }
+                    PromptKind::RenameTag(old) => {
+                        let v = value.clone();
+                        self.run(format!("renamed {old} to {value}"), move |r| r.rename_tag(&old, &v));
+                    }
+                    PromptKind::RenameRemote(old) => {
+                        let v = value.clone();
+                        self.run(format!("renamed remote {old} to {value}"), move |r| r.rename_remote(&old, &v));
+                    }
+                    PromptKind::RenameRemoteBranch(old) => {
+                        let v = value.clone();
+                        let done = format!("renamed {old} to {value} on the remote");
+                        self.remote("renaming on the remote", &done, move |r| r.rename_remote_branch(&old, &v));
+                    }
+                    PromptKind::RenameFolder { kind, prefix } => {
+                        let value = value.trim_end_matches('/').to_string();
+                        let pairs: Vec<(String, String)> = self.branches.iter().filter(|r| r.kind == kind && r.name.starts_with(&format!("{prefix}/"))).map(|r| (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..]))).collect();
+                        let n = pairs.len();
+                        self.run(format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }), move |r| {
+                            for (old, new) in &pairs {
+                                if kind == RefKind::Tag { r.rename_tag(old, new)?; } else { r.rename_branch(old, new)?; }
+                            }
+                            Ok(())
+                        });
                     }
                     PromptKind::BranchAt(oid) => {
                         let v = value.clone();
@@ -1224,6 +1271,10 @@ impl App {
                     PromptKind::NewBranch => "new branch: ",
                     PromptKind::NewStash => "stash message: ",
                     PromptKind::RenameBranch(_) => "rename to: ",
+                    PromptKind::RenameTag(_) => "rename tag to: ",
+                    PromptKind::RenameRemote(_) => "rename remote to: ",
+                    PromptKind::RenameRemoteBranch(_) => "rename on the remote to: ",
+                    PromptKind::RenameFolder { .. } => "rename folder to: ",
                     PromptKind::BranchAt(_) => "new branch here: ",
                     PromptKind::TagAt(_) => "tag name: ",
                     PromptKind::Reword => "message: ",
@@ -1559,6 +1610,37 @@ mod tests {
         press(&mut app, "1");
         assert_eq!((app.screen, app.focus), (Screen::Status, Focus::Files));
         assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
+    }
+
+    #[test]
+    fn tags_and_folders_of_refs_can_be_renamed() {
+        let d = repo("renames");
+        git(&d, &["branch", "feature/login"]);
+        git(&d, &["branch", "feature/signup"]);
+        git(&d, &["tag", "v1"]);
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "3");
+        // A tag.
+        app.lists[0].cursor = ref_row(&app, "v1");
+        press(&mut app, "R");
+        for _ in 0..2 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "v2");
+        assert!(app.branches.iter().any(|b| b.name == "v2") && app.branches.iter().all(|b| b.name != "v1"), "{:?}", app.message);
+        // A folder: everything under `feature/` moves to `feat/`.
+        app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+        press(&mut app, "R");
+        for _ in 0..7 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "feat");
+        let names: Vec<&str> = app.branches.iter().map(|b| b.name.as_str()).collect();
+        assert!(names.contains(&"feat/login") && names.contains(&"feat/signup") && !names.iter().any(|n| n.starts_with("feature/")), "{names:?} {:?}", app.message);
+        // A section cannot be renamed.
+        app.lists[0].cursor = 0;
+        press(&mut app, "R");
+        assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
     }
 
     #[test]

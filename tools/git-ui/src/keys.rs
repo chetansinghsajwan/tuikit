@@ -55,7 +55,7 @@ const BRANCHES: &[Action] = &[
     action("branch.force_delete", "force-delete branch", "delete the local branch even if it is not merged (asks first)", &["D"]),
     action("branch.merge", "merge", "merge the branch into the checked-out one (asks first)", &["M", "leader m"]),
     action("branch.rebase", "rebase onto", "replay the checked-out branch on top of this one (asks first)", &["B", "leader b"]),
-    action("branch.rename", "rename", "rename the local branch", &["R", "leader e"]),
+    action("branch.rename", "rename", "rename the branch, tag, remote branch (pushes the new name, deletes the old), remote or folder under the cursor", &["R", "leader e"]),
 ];
 
 const COMMITS: &[Action] = &[

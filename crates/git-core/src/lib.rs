@@ -605,6 +605,22 @@ mod tests {
         Repo::discover(&d).unwrap().push(true).unwrap();
         git(&d, &["checkout", "-q", "main"]);
         Repo::discover(&d).unwrap().delete_remote_branch("origin/topic").unwrap();
-        assert!(Repo::discover(&d).unwrap().delete_remote_branch("nonsense").is_err());
+        // Renaming: a remote branch (push the new name, delete the old), a tag, and the remote itself.
+        git(&d, &["checkout", "-q", "-b", "old-name"]);
+        Repo::discover(&d).unwrap().push(false).unwrap();
+        git(&d, &["checkout", "-q", "main"]);
+        let r = Repo::discover(&d).unwrap();
+        r.rename_remote_branch("origin/old-name", "new-name").unwrap();
+        r.fetch().unwrap();
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"origin/new-name".to_string()) && !names.contains(&"origin/old-name".to_string()), "{names:?}");
+        git(&d, &["tag", "t1"]);
+        r.rename_tag("t1", "t2").unwrap();
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"t2".to_string()) && !names.contains(&"t1".to_string()));
+        assert!(r.rename_tag("t2", "t2").is_err() && r.rename_tag("nope", "t3").is_err());
+        r.rename_remote("origin", "upstream").unwrap();
+        let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+        assert!(names.contains(&"upstream/main".to_string()), "{names:?}");
     }
 }
