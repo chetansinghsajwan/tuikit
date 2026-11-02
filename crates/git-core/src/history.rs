@@ -153,6 +153,19 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
         let info = info.map_err(err)?;
         out.push(commit_info(&info.object().map_err(err)?)?);
     }
+    // Several tips: time order alone can put a parent before its child.
+    Ok(crate::graph::topo_order(out))
+}
+
+pub(crate) fn commits_from(repo: &gix::Repository, rev: &str, limit: usize) -> Result<Vec<CommitInfo>, Error> {
+    let id = repo.rev_parse_single(rev).map_err(err)?;
+    let start = repo.find_commit(id).map_err(err)?;
+    let walk = start.ancestors().all().map_err(err)?;
+    let mut out = Vec::new();
+    for info in walk.take(limit) {
+        let info = info.map_err(err)?;
+        out.push(commit_info(&info.object().map_err(err)?)?);
+    }
     Ok(out)
 }
 

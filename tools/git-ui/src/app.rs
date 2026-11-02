@@ -12,8 +12,6 @@ use tui_input::backend::crossterm::EventHandler;
 use ui::keys::{Feed, Keymap};
 use ui::{Pane, Theme};
 
-/// How many commits the log pane loads.
-const LOG_LIMIT: usize = 500;
 /// How many commits the Commits tab loads.
 const TAB_LOG_LIMIT: usize = 3000;
 /// Most cells (two per lane) the graph column may take.
@@ -39,9 +37,17 @@ enum Focus {
     Stashes,
 }
 
-const ORDER: [Focus; 4] = [Focus::Files, Focus::Branches, Focus::Commits, Focus::Stashes];
+/// The panes of each tab, in focus order.
+const STATUS_PANES: [Focus; 1] = [Focus::Files];
+const COMMITS_PANES: [Focus; 1] = [Focus::Commits];
+const REFS_PANES: [Focus; 2] = [Focus::Branches, Focus::Stashes];
 
 enum PromptKind {
+    /// Commit filters: message, author, branch or tag, since.
+    FilterText,
+    FilterAuthor,
+    FilterBranch,
+    FilterSince,
     /// Search the commits.
     Search,
     NewBranch,
@@ -77,17 +83,80 @@ struct Job {
     handle: std::thread::JoinHandle<Result<(), git_core::Error>>,
 }
 
-/// The two tabs: the four panes, and the full commit graph.
+/// The tabs: the changed files, the full commit graph, and the refs (branches, tags, stashes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Screen {
     Status,
     Commits,
+    Refs,
 }
 
 enum Mode {
     Normal,
     Prompt(PromptKind, Input),
     Confirm(Confirm),
+}
+
+/// What narrows the commit list. The graph is drawn from what is left.
+#[derive(Default, Clone)]
+struct Filter {
+    text: String,
+    author: String,
+    /// Only the history of this branch or tag.
+    branch: String,
+    /// As typed (`7d`) and as seconds since the epoch.
+    since: Option<(String, i64)>,
+}
+
+impl Filter {
+    fn active(&self) -> bool {
+        !self.text.is_empty() || !self.author.is_empty() || !self.branch.is_empty() || self.since.is_some()
+    }
+
+    /// `author:x  since 7d`, for the pane title.
+    fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        if !self.branch.is_empty() {
+            parts.push(format!("branch {}", self.branch));
+        }
+        if !self.text.is_empty() {
+            parts.push(format!("message {}", self.text));
+        }
+        if !self.author.is_empty() {
+            parts.push(format!("author {}", self.author));
+        }
+        if let Some((s, _)) = &self.since {
+            parts.push(format!("since {s}"));
+        }
+        parts.join(", ")
+    }
+
+    fn keeps(&self, c: &CommitInfo) -> bool {
+        (self.text.is_empty() || c.message.to_lowercase().contains(&self.text.to_lowercase()))
+            && (self.author.is_empty() || c.author.to_lowercase().contains(&self.author.to_lowercase()))
+            && self.since.as_ref().is_none_or(|(_, t)| c.time >= *t)
+    }
+}
+
+/// Seconds since the epoch for `7d`, `2w`, `3m` (30 days), `1y` or `2026-10-01`; `now` is the current time.
+fn parse_since(text: &str, now: i64) -> Option<i64> {
+    let text = text.trim();
+    let (digits, unit) = text.split_at(text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len()));
+    if let (Ok(n), Some(secs)) = (digits.parse::<i64>(), match unit { "d" => Some(86_400), "w" => Some(7 * 86_400), "m" => Some(30 * 86_400), "y" => Some(365 * 86_400), _ => None }) {
+        return Some(now - n * secs);
+    }
+    // A date: days since 1970-01-01 by the civil-calendar formula.
+    let mut it = text.split('-').map(|p| p.parse::<i64>());
+    let (Some(Ok(y)), Some(Ok(m)), Some(Ok(d)), None) = (it.next(), it.next(), it.next(), it.next()) else { return None };
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some((era * 146_097 + doe - 719_468) * 86_400)
 }
 
 #[derive(Default, Clone, Copy)]
@@ -129,15 +198,12 @@ pub struct App {
     graph_w: usize,
     /// The refs (branches, tags) pointing at each commit, by hash, for the labels.
     labels: std::collections::HashMap<String, Vec<RefInfo>>,
-    /// The focused list pane fills the screen.
-    zoom: bool,
     screen: Screen,
-    /// What the graph and branch scope were before the Commits tab took them over.
-    saved_view: (bool, bool),
     /// The Commits tab shows the diff of the commit under the cursor beside the list.
     detail: bool,
     /// The current commit search.
     search: Option<String>,
+    filter: Filter,
     /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
     watch: Option<ui::watch::Watch>,
 }
@@ -170,15 +236,14 @@ impl App {
             help: None,
             job: None,
             graph: true,
-            all_branches: false,
+            all_branches: true,
             graph_rows: Vec::new(),
             graph_w: 0,
             labels: Default::default(),
-            zoom: false,
             screen: Screen::Status,
-            saved_view: (true, false),
             detail: false,
             search: None,
+            filter: Filter::default(),
             watch,
         };
         app.reload_all();
@@ -200,9 +265,23 @@ impl App {
         };
         refs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time)));
         self.branches = refs;
-        let limit = if self.screen == Screen::Commits { TAB_LOG_LIMIT } else { LOG_LIMIT };
-        let commits = if self.all_branches { self.repo.commits_all(limit) } else { self.repo.commits(limit) };
-        self.commits = commits.unwrap_or_default();
+        // The commits are only loaded while their tab is shown.
+        let limit = TAB_LOG_LIMIT;
+        let commits = if self.screen != Screen::Commits {
+            Ok(Vec::new())
+        } else if !self.filter.branch.is_empty() {
+            self.repo.commits_from(&self.filter.branch, limit)
+        } else if self.all_branches {
+            self.repo.commits_all(limit)
+        } else {
+            self.repo.commits(limit)
+        };
+        let mut commits = commits.unwrap_or_default();
+        if self.filter.active() {
+            let filter = self.filter.clone();
+            commits = git_core::simplify(commits, move |c| filter.keeps(c));
+        }
+        self.commits = commits;
         self.graph_rows = if self.graph { git_core::graph(&self.commits) } else { Vec::new() };
         self.graph_w = self.graph_rows.iter().map(|r| r.cells.len()).max().unwrap_or(0).min(GRAPH_MAX);
         self.labels.clear();
@@ -262,29 +341,48 @@ impl App {
 
     // ---- tabs and search --------------------------------------------------
 
-    /// Switch tab. The Commits tab shows every branch with the graph and takes the Commits
-    /// pane's list for that; leaving it restores what the pane showed.
+    /// The tab that shows `focus`.
+    fn screen_of(focus: Focus) -> Screen {
+        match focus {
+            Focus::Files => Screen::Status,
+            Focus::Commits => Screen::Commits,
+            Focus::Branches | Focus::Stashes => Screen::Refs,
+        }
+    }
+
+    /// Switch tab (and focus its first pane).
     fn set_screen(&mut self, screen: Screen) {
         if screen == self.screen {
             return;
         }
-        match screen {
-            Screen::Commits => {
-                self.saved_view = (self.all_branches, self.graph);
-                self.all_branches = true;
-                self.graph = true;
-                self.zoom = false;
-                self.focus = Focus::Commits;
-            }
-            Screen::Status => {
-                (self.all_branches, self.graph) = self.saved_view;
-                self.search = None;
-            }
-        }
         self.screen = screen;
+        self.focus = match screen {
+            Screen::Status => Focus::Files,
+            Screen::Commits => Focus::Commits,
+            Screen::Refs => Focus::Branches,
+        };
+        if screen != Screen::Commits {
+            self.search = None;
+        }
+        self.pscroll = 0;
+        // The commits are only loaded while their tab is shown.
+        self.reload_history();
+    }
+
+    /// Show `focus`'s pane: its tab, and it focused.
+    fn show(&mut self, focus: Focus) {
+        self.set_screen(Self::screen_of(focus));
+        self.set_focus(focus);
+    }
+
+    /// Reload the list after a filter changed and say how many commits are left.
+    fn refilter(&mut self, what: &str) {
         self.lists[1] = ListState::default();
         self.pscroll = 0;
         self.reload_history();
+        let n = self.commits.len();
+        let shown = if self.filter.active() { format!("{what}: {n} commit{}", if n == 1 { "" } else { "s" }) } else { what.to_string() };
+        self.say(shown, false);
     }
 
     /// Whether commit `i` of the list matches the search.
@@ -363,28 +461,44 @@ impl App {
         let focus = self.focus;
         let last = self.len(focus).saturating_sub(1);
         let li = Self::list_index(focus);
-        // On the Commits tab the pane keys that leave the pane go back to the Status tab first.
-        if self.screen == Screen::Commits && matches!(id, "focus.next" | "focus.prev" | "focus.files" | "focus.branches" | "focus.stashes" | "back") {
-            if id == "back" && self.search.is_some() {
-                self.search = None;
-                return Quit::No;
-            }
-            self.set_screen(Screen::Status);
-        }
         let mut moved = true;
         match id {
-            "tab.next" | "tab.prev" => self.set_screen(if self.screen == Screen::Status { Screen::Commits } else { Screen::Status }),
+            "tab.next" => self.set_screen(match self.screen {
+                Screen::Status => Screen::Commits,
+                Screen::Commits => Screen::Refs,
+                Screen::Refs => Screen::Status,
+            }),
+            "tab.prev" => self.set_screen(match self.screen {
+                Screen::Status => Screen::Refs,
+                Screen::Commits => Screen::Status,
+                Screen::Refs => Screen::Commits,
+            }),
             "search.start" => self.mode = Mode::Prompt(PromptKind::Search, Input::new(self.search.clone().unwrap_or_default())),
             "search.next" => self.search_step(1),
             "search.prev" => self.search_step(-1),
             "view.detail" => self.detail = !self.detail,
+            "filter.text" => self.mode = Mode::Prompt(PromptKind::FilterText, Input::new(self.filter.text.clone())),
+            "filter.author" => self.mode = Mode::Prompt(PromptKind::FilterAuthor, Input::new(self.filter.author.clone())),
+            "filter.branch" => self.mode = Mode::Prompt(PromptKind::FilterBranch, Input::new(self.filter.branch.clone())),
+            "filter.since" => self.mode = Mode::Prompt(PromptKind::FilterSince, Input::new(self.filter.since.as_ref().map(|(s, _)| s.clone()).unwrap_or_default())),
+            "filter.clear" => {
+                self.filter = Filter::default();
+                self.refilter("no filters");
+            }
             "focus.next" => self.focus_by(1),
             "focus.prev" => self.focus_by(-1),
-            "focus.files" => self.set_focus(Focus::Files),
-            "focus.branches" => self.set_focus(Focus::Branches),
-            "focus.commits" => self.set_focus(Focus::Commits),
-            "focus.stashes" => self.set_focus(Focus::Stashes),
-            "back" => self.set_focus(Focus::Files),
+            "focus.files" => self.show(Focus::Files),
+            "focus.branches" => self.show(Focus::Branches),
+            "focus.commits" => self.show(Focus::Commits),
+            "focus.stashes" => self.show(Focus::Stashes),
+            "back" => {
+                // Esc: clear a search first, then go back to the Status tab.
+                if self.search.is_some() {
+                    self.search = None;
+                } else {
+                    self.set_screen(Screen::Status);
+                }
+            }
             "quit" => return Quit::Yes,
             "help" => self.help = Some(ui::keys::Help::default()),
             "palette" => return Quit::Palette,
@@ -403,7 +517,6 @@ impl App {
                 self.reload_history();
                 self.say(if self.all_branches { "every branch" } else { "the checked-out branch" }, false);
             }
-            "view.zoom" => self.zoom = !self.zoom,
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
             "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
@@ -479,9 +592,15 @@ impl App {
         self.pscroll = 0;
     }
 
+    /// Move the focus to the next or previous pane of the tab (only the Refs tab has two).
     fn focus_by(&mut self, delta: isize) {
-        let at = ORDER.iter().position(|f| *f == self.focus).unwrap_or(0) as isize;
-        self.focus = ORDER[(at + delta).rem_euclid(ORDER.len() as isize) as usize];
+        let panes: &[Focus] = match self.screen {
+            Screen::Status => &STATUS_PANES,
+            Screen::Commits => &COMMITS_PANES,
+            Screen::Refs => &REFS_PANES,
+        };
+        let at = panes.iter().position(|f| *f == self.focus).unwrap_or(0) as isize;
+        self.focus = panes[(at + delta).rem_euclid(panes.len() as isize) as usize];
         self.pscroll = 0;
     }
 
@@ -624,6 +743,37 @@ impl App {
             KeyCode::Enter => {
                 let value = input.value().to_string();
                 match kind {
+                    PromptKind::FilterText => {
+                        self.filter.text = value;
+                        self.refilter("filtered by message");
+                    }
+                    PromptKind::FilterAuthor => {
+                        self.filter.author = value;
+                        self.refilter("filtered by author");
+                    }
+                    PromptKind::FilterBranch => {
+                        if !value.is_empty() && self.repo.commit(&value).is_err() {
+                            self.say(format!("no branch, tag or commit named {value}"), true);
+                        } else {
+                            self.filter.branch = value;
+                            self.refilter("filtered by branch");
+                        }
+                    }
+                    PromptKind::FilterSince => {
+                        if value.is_empty() {
+                            self.filter.since = None;
+                            self.refilter("filtered by date");
+                        } else {
+                            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+                            match parse_since(&value, now) {
+                                Some(t) => {
+                                    self.filter.since = Some((value, t));
+                                    self.refilter("filtered by date");
+                                }
+                                None => self.say("use 7d, 2w, 3m, 1y or a date like 2026-10-01", true),
+                            }
+                        }
+                    }
                     PromptKind::Search => {
                         self.search = if value.is_empty() { None } else { Some(value) };
                         if self.search.is_some() {
@@ -708,13 +858,18 @@ impl App {
     /// Draw the tab strip and the screen of the active tab.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
-        let labels = [ui::tabs::Label::new("Status"), ui::tabs::Label::new("Commits")];
-        let active = usize::from(self.screen == Screen::Commits);
+        let labels = [ui::tabs::Label::new("Status"), ui::tabs::Label::new("Commits"), ui::tabs::Label::new("Refs")];
+        let active = match self.screen {
+            Screen::Status => 0,
+            Screen::Commits => 1,
+            Screen::Refs => 2,
+        };
         ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, false);
         let rest = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
         match self.screen {
             Screen::Status => self.render_panes(rest, buf),
             Screen::Commits => self.render_commits_tab(rest, buf),
+            Screen::Refs => self.render_refs_tab(rest, buf),
         }
     }
 
@@ -734,31 +889,31 @@ impl App {
         self.render_overlays(area, buf, &theme);
     }
 
-    /// The Status tab: the four panes and the preview.
+    /// The Status tab: the changed files and the preview of the one under the cursor.
     fn render_panes(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         let [left, right] = ui::layout::main_preview(&theme, body);
-        // A zoomed list pane takes the whole body: no other panes, no preview.
-        if self.zoom && Self::list_index(self.focus).is_some() {
-            self.render_list(self.focus, body, buf, &theme);
-            self.render_status(status, buf, &theme);
-            self.render_overlays(area, buf, &theme);
-            return;
-        }
+        self.files.render_compact(left, buf, &theme, true);
+        self.files.render_preview_pane(right, buf, &theme);
+        self.render_status(status, buf, &theme);
+        self.render_overlays(area, buf, &theme);
+    }
 
-        // The focused pane takes the room; the others show a few rows.
-        let constraints = ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(5) });
+    /// The Refs tab: branches (with remotes and tags) above the stashes, the preview beside them.
+    fn render_refs_tab(&mut self, area: Rect, buf: &mut Buffer) {
+        let theme = self.theme.clone();
+        let body = Rect { height: area.height.saturating_sub(1), ..area };
+        let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
+        let [left, right] = ui::layout::main_preview(&theme, body);
+        // The focused pane takes the room, the other shows a few rows.
+        let constraints = REFS_PANES.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
         let panes = Layout::vertical(constraints).split(left);
-        self.files.render_compact(panes[0], buf, &theme, self.focus == Focus::Files);
-        for (i, f) in [Focus::Branches, Focus::Commits, Focus::Stashes].into_iter().enumerate() {
-            self.render_list(f, panes[i + 1], buf, &theme);
+        for (pane, f) in panes.iter().zip(REFS_PANES) {
+            self.render_list(f, *pane, buf, &theme);
         }
-        match self.focus {
-            Focus::Files => self.files.render_preview_pane(right, buf, &theme),
-            f => self.render_preview(f, right, buf, &theme),
-        }
+        self.render_preview(self.focus, right, buf, &theme);
         self.render_status(status, buf, &theme);
         self.render_overlays(area, buf, &theme);
     }
@@ -782,13 +937,15 @@ impl App {
 
     fn render_list(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let (title, n) = match which {
-            Focus::Branches => ("Branches", self.branches.len()),
+            Focus::Branches => ("Refs", self.branches.len()),
             Focus::Commits => ("Commits", self.commits.len()),
             _ => ("Stashes", self.stashes.len()),
         };
         let focused = self.focus == which;
-        let mut pane = Pane::new(theme).title(title).focused(focused);
-        if let Some(icon) = ui::icons::for_title(title) {
+        let shown = if which == Focus::Commits && self.filter.active() { format!("{title}  ({})", self.filter.summary()) } else { title.to_string() };
+        let mut pane = Pane::new(theme).title(&shown).focused(focused);
+        let icon = if which == Focus::Branches { Some(ui::icons::BRANCH) } else { ui::icons::for_title(title) };
+        if let Some(icon) = icon {
             pane = pane.icon(icon);
         }
         let inner = pane.inner(area);
@@ -929,6 +1086,10 @@ impl App {
         let line = match &self.mode {
             Mode::Prompt(kind, input) => {
                 let label = match kind {
+                    PromptKind::FilterText => "message contains: ",
+                    PromptKind::FilterAuthor => "author contains: ",
+                    PromptKind::FilterBranch => "branch or tag: ",
+                    PromptKind::FilterSince => "since (7d, 2w, 3m, 1y, 2026-10-01): ",
                     PromptKind::Search => "search: ",
                     PromptKind::NewBranch => "new branch: ",
                     PromptKind::NewStash => "stash message: ",
@@ -971,13 +1132,13 @@ impl App {
 
     fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
-            return "/ search  n N next match  p diff  enter checkout  C cherry-pick  space a/g all branches/graph  [ ] tab  ? keys";
+            return "/ search  n N next  space f filter  p diff  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
         }
         match self.focus {
-            Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  space space commands  ? keys",
-            Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  space r fetch/pull/push  space space commands  ? keys",
+            Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
+            Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
             Focus::Commits => "enter checkout  C cherry-pick  R revert  w reword  b branch  t tag  space z reset  space space commands  ? keys",
-            Focus::Stashes => "n new  a apply  p pop  d drop  space space commands  ? keys",
+            Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
         }
     }
 }
@@ -1123,14 +1284,77 @@ mod tests {
     }
 
     #[test]
-    fn shows_the_four_panes_and_the_log() {
+    fn filters_narrow_the_graph_and_keep_it_connected() {
+        let d = repo("filter");
+        commit_file(&d, "b.txt", "b\n", "add feature alpha");
+        commit_file(&d, "c.txt", "c\n", "fix bug beta");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "3");
+        assert_eq!(app.commits.len(), 3);
+        // By message: only the matching commit, its parent moved to the first commit.
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "m");
+        type_text(&mut app, "alpha");
+        assert_eq!(app.commits.len(), 1, "{:?}", app.message);
+        assert_eq!(app.commits[0].subject, "add feature alpha");
+        assert!(app.screen == Screen::Commits && app.filter.active());
+        // Clearing shows every commit again.
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "x");
+        assert_eq!(app.commits.len(), 3);
+        // By date: everything is newer than a day; a future date drops everything.
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "d");
+        type_text(&mut app, "1d");
+        assert_eq!(app.commits.len(), 3);
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "d");
+        for _ in 0..2 {
+            app.handle_event(&key(KeyCode::Backspace));
+        }
+        type_text(&mut app, "2999-01-01");
+        assert_eq!(app.commits.len(), 0);
+        // A date that makes no sense says so and changes nothing.
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "d");
+        type_text(&mut app, "soon");
+        assert!(app.message.as_ref().is_some_and(|(_, err)| *err));
+    }
+
+    #[test]
+    fn since_understands_units_and_dates() {
+        let now = 1_000_000_000;
+        assert_eq!(parse_since("7d", now), Some(now - 7 * 86_400));
+        assert_eq!(parse_since("2w", now), Some(now - 14 * 86_400));
+        assert_eq!(parse_since("1970-01-02", now), Some(86_400));
+        assert_eq!(parse_since("2000-03-01", now), Some(951_868_800));
+        assert_eq!(parse_since("tomorrow", now), None);
+        assert_eq!(parse_since("2026-13-01", now), None);
+    }
+
+    #[test]
+    fn shows_the_files_page_and_the_commits_and_refs_tabs() {
         let d = repo("panes");
         let mut app = App::new(&d).unwrap();
+        // The first page is the changed files only, under the tab strip.
         let all = screen(&mut app).join("\n");
-        for title in ["Files", "Branches", "Commits", "Stashes"] {
-            assert!(all.contains(title), "{title} in\n{all}");
+        for want in ["Status", "Commits", "Refs", "Files"] {
+            assert!(all.contains(want), "{want} in\n{all}");
         }
-        assert!(all.contains("main") && all.contains("other"), "{all}");
+        assert!(!all.contains("Stashes") && !all.contains("Branches"), "{all}");
+        // Refs: the branches (and tags, remotes) and the stashes.
+        press(&mut app, "2");
+        let all = screen(&mut app).join("\n");
+        assert!(all.contains("Stashes") && all.contains("main") && all.contains("other"), "{all}");
+        // Commits: the graph with the refs as pills.
+        press(&mut app, "3");
+        let all = screen(&mut app).join("\n");
+        assert!(all.contains("●") && all.contains("main") && all.contains("other"), "{all}");
     }
 
     #[test]
@@ -1138,13 +1362,20 @@ mod tests {
         let d = repo("focus");
         let mut app = App::new(&d).unwrap();
         press(&mut app, "3");
+        assert_eq!((app.screen, app.focus), (Screen::Commits, Focus::Commits));
+        // Commits has one pane: Tab stays. Refs has two: Tab and Shift-Tab move between them.
+        app.handle_event(&key(KeyCode::Tab));
         assert_eq!(app.focus, Focus::Commits);
+        press(&mut app, "2");
+        assert_eq!((app.screen, app.focus), (Screen::Refs, Focus::Branches));
         app.handle_event(&key(KeyCode::Tab));
         assert_eq!(app.focus, Focus::Stashes);
         app.handle_event(&key(KeyCode::Tab));
-        assert_eq!(app.focus, Focus::Files);
+        assert_eq!(app.focus, Focus::Branches);
         app.handle_event(&Event::Key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)));
         assert_eq!(app.focus, Focus::Stashes);
+        press(&mut app, "1");
+        assert_eq!((app.screen, app.focus), (Screen::Status, Focus::Files));
         assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
     }
 
@@ -1222,6 +1453,7 @@ mod tests {
         press(&mut app, "c");
         press(&mut app, "second");
         app.handle_event(&key(KeyCode::Enter));
+        press(&mut app, "3"); // the commits load when their tab is shown
         assert_eq!(app.commits.len(), 2, "{:?}", app.message);
         assert_eq!(app.commits[0].subject, "second");
     }

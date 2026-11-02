@@ -6,14 +6,14 @@ use ui::keys::{Action, Group, action, basic};
 
 /// Switching panes and the like: given to the Files panel too.
 pub const GLOBAL: &[Action] = &[
-    basic("tab.next", "next tab", "go to the next tab (Status, Commits)", &["]"]),
+    basic("tab.next", "next tab", "go to the next tab (Status, Commits, Refs)", &["]"]),
     basic("tab.prev", "previous tab", "go to the previous tab", &["["]),
-    basic("focus.next", "next pane", "focus the next pane", &["tab"]),
+    basic("focus.next", "next pane", "focus the next pane of the tab (Refs: branches and stashes)", &["tab"]),
     basic("focus.prev", "previous pane", "focus the previous pane", &["backtab"]),
-    basic("focus.files", "files pane", "focus the files pane", &["1"]),
-    basic("focus.branches", "branches pane", "focus the branches pane", &["2"]),
-    basic("focus.commits", "commits pane", "focus the commits pane", &["3"]),
-    basic("focus.stashes", "stashes pane", "focus the stashes pane", &["4"]),
+    basic("focus.files", "status tab", "show the Status tab (changed files)", &["1"]),
+    basic("focus.branches", "refs: branches", "show the Refs tab on the branches, tags and remotes", &["2"]),
+    basic("focus.commits", "commits tab", "show the Commits tab (the full graph)", &["3"]),
+    basic("focus.stashes", "refs: stashes", "show the Refs tab on the stashes", &["4"]),
     action("remote.fetch", "fetch", "fetch every remote and prune what is gone there", &["leader r f"]),
     action("remote.pull", "pull", "pull the upstream into the checked-out branch", &["leader r p"]),
     action("remote.push", "push", "push the checked-out branch (the first push sets its upstream on origin)", &["leader r P"]),
@@ -27,6 +27,7 @@ pub const GROUPS: &[Group] = &[
     Group { prefix: "leader r", name: "remote" },
     Group { prefix: "leader o", name: "operation" },
     Group { prefix: "leader z", name: "reset" },
+    Group { prefix: "leader f", name: "filter" },
 ];
 
 /// Movement, the diff scroll and quitting, for the list panes.
@@ -39,7 +40,6 @@ const COMMON: &[Action] = &[
     basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
     basic("nav.top", "top", "go to the first row", &["g", "home"]),
     basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
-    basic("view.zoom", "zoom", "let the focused pane fill the screen (again to go back)", &["z"]),
     basic("preview.down", "scroll diff down", "scroll the preview down", &["ctrl-d"]),
     basic("preview.up", "scroll diff up", "scroll the preview up", &["ctrl-u"]),
     basic("back", "back to files", "focus the files pane", &["esc"]),
@@ -64,6 +64,11 @@ const COMMITS: &[Action] = &[
     basic("search.next", "next match", "go to the next commit that matches the search", &["n"]),
     basic("search.prev", "previous match", "go to the previous commit that matches the search", &["N"]),
     action("view.detail", "diff", "show or hide the diff beside the list (the Commits tab)", &["p"]),
+    action("filter.text", "filter by message", "show only commits whose message contains the text (empty clears)", &["leader f m"]),
+    action("filter.author", "filter by author", "show only commits by authors whose name contains the text (empty clears)", &["leader f a"]),
+    action("filter.branch", "filter by branch", "show only the history of a branch or tag (empty clears)", &["leader f b"]),
+    action("filter.since", "filter by date", "show only commits since 7d, 2w, 3m, 1y or a date like 2026-10-01 (empty clears)", &["leader f d"]),
+    action("filter.clear", "clear filters", "show every commit again", &["leader f x"]),
     action("view.graph", "graph", "show or hide the commit graph (lanes, merges, branch labels)", &["leader g"]),
     action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["leader a"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),

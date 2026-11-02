@@ -20,6 +20,74 @@ impl GraphRow {
     }
 }
 
+/// `commits` in the order of `git log --topo-order`: every commit before its parents, and among the
+/// commits ready to go the newest first (ties keep their incoming order). Commit times alone are not
+/// enough, a parent can carry the same or a later time than its child.
+pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
+    use std::cmp::Reverse;
+    use std::collections::{BinaryHeap, HashMap};
+    let index: HashMap<String, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid.clone(), i)).collect();
+    // How many commits of the list still have to come before each one.
+    let mut waiting = vec![0usize; commits.len()];
+    for c in &commits {
+        for p in &c.parents {
+            if let Some(&j) = index.get(p) {
+                waiting[j] += 1;
+            }
+        }
+    }
+    let mut ready: BinaryHeap<(i64, Reverse<usize>)> = (0..commits.len()).filter(|&i| waiting[i] == 0).map(|i| (commits[i].time, Reverse(i))).collect();
+    let mut order = Vec::with_capacity(commits.len());
+    while let Some((_, Reverse(i))) = ready.pop() {
+        order.push(i);
+        for p in &commits[i].parents {
+            if let Some(&j) = index.get(p) {
+                waiting[j] -= 1;
+                if waiting[j] == 0 {
+                    ready.push((commits[j].time, Reverse(j)));
+                }
+            }
+        }
+    }
+    let mut slots: Vec<Option<CommitInfo>> = commits.into_iter().map(Some).collect();
+    order.into_iter().filter_map(|i| slots[i].take()).collect()
+}
+
+/// The commits `keep` accepts, with each parent link moved to the nearest kept ancestor, so a
+/// filtered history still draws as one connected graph (like `git log --graph` with a filter).
+/// `commits` is newest first, children before parents.
+pub fn simplify(commits: Vec<CommitInfo>, keep: impl Fn(&CommitInfo) -> bool) -> Vec<CommitInfo> {
+    use std::collections::{HashMap, HashSet};
+    let index: HashMap<&str, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid.as_str(), i)).collect();
+    let kept: Vec<bool> = commits.iter().map(|c| keep(c)).collect();
+    // For every commit, the kept commits reached first going down through its parents.
+    // Parents come later in the list, so walking it backwards has them done already.
+    let mut below: Vec<Vec<String>> = vec![Vec::new(); commits.len()];
+    for i in (0..commits.len()).rev() {
+        let mut found: Vec<String> = Vec::new();
+        for p in &commits[i].parents {
+            let Some(&j) = index.get(p.as_str()) else { continue };
+            if kept[j] {
+                found.push(p.clone());
+            } else {
+                found.extend(below[j].iter().cloned());
+            }
+        }
+        let mut seen = HashSet::new();
+        found.retain(|o| seen.insert(o.clone()));
+        below[i] = found;
+    }
+    commits
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| kept[*i])
+        .map(|(i, mut c)| {
+            c.parents = std::mem::take(&mut below[i]);
+            c
+        })
+        .collect()
+}
+
 /// Lanes of the drawing for `commits` (newest first, children before their parents).
 pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
     let mut lanes: Vec<Option<String>> = Vec::new();
@@ -118,6 +186,28 @@ mod tests {
 
     fn drawn(commits: &[CommitInfo]) -> Vec<String> {
         graph(commits).iter().map(GraphRow::text).collect()
+    }
+
+    #[test]
+    fn simplify_keeps_the_graph_connected_around_dropped_commits() {
+        // a - b - c - d, keeping a, c, d: a's parent becomes c.
+        let list = vec![c("a", &["b"]), c("b", &["c"]), c("c", &["d"]), c("d", &[])];
+        let kept = simplify(list, |k| k.oid != "b");
+        let parents: Vec<(String, Vec<String>)> = kept.iter().map(|k| (k.oid.clone(), k.parents.clone())).collect();
+        assert_eq!(parents, vec![("a".into(), vec!["c".into()]), ("c".into(), vec!["d".into()]), ("d".into(), vec![])]);
+        // A merge whose two sides are both dropped keeps one link per kept ancestor, once.
+        let list = vec![c("m", &["x", "y"]), c("x", &["r"]), c("y", &["r"]), c("r", &[])];
+        let kept = simplify(list, |k| k.oid == "m" || k.oid == "r");
+        assert_eq!(kept[0].parents, vec!["r".to_string()]);
+    }
+
+    #[test]
+    fn topo_order_puts_children_before_parents_even_with_equal_times() {
+        let mut list = vec![c("p", &[]), c("k", &["p"])];
+        list[0].time = 5;
+        list[1].time = 5;
+        let order: Vec<String> = topo_order(list).into_iter().map(|k| k.oid).collect();
+        assert_eq!(order, vec!["k".to_string(), "p".to_string()]);
     }
 
     #[test]

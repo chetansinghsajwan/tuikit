@@ -8,7 +8,7 @@ mod lines;
 mod status;
 mod worktree;
 
-pub use graph::{GraphRow, graph};
+pub use graph::{GraphRow, graph, simplify, topo_order};
 pub use history::{CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo};
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
@@ -77,6 +77,11 @@ impl Repo {
     /// Up to `limit` commits reachable from any branch, tag or `HEAD`, newest first, children before parents.
     pub fn commits_all(&self, limit: usize) -> Result<Vec<CommitInfo>, Error> {
         history::commits_all(&self.repo, limit)
+    }
+
+    /// Up to `limit` commits reachable from `rev` (a branch, tag or hash), newest first.
+    pub fn commits_from(&self, rev: &str, limit: usize) -> Result<Vec<CommitInfo>, Error> {
+        history::commits_from(&self.repo, rev, limit)
     }
 
     /// Up to `limit` commits reachable from `HEAD`, newest first.
