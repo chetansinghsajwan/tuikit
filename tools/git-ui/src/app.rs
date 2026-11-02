@@ -14,6 +14,8 @@ use ui::{Pane, Theme};
 
 /// How many commits the log pane loads.
 const LOG_LIMIT: usize = 500;
+/// How many commits the Commits tab loads.
+const TAB_LOG_LIMIT: usize = 3000;
 /// Most cells (two per lane) the graph column may take.
 const GRAPH_MAX: usize = 24;
 
@@ -40,6 +42,8 @@ enum Focus {
 const ORDER: [Focus; 4] = [Focus::Files, Focus::Branches, Focus::Commits, Focus::Stashes];
 
 enum PromptKind {
+    /// Search the commits.
+    Search,
     NewBranch,
     NewStash,
     /// Rename this local branch.
@@ -71,6 +75,13 @@ struct Job {
     label: String,
     done: String,
     handle: std::thread::JoinHandle<Result<(), git_core::Error>>,
+}
+
+/// The two tabs: the four panes, and the full commit graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    Status,
+    Commits,
 }
 
 enum Mode {
@@ -120,6 +131,13 @@ pub struct App {
     labels: std::collections::HashMap<String, Vec<RefInfo>>,
     /// The focused list pane fills the screen.
     zoom: bool,
+    screen: Screen,
+    /// What the graph and branch scope were before the Commits tab took them over.
+    saved_view: (bool, bool),
+    /// The Commits tab shows the diff of the commit under the cursor beside the list.
+    detail: bool,
+    /// The current commit search.
+    search: Option<String>,
     /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
     watch: Option<ui::watch::Watch>,
 }
@@ -157,6 +175,10 @@ impl App {
             graph_w: 0,
             labels: Default::default(),
             zoom: false,
+            screen: Screen::Status,
+            saved_view: (true, false),
+            detail: false,
+            search: None,
             watch,
         };
         app.reload_all();
@@ -178,7 +200,8 @@ impl App {
         };
         refs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time)));
         self.branches = refs;
-        let commits = if self.all_branches { self.repo.commits_all(LOG_LIMIT) } else { self.repo.commits(LOG_LIMIT) };
+        let limit = if self.screen == Screen::Commits { TAB_LOG_LIMIT } else { LOG_LIMIT };
+        let commits = if self.all_branches { self.repo.commits_all(limit) } else { self.repo.commits(limit) };
         self.commits = commits.unwrap_or_default();
         self.graph_rows = if self.graph { git_core::graph(&self.commits) } else { Vec::new() };
         self.graph_w = self.graph_rows.iter().map(|r| r.cells.len()).max().unwrap_or(0).min(GRAPH_MAX);
@@ -237,6 +260,63 @@ impl App {
         self.reload_all();
     }
 
+    // ---- tabs and search --------------------------------------------------
+
+    /// Switch tab. The Commits tab shows every branch with the graph and takes the Commits
+    /// pane's list for that; leaving it restores what the pane showed.
+    fn set_screen(&mut self, screen: Screen) {
+        if screen == self.screen {
+            return;
+        }
+        match screen {
+            Screen::Commits => {
+                self.saved_view = (self.all_branches, self.graph);
+                self.all_branches = true;
+                self.graph = true;
+                self.zoom = false;
+                self.focus = Focus::Commits;
+            }
+            Screen::Status => {
+                (self.all_branches, self.graph) = self.saved_view;
+                self.search = None;
+            }
+        }
+        self.screen = screen;
+        self.lists[1] = ListState::default();
+        self.pscroll = 0;
+        self.reload_history();
+    }
+
+    /// Whether commit `i` of the list matches the search.
+    fn commit_matches(&self, i: usize) -> bool {
+        let Some(q) = self.search.as_deref().filter(|q| !q.is_empty()) else { return false };
+        let q = q.to_lowercase();
+        let Some(k) = self.commits.get(i) else { return false };
+        let refs = self.labels.get(&k.oid).into_iter().flatten().map(|r| r.name.as_str()).collect::<Vec<_>>().join(" ");
+        [k.oid.as_str(), k.subject.as_str(), k.author.as_str(), refs.as_str()].iter().any(|s| s.to_lowercase().contains(&q))
+    }
+
+    /// Go to the next (`step` 1) or previous (-1) commit matching the search, wrapping around.
+    fn search_step(&mut self, step: isize) {
+        let n = self.commits.len();
+        if self.search.is_none() || n == 0 {
+            self.say("no search: / starts one", true);
+            return;
+        }
+        let from = self.lists[1].cursor;
+        let found = (1..=n).map(|d| (from as isize + step * d as isize).rem_euclid(n as isize) as usize).find(|&i| self.commit_matches(i));
+        let total = (0..n).filter(|&i| self.commit_matches(i)).count();
+        match found {
+            Some(i) => {
+                self.lists[1].cursor = i;
+                self.pscroll = 0;
+                let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
+                self.say(format!("match {nth} of {total}"), false);
+            }
+            None => self.say(format!("no commit matches \"{}\"", self.search.clone().unwrap_or_default()), true),
+        }
+    }
+
     // ---- events ---------------------------------------------------------
 
     pub fn handle_event(&mut self, ev: &Event) -> Quit {
@@ -283,8 +363,21 @@ impl App {
         let focus = self.focus;
         let last = self.len(focus).saturating_sub(1);
         let li = Self::list_index(focus);
+        // On the Commits tab the pane keys that leave the pane go back to the Status tab first.
+        if self.screen == Screen::Commits && matches!(id, "focus.next" | "focus.prev" | "focus.files" | "focus.branches" | "focus.stashes" | "back") {
+            if id == "back" && self.search.is_some() {
+                self.search = None;
+                return Quit::No;
+            }
+            self.set_screen(Screen::Status);
+        }
         let mut moved = true;
         match id {
+            "tab.next" | "tab.prev" => self.set_screen(if self.screen == Screen::Status { Screen::Commits } else { Screen::Status }),
+            "search.start" => self.mode = Mode::Prompt(PromptKind::Search, Input::new(self.search.clone().unwrap_or_default())),
+            "search.next" => self.search_step(1),
+            "search.prev" => self.search_step(-1),
+            "view.detail" => self.detail = !self.detail,
             "focus.next" => self.focus_by(1),
             "focus.prev" => self.focus_by(-1),
             "focus.files" => self.set_focus(Focus::Files),
@@ -531,6 +624,20 @@ impl App {
             KeyCode::Enter => {
                 let value = input.value().to_string();
                 match kind {
+                    PromptKind::Search => {
+                        self.search = if value.is_empty() { None } else { Some(value) };
+                        if self.search.is_some() {
+                            // The commit under the cursor counts if it matches.
+                            let at = self.lists[1].cursor;
+                            if self.commit_matches(at) {
+                                let total = (0..self.commits.len()).filter(|&i| self.commit_matches(i)).count();
+                                let nth = (0..=at).filter(|&j| self.commit_matches(j)).count();
+                                self.say(format!("match {nth} of {total}"), false);
+                            } else {
+                                self.search_step(1);
+                            }
+                        }
+                    }
                     PromptKind::NewBranch => {
                         let v = value.clone();
                         self.run(format!("created {value}"), move |r| r.create_branch(&v));
@@ -598,7 +705,37 @@ impl App {
 
     // ---- drawing --------------------------------------------------------
 
+    /// Draw the tab strip and the screen of the active tab.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        let theme = self.theme.clone();
+        let labels = [ui::tabs::Label::new("Status"), ui::tabs::Label::new("Commits")];
+        let active = usize::from(self.screen == Screen::Commits);
+        ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, false);
+        let rest = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
+        match self.screen {
+            Screen::Status => self.render_panes(rest, buf),
+            Screen::Commits => self.render_commits_tab(rest, buf),
+        }
+    }
+
+    /// The Commits tab: the whole graph of every branch full width, the diff of the commit beside it on request.
+    fn render_commits_tab(&mut self, area: Rect, buf: &mut Buffer) {
+        let theme = self.theme.clone();
+        let body = Rect { height: area.height.saturating_sub(1), ..area };
+        let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
+        if self.detail && body.width >= 60 {
+            let [left, right] = ui::layout::main_preview(&theme, body);
+            self.render_list(Focus::Commits, left, buf, &theme);
+            self.render_preview(Focus::Commits, right, buf, &theme);
+        } else {
+            self.render_list(Focus::Commits, body, buf, &theme);
+        }
+        self.render_status(status, buf, &theme);
+        self.render_overlays(area, buf, &theme);
+    }
+
+    /// The Status tab: the four panes and the preview.
+    fn render_panes(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
@@ -709,6 +846,7 @@ impl App {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
                 let author = Span::styled(format!("{} ", initials(&k.author)), Style::new().fg(author_color(theme, &k.author)));
+                let hit = self.commit_matches(i);
                 let mut spans = Vec::new();
                 if let Some(row) = self.graph_rows.get(i) {
                     spans.extend(self.graph_spans(row, theme));
@@ -725,7 +863,7 @@ impl App {
                     spans.push(Span::styled(format!("{} ", r.name), style));
                 }
                 spans.push(author);
-                spans.push(Span::styled(k.subject.clone(), fg));
+                spans.push(Span::styled(k.subject.clone(), if hit { Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD) } else { fg }));
                 (Line::from(spans), ago(k.time))
             }
             _ => {
@@ -796,6 +934,7 @@ impl App {
         let line = match &self.mode {
             Mode::Prompt(kind, input) => {
                 let label = match kind {
+                    PromptKind::Search => "search: ",
                     PromptKind::NewBranch => "new branch: ",
                     PromptKind::NewStash => "stash message: ",
                     PromptKind::RenameBranch(_) => "rename to: ",
@@ -836,6 +975,9 @@ impl App {
     }
 
     fn hints(&self) -> &'static str {
+        if self.screen == Screen::Commits {
+            return "/ search  n N next match  p diff  enter checkout  C cherry-pick  space a/g all branches/graph  [ ] tab  ? keys";
+        }
         match self.focus {
             Focus::Files => "s stage  u unstage  a/A all  x discard  c commit  enter edit  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  space r fetch/pull/push  space space commands  ? keys",
@@ -932,6 +1074,33 @@ mod tests {
 
     fn head(d: &Path) -> String {
         Repo::discover(d).unwrap().branch().unwrap()
+    }
+
+    #[test]
+    fn the_commits_tab_shows_every_branch_and_searches() {
+        let d = repo("tab");
+        git(&d, &["checkout", "-q", "-b", "side"]);
+        fs::write(d.join("b.txt"), "b\n").unwrap();
+        git(&d, &["add", "."]);
+        git(&d, &["commit", "-qm", "needle on a side branch"]);
+        git(&d, &["checkout", "-q", "main"]);
+        let mut app = App::new(&d).unwrap();
+        // The Status tab lists the checked-out branch only.
+        assert!(!screen(&mut app).join("\n").contains("needle"));
+        // `]` opens the Commits tab: every branch, with the graph and the ref labels.
+        press(&mut app, "]");
+        let all = screen(&mut app).join("\n");
+        assert!(all.contains("needle on a side branch") && all.contains("side") && all.contains("●"), "{all}");
+        // `/` searches: the cursor lands on the match and the message counts it.
+        press(&mut app, "/");
+        type_text(&mut app, "needle");
+        assert_eq!(app.commits[app.lists[1].cursor].subject, "needle on a side branch");
+        assert!(app.message.as_ref().is_some_and(|(m, _)| m.contains("match 1 of 1")), "{:?}", app.message);
+        // Esc clears the search first, then leaves the tab and restores the pane's scope.
+        app.handle_event(&key(KeyCode::Esc));
+        assert!(app.search.is_none());
+        press(&mut app, "[");
+        assert!(!screen(&mut app).join("\n").contains("needle"));
     }
 
     #[test]

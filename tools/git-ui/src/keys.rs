@@ -6,6 +6,8 @@ use ui::keys::{Action, Group, action, basic};
 
 /// Switching panes and the like: given to the Files panel too.
 pub const GLOBAL: &[Action] = &[
+    basic("tab.next", "next tab", "go to the next tab (Status, Commits)", &["]"]),
+    basic("tab.prev", "previous tab", "go to the previous tab", &["["]),
     basic("focus.next", "next pane", "focus the next pane", &["tab"]),
     basic("focus.prev", "previous pane", "focus the previous pane", &["backtab"]),
     basic("focus.files", "files pane", "focus the files pane", &["1"]),
@@ -58,6 +60,10 @@ const BRANCHES: &[Action] = &[
 
 const COMMITS: &[Action] = &[
     action("commit.checkout", "check out", "check out the commit (detached HEAD)", &["enter", "leader k"]),
+    action("search.start", "search", "search the commits by hash, subject, author or branch and tag names", &["/", "leader s"]),
+    basic("search.next", "next match", "go to the next commit that matches the search", &["n"]),
+    basic("search.prev", "previous match", "go to the previous commit that matches the search", &["N"]),
+    action("view.detail", "diff", "show or hide the diff beside the list (the Commits tab)", &["p"]),
     action("view.graph", "graph", "show or hide the commit graph (lanes, merges, branch labels)", &["leader g"]),
     action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["leader a"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
