@@ -293,7 +293,7 @@ impl App {
         for r in &self.branches {
             self.labels.entry(r.oid.clone()).or_default().push(r.clone());
         }
-        self.refs_w = self.commits.iter().map(|k| self.labels.get(&k.oid).into_iter().flatten().map(ref_width).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
+        self.refs_w = self.commits.iter().map(|k| pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default()).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
         self.stashes = self.repo.stashes().unwrap_or_default();
         for (i, len) in [self.branches.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
@@ -1020,9 +1020,9 @@ impl App {
                 spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), muted));
                 if self.refs_w > 0 {
                     let mut used = 0;
-                    let refs: Vec<&RefInfo> = self.labels.get(&k.oid).into_iter().flatten().collect();
-                    for (n, r) in refs.iter().enumerate() {
-                        let w = ref_width(r);
+                    let refs = pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default());
+                    for (n, (r, remotes)) in refs.iter().enumerate() {
+                        let w = ref_width(r, remotes);
                         if used + w > self.refs_w {
                             // The rest does not fit: say how many are left.
                             let more = format!("+{}", refs.len() - n);
@@ -1032,7 +1032,7 @@ impl App {
                             }
                             break;
                         }
-                        spans.extend(ref_pill(theme, r));
+                        spans.extend(ref_pill(theme, r, remotes));
                         used += w;
                     }
                     spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
@@ -1169,13 +1169,52 @@ impl App {
 const HASH_W: usize = 8;
 
 /// Cells a ref takes as a pill (the caps, the name, the branch icon of the checked-out one, a space).
-fn ref_width(r: &RefInfo) -> usize {
-    r.name.chars().count() + if r.is_head { 2 } else { 0 } + 3
+fn ref_width(r: &RefInfo, remotes: &[String]) -> usize {
+    pill_text(r, remotes).chars().count() + 3
+}
+
+/// The text of a pill: the name, with the remotes that point at the same commit under the same name
+/// (`main · origin`), and the branch icon on the checked-out branch.
+fn pill_text(r: &RefInfo, remotes: &[String]) -> String {
+    let mut text = if r.is_head { format!("\u{e0a0} {}", r.name) } else { r.name.clone() };
+    if !remotes.is_empty() {
+        text.push_str(&format!(" · {}", remotes.join(", ")));
+    }
+    text
+}
+
+/// The refs at one commit as pills: a branch and its remote branches (`origin/main`) share a pill.
+fn pills(refs: &[RefInfo]) -> Vec<(RefInfo, Vec<String>)> {
+    let mut out: Vec<(RefInfo, Vec<String>)> = Vec::new();
+    let mut used = vec![false; refs.len()];
+    for (i, r) in refs.iter().enumerate() {
+        if r.kind == RefKind::Remote {
+            continue;
+        }
+        let suffix = format!("/{}", r.name);
+        let mut remotes = Vec::new();
+        if r.kind == RefKind::Branch {
+            for (j, o) in refs.iter().enumerate() {
+                if o.kind == RefKind::Remote && o.name.ends_with(&suffix) {
+                    remotes.push(o.name[..o.name.len() - suffix.len()].to_string());
+                    used[j] = true;
+                }
+            }
+        }
+        used[i] = true;
+        out.push((r.clone(), remotes));
+    }
+    for (j, o) in refs.iter().enumerate() {
+        if !used[j] {
+            out.push((o.clone(), Vec::new()));
+        }
+    }
+    out
 }
 
 /// A branch or tag name as a pill with rounded ends. The checked-out branch is solid with the
 /// branch icon; the others are a tint of their colour (branches blue, remotes grey, tags yellow).
-fn ref_pill(theme: &Theme, r: &RefInfo) -> Vec<Span<'static>> {
+fn ref_pill(theme: &Theme, r: &RefInfo, remotes: &[String]) -> Vec<Span<'static>> {
     use ratatui::style::Color;
     let c = &theme.colors;
     let color = match (r.is_head, r.kind) {
@@ -1185,9 +1224,9 @@ fn ref_pill(theme: &Theme, r: &RefInfo) -> Vec<Span<'static>> {
         (_, RefKind::Tag) => Color::from(c.warning),
     };
     let (bg, fg, text) = if r.is_head {
-        (color, Color::from(c.bg), format!("\u{e0a0} {}", r.name))
+        (color, Color::from(c.bg), pill_text(r, remotes))
     } else {
-        (ui::mix(color, Color::from(c.bg), 30), color, r.name.clone())
+        (ui::mix(color, Color::from(c.bg), 30), color, pill_text(r, remotes))
     };
     let mut body = Style::new().fg(fg).bg(bg);
     if r.is_head {
@@ -1461,6 +1500,15 @@ mod tests {
         press(&mut app, "d");
         press(&mut app, "y");
         assert!(app.stashes.is_empty());
+    }
+
+    #[test]
+    fn a_branch_and_its_remote_branch_share_a_pill() {
+        let r = |name: &str, kind| RefInfo { name: name.into(), kind, oid: "x".into(), is_head: false, subject: String::new(), time: 0 };
+        let refs = [r("main", RefKind::Branch), r("origin/main", RefKind::Remote), r("origin/other", RefKind::Remote), r("v1", RefKind::Tag)];
+        let got: Vec<(String, Vec<String>)> = pills(&refs).into_iter().map(|(r, o)| (r.name, o)).collect();
+        assert_eq!(got, vec![("main".to_string(), vec!["origin".to_string()]), ("v1".to_string(), vec![]), ("origin/other".to_string(), vec![])]);
+        assert_eq!(pill_text(&refs[0], &["origin".to_string()]), "main · origin");
     }
 
     #[test]
