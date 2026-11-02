@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier};
 
 /// How much of the original colour is left (percent).
-pub const KEEP: u8 = 45;
+pub const KEEP: u8 = 28;
 
 /// Dim every cell of `area`.
 pub fn dim(buf: &mut Buffer, area: Rect, theme: &Theme) {
@@ -44,7 +44,7 @@ mod tests {
         buf.set_string(0, 0, "a", Style::new().fg(Color::Rgb(200, 100, 0)));
         buf.set_string(1, 0, "b", Style::new());
         dim(&mut buf, area, &theme);
-        assert_eq!(buf[(0, 0)].fg, Color::Rgb(90, 45, 0));
+        assert_eq!(buf[(0, 0)].fg, Color::Rgb(56, 28, 0));
         assert!(buf[(1, 0)].modifier.contains(Modifier::DIM));
     }
 }

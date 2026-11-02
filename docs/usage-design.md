@@ -97,4 +97,4 @@ Every command palette lists the commands run last first (newest first), then the
 - Tools that show files or git state follow changes made outside them (`ui::watch`), without polling.
 
 ## Popups dim what is behind them
-A popup (Quick Keys, keys help, palette overlays inside helix, pickers, the git panel, the Markdown view) dims the screen behind it: colours move 55 % toward the background (`ui::dim`, `KEEP` = 45), default-colour text gets the terminal's dim attribute. A terminal cannot blur. Pickers started as a separate zellij pane (`pick` from `files`) cannot dim their parent.
+A popup (Quick Keys, keys help, palette overlays inside helix, pickers, the git panel, the Markdown view) dims the screen behind it: colours move 72 % toward the background (`ui::dim`, `KEEP` = 28), default-colour text gets the terminal's dim attribute. A terminal cannot blur. Pickers started as a separate zellij pane (`pick` from `files`) cannot dim their parent.
