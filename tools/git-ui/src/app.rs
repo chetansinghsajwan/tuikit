@@ -705,6 +705,10 @@ impl App {
             Focus::Commits => {
                 let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
                 match id {
+                    "commit.copy_hash" => match ui::clipboard::copy(&k.oid) {
+                        Ok(()) => self.say(format!("copied {} to the clipboard", k.short), false),
+                        Err(e) => self.say(format!("could not copy: {e}"), true),
+                    },
                     "commit.checkout" => {
                         let oid = k.oid.clone();
                         self.run(format!("checked out {}", k.short), move |r| r.checkout_commit(&oid));
@@ -1154,7 +1158,7 @@ impl App {
 
     fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
-            return "/ search  n N next  space f filter  p diff  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
+            return "/ search  n N next  space f filter  p diff  y copy hash  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
         }
         match self.focus {
             Focus::Files => "s stage  u unstage  a all (toggle)  x discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",

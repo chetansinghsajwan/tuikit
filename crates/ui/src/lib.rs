@@ -3,6 +3,7 @@
 //! their own borders, colors or gaps.
 
 pub mod ansi;
+pub mod clipboard;
 pub mod icons;
 pub mod keys;
 mod icons_data;
