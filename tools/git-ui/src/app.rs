@@ -16,6 +16,8 @@ use ui::{Pane, Theme};
 const TAB_LOG_LIMIT: usize = 3000;
 /// Most cells (two per lane) the graph column may take.
 const GRAPH_MAX: usize = 24;
+/// Most cells the refs column of the Commits table may take.
+const REFS_MAX: usize = 32;
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
@@ -196,6 +198,8 @@ pub struct App {
     all_branches: bool,
     graph_rows: Vec<git_core::GraphRow>,
     graph_w: usize,
+    /// Width of the refs column in the Commits table.
+    refs_w: usize,
     /// The refs (branches, tags) pointing at each commit, by hash, for the labels.
     labels: std::collections::HashMap<String, Vec<RefInfo>>,
     screen: Screen,
@@ -239,6 +243,7 @@ impl App {
             all_branches: true,
             graph_rows: Vec::new(),
             graph_w: 0,
+            refs_w: 0,
             labels: Default::default(),
             screen: Screen::Status,
             detail: false,
@@ -288,6 +293,7 @@ impl App {
         for r in &self.branches {
             self.labels.entry(r.oid.clone()).or_default().push(r.clone());
         }
+        self.refs_w = self.commits.iter().map(|k| self.labels.get(&k.oid).into_iter().flatten().map(ref_width).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
         self.stashes = self.repo.stashes().unwrap_or_default();
         for (i, len) in [self.branches.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
@@ -948,10 +954,19 @@ impl App {
         if let Some(icon) = icon {
             pane = pane.icon(icon);
         }
-        let inner = pane.inner(area);
+        let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 4 {
             return;
+        }
+        // The Commits table has a header row naming its columns.
+        if which == Focus::Commits && inner.height > 2 && !self.commits.is_empty() {
+            let head = Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::BOLD);
+            let graph = if self.graph_w > 0 { " ".repeat(self.graph_w + 1) } else { String::new() };
+            let refs = if self.refs_w > 0 { format!("{:<w$} ", "Refs", w = self.refs_w) } else { String::new() };
+            let text = format!("{graph}{:<3}{:<w$} {refs}Subject", "Au", "Hash", w = HASH_W);
+            Paragraph::new(Line::from(Span::styled(text, head))).render(Rect { x: inner.x + 1, y: inner.y, width: inner.width.saturating_sub(2), height: 1 }, buf);
+            inner = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
         }
         let Some(li) = Self::list_index(which) else { return };
         if n == 0 {
@@ -1002,19 +1017,35 @@ impl App {
             Focus::Commits => {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
-                let author = Span::styled(format!("{} ", initials(&k.author)), Style::new().fg(author_color(theme, &k.author)));
+                let author = Span::styled(format!("{:<2} ", initials(&k.author)), Style::new().fg(author_color(theme, &k.author)));
                 let hit = self.commit_matches(i);
                 let mut spans = Vec::new();
                 if let Some(row) = self.graph_rows.get(i) {
                     spans.extend(self.graph_spans(row, theme));
                 }
-                // The author first, then the branches and tags at this commit as pills (the
-                // checked-out branch is the solid one with the branch icon), then hash and subject.
+                // A table: graph, author, hash, refs (pills; the checked-out branch is the solid one
+                // with the branch icon), subject; every column starts at the same place in every row.
                 spans.push(author);
-                for r in self.labels.get(&k.oid).into_iter().flatten() {
-                    spans.extend(ref_pill(theme, r));
+                spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), muted));
+                if self.refs_w > 0 {
+                    let mut used = 0;
+                    let refs: Vec<&RefInfo> = self.labels.get(&k.oid).into_iter().flatten().collect();
+                    for (n, r) in refs.iter().enumerate() {
+                        let w = ref_width(r);
+                        if used + w > self.refs_w {
+                            // The rest does not fit: say how many are left.
+                            let more = format!("+{}", refs.len() - n);
+                            if used + more.len() <= self.refs_w {
+                                used += more.len();
+                                spans.push(Span::styled(more, muted));
+                            }
+                            break;
+                        }
+                        spans.extend(ref_pill(theme, r));
+                        used += w;
+                    }
+                    spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
                 }
-                spans.push(Span::styled(format!("{} ", k.short), muted));
                 spans.push(Span::styled(k.subject.clone(), if hit { Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD) } else { fg }));
                 (Line::from(spans), ago(k.time))
             }
@@ -1141,6 +1172,14 @@ impl App {
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
         }
     }
+}
+
+/// Width of the hash column of the Commits table.
+const HASH_W: usize = 8;
+
+/// Cells a ref takes as a pill (the caps, the name, the branch icon of the checked-out one, a space).
+fn ref_width(r: &RefInfo) -> usize {
+    r.name.chars().count() + if r.is_head { 2 } else { 0 } + 3
 }
 
 /// A branch or tag name as a pill with rounded ends. The checked-out branch is solid with the
