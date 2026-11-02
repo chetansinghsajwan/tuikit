@@ -117,7 +117,8 @@ impl Backend for MacWifi {
 
     fn scan(&self) -> Result<()> {
         // CoreWLAN scans synchronously: this blocks for a few seconds.
-        self.scanned(&self.interface()?, true).map(|_| ())
+        let iface = self.interface()?;
+        self.scanned(&iface, true).map(|_| ())
     }
 
     fn set_enabled(&self, on: bool) -> Result<()> {

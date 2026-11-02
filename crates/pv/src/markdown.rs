@@ -12,8 +12,7 @@ pub fn is_markdown(path: &std::path::Path) -> bool {
     path.extension().is_some_and(|e| matches!(e.to_str().map(str::to_ascii_lowercase).as_deref(), Some("md" | "markdown")))
 }
 
-struct Out<'a> {
-    theme: &'a Theme,
+struct Out {
     width: usize,
     lines: Vec<Line<'static>>,
     /// The words of the paragraph being built, with their styles.
@@ -31,7 +30,7 @@ struct Out<'a> {
     code_lang: String,
 }
 
-impl Out<'_> {
+impl Out {
     fn style(&self) -> Style {
         self.styles.last().copied().unwrap_or_default()
     }
@@ -56,7 +55,7 @@ impl Out<'_> {
         let mut used = 0;
         let words = std::mem::take(&mut self.words);
         let mut first = true;
-        let mut emit = |this: &mut Self, spans: Vec<Span<'static>>, first: &mut bool| {
+        let emit = |this: &mut Self, spans: Vec<Span<'static>>, first: &mut bool| {
             let mut full = Vec::new();
             if *first {
                 full.extend(this.indent.iter().take(this.indent.len().saturating_sub(1)).cloned());
@@ -118,7 +117,6 @@ pub fn render(text: &str, theme: &Theme, width: u16) -> Vec<Line<'static>> {
     let accent = Color::from(c.accent);
     let muted = Color::from(c.muted);
     let mut out = Out {
-        theme,
         width: usize::from(width.max(20)),
         lines: Vec::new(),
         words: Vec::new(),
