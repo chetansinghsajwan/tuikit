@@ -252,12 +252,14 @@ impl Keymap {
         if longer {
             return Feed::Pending;
         }
-        let started = n > 1;
-        if started {
+        if n > 1 {
+            // A key nothing is bound to inside a menu: name it, drop it, and keep the menu open.
             self.rejected = self.pending.iter().map(Chord::label).collect::<Vec<_>>().join(" ");
+            self.pending.pop();
+            return Feed::NoBinding;
         }
         self.pending.clear();
-        if started { Feed::NoBinding } else { Feed::Unbound }
+        Feed::Unbound
     }
 
     /// The menu for a started sequence, or `None` when nothing is pending.
@@ -435,6 +437,14 @@ impl Help {
     }
 }
 
+/// Size of the Quick Keys popup, border included: 44 columns and three quarters of the height
+/// (at most 36 rows), the same at every level; smaller only on a small screen.
+pub const MENU_WIDTH: u16 = 44;
+
+pub fn menu_height(screen_height: u16) -> u16 {
+    (screen_height * 3 / 4).clamp(8, 36).min(screen_height.saturating_sub(1))
+}
+
 /// Draw the which-key popup in the centre of `area`: a pane titled with the keys
 /// typed so far, one row per option (`key  name`, groups marked with `▸`).
 pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
@@ -443,11 +453,9 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     }
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
-    let body_w = menu.entries.iter().map(|e| key_w + 2 + e.name.chars().count() + if e.group { 2 } else { 0 }).max().unwrap_or(1).max(menu.title.chars().count() + 2);
-    // Border and the pane's padding on each side.
-    let pad = 2 + 2 * theme.layout.padding_x;
-    let width = (body_w as u16 + pad).min(area.width);
-    let height = (menu.entries.len() as u16 + 2).min(area.height.saturating_sub(1));
+    // A fixed size, so the popup does not jump between levels (smaller only on a small screen).
+    let width = MENU_WIDTH.min(area.width);
+    let height = menu_height(area.height);
     let rect = Rect { x: area.x + (area.width - width) / 2, y: area.y + (area.height - height) / 2, width, height };
     Clear.render(rect, buf);
     let pane = crate::Pane::new(theme).title(&menu.title).focused(true);
@@ -509,12 +517,11 @@ mod tests {
         m.feed(&k(' '));
         assert_eq!(m.feed(&k('v')), Feed::Pending);
         assert_eq!(m.feed(&k('c')), Feed::Run("view.columns"));
-        // A wrong key ends the sequence and is used up; Esc cancels too.
+        // A wrong key is named and dropped, the menu stays open; Esc cancels it.
         m.feed(&k(' '));
         assert_eq!(m.feed(&k('q')), Feed::NoBinding);
         assert_eq!(m.rejected(), "space q");
-        assert!(!m.is_pending());
-        m.feed(&k(' '));
+        assert!(m.is_pending());
         assert_eq!(m.feed(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)), Feed::Cancelled);
         assert!(!m.is_pending());
         // The leader itself is bindable: another leader key works.

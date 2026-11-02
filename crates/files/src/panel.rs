@@ -1502,10 +1502,10 @@ mod tests {
             assert!(names.contains(&want), "{want} in {names:?}");
         }
         // The popup is drawn over the screen by the host.
-        let area = Rect::new(0, 0, 60, 16);
+        let area = Rect::new(0, 0, 60, 30);
         let mut buf = Buffer::empty(area);
         ui::keys::render_menu(area, &mut buf, &Theme::default(), &menu);
-        let text: String = (0..16).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+        let text: String = (0..30).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
         assert!(text.contains("grep") && text.contains("bookmarks"), "{text}");
         // A group opens a deeper menu; Esc closes it without doing anything.
         p.handle_event(&key(KeyCode::Char('v')));
@@ -1517,6 +1517,9 @@ mod tests {
         p.handle_event(&key(KeyCode::Char(' ')));
         p.handle_event(&key(KeyCode::Char('z'))); // not bound: the sequence ends
         assert_eq!(p.rows.len(), rows);
+        assert!(p.menu().is_some());
+        assert!(p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("not bound")), "{:?}", p.message);
+        p.handle_event(&key(KeyCode::Esc));
         assert!(p.menu().is_none());
         // Host actions come back as commands; the leader key is configurable.
         let acts = vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false, keys: &["leader t n"] }];

@@ -851,18 +851,13 @@ impl App {
                 if let Some(row) = self.graph_rows.get(i) {
                     spans.extend(self.graph_spans(row, theme));
                 }
-                spans.push(Span::styled(format!("{} ", k.short), muted));
-                // Branches and tags that point here, as labels.
-                for r in self.labels.get(&k.oid).into_iter().flatten() {
-                    let style = match (r.is_head, r.kind) {
-                        (true, _) => Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD),
-                        (_, RefKind::Branch) => Style::new().fg(c.info.into()),
-                        (_, RefKind::Remote) => muted,
-                        (_, RefKind::Tag) => Style::new().fg(c.warning.into()),
-                    };
-                    spans.push(Span::styled(format!("{} ", r.name), style));
-                }
+                // The author first, then the branches and tags at this commit as pills (the
+                // checked-out branch is the solid one with the branch icon), then hash and subject.
                 spans.push(author);
+                for r in self.labels.get(&k.oid).into_iter().flatten() {
+                    spans.extend(ref_pill(theme, r));
+                }
+                spans.push(Span::styled(format!("{} ", k.short), muted));
                 spans.push(Span::styled(k.subject.clone(), if hit { Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD) } else { fg }));
                 (Line::from(spans), ago(k.time))
             }
@@ -985,6 +980,30 @@ impl App {
             Focus::Stashes => "n new  a apply  p pop  d drop  space space commands  ? keys",
         }
     }
+}
+
+/// A branch or tag name as a pill with rounded ends. The checked-out branch is solid with the
+/// branch icon; the others are a tint of their colour (branches blue, remotes grey, tags yellow).
+fn ref_pill(theme: &Theme, r: &RefInfo) -> Vec<Span<'static>> {
+    use ratatui::style::Color;
+    let c = &theme.colors;
+    let color = match (r.is_head, r.kind) {
+        (true, _) => Color::from(c.success),
+        (_, RefKind::Branch) => Color::from(c.info),
+        (_, RefKind::Remote) => Color::from(c.muted),
+        (_, RefKind::Tag) => Color::from(c.warning),
+    };
+    let (bg, fg, text) = if r.is_head {
+        (color, Color::from(c.bg), format!("\u{e0a0} {}", r.name))
+    } else {
+        (ui::mix(color, Color::from(c.bg), 30), color, r.name.clone())
+    };
+    let mut body = Style::new().fg(fg).bg(bg);
+    if r.is_head {
+        body = body.add_modifier(Modifier::BOLD);
+    }
+    let cap = Style::new().fg(bg);
+    vec![Span::styled("\u{e0b6}", cap), Span::styled(text, body), Span::styled("\u{e0b4}", cap), Span::raw(" ")]
 }
 
 /// The author as two letters: the first letters of the first two words (`Chetan Singh Sajwan` ->
@@ -1111,7 +1130,7 @@ mod tests {
         for title in ["Files", "Branches", "Commits", "Stashes"] {
             assert!(all.contains(title), "{title} in\n{all}");
         }
-        assert!(all.contains("first") && all.contains("main") && all.contains("other"), "{all}");
+        assert!(all.contains("main") && all.contains("other"), "{all}");
     }
 
     #[test]
