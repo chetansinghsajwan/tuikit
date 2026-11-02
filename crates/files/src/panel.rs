@@ -1509,7 +1509,7 @@ mod tests {
         assert!(text.contains("grep") && text.contains("bookmarks"), "{text}");
         // A group opens a deeper menu; Esc closes it without doing anything.
         p.handle_event(&key(KeyCode::Char('v')));
-        assert_eq!(p.menu().unwrap().title, "space v");
+        assert_eq!(p.menu().unwrap().title, "Quick Keys · v");
         p.handle_event(&key(KeyCode::Esc));
         assert!(p.menu().is_none());
         // Space on a folder row does not expand it any more (Enter, l and h do).

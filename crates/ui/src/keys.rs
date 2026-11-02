@@ -144,6 +144,9 @@ pub enum Feed {
     Unbound,
 }
 
+/// The name of the popup that lists what can follow the leader key.
+pub const MENU_TITLE: &str = "Quick Keys";
+
 /// One row of the which-key menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuEntry {
@@ -283,7 +286,9 @@ impl Keymap {
             }
         }
         entries.sort_by(|a, b| a.key.to_lowercase().cmp(&b.key.to_lowercase()).then(a.key.cmp(&b.key)));
-        Some(Menu { title: self.pending.iter().map(Chord::label).collect::<Vec<_>>().join(" "), entries })
+        let deeper: Vec<String> = self.pending.iter().skip(1).map(Chord::label).collect();
+        let title = if deeper.is_empty() { MENU_TITLE.to_string() } else { format!("{MENU_TITLE} · {}", deeper.join(" ")) };
+        Some(Menu { title, entries })
     }
 }
 
@@ -438,7 +443,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     }
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
-    let body_w = menu.entries.iter().map(|e| key_w + 2 + e.name.chars().count() + if e.group { 2 } else { 0 }).max().unwrap_or(1).max(menu.title.chars().count());
+    let body_w = menu.entries.iter().map(|e| key_w + 2 + e.name.chars().count() + if e.group { 2 } else { 0 }).max().unwrap_or(1).max(menu.title.chars().count() + 2);
     // Border and the pane's padding on each side.
     let pad = 2 + 2 * theme.layout.padding_x;
     let width = (body_w as u16 + pad).min(area.width);
@@ -525,12 +530,12 @@ mod tests {
         assert_eq!(m.menu(), None);
         m.feed(&k(' '));
         let menu = m.menu().unwrap();
-        assert_eq!(menu.title, "space");
+        assert_eq!(menu.title, "Quick Keys");
         let shown: Vec<(&str, &str, bool)> = menu.entries.iter().map(|e| (e.key.as_str(), e.name.as_str(), e.group)).collect();
         assert_eq!(shown, vec![("f", "find", false), ("v", "view", true)]);
         m.feed(&k('v'));
         let menu = m.menu().unwrap();
-        assert_eq!(menu.title, "space v");
+        assert_eq!(menu.title, "Quick Keys · v");
         let shown: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(shown, vec!["columns", "hidden"]);
     }
@@ -587,7 +592,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         render_menu(area, &mut buf, &Theme::default(), &m.menu().unwrap());
         let text: String = (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-        assert!(text.contains("space") && text.contains("find") && text.contains("view") && text.contains('▸'), "{text}");
+        assert!(text.contains("Quick Keys") && text.contains("find") && text.contains("view") && text.contains('▸'), "{text}");
     }
 
     #[test]

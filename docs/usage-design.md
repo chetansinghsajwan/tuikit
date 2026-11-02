@@ -15,7 +15,7 @@ The look is shared through the `ui` crate. This document is the same idea for be
 
 ## The leader and the palette
 
-- **Space is the leader in every tool** (setting `dotfiles.editor.leader` now, to become one shared `ui.keys.leader`). It opens the same which-key popup everywhere, listing the tool's grouped actions.
+- **Space is the leader in every tool** (setting `dotfiles.editor.leader` now, to become one shared `ui.keys.leader`). It opens the same popup everywhere, named **Quick Keys**, listing the tool's grouped actions.
 - **`Space Space` opens the command palette** in every tool: a fuzzy list (the shared `pick`) of all actions of the tool, with name, description and key. Helix keeps `:` as its own command line.
 - **`?` shows the keys of the current pane**, from the registry.
 - Single-letter keys are for the verbs below. Everything tool-specific that is not a verb goes under the leader menu, so tools cannot clash with each other.
