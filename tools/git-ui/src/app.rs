@@ -954,19 +954,10 @@ impl App {
         if let Some(icon) = icon {
             pane = pane.icon(icon);
         }
-        let mut inner = pane.inner(area);
+        let inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 4 {
             return;
-        }
-        // The Commits table has a header row naming its columns.
-        if which == Focus::Commits && inner.height > 2 && !self.commits.is_empty() {
-            let head = Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::BOLD);
-            let graph = if self.graph_w > 0 { " ".repeat(self.graph_w + 1) } else { String::new() };
-            let refs = if self.refs_w > 0 { format!("{:<w$} ", "Refs", w = self.refs_w) } else { String::new() };
-            let text = format!("{graph}{:<3}{:<w$} {refs}Subject", "Au", "Hash", w = HASH_W);
-            Paragraph::new(Line::from(Span::styled(text, head))).render(Rect { x: inner.x + 1, y: inner.y, width: inner.width.saturating_sub(2), height: 1 }, buf);
-            inner = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
         }
         let Some(li) = Self::list_index(which) else { return };
         if n == 0 {
