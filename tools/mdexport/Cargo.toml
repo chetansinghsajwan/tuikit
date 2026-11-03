@@ -1,0 +1,18 @@
+[package]
+name = "mdexport"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "mdexport"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mdexport"
+path = "src/main.rs"
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+typst = "0.14"
+typst-pdf = "0.14"
+typst-assets = { version = "0.14", features = ["fonts"] }
