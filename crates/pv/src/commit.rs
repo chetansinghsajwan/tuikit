@@ -10,7 +10,7 @@ use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 /// `YYYY-MM-DD HH:MM` in UTC from seconds since the epoch.
-fn utc(secs: i64) -> String {
+pub fn utc(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
     // Civil-from-days (Howard Hinnant).

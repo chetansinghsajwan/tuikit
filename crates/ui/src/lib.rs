@@ -11,6 +11,7 @@ pub mod keys;
 mod icons_data;
 pub mod layout;
 pub mod list;
+pub mod multi;
 pub mod popup;
 pub mod prompt;
 pub mod recent;

@@ -18,6 +18,7 @@ use ui::Theme;
 
 pub use ansi::to_ansi;
 pub use commit::render as preview_commit;
+pub use commit::utc as format_utc;
 pub use commit::render_marked as preview_commit_marked;
 pub use commit::render_file_diff_marked as preview_diff_marked;
 pub use diff::Anchors;

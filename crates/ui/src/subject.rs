@@ -22,18 +22,19 @@ pub fn category_len(subject: &str) -> Option<usize> {
     (rest.is_empty() || rest == "!").then_some(colon + 1)
 }
 
-/// The color of a category: fixes in the error color, new things in the success color, and so on.
+/// The category word of a subject, lowercase and without scope or `!`: `feat(ui)!: x` -> `feat`.
+pub fn category_word(subject: &str) -> Option<String> {
+    let n = category_len(subject)?;
+    subject[..n].trim_end_matches(':').split(['(', '!']).next().map(str::to_lowercase)
+}
+
+/// The color of a category: one per word, the same word always the same color (a hash picks it from the theme's colors).
 pub fn category_color(theme: &Theme, subject: &str) -> Color {
     let c = &theme.colors;
-    let word = subject[..category_len(subject).unwrap_or(0)].trim_end_matches(':').split(['(', '!']).next().unwrap_or("").to_lowercase();
-    match word.as_str() {
-        "fix" | "bug" | "hotfix" | "revert" => c.error.into(),
-        "feat" | "feature" | "add" | "new" => c.success.into(),
-        "docs" | "doc" | "readme" => c.info.into(),
-        "chore" | "ci" | "build" | "deps" | "test" | "tests" | "style" | "wip" => c.muted.into(),
-        "perf" | "security" | "breaking" => c.warning.into(),
-        _ => c.accent.into(),
-    }
+    let palette: [Color; 8] = [c.accent.into(), c.success.into(), c.warning.into(), c.error.into(), c.info.into(), c.git.modified.into(), c.git.renamed.into(), c.git.untracked.into()];
+    let word = category_word(subject).unwrap_or_default();
+    let hash = word.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
+    palette[(hash % palette.len() as u64) as usize]
 }
 
 /// The subject as spans: the category in its color (bold), the rest in `base`.
@@ -63,7 +64,10 @@ mod tests {
     #[test]
     fn colors_by_kind_and_splits_the_spans() {
         let t = Theme::default();
-        assert_ne!(category_color(&t, "fix: x"), category_color(&t, "feat: x"));
+        assert_eq!(category_color(&t, "fix: x"), category_color(&t, "fix(ui)!: y"));
+        assert_eq!(category_color(&t, "Fix: x"), category_color(&t, "fix: x"));
+        assert_eq!(category_word("Feat(ui)!: a").as_deref(), Some("feat"));
+        assert_eq!(category_word("plain"), None);
         let s = spans(&t, "docs: write", Style::new());
         assert_eq!((s[0].content.as_ref(), s[1].content.as_ref()), ("docs:", " write"));
         assert_eq!(spans(&t, "plain subject", Style::new()).len(), 1);

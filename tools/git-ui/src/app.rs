@@ -45,11 +45,6 @@ const COMMITS_PANES: [Focus; 1] = [Focus::Commits];
 const REFS_PANES: [Focus; 2] = [Focus::Branches, Focus::Stashes];
 
 enum PromptKind {
-    /// Commit filters: message, author, branch or tag, since.
-    FilterText,
-    FilterAuthor,
-    FilterBranch,
-    FilterSince,
     /// Search the commits.
     Search,
     NewBranch,
@@ -106,6 +101,8 @@ enum Mode {
     Normal,
     Prompt(PromptKind, Input),
     Confirm(Confirm),
+    /// The filter popup.
+    Popup(ui::multi::Multi),
 }
 
 /// A row of the Refs tree: a section (Branches, Remotes, Tags), a folder (`feature/`, `origin/`) or a ref.
@@ -117,43 +114,69 @@ enum RefRow {
     Item { index: usize, name: String, depth: usize },
 }
 
+/// Which columns of the Commits table show (`v` menu).
+#[derive(Clone, Copy)]
+struct Columns {
+    hash: bool,
+    author: bool,
+    /// Authors as full names instead of two initials.
+    author_name: bool,
+    refs: bool,
+    subject: bool,
+    rel_time: bool,
+    abs_time: bool,
+}
+
+impl Default for Columns {
+    fn default() -> Self {
+        Columns { hash: true, author: true, author_name: false, refs: true, subject: true, rel_time: true, abs_time: false }
+    }
+}
+
 /// What narrows the commit list. The graph is drawn from what is left.
 #[derive(Default, Clone)]
 struct Filter {
     text: String,
-    author: String,
-    /// Only the history of this branch or tag.
-    branch: String,
+    /// Commits by any of these authors.
+    authors: Vec<String>,
+    /// Only the history of these branches or tags (all of them together).
+    branches: Vec<String>,
+    /// Commits whose subject starts with any of these categories (`fix`, `feat`).
+    categories: Vec<String>,
     /// As typed (`7d`) and as seconds since the epoch.
     since: Option<(String, i64)>,
 }
 
 impl Filter {
     fn active(&self) -> bool {
-        !self.text.is_empty() || !self.author.is_empty() || !self.branch.is_empty() || self.since.is_some()
+        !self.text.is_empty() || !self.authors.is_empty() || !self.branches.is_empty() || !self.categories.is_empty() || self.since.is_some()
     }
 
-    /// `author:x  since 7d`, for the pane title.
-    fn summary(&self) -> String {
+    /// The parts that are set, as `(what, value)` for the filter bar and the popup.
+    fn parts(&self) -> Vec<(&'static str, String)> {
         let mut parts = Vec::new();
-        if !self.branch.is_empty() {
-            parts.push(format!("branch {}", self.branch));
+        if !self.branches.is_empty() {
+            parts.push(("branch", self.branches.join(", ")));
+        }
+        if !self.authors.is_empty() {
+            parts.push(("author", self.authors.join(", ")));
+        }
+        if !self.categories.is_empty() {
+            parts.push(("category", self.categories.join(", ")));
         }
         if !self.text.is_empty() {
-            parts.push(format!("message {}", self.text));
-        }
-        if !self.author.is_empty() {
-            parts.push(format!("author {}", self.author));
+            parts.push(("message", self.text.clone()));
         }
         if let Some((s, _)) = &self.since {
-            parts.push(format!("since {s}"));
+            parts.push(("since", s.clone()));
         }
-        parts.join(", ")
+        parts
     }
 
     fn keeps(&self, c: &CommitInfo) -> bool {
         (self.text.is_empty() || c.message.to_lowercase().contains(&self.text.to_lowercase()))
-            && (self.author.is_empty() || c.author.to_lowercase().contains(&self.author.to_lowercase()))
+            && (self.authors.is_empty() || self.authors.iter().any(|a| a.eq_ignore_ascii_case(&c.author)))
+            && (self.categories.is_empty() || ui::subject::category_word(&c.subject).is_some_and(|w| self.categories.contains(&w)))
             && self.since.as_ref().is_none_or(|(_, t)| c.time >= *t)
     }
 }
@@ -220,6 +243,9 @@ pub struct App {
     graph_w: usize,
     /// Width of the refs column in the Commits table.
     refs_w: usize,
+    /// The columns shown, and the width of the author names.
+    cols: Columns,
+    author_w: usize,
     /// The refs as the tree the Refs pane shows, and which sections and folders are folded.
     ref_rows: Vec<RefRow>,
     folded: std::collections::HashSet<String>,
@@ -269,6 +295,8 @@ impl App {
             graph_rows: Vec::new(),
             graph_w: 0,
             refs_w: 0,
+            cols: Columns::default(),
+            author_w: 0,
             ref_rows: Vec::new(),
             folded: Default::default(),
             labels: Default::default(),
@@ -308,8 +336,22 @@ impl App {
         let limit = TAB_LOG_LIMIT;
         let commits = if self.screen != Screen::Commits {
             Ok(Vec::new())
-        } else if !self.filter.branch.is_empty() {
-            self.repo.commits_from(&self.filter.branch, limit)
+        } else if self.filter.branches.len() == 1 {
+            self.repo.commits_from(&self.filter.branches[0], limit)
+        } else if !self.filter.branches.is_empty() {
+            // Several branches: their histories together, each commit once.
+            let mut all: Vec<CommitInfo> = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for b in &self.filter.branches {
+                for k in self.repo.commits_from(b, limit).unwrap_or_default() {
+                    if seen.insert(k.oid.clone()) {
+                        all.push(k);
+                    }
+                }
+            }
+            all.sort_by(|a, b| b.time.cmp(&a.time));
+            all.truncate(limit);
+            Ok(git_core::topo_order(all))
         } else if self.all_branches {
             self.repo.commits_all(limit)
         } else {
@@ -327,6 +369,7 @@ impl App {
         for r in &self.branches {
             self.labels.entry(r.oid.clone()).or_default().push(r.clone());
         }
+        self.author_w = self.commits.iter().map(|k| k.author.chars().count()).max().unwrap_or(0).min(AUTHOR_MAX);
         self.refs_w = self.commits.iter().map(|k| pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default()).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
         self.stashes = self.repo.stashes().unwrap_or_default();
         self.build_ref_rows(keep);
@@ -556,6 +599,10 @@ impl App {
                 self.confirm_key(c, key);
                 return Quit::No;
             }
+            Mode::Popup(p) => {
+                self.popup_key(p, key);
+                return Quit::No;
+            }
             Mode::Normal => {}
         }
         // The Files pane is the git panel: it has its own keys (and the global ones as commands).
@@ -596,30 +643,7 @@ impl App {
             "search.next" => self.search_step(1),
             "search.prev" => self.search_step(-1),
             "view.detail" => self.detail = !self.detail,
-            "filter.text" => {
-                self.suggest = Default::default();
-                self.mode = Mode::Prompt(PromptKind::FilterText, Input::new(self.filter.text.clone()));
-            }
-            "filter.author" => {
-                let mut authors: Vec<(usize, String)> = Vec::new();
-                for k in self.repo.commits_all(TAB_LOG_LIMIT).unwrap_or_default() {
-                    match authors.iter_mut().find(|(_, a)| *a == k.author) {
-                        Some((n, _)) => *n += 1,
-                        None => authors.push((1, k.author)),
-                    }
-                }
-                authors.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-                self.suggest = ui::prompt::Suggest::new(authors.into_iter().map(|(_, a)| a).collect());
-                self.mode = Mode::Prompt(PromptKind::FilterAuthor, Input::new(self.filter.author.clone()));
-            }
-            "filter.branch" => {
-                self.suggest = ui::prompt::Suggest::new(self.branches.iter().map(|b| b.name.clone()).collect());
-                self.mode = Mode::Prompt(PromptKind::FilterBranch, Input::new(self.filter.branch.clone()));
-            }
-            "filter.since" => {
-                self.suggest = ui::prompt::Suggest::new(["1d", "3d", "7d", "2w", "1m", "3m", "6m", "1y"].map(String::from).to_vec());
-                self.mode = Mode::Prompt(PromptKind::FilterSince, Input::new(self.filter.since.as_ref().map(|(s, _)| s.clone()).unwrap_or_default()));
-            }
+            "filter.open" => self.open_filter(),
             "filter.clear" => {
                 self.filter = Filter::default();
                 self.refilter("no filters");
@@ -656,6 +680,13 @@ impl App {
                 self.graph = !self.graph;
                 self.reload_history();
             }
+            "view.hash" => self.cols.hash = !self.cols.hash,
+            "view.author" => self.cols.author = !self.cols.author,
+            "view.author_name" => self.cols.author_name = !self.cols.author_name,
+            "view.refs" => self.cols.refs = !self.cols.refs,
+            "view.subject" => self.cols.subject = !self.cols.subject,
+            "view.rel_time" => self.cols.rel_time = !self.cols.rel_time,
+            "view.abs_time" => self.cols.abs_time = !self.cols.abs_time,
             "view.all" => {
                 self.all_branches = !self.all_branches;
                 self.reload_history();
@@ -925,9 +956,55 @@ impl App {
         }
     }
 
+    /// The filter popup: message, authors, categories, branches and date, with what is set chosen.
+    fn open_filter(&mut self) {
+        use ui::multi::{Kind, Multi, Section};
+        // The authors and categories of the history, the most frequent first.
+        let (mut authors, mut cats): (Vec<(usize, String)>, Vec<(usize, String)>) = (Vec::new(), Vec::new());
+        let bump = |list: &mut Vec<(usize, String)>, name: String| match list.iter_mut().find(|(_, n)| *n == name) {
+            Some((n, _)) => *n += 1,
+            None => list.push((1, name)),
+        };
+        for k in self.repo.commits_all(TAB_LOG_LIMIT).unwrap_or_default() {
+            bump(&mut authors, k.author.clone());
+            if let Some(w) = ui::subject::category_word(&k.subject) {
+                bump(&mut cats, w);
+            }
+        }
+        let ranked = |mut v: Vec<(usize, String)>| -> Vec<String> {
+            v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+            v.into_iter().map(|(_, n)| n).collect()
+        };
+        let f = &self.filter;
+        let sections = vec![
+            Section::new("Message", Kind::Text, Vec::new(), if f.text.is_empty() { Vec::new() } else { vec![f.text.clone()] }),
+            Section::new("Author", Kind::Many, ranked(authors), f.authors.clone()),
+            Section::new("Category", Kind::Many, ranked(cats), f.categories.clone()),
+            Section::new("Branch", Kind::Many, self.branches.iter().map(|b| b.name.clone()).collect(), f.branches.clone()),
+            Section::new("Since", Kind::One, ["1d", "3d", "7d", "2w", "1m", "3m", "6m", "1y"].map(String::from).to_vec(), f.since.iter().map(|(s, _)| s.clone()).collect()),
+        ];
+        self.mode = Mode::Popup(Multi::new("Filter commits", sections));
+    }
+
+    fn popup_key(&mut self, mut popup: ui::multi::Multi, key: &KeyEvent) {
+        match popup.key(key) {
+            ui::multi::Outcome::Open => self.mode = Mode::Popup(popup),
+            ui::multi::Outcome::Cancel => {}
+            ui::multi::Outcome::Apply => {
+                self.filter.text = popup.chosen("Message").first().cloned().unwrap_or_default();
+                self.filter.authors = popup.chosen("Author").to_vec();
+                self.filter.categories = popup.chosen("Category").to_vec();
+                self.filter.branches = popup.chosen("Branch").to_vec();
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+                self.filter.since = popup.chosen("Since").first().and_then(|s| parse_since(s, now).map(|t| (s.clone(), t)));
+                self.refilter("filtered");
+            }
+        }
+    }
+
     fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event, key: &KeyEvent) {
         // Filter prompts offer options: up and down choose, tab fills the line in.
-        if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince | PromptKind::SwitchTo) {
+        if matches!(kind, PromptKind::SwitchTo) {
             let ctrl = key.modifiers.contains(ratatui::crossterm::event::KeyModifiers::CONTROL);
             let step = match key.code {
                 KeyCode::Down | KeyCode::Tab => Some(1),
@@ -954,37 +1031,6 @@ impl App {
             KeyCode::Enter => {
                 let value = input.value().to_string();
                 match kind {
-                    PromptKind::FilterText => {
-                        self.filter.text = value;
-                        self.refilter("filtered by message");
-                    }
-                    PromptKind::FilterAuthor => {
-                        self.filter.author = value;
-                        self.refilter("filtered by author");
-                    }
-                    PromptKind::FilterBranch => {
-                        if !value.is_empty() && self.repo.commit(&value).is_err() {
-                            self.say(format!("no branch, tag or commit named {value}"), true);
-                        } else {
-                            self.filter.branch = value;
-                            self.refilter("filtered by branch");
-                        }
-                    }
-                    PromptKind::FilterSince => {
-                        if value.is_empty() {
-                            self.filter.since = None;
-                            self.refilter("filtered by date");
-                        } else {
-                            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-                            match parse_since(&value, now) {
-                                Some(t) => {
-                                    self.filter.since = Some((value, t));
-                                    self.refilter("filtered by date");
-                                }
-                                None => self.say("use 7d, 2w, 3m, 1y or a date like 2026-10-01", true),
-                            }
-                        }
-                    }
                     PromptKind::Search => {
                         self.search = if value.is_empty() { None } else { Some(value) };
                         if self.search.is_some() {
@@ -1191,6 +1237,9 @@ impl App {
         if let Some(menu) = menu {
             ui::keys::render_menu(area, buf, theme, &menu);
         }
+        if let Mode::Popup(p) = &self.mode {
+            p.render(area, buf, theme);
+        }
         if self.help.is_some() {
             let rows = self.keys_rows();
             if let Some(h) = self.help.as_mut() {
@@ -1206,16 +1255,33 @@ impl App {
             _ => ("Stashes", self.stashes.len()),
         };
         let focused = self.focus == which;
-        let shown = if which == Focus::Commits && self.filter.active() { format!("{title}  ({})", self.filter.summary()) } else { title.to_string() };
-        let mut pane = Pane::new(theme).title(&shown).focused(focused);
+        let mut pane = Pane::new(theme).title(title).focused(focused);
         let icon = if which == Focus::Branches { Some(ui::icons::BRANCH) } else { ui::icons::for_title(title) };
         if let Some(icon) = icon {
             pane = pane.icon(icon);
         }
-        let inner = pane.inner(area);
+        let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 4 {
             return;
+        }
+        // The filters in force, on a row of their own above the list.
+        if which == Focus::Commits && self.filter.active() {
+            let c = &theme.colors;
+            let mut spans = vec![Span::styled("filter ", Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))];
+            for (i, (what, value)) in self.filter.parts().into_iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled("  ·  ", Style::new().fg(c.muted.into())));
+                }
+                spans.push(Span::styled(format!("{what} "), Style::new().fg(c.muted.into())));
+                spans.push(Span::styled(value, Style::new().fg(c.warning.into())));
+            }
+            Paragraph::new(Line::from(spans)).render(Rect { height: 1, ..inner }, buf);
+            inner.y += 1;
+            inner.height -= 1;
+            if inner.height == 0 {
+                return;
+            }
         }
         let Some(li) = Self::list_index(which) else { return };
         if n == 0 {
@@ -1280,7 +1346,8 @@ impl App {
             Focus::Commits => {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
-                let author = Span::styled(format!("{:<2} ", initials(&k.author)), Style::new().fg(author_color(theme, &k.author)));
+                let who = if self.cols.author_name { let mut n: String = k.author.chars().take(self.author_w).collect(); n.push_str(&" ".repeat(self.author_w.saturating_sub(n.chars().count()))); n } else { format!("{:<2}", initials(&k.author)) };
+                let author = Span::styled(format!("{who} "), Style::new().fg(author_color(theme, &k.author)));
                 let hit = self.commit_matches(i);
                 let mut spans = Vec::new();
                 if let Some(row) = self.graph_rows.get(i) {
@@ -1288,9 +1355,13 @@ impl App {
                 }
                 // A table: graph, author, hash, refs (pills; the checked-out branch is the solid one
                 // with the branch icon), subject; every column starts at the same place in every row.
-                spans.push(author);
-                spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), muted));
-                if self.refs_w > 0 {
+                if self.cols.author {
+                    spans.push(author);
+                }
+                if self.cols.hash {
+                    spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), muted));
+                }
+                if self.cols.refs && self.refs_w > 0 {
                     let mut used = 0;
                     let refs = pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default());
                     for (n, (r, remotes)) in refs.iter().enumerate() {
@@ -1309,12 +1380,20 @@ impl App {
                     }
                     spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
                 }
-                if hit {
+                if !self.cols.subject {
+                } else if hit {
                     spans.push(Span::styled(k.subject.clone(), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)));
                 } else {
                     spans.extend(ui::subject::spans(theme, &k.subject, fg));
                 }
-                (Line::from(spans), ago(k.time))
+                let mut when = Vec::new();
+                if self.cols.abs_time {
+                    when.push(pv::format_utc(k.time));
+                }
+                if self.cols.rel_time {
+                    when.push(ago(k.time));
+                }
+                (Line::from(spans), when.join("  "))
             }
             _ => {
                 let s = &self.stashes[i];
@@ -1384,10 +1463,6 @@ impl App {
         let line = match &self.mode {
             Mode::Prompt(kind, input) => {
                 let label = match kind {
-                    PromptKind::FilterText => "message contains: ",
-                    PromptKind::FilterAuthor => "author contains: ",
-                    PromptKind::FilterBranch => "branch or tag: ",
-                    PromptKind::FilterSince => "since (7d, 2w, 3m, 1y, 2026-10-01): ",
                     PromptKind::Search => "search: ",
                     PromptKind::NewBranch => "new branch: ",
                     PromptKind::NewStash => "stash message: ",
@@ -1403,7 +1478,7 @@ impl App {
                     PromptKind::SwitchTo => "switch to (branch, tag or commit): ",
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
-                if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince | PromptKind::SwitchTo) {
+                if matches!(kind, PromptKind::SwitchTo) {
                     self.suggest.render(buf, area, theme);
                 }
                 ui::prompt::line(theme, label, input.value())
@@ -1422,6 +1497,7 @@ impl App {
                 };
                 Line::from(Span::styled(q, Style::new().fg(c.warning.into())))
             }
+            Mode::Popup(_) => Line::default(),
             Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
             Mode::Normal => match &self.message {
                 Some((m, err)) => Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into()))),
@@ -1439,7 +1515,7 @@ impl App {
 
     fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
-            return "/ search  n N next  space f filter  p diff  y copy hash  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
+            return "/ search  n N next  f filter  F clear  v view  y copy hash  enter checkout  C cherry-pick  [ ] tabs  ? keys";
         }
         match self.focus {
             Focus::Files => "s stage  u unstage  a all  d discard  t tree/list  c commit  enter edit  [ ] tabs  space space commands  ? keys",
@@ -1452,6 +1528,9 @@ impl App {
 
 /// Width of the hash column of the Commits table.
 const HASH_W: usize = 8;
+
+/// The widest an author name column gets.
+const AUTHOR_MAX: usize = 20;
 
 /// Cells a ref takes as a pill (the caps, the name, the branch icon of the checked-out one, a space).
 fn ref_width(r: &RefInfo, remotes: &[String]) -> usize {
@@ -1684,64 +1763,55 @@ mod tests {
         assert!(app.repo.status().unwrap().is_empty(), "{:?}", app.message);
     }
 
-    #[test]
-    fn filter_prompts_offer_the_authors_and_tab_fills_one_in() {
-        let d = repo("suggest");
-        commit_file(&d, "b.txt", "b\n", "add feature alpha");
-        let mut app = App::new(&d).unwrap();
-        press(&mut app, "2");
-        press(&mut app, " ");
-        press(&mut app, "f");
-        press(&mut app, "a");
-        assert!(!app.suggest.is_empty(), "the authors are offered");
-        let who = app.suggest.current().unwrap();
-        assert!(screen(&mut app).join("\n").contains(&who), "the options are drawn");
+    fn tab(app: &mut App) {
         app.handle_event(&key(KeyCode::Tab));
-        app.handle_event(&key(KeyCode::Enter));
-        assert_eq!(app.filter.author, who);
     }
 
     #[test]
-    fn filters_narrow_the_graph_and_keep_it_connected() {
+    fn the_filter_popup_chooses_several_things_and_the_bar_shows_them() {
         let d = repo("filter");
         commit_file(&d, "b.txt", "b\n", "add feature alpha");
-        commit_file(&d, "c.txt", "c\n", "fix bug beta");
+        commit_file(&d, "c.txt", "c\n", "fix: bug beta");
+        commit_file(&d, "d.txt", "d\n", "feat(ui): gamma");
         let mut app = App::new(&d).unwrap();
         press(&mut app, "2");
-        assert_eq!(app.commits.len(), 3);
-        // By message: only the matching commit, its parent moved to the first commit.
-        press(&mut app, " ");
+        assert_eq!(app.commits.len(), 4);
+        // By message: the text section is the first.
         press(&mut app, "f");
-        press(&mut app, "m");
+        assert!(screen(&mut app).join("\n").contains("Filter commits"));
         type_text(&mut app, "alpha");
         assert_eq!(app.commits.len(), 1, "{:?}", app.message);
-        assert_eq!(app.commits[0].subject, "add feature alpha");
-        assert!(app.screen == Screen::Commits && app.filter.active());
-        // Clearing shows every commit again.
-        press(&mut app, " ");
+        assert!(screen(&mut app).join("\n").contains("message alpha"), "the bar names the filter");
+        press(&mut app, "F");
+        assert_eq!(app.commits.len(), 4);
+        // By category: feat, then feat and fix together.
         press(&mut app, "f");
-        press(&mut app, "x");
-        assert_eq!(app.commits.len(), 3);
-        // By date: everything is newer than a day; a future date drops everything.
+        tab(&mut app); // authors
+        tab(&mut app); // categories: feat, fix
         press(&mut app, " ");
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.commits.len(), 1, "{:?}", app.message);
+        assert_eq!(app.commits[0].subject, "feat(ui): gamma");
         press(&mut app, "f");
-        press(&mut app, "d");
-        type_text(&mut app, "1d");
-        assert_eq!(app.commits.len(), 3);
+        tab(&mut app);
+        tab(&mut app);
+        app.handle_event(&key(KeyCode::Down));
         press(&mut app, " ");
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.commits.len(), 2);
+        assert!(screen(&mut app).join("\n").contains("category feat, fix"));
+        // The popup shows what is set, and a date that excludes everything empties the list.
         press(&mut app, "f");
-        press(&mut app, "d");
-        for _ in 0..2 {
-            app.handle_event(&key(KeyCode::Backspace));
+        for _ in 0..4 {
+            tab(&mut app);
         }
-        type_text(&mut app, "2999-01-01");
-        assert_eq!(app.commits.len(), 0);
-        // A date that makes no sense says so and changes nothing.
         press(&mut app, " ");
-        press(&mut app, "f");
-        press(&mut app, "d");
-        type_text(&mut app, "soon");
-        assert!(app.message.as_ref().is_some_and(|(_, err)| *err));
+        assert!(screen(&mut app).join("\n").contains("since: 1d"));
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.commits.len(), 2, "everything is newer than a day");
+        app.filter.since = Some(("x".into(), i64::MAX));
+        app.refilter("x");
+        assert_eq!(app.commits.len(), 0);
     }
 
     #[test]
