@@ -13,3 +13,6 @@ two-face = { version = "0.5.2", default-features = false, features = ["syntect-f
 pulldown-cmark = { version = "0.13", default-features = false }
 ui = { version = "0.1.0", path = "../ui" }
 unicode-width = "0.2.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+lofty = "0.22"
+mp4 = "0.14"

@@ -6,6 +6,7 @@ mod commit;
 mod config;
 mod diff;
 mod dir;
+mod media;
 mod git;
 pub mod markdown;
 mod text;
@@ -95,6 +96,9 @@ pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'s
     if meta.is_dir() {
         dir::render(path, theme, opts)
     } else if meta.is_file() {
+        if let Some(kind) = media::kind(path) {
+            return media::render(path, kind, theme, opts);
+        }
         if markdown::is_markdown(path) && opts.focus.is_none() {
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path)?, 1 << 20), &mut buf)?;
