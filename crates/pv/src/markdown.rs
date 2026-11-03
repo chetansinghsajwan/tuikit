@@ -443,7 +443,8 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let total = out.width.saturating_sub(out.prefix_width() + 1).max(12);
                     let inner = total - 2;
                     let tint = Style::new().bg(ui::mix(c.fg.into(), c.bg.into(), 7));
-                    let edge = Style::new().fg(muted);
+                    // The frame sits on the same tint as the inside, so the rounded corners belong to the block.
+                    let edge = tint.fg(muted);
                     out.push_line(vec![Span::styled(format!("╭{}╮", "─".repeat(inner)), edge)]);
                     let row = |spans: Vec<Span<'static>>, used: usize| -> Vec<Span<'static>> {
                         let mut line = vec![Span::styled("│", edge), Span::styled(" ", tint)];
@@ -797,6 +798,10 @@ mod tests {
         assert!(lines[2].contains("fn main") && lines[3].contains("let a_long_line"));
         assert!(lines[4].starts_with('╰') && lines[4].ends_with('╯'));
         assert!(lines[..5].iter().all(|l| l.width() == lines[0].width()), "every row is as wide as the top: {lines:#?}");
+        // The frame is on the same tint as the inside: the corners are part of the block.
+        let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
+        let bg = |row: usize, col: usize| styled[row].spans[col].style.bg;
+        assert!(bg(0, 0).is_some() && bg(0, 0) == bg(2, 1), "the top left corner shares the tint of the code");
     }
 
     #[test]
