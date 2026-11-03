@@ -1,6 +1,6 @@
 # Usage design: one experience across all terminal tools
 
-Status: decided (user, 2026-10-31). Done: `ui::keys` (engine, which-key popup), the palette (`Space Space`) and `?` help, migrated: `files`, `git-panel`, `git-ui`, the helix palette; still to do: `pick` and the diagnostics panel, the shared leader setting and the Nix key config. Applies to every tool built so far (`files`, `pick`, `pv` where interactive, `git-ui`, `git-panel`, the diagnostics panel, the helix docks and popups) and to every future tool.
+Status: decided (user, 2026-10-31). Done: `ui::keys` (engine, which-key popup), the palette (`Space Space`) and `?` help, migrated: `files`, `git-panel`, `git-ui`, the helix palette; still to do: `pick` and the diagnostics panel, the Nix generation of the key config (the shared leader and the key overrides are in `ui::config`, TOML). Applies to every tool built so far (`files`, `pick`, `pv` where interactive, `git-ui`, `git-panel`, the diagnostics panel, the helix docks and popups) and to every future tool.
 
 The look is shared through the `ui` crate. This document is the same idea for behaviour: what keys do, how actions are found, how a tool is embedded.
 
@@ -98,3 +98,6 @@ Every command palette lists the commands run last first (newest first), then the
 
 ## Popups dim what is behind them (and panes without the focus dim a little: `KEEP_INACTIVE` = 62, in helix the editor or the docks, in `gu` and `nu` the pane without the focus)
 A popup (Quick Keys, keys help, palette overlays inside helix, pickers, the git panel, the Markdown view) dims the screen behind it: colours move 72 % toward the background (`ui::dim`, `KEEP` = 28), default-colour text gets the terminal's dim attribute. A terminal cannot blur. Pickers started as a separate zellij pane (`pick` from `files`) cannot dim their parent.
+
+## Delete, discard and confirm
+`d` deletes (a file, a branch, a tag, a stash, a saved network) or discards changes; the footer then asks, and `d` again confirms (`y` and Enter too, anything else cancels). Every tool follows this. In `gu` `r` renames (and rewords the last commit) and `R` reverts.
