@@ -176,9 +176,10 @@ pub struct Keymap {
 }
 
 impl Keymap {
-    /// A keymap for `actions`, with `leader` (a key name) standing for `leader` in bindings.
+    /// A keymap for `actions`, with `leader` (a key name) standing for `leader` in bindings; the
+    /// user's configuration (`ui::config`) overrides the leader and the keys.
     pub fn new(leader: &str, actions: &[Action], groups: &[Group]) -> Keymap {
-        let leader = Chord::parse(leader).unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
+        let leader = crate::config::get().leader.as_deref().and_then(Chord::parse).or_else(|| Chord::parse(leader)).unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
         let mut map = Keymap { leader, actions: actions.to_vec(), groups: Vec::new(), bindings: Vec::new(), pending: Vec::new(), rejected: String::new() };
         for g in groups {
             if let Some(seq) = map.sequence(g.prefix) {
@@ -192,7 +193,17 @@ impl Keymap {
                 }
             }
         }
+        map.apply_config();
         map
+    }
+
+    /// The user's leader and bindings (`ui::config`).
+    fn apply_config(&mut self) {
+        let cfg = crate::config::get();
+        for (id, keys) in &cfg.keys {
+            let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+            self.rebind(id, &keys);
+        }
     }
 
     fn sequence(&self, s: &str) -> Option<Vec<Chord>> {
@@ -206,6 +217,10 @@ impl Keymap {
         }
         self.bindings.retain(|(_, i)| *i != id);
         for k in keys {
+            // A key the user gives to this action is no longer another one's.
+            if let Some(seq) = self.sequence(k) {
+                self.bindings.retain(|(s, i)| !(*s == seq && *i != id));
+            }
             if let (Some(seq), Some(a)) = (self.sequence(k), self.actions.iter().find(|a| a.id == id)) {
                 self.bindings.push((seq, a.id));
             }
@@ -506,6 +521,18 @@ mod tests {
         assert_eq!(m.feed(&KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)), Feed::Run("page.down"));
         assert_eq!(m.feed(&k('z')), Feed::Unbound);
         assert!(!m.is_pending());
+    }
+
+    #[test]
+    fn rebinding_takes_the_key_from_another_action_and_an_empty_list_unbinds() {
+        let mut m = map();
+        m.rebind("nav.down", &["."]);
+        assert_eq!(m.feed(&k('.')), Feed::Run("nav.down"));
+        assert_eq!(m.feed(&k('j')), Feed::Unbound);
+        m.rebind("find", &[]);
+        assert_eq!(m.feed(&k('/')), Feed::Unbound);
+        m.rebind("no.such.action", &["z"]);
+        assert_eq!(m.feed(&k('z')), Feed::Unbound);
     }
 
     #[test]

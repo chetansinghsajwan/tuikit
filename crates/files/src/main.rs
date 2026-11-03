@@ -32,6 +32,9 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
+    for p in ui::config::init("files") {
+        eprintln!("files: {p}");
+    }
     let cli = Cli::parse();
     match app::run(cli.into()) {
         Ok(code) => ExitCode::from(code),

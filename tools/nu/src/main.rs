@@ -36,6 +36,9 @@ fn leave(term: &mut Term) -> io::Result<()> {
 }
 
 fn main() -> ExitCode {
+    for p in ui::config::init("nu") {
+        eprintln!("nu: {p}");
+    }
     match run(Cli::parse()) {
         Ok(code) => ExitCode::from(code),
         Err(e) => {

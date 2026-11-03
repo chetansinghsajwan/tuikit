@@ -36,6 +36,9 @@ impl Drop for Tty {
 }
 
 fn main() -> ExitCode {
+    for p in ui::config::init("git-panel") {
+        eprintln!("git-panel: {p}");
+    }
     let cli = Cli::parse();
     match run(cli) {
         Ok(code) => ExitCode::from(code),

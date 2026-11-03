@@ -4,6 +4,7 @@
 
 pub mod ansi;
 pub mod clipboard;
+pub mod config;
 pub mod dim;
 pub mod icons;
 pub mod keys;

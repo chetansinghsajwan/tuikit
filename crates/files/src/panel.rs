@@ -1039,7 +1039,7 @@ impl Panel {
             let git = self.git_state(row);
             // The whole row takes a faded tint of its git color; the hovered row is a faded blue.
             let tint = git.map(|(_, k)| Self::git_color(theme, k));
-            let base = ui::list::style(theme, selected && focused, tint);
+            let base = if selected && !focused { ui::list::active(theme) } else { ui::list::style(theme, selected && focused, tint) };
             buf.set_style(rows.bar(y), base);
 
             let color = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() });

@@ -46,6 +46,13 @@ pub fn style(theme: &Theme, hovered: bool, tint: Option<Color>) -> Style {
     }
 }
 
+/// The row that is current while its pane does not have the focus (the file open in the editor): a
+/// fainter blue than the hovered row.
+pub fn active(theme: &Theme) -> Style {
+    let c = &theme.colors;
+    Style::new().bg(mix(c.accent.into(), c.bg.into(), 14)).add_modifier(Modifier::BOLD)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
