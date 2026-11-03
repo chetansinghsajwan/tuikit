@@ -396,15 +396,28 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let code = std::mem::take(&mut out.code);
                     let lang = std::mem::take(&mut out.code_lang);
                     let code = code.trim_end_matches('\n');
-                    let inner = out.width.saturating_sub(out.prefix_width() + 2).max(10);
-                    let tint = ui::mix(c.fg.into(), c.bg.into(), 7);
+                    // A rounded box: the width of the block, a tinted inside with the language as its first line.
+                    let total = out.width.saturating_sub(out.prefix_width() + 1).max(12);
+                    let inner = total - 2;
+                    let tint = Style::new().bg(ui::mix(c.fg.into(), c.bg.into(), 7));
+                    let edge = Style::new().fg(muted);
+                    out.push_line(vec![Span::styled(format!("╭{}╮", "─".repeat(inner)), edge)]);
+                    let row = |spans: Vec<Span<'static>>, used: usize| -> Vec<Span<'static>> {
+                        let mut line = vec![Span::styled("│", edge), Span::styled(" ", tint)];
+                        line.extend(spans);
+                        line.push(Span::styled(" ".repeat(inner.saturating_sub(used + 1)), tint));
+                        line.push(Span::styled("│", edge));
+                        line
+                    };
                     if !lang.is_empty() {
-                        out.push_line(vec![Span::styled(format!("  {lang}"), Style::new().fg(muted).add_modifier(Modifier::ITALIC))]);
+                        let label: String = lang.chars().take(inner.saturating_sub(2)).collect();
+                        let used = label.width();
+                        let spans = vec![Span::styled(label, tint.fg(muted).add_modifier(Modifier::ITALIC))];
+                        out.push_line(row(spans, used));
                     }
-                    let lit = Style::new().fg(Color::from(c.syntax.string));
                     for pieces in crate::text::highlight_code(code, &lang, theme) {
-                        // Long lines are cut at the width, the block is tinted to it.
-                        let mut spans = vec![Span::styled(" ", Style::new().bg(tint))];
+                        // Long lines are cut at the width.
+                        let mut spans = Vec::new();
                         let mut used = 1;
                         for (style, piece) in pieces {
                             if used >= inner {
@@ -412,14 +425,14 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                             }
                             let piece: String = piece.chars().scan(0usize, |w, ch| { *w += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0); Some((*w, ch)) }).take_while(|(w, _)| used + w <= inner).map(|(_, ch)| ch).collect();
                             used += piece.width();
-                            spans.push(Span::styled(piece, style.bg(tint)));
+                            spans.push(Span::styled(piece, style.bg(tint.bg.unwrap_or(Color::Reset))));
                         }
-                        spans.push(Span::styled(" ".repeat(inner.saturating_sub(used) + 1), Style::new().bg(tint)));
-                        out.push_line(spans);
+                        out.push_line(row(spans, used - 1));
                     }
                     if code.is_empty() {
-                        out.push_line(vec![Span::styled("  ", lit)]);
+                        out.push_line(row(Vec::new(), 0));
                     }
+                    out.push_line(vec![Span::styled(format!("╰{}╯", "─".repeat(inner)), edge)]);
                     out.lines.push(Line::default());
                 }
                 TagEnd::List(_) => {
@@ -731,6 +744,16 @@ mod tests {
         image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 0, 0, 255])).save(d.join("p.png")).unwrap();
         let r = render_in("![red](p.png)\n", &Theme::default(), 50, Some(&d));
         assert!(r.lines.iter().any(|l| l.spans.iter().any(|s| s.content == "▀")), "{:?}", text(&r.lines));
+    }
+
+    #[test]
+    fn code_blocks_are_rounded_boxes_with_the_language_inside() {
+        let lines = text(&render("```rust\nfn main() {}\nlet a_long_line = 1;\n```\n", &Theme::default(), 40));
+        assert!(lines[0].starts_with('╭') && lines[0].ends_with('╮'), "{lines:#?}");
+        assert!(lines[1].starts_with("│ rust") && lines[1].ends_with('│'), "the language is inside: {lines:#?}");
+        assert!(lines[2].contains("fn main") && lines[3].contains("let a_long_line"));
+        assert!(lines[4].starts_with('╰') && lines[4].ends_with('╯'));
+        assert!(lines[..5].iter().all(|l| l.width() == lines[0].width()), "every row is as wide as the top: {lines:#?}");
     }
 
     #[test]

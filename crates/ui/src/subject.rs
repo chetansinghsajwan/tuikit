@@ -10,7 +10,9 @@ pub fn category_len(subject: &str) -> Option<usize> {
     let head = &subject[..colon];
     let word_end = head.find(['(', '!']).unwrap_or(head.len());
     let word = &head[..word_end];
-    if word.is_empty() || !word.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_') {
+    // One word or two (`git panel: one tree`).
+    let words: Vec<&str> = word.split(' ').collect();
+    if words.len() > 2 || words.iter().any(|w| w.is_empty() || !w.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')) {
         return None;
     }
     // After the word only an optional `(scope)` and an optional `!` may come.
@@ -59,6 +61,10 @@ mod tests {
         assert_eq!(category_len(": empty"), None);
         assert_eq!(category_len("a/b: path"), None);
         assert_eq!(category_len("fix(: odd"), None);
+        assert_eq!(category_len("git panel: one tree"), Some(10));
+        assert_eq!(category_len("git panel ui: three words"), None);
+        assert_eq!(category_word("Git Panel(x): y").as_deref(), Some("git panel"));
+        assert_eq!(category_len("fix  bug: double space"), None);
     }
 
     #[test]

@@ -17,7 +17,7 @@ const TAB_LOG_LIMIT: usize = 3000;
 /// Most cells (two per lane) the graph column may take.
 const GRAPH_MAX: usize = 24;
 /// Most cells the refs column of the Commits table may take.
-const REFS_MAX: usize = 32;
+const REFS_COL: usize = 24;
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
@@ -369,8 +369,9 @@ impl App {
         for r in &self.branches {
             self.labels.entry(r.oid.clone()).or_default().push(r.clone());
         }
-        self.author_w = self.commits.iter().map(|k| k.author.chars().count()).max().unwrap_or(0).min(AUTHOR_MAX);
-        self.refs_w = self.commits.iter().map(|k| pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default()).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0).min(REFS_MAX);
+        self.author_w = AUTHOR_COL;
+        // Every column has one width, whatever the commits are: the refs column too (when any commit has a ref).
+        self.refs_w = if self.commits.iter().any(|k| self.labels.contains_key(&k.oid)) { REFS_COL } else { 0 };
         self.stashes = self.repo.stashes().unwrap_or_default();
         self.build_ref_rows(keep);
         for (i, len) in [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
@@ -1388,10 +1389,10 @@ impl App {
                 }
                 let mut when = Vec::new();
                 if self.cols.abs_time {
-                    when.push(pv::format_utc(k.time));
+                    when.push(format!("{:<16}", pv::format_utc(k.time)));
                 }
                 if self.cols.rel_time {
-                    when.push(ago(k.time));
+                    when.push(format!("{:>8}", ago(k.time)));
                 }
                 (Line::from(spans), when.join("  "))
             }
@@ -1530,7 +1531,7 @@ impl App {
 const HASH_W: usize = 8;
 
 /// The widest an author name column gets.
-const AUTHOR_MAX: usize = 20;
+const AUTHOR_COL: usize = 18;
 
 /// Cells a ref takes as a pill (the caps, the name, the branch icon of the checked-out one, a space).
 fn ref_width(r: &RefInfo, remotes: &[String]) -> usize {
