@@ -31,37 +31,37 @@ pub enum Action {
     Changed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Section {
-    Conflicts,
-    Staged,
-    Unstaged,
-    Untracked,
+/// One changed file: what of it is staged and what is not (`git status -s` columns).
+#[derive(Debug, Clone)]
+struct Change {
+    rela: PathBuf,
+    staged: Option<Kind>,
+    unstaged: Option<Kind>,
 }
 
-impl Section {
-    fn title(self) -> &'static str {
-        match self {
-            Section::Conflicts => "Conflicts",
-            Section::Staged => "Staged",
-            Section::Unstaged => "Unstaged",
-            Section::Untracked => "Untracked",
-        }
+impl Change {
+    /// Something of it is not staged yet (a change, a new file, a conflict).
+    fn open(&self) -> bool {
+        self.unstaged.is_some()
+    }
+
+    /// The kind that colors its row: what is not staged, else what is.
+    fn kind(&self) -> Kind {
+        self.unstaged.or(self.staged).unwrap_or(Kind::Modified)
     }
 }
 
 enum Row {
-    Header(Section, usize),
-    /// A directory of the tree view (single-child chains are joined: `src/lib`).
-    Folder { section: Section, path: PathBuf, label: String, depth: usize, count: usize, folded: bool },
-    File { section: Section, rela: PathBuf, kind: Kind, depth: usize },
+    /// A directory (single-child chains are joined: `src/lib`).
+    Folder { path: PathBuf, label: String, depth: usize, count: usize, folded: bool },
+    File { change: Change, depth: usize },
 }
 
-/// The changed files of one section as a directory tree.
+/// The changed files as a directory tree.
 #[derive(Default)]
 struct Node {
     dirs: std::collections::BTreeMap<String, Node>,
-    files: Vec<(PathBuf, Kind)>,
+    files: Vec<Change>,
 }
 
 impl Node {
@@ -105,9 +105,9 @@ pub struct Panel {
     pheight: usize,
     /// The changed files as a tree of directories (the default) or one flat list; the folded folders.
     tree: bool,
-    folded: std::collections::HashSet<(Section, PathBuf)>,
+    folded: std::collections::HashSet<PathBuf>,
     /// Every changed file, also the ones folded away.
-    all: Vec<(Section, PathBuf, Kind)>,
+    all: Vec<Change>,
     /// Title of the list pane instead of `git: <branch>`.
     title: Option<String>,
     keymap: ui::keys::Keymap,
@@ -173,67 +173,45 @@ impl Panel {
         let keep = self.row_key(self.cursor);
         self.branch = self.repo.branch().unwrap_or_else(|| "(detached)".into());
         let status = self.repo.status().unwrap_or_default();
-        let mut buckets: [Vec<(PathBuf, Kind)>; 4] = Default::default();
-        for (path, st) in status.iter() {
-            let p = path.to_path_buf();
-            if st.unstaged == Some(Kind::Conflict) {
-                buckets[0].push((p.clone(), Kind::Conflict));
-                continue;
-            }
-            if let Some(k) = st.staged {
-                buckets[1].push((p.clone(), k));
-            }
-            match st.unstaged {
-                Some(Kind::Untracked) => buckets[3].push((p, Kind::Untracked)),
-                Some(k) => buckets[2].push((p, k)),
-                None => {}
-            }
-        }
+        self.all = status
+            .iter()
+            .filter_map(|(path, st)| {
+                let (staged, unstaged) = if st.unstaged == Some(Kind::Conflict) { (None, Some(Kind::Conflict)) } else { (st.staged, st.unstaged) };
+                (staged.is_some() || unstaged.is_some()).then(|| Change { rela: path.to_path_buf(), staged, unstaged })
+            })
+            .collect();
+        self.all.sort_by(|a, b| a.rela.cmp(&b.rela));
         self.rows.clear();
         self.items.clear();
-        self.all.clear();
-        for (i, section) in [Section::Conflicts, Section::Staged, Section::Unstaged, Section::Untracked].into_iter().enumerate() {
-            let mut files = std::mem::take(&mut buckets[i]);
-            if files.is_empty() {
-                continue;
-            }
-            files.sort_by(|a, b| a.0.cmp(&b.0));
-            self.rows.push(Row::Header(section, files.len()));
-            self.all.extend(files.iter().map(|(p, k)| (section, p.clone(), *k)));
-            if self.tree {
-                let mut root = Node::default();
-                for (rela, kind) in files {
-                    let mut node = &mut root;
-                    if let Some(dir) = rela.parent() {
-                        for part in dir.components() {
-                            node = node.dirs.entry(part.as_os_str().to_string_lossy().into_owned()).or_default();
-                        }
+        if self.tree {
+            let mut root = Node::default();
+            for change in &self.all {
+                let mut node = &mut root;
+                if let Some(dir) = change.rela.parent() {
+                    for part in dir.components() {
+                        node = node.dirs.entry(part.as_os_str().to_string_lossy().into_owned()).or_default();
                     }
-                    node.files.push((rela, kind));
                 }
-                self.push_node(section, &root, Path::new(""), 0);
-            } else {
-                for (rela, kind) in files {
-                    self.items.push(self.rows.len());
-                    self.rows.push(Row::File { section, rela, kind, depth: 0 });
-                }
+                node.files.push(change.clone());
+            }
+            self.push_node(&root, Path::new(""), 0);
+        } else {
+            for change in self.all.clone() {
+                self.items.push(self.rows.len());
+                self.rows.push(Row::File { change, depth: 0 });
             }
         }
-        // Stay on the same row: in the same section if it is still there, else
-        // wherever it moved to (staging moves a file from Unstaged to Staged).
-        let find = |panel: &Panel, same_section: Option<Section>, p: &Path, folder: bool| {
-            (0..panel.items.len()).find(|&n| panel.row_key(n).is_some_and(|(s, q, f)| q == p && f == folder && same_section.is_none_or(|x| x == s)))
-        };
+        // Stay on the same row.
         self.cursor = keep
-            .and_then(|(s, p, folder)| find(self, Some(s), &p, folder).or_else(|| find(self, None, &p, folder)))
+            .and_then(|(p, folder)| (0..self.items.len()).find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder)))
             .unwrap_or(self.cursor)
             .min(self.items.len().saturating_sub(1));
         self.version += 1;
         self.pscroll = 0;
     }
 
-    /// Add `node` (a directory of `section`) to the rows: its folders first, then its files.
-    fn push_node(&mut self, section: Section, node: &Node, prefix: &Path, depth: usize) {
+    /// Add `node` (a directory) to the rows: its folders first, then its files.
+    fn push_node(&mut self, node: &Node, prefix: &Path, depth: usize) {
         for (name, child) in &node.dirs {
             let (mut label, mut child, mut path) = (name.clone(), child, prefix.join(name));
             while child.files.is_empty() && child.dirs.len() == 1 {
@@ -242,46 +220,45 @@ impl Panel {
                 path = path.join(n);
                 child = c;
             }
-            let folded = self.folded.contains(&(section, path.clone()));
+            let folded = self.folded.contains(&path);
             self.items.push(self.rows.len());
-            self.rows.push(Row::Folder { section, path: path.clone(), label, depth, count: child.count(), folded });
+            self.rows.push(Row::Folder { path: path.clone(), label, depth, count: child.count(), folded });
             if !folded {
-                self.push_node(section, child, &path, depth + 1);
+                self.push_node(child, &path, depth + 1);
             }
         }
-        for (rela, kind) in &node.files {
+        for change in &node.files {
             self.items.push(self.rows.len());
-            self.rows.push(Row::File { section, rela: rela.clone(), kind: *kind, depth });
+            self.rows.push(Row::File { change: change.clone(), depth });
         }
     }
 
-    /// Section, path and whether it is a folder, of the `n`th selectable row.
-    fn row_key(&self, n: usize) -> Option<(Section, PathBuf, bool)> {
+    /// Path and whether it is a folder, of the `n`th selectable row.
+    fn row_key(&self, n: usize) -> Option<(PathBuf, bool)> {
         match self.rows.get(*self.items.get(n)?)? {
-            Row::File { section, rela, .. } => Some((*section, rela.clone(), false)),
-            Row::Folder { section, path, .. } => Some((*section, path.clone(), true)),
-            Row::Header(..) => None,
+            Row::File { change, .. } => Some((change.rela.clone(), false)),
+            Row::Folder { path, .. } => Some((path.clone(), true)),
         }
     }
 
     /// The highlighted folder of the tree view.
-    fn current_folder(&self) -> Option<(Section, PathBuf)> {
+    fn current_folder(&self) -> Option<PathBuf> {
         match self.rows.get(*self.items.get(self.cursor)?)? {
-            Row::Folder { section, path, .. } => Some((*section, path.clone())),
+            Row::Folder { path, .. } => Some(path.clone()),
             _ => None,
         }
     }
 
-    /// The files of `section` below the folder `path`.
-    fn files_under(&self, section: Section, path: &Path) -> Vec<PathBuf> {
-        self.all.iter().filter(|(s, p, _)| *s == section && p.starts_with(path)).map(|(_, p, _)| p.clone()).collect()
+    /// The changes below the folder `path`.
+    fn changes_under(&self, path: &Path) -> Vec<&Change> {
+        self.all.iter().filter(|c| c.rela.starts_with(path)).collect()
     }
 
-    /// Section, path and kind of the highlighted file.
-    fn current(&self) -> Option<(Section, &Path, Kind)> {
+    /// The highlighted file.
+    fn current(&self) -> Option<&Change> {
         match self.rows.get(*self.items.get(self.cursor)?)? {
-            Row::File { section, rela, kind, .. } => Some((*section, rela.as_path(), *kind)),
-            Row::Header(..) | Row::Folder { .. } => None,
+            Row::File { change, .. } => Some(change),
+            Row::Folder { .. } => None,
         }
     }
 
@@ -388,42 +365,41 @@ impl Panel {
                     self.refresh();
                     return Action::None;
                 }
-                if let Some((_, rela, _)) = self.current() {
-                    return Action::Open(self.root.join(rela));
+                if let Some(c) = self.current() {
+                    return Action::Open(self.root.join(&c.rela));
                 }
             }
             "change.stage" => {
-                if let Some((section, path)) = self.current_folder() {
-                    let files = self.files_under(section, &path);
-                    if section != Section::Staged {
-                        let r = self.repo.stage(&files);
-                        return self.finish("staged", r);
-                    }
+                // One key for both: what is not staged yet gets staged, a file that is all staged is unstaged.
+                let targets: Vec<Change> = match self.current_folder() {
+                    Some(path) => self.changes_under(&path).into_iter().cloned().collect(),
+                    None => self.current().cloned().into_iter().collect(),
+                };
+                if targets.is_empty() {
                     return Action::None;
                 }
-                if let Some((section, rela, _)) = self.current() {
-                    if section != Section::Staged {
-                        let rela = rela.to_path_buf();
-                        return self.stage(rela);
-                    }
+                if targets.iter().any(Change::open) {
+                    let paths: Vec<PathBuf> = targets.iter().filter(|c| c.open()).map(|c| c.rela.clone()).collect();
+                    let r = self.repo.stage(&paths);
+                    return self.finish("staged", r);
                 }
+                let paths: Vec<PathBuf> = targets.iter().map(|c| c.rela.clone()).collect();
+                let r = self.repo.unstage(&paths);
+                return self.finish("unstaged", r);
             }
             "change.unstage" => {
-                if let Some((Section::Staged, path)) = self.current_folder() {
-                    let files = self.files_under(Section::Staged, &path);
-                    let r = self.repo.unstage(&files);
+                let targets: Vec<PathBuf> = match self.current_folder() {
+                    Some(path) => self.changes_under(&path).into_iter().filter(|c| c.staged.is_some()).map(|c| c.rela.clone()).collect(),
+                    None => self.current().filter(|c| c.staged.is_some()).map(|c| c.rela.clone()).into_iter().collect(),
+                };
+                if !targets.is_empty() {
+                    let r = self.repo.unstage(&targets);
                     return self.finish("unstaged", r);
-                }
-                if let Some((Section::Staged, rela, _)) = self.current() {
-                    let rela = rela.to_path_buf();
-                    return self.unstage(rela);
                 }
             }
             "change.toggle_all" => {
                 // Everything staged already (nothing left to stage): take it all back out.
-                let open = self.all.iter().any(|(s, ..)| *s != Section::Staged);
-                let staged = self.all.iter().any(|(s, ..)| *s == Section::Staged);
-                if staged && !open {
+                if !self.all.is_empty() && !self.all.iter().any(Change::open) {
                     let r = self.repo.unstage_all();
                     return self.finish("unstaged everything", r);
                 }
@@ -436,22 +412,23 @@ impl Panel {
                     return Action::None;
                 }
                 // Discard: only work-tree changes, never the staged ones.
-                if let Some((section, rela, _)) = self.current() {
-                    match section {
-                        Section::Unstaged | Section::Untracked => self.mode = Mode::Discard(rela.to_path_buf(), section == Section::Untracked),
-                        _ => self.say("nothing to discard here (unstage it first)", true),
+                if let Some(c) = self.current().cloned() {
+                    match c.unstaged {
+                        Some(Kind::Conflict) => self.say("resolve the conflict first", true),
+                        Some(kind) => self.mode = Mode::Discard(c.rela, kind == Kind::Untracked),
+                        None => self.say("nothing to discard here (unstage it first)", true),
                     }
                 }
             }
             "commit.new" => {
-                if self.all.iter().any(|(s, ..)| *s == Section::Staged) {
+                if self.all.iter().any(|c| c.staged.is_some()) {
                     self.mode = Mode::Commit(Input::default());
                 } else {
                     self.say("nothing staged to commit (stage with s)", true);
                 }
             }
             "commit.amend" => {
-                if self.all.iter().any(|(s, ..)| *s == Section::Staged) {
+                if self.all.iter().any(|c| c.staged.is_some()) {
                     let r = self.repo.amend(None);
                     return self.finish("amended the last commit", r);
                 }
@@ -472,16 +449,6 @@ impl Panel {
             _ => {}
         }
         Action::None
-    }
-
-    fn stage(&mut self, rela: PathBuf) -> Action {
-        let r = self.repo.stage(std::slice::from_ref(&rela));
-        self.finish("staged", r)
-    }
-
-    fn unstage(&mut self, rela: PathBuf) -> Action {
-        let r = self.repo.unstage(std::slice::from_ref(&rela));
-        self.finish("unstaged", r)
     }
 
     fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Action {
@@ -620,39 +587,39 @@ impl Panel {
             let y = inner.y + (i - self.offset) as u16;
             let area = Rect { y, height: 1, ..inner };
             match row {
-                Row::Header(section, n) => {
-                    let color = match section {
-                        Section::Conflicts => c.git.conflict,
-                        Section::Staged => c.git.added,
-                        Section::Unstaged => c.git.modified,
-                        Section::Untracked => c.git.untracked,
-                    };
-                    let line = Line::from(vec![
-                        Span::styled("▾ ", Style::new().fg(c.muted.into())),
-                        Span::styled(format!("{} ({n})", section.title()), Style::new().fg(color.into()).add_modifier(Modifier::BOLD)),
-                    ]);
-                    Paragraph::new(line).render(area, buf);
-                }
                 Row::Folder { label, depth, count, folded, .. } => {
                     let base = ui::list::style(theme, i == crow, None);
                     buf.set_style(geo.bar(y), base);
+                    let name = label.rsplit('/').next().unwrap_or(label);
+                    let icon = ui::icons::dir(name, !*folded);
                     let line = Line::from(vec![
-                        Span::raw("  ".repeat(*depth)),
+                        Span::raw("   ".repeat(*depth)),
                         Span::styled(if *folded { "▸ " } else { "▾ " }, Style::new().fg(c.muted.into())),
+                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
                         Span::styled(format!("{label}/"), Style::new().fg(c.accent.into())),
                         Span::styled(format!(" ({count})"), Style::new().fg(c.muted.into())),
                     ]);
                     Paragraph::new(line).style(base).render(area, buf);
                 }
-                Row::File { rela, kind, depth, .. } => {
+                Row::File { change, depth } => {
                     let selected = i == crow;
-                    let color = Self::kind_color(theme, *kind);
+                    let color = Self::kind_color(theme, change.kind());
                     let base = ui::list::style(theme, selected, Some(color));
                     buf.set_style(geo.bar(y), base);
+                    let rela = &change.rela;
                     let name = if self.tree { rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { rela.display().to_string() };
+                    let icon = ui::icons::file(&rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), false);
+                    // Two marks like `git status -s`: what is staged, then what is not.
+                    let mark = |kind: Option<Kind>| match kind {
+                        Some(k) => Span::styled(kind_char(k).to_string(), Style::new().fg(Self::kind_color(theme, k))),
+                        None => Span::raw(" "),
+                    };
                     let line = Line::from(vec![
-                        Span::raw("  ".repeat(*depth)),
-                        Span::styled(format!("{} ", kind_char(*kind)), Style::new().fg(color)),
+                        Span::raw("   ".repeat(*depth)),
+                        mark(change.staged),
+                        mark(change.unstaged),
+                        Span::raw(" "),
+                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
                         Span::styled(name, Style::new().fg(c.fg.into())),
                     ]);
                     Paragraph::new(line).style(base).render(area, buf);
@@ -662,20 +629,19 @@ impl Panel {
     }
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        let current = self.current().map(|(s, p, _)| (s, p.to_path_buf()));
+        let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone()));
         let title = current.as_ref().map(|(_, p)| p.display().to_string()).unwrap_or_default();
         let name = title.trim_end_matches('/').rsplit('/').next().unwrap_or(&title).to_string();
         let pane = Pane::new(theme).title(&title).icon(ui::icons::file(&name, false));
         let inner = pane.inner(area);
         pane.render(area, buf);
-        let Some((section, rela)) = current else {
+        let Some((staged, rela)) = current else {
             self.preview = None;
             return;
         };
         if inner.width == 0 || inner.height == 0 {
             return;
         }
-        let staged = section == Section::Staged;
         let key = (rela.clone(), staged, inner.width, inner.height, self.version);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
@@ -765,38 +731,51 @@ mod tests {
     }
 
     fn on(p: &mut Panel, name: &str) {
-        let i = p.items.iter().position(|&i| matches!(&p.rows[i], Row::File { rela, .. } if rela == Path::new(name))).unwrap_or_else(|| panic!("{name} listed"));
+        let i = p.items.iter().position(|&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name))).unwrap_or_else(|| panic!("{name} listed"));
         p.cursor = i;
     }
 
     #[test]
-    fn lists_the_sections_in_order_with_counts_and_the_branch() {
+    fn one_tree_with_two_marks_per_file_and_icons() {
         let mut p = Panel::new(&repo("sections")).unwrap();
         let text = draw(&mut p).join("\n");
+        assert!(!text.contains("Staged (") && !text.contains("Unstaged (") && !text.contains("Untracked ("), "no sections: {text}");
         let pos = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in\n{text}"));
-        assert!(pos("main") < pos("Staged (1)") && pos("Staged (1)") < pos("Unstaged (1)") && pos("Unstaged (1)") < pos("Untracked (1)"));
-        assert!(pos("M b.txt") < pos("M a.txt") && pos("M a.txt") < pos("? new.txt"), "{text}");
+        // Sorted by name; the first mark is staged, the second not staged (`?` for a new file).
+        assert!(pos("main") < pos("a.txt") && pos("a.txt") < pos("b.txt") && pos("b.txt") < pos("new.txt"), "{text}");
+        assert!(text.contains(" M ") && text.contains("M  ") && text.contains(" ? "), "{text}");
+        // A file that is partly staged is one row with both marks.
+        fs::write(p.root.join("b.txt"), "b1\nmore\n").unwrap();
+        p.refresh();
+        assert_eq!(p.all.iter().filter(|c| c.rela == Path::new("b.txt")).count(), 1);
+        assert!(draw(&mut p).join("\n").contains("MM "));
     }
 
     #[test]
-    fn s_and_u_stage_and_unstage_and_the_cursor_stays_on_the_file() {
+    fn s_toggles_stage_and_unstage_and_the_cursor_stays_on_the_file() {
         let d = repo("toggle");
         let mut p = Panel::new(&d).unwrap();
         on(&mut p, "new.txt");
         assert_eq!(press(&mut p, "s"), Action::Changed);
-        assert_eq!(p.current().map(|(s, f, _)| (s, f.to_path_buf())), Some((Section::Staged, PathBuf::from("new.txt"))));
-        assert!(p.repo.status().unwrap().get(Path::new("new.txt")).unwrap().staged == Some(Kind::Added));
-        assert_eq!(press(&mut p, "u"), Action::Changed); // and back
-        assert_eq!(p.current().map(|(s, ..)| s), Some(Section::Untracked));
-        // `s` only stages, `u` only unstages.
+        assert_eq!(p.current().map(|c| (c.rela.clone(), c.staged)), Some((PathBuf::from("new.txt"), Some(Kind::Added))));
+        assert_eq!(press(&mut p, "s"), Action::Changed); // all staged: back out
+        assert_eq!(p.current().map(|c| c.unstaged), Some(Some(Kind::Untracked)));
+        // `u` only unstages.
         on(&mut p, "a.txt");
         assert_eq!(press(&mut p, "u"), Action::None);
+        // A partly staged file: s stages the rest, s again unstages it.
+        on(&mut p, "b.txt");
+        fs::write(d.join("b.txt"), "b1\nmore\n").unwrap();
+        p.refresh();
         assert_eq!(press(&mut p, "s"), Action::Changed);
+        assert!(p.current().is_some_and(|c| c.unstaged.is_none() && c.staged.is_some()));
+        assert_eq!(press(&mut p, "s"), Action::Changed);
+        assert!(p.current().is_some_and(|c| c.staged.is_none()), "{:?}", p.current());
         // `a` toggles: it stages everything while something is left, and unstages it all once all is staged.
         assert_eq!(press(&mut p, "a"), Action::Changed);
-        assert!(p.items.iter().all(|&i| matches!(&p.rows[i], Row::File { section: Section::Staged, .. })));
+        assert!(p.all.iter().all(|c| !c.open()));
         assert_eq!(press(&mut p, "a"), Action::Changed);
-        assert!(p.items.iter().all(|&i| !matches!(&p.rows[i], Row::File { section: Section::Staged, .. })));
+        assert!(p.all.iter().all(|c| c.staged.is_none()));
     }
 
     #[test]
@@ -815,10 +794,12 @@ mod tests {
         p.cursor = at;
         p.handle_event(&key(KeyCode::Enter));
         let text = draw(&mut p).join("\n");
-        assert!(text.contains("▸ src/ (2)") && !text.contains("one.rs"), "{text}");
-        // s on the folder stages everything below it.
+        assert!(text.contains("▸ ") && text.contains("src/ (2)") && !text.contains("one.rs"), "{text}");
+        // s on the folder stages everything below it, s again unstages it.
         assert_eq!(press(&mut p, "s"), Action::Changed);
-        assert!(p.all.iter().filter(|(_, f, _)| f.starts_with("src")).all(|(s, ..)| *s == Section::Staged), "{:?}", p.message);
+        assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()), "{:?}", p.message);
+        assert_eq!(press(&mut p, "s"), Action::Changed);
+        assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| c.staged.is_none()));
         // t switches to the flat list with the full paths.
         press(&mut p, "t");
         let text = draw(&mut p).join("\n");
@@ -866,9 +847,9 @@ mod tests {
         assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Changed);
         let log = p.repo.commits(2).unwrap();
         assert_eq!(log[0].subject, "fix b");
-        // The staged section is gone; the unstaged and untracked files remain.
+        // What was staged is gone from the list; the other files remain.
         let text = draw(&mut p).join("\n");
-        assert!(!text.contains("Staged (") && text.contains("Unstaged (1)") && text.contains("committed "), "{text}");
+        assert!(!text.contains("b.txt") && text.contains("a.txt") && text.contains("committed "), "{text}");
         // Esc cancels the prompt.
         press(&mut p, "c"); // nothing staged now
         assert!(p.message.as_ref().is_some_and(|(m, e)| *e && m.contains("nothing staged")));
@@ -907,7 +888,7 @@ mod tests {
         assert_eq!(press(&mut p, " "), Action::None);
         let menu = p.menu().expect("a leader menu");
         let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
-        for want in ["stage", "unstage", "commit", "discard", "commands"] {
+        for want in ["stage or unstage", "unstage", "commit", "discard", "commands"] {
             assert!(names.contains(&want), "{want} in {names:?}");
         }
         // Space then Space is the palette; `?` is the help; the host's own actions come back as commands.
