@@ -18,6 +18,7 @@ pub const GLOBAL: &[Action] = &[
     action("remote.pull", "pull", "pull the upstream into the checked-out branch", &["leader r p"]),
     action("remote.push", "push", "push the checked-out branch (the first push sets its upstream on origin)", &["leader r P"]),
     action("remote.force_push", "force push", "push with --force-with-lease (asks first)", &["leader r F"]),
+    action("switch.to", "switch to", "check out a branch, tag, remote branch or any commit by hash (type, up and down choose, tab fills)", &["leader S"]),
     action("op.continue", "continue", "continue the stopped merge, rebase, cherry-pick or revert once conflicts are resolved and staged", &["leader o c"]),
     action("op.abort", "abort", "give up the stopped merge, rebase, cherry-pick or revert", &["leader o a"]),
 ];
@@ -78,7 +79,8 @@ const COMMITS: &[Action] = &[
     action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["leader a"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
     action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
-    action("commit.reword", "reword", "change the message of the last commit", &["r", "leader w"]),
+    action("commit.amend", "amend", "add what is staged to the last commit and edit its message (enter keeps it)", &["A", "leader A"]),
+    action("commit.reword", "reword", "change only the message of the last commit (staged changes stay staged)", &["r", "leader w"]),
     action("commit.branch", "new branch here", "create a branch at the commit and switch to it", &["b", "leader n"]),
     action("commit.tag", "tag", "create a tag at the commit", &["t", "leader t"]),
     action("commit.reset_soft", "reset soft", "move the branch here, keep the index and the work tree", &["leader z s"]),

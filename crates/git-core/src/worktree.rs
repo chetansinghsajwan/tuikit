@@ -406,6 +406,14 @@ impl Repo {
         }
     }
 
+    /// Change only the message of the last commit; what is staged stays staged.
+    pub fn reword(&self, message: &str) -> Result<(), Error> {
+        if message.trim().is_empty() {
+            return Err(Error("empty commit message".into()));
+        }
+        self.git(&["commit", "-q", "--amend", "--only", "-m", message], &[]).map(|_| ())
+    }
+
     /// The operation under way that stopped (a conflict, say), if any.
     pub fn operation(&self) -> Option<Operation> {
         let dir = self.git_dir()?;

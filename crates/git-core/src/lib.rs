@@ -537,6 +537,13 @@ mod tests {
         r.amend(None).unwrap();
         assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "renamed first");
         assert!(Repo::discover(&d).unwrap().status().unwrap().is_empty());
+        // Reword leaves the staged changes staged.
+        fs::write(d.join("a.txt"), "staged later\n").unwrap();
+        git(&d, &["add", "a.txt"]);
+        r.reword("only the message").unwrap();
+        assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "only the message");
+        assert!(!Repo::discover(&d).unwrap().status().unwrap().is_empty());
+        git(&d, &["reset", "-q", "--hard"]);
         r.delete_tag("v1").unwrap();
         assert!(Repo::discover(&d).unwrap().refs().unwrap().iter().all(|x| x.name != "v1"));
         // Rebase a feature branch onto main, which has moved on.

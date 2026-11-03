@@ -67,6 +67,10 @@ enum PromptKind {
     TagAt(String),
     /// A new message for the last commit.
     Reword,
+    /// Check out a branch, tag, remote branch or commit by name.
+    SwitchTo,
+    /// Amend the last commit with what is staged, with this message (the old one is the value).
+    Amend(String),
 }
 
 enum Confirm {
@@ -637,6 +641,11 @@ impl App {
             "quit" => return Quit::Yes,
             "help" => self.help = Some(ui::keys::Help::default()),
             "palette" => return Quit::Palette,
+            "switch.to" => {
+                let names = self.branches.iter().map(|b| b.name.clone()).collect();
+                self.suggest = ui::prompt::Suggest::new(names);
+                self.mode = Mode::Prompt(PromptKind::SwitchTo, Input::default());
+            }
             "remote.fetch" => self.remote("fetching", "fetched", |r| r.fetch()),
             "remote.pull" => self.remote("pulling", "pulled", |r| r.pull()),
             "remote.push" => self.remote("pushing", "pushed", |r| r.push(false)),
@@ -890,6 +899,10 @@ impl App {
                             self.say("only the last commit can be reworded here", true);
                         }
                     }
+                    "commit.amend" => {
+                        let head = self.commits.first().map(|c| c.subject.clone()).unwrap_or_default();
+                        self.mode = Mode::Prompt(PromptKind::Amend(head.clone()), Input::new(head));
+                    }
                     "commit.branch" => self.mode = Mode::Prompt(PromptKind::BranchAt(k.oid), Input::default()),
                     "commit.tag" => self.mode = Mode::Prompt(PromptKind::TagAt(k.oid), Input::default()),
                     "commit.reset_soft" => self.run(format!("reset (soft) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Soft)),
@@ -914,7 +927,7 @@ impl App {
 
     fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event, key: &KeyEvent) {
         // Filter prompts offer options: up and down choose, tab fills the line in.
-        if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince) {
+        if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince | PromptKind::SwitchTo) {
             let ctrl = key.modifiers.contains(ratatui::crossterm::event::KeyModifiers::CONTROL);
             let step = match key.code {
                 KeyCode::Down | KeyCode::Tab => Some(1),
@@ -1032,7 +1045,12 @@ impl App {
                     }
                     PromptKind::Reword => {
                         let v = value.clone();
-                        self.run("reworded the last commit".to_string(), move |r| r.amend(Some(&v)));
+                        self.run("reworded the last commit".to_string(), move |r| r.reword(&v));
+                    }
+                    PromptKind::SwitchTo => self.switch_to(value),
+                    PromptKind::Amend(old) => {
+                        let v = value.clone();
+                        self.run("amended the last commit".to_string(), move |r| if v == old { r.amend(None) } else { r.amend(Some(&v)) });
                     }
                 }
             }
@@ -1041,6 +1059,25 @@ impl App {
                 self.suggest.typed(input.value());
                 self.mode = Mode::Prompt(kind, input);
             }
+        }
+    }
+
+    /// Check out what was typed: a ref by its name, the option chosen from the list, or a commit.
+    fn switch_to(&mut self, typed: String) {
+        let typed = typed.trim().to_string();
+        let by = |name: &str| self.branches.iter().find(|b| b.name == name).map(|b| (b.name.clone(), b.kind, b.is_head));
+        let pick = by(&typed).or_else(|| self.suggest.current().and_then(|s| by(&s)));
+        match pick {
+            Some((name, _, true)) => self.say(format!("already on {name}"), false),
+            Some((name, kind, false)) => self.run(format!("switched to {name}"), move |r| r.checkout_ref(&name, kind)),
+            None if typed.is_empty() => {}
+            None => match self.repo.commit(&typed) {
+                Ok(k) => {
+                    let (oid, short) = (k.oid.clone(), k.short.clone());
+                    self.run(format!("checked out {short}"), move |r| r.checkout_commit(&oid));
+                }
+                Err(_) => self.say(format!("no branch, tag or commit named {typed}"), true),
+            },
         }
     }
 
@@ -1358,9 +1395,11 @@ impl App {
                     PromptKind::BranchAt(_) => "new branch here: ",
                     PromptKind::TagAt(_) => "tag name: ",
                     PromptKind::Reword => "message: ",
+                    PromptKind::Amend(_) => "amend with message: ",
+                    PromptKind::SwitchTo => "switch to (branch, tag or commit): ",
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
-                if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince) {
+                if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince | PromptKind::SwitchTo) {
                     self.suggest.render(buf, area, theme);
                 }
                 ui::prompt::line(theme, label, input.value())
@@ -1597,6 +1636,48 @@ mod tests {
         assert!(app.search.is_none());
         press(&mut app, "[");
         assert!(!screen(&mut app).join("\n").contains("needle"));
+    }
+
+    #[test]
+    fn switch_to_takes_a_ref_a_chosen_option_or_a_commit_hash() {
+        let d = repo("switch");
+        git(&d, &["branch", "topic-one"]);
+        git(&d, &["branch", "side-two"]);
+        let mut app = App::new(&d).unwrap();
+        let root = app.repo.commits(5).unwrap()[0].oid.clone();
+        press(&mut app, " ");
+        press(&mut app, "S");
+        type_text(&mut app, "topic-one");
+        assert_eq!(app.repo.branch().as_deref(), Some("topic-one"));
+        // A fragment picks the first match.
+        press(&mut app, " ");
+        press(&mut app, "S");
+        type_text(&mut app, "side");
+        assert_eq!(app.repo.branch().as_deref(), Some("side-two"));
+        // A hash detaches HEAD.
+        press(&mut app, " ");
+        press(&mut app, "S");
+        type_text(&mut app, &root[..8]);
+        assert_eq!(app.repo.branch(), None, "{:?}", app.message);
+        // Nothing of that name.
+        press(&mut app, " ");
+        press(&mut app, "S");
+        type_text(&mut app, "zzzz-nothing");
+        assert!(app.message.as_ref().is_some_and(|(m, err)| *err && m.contains("no branch")));
+    }
+
+    #[test]
+    fn amend_adds_the_staged_file_and_enter_keeps_the_message() {
+        let d = repo("amend");
+        let mut app = App::new(&d).unwrap();
+        fs::write(d.join("more.txt"), "x\n").unwrap();
+        git(&d, &["add", "more.txt"]);
+        let before = app.repo.commits(5).unwrap().len();
+        press(&mut app, "2");
+        press(&mut app, "A");
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.repo.commits(5).unwrap().len(), before, "amended, not added");
+        assert!(app.repo.status().unwrap().is_empty(), "{:?}", app.message);
     }
 
     #[test]
