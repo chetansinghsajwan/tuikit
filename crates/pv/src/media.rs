@@ -68,12 +68,24 @@ fn image(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>
     let img = image::ImageReader::open(path)?.with_guessed_format()?.decode().map_err(|e| unreadable("image", e))?;
     let (w, h) = img.dimensions();
     let bytes = std::fs::metadata(path)?.len();
-    let c = &theme.colors;
     let mut out = facts(theme, &[("image", format!("{w}×{h}  {}", size_text(bytes)))]);
     out.push(Line::default());
-    // The picture: a cell is one pixel wide and two tall.
     let cols = u32::from(opts.width.unwrap_or(80)).saturating_sub(1).max(1);
     let rows = opts.height.map(|h| u32::from(h).saturating_sub(out.len() as u32)).unwrap_or(30).max(1);
+    out.extend(picture(&img, theme, cols, rows));
+    Ok(out)
+}
+
+/// The image file as half-block rows, at most `cols` wide and `rows` tall.
+pub fn image_rows(path: &Path, theme: &Theme, cols: u16, rows: u16) -> Result<Vec<Line<'static>>, Error> {
+    let img = image::ImageReader::open(path)?.with_guessed_format()?.decode().map_err(|e| unreadable("image", e))?;
+    Ok(picture(&img, theme, u32::from(cols).max(1), u32::from(rows).max(1)))
+}
+
+/// A cell is one pixel wide and two tall.
+fn picture(img: &image::DynamicImage, theme: &Theme, cols: u32, rows: u32) -> Vec<Line<'static>> {
+    let c = &theme.colors;
+    let mut out = Vec::new();
     let small = img.resize(cols, rows * 2, image::imageops::FilterType::Triangle).to_rgba8();
     let bg: Color = c.bg.into();
     let (br, bgc, bb) = match bg {
@@ -94,7 +106,7 @@ fn image(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>
         let spans: Vec<Span<'static>> = (0..small.width()).map(|x| Span::styled("▀", Style::new().fg(at(x, y)).bg(at(x, y + 1)))).collect();
         out.push(Line::from(spans));
     }
-    Ok(out)
+    out
 }
 
 fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {

@@ -75,7 +75,7 @@ fn rendered_markdown(name: &Path, text: &[u8], theme: &Theme, opts: &Options) ->
         return None;
     }
     let text = std::str::from_utf8(text).ok()?;
-    let mut lines = markdown::render(text, theme, opts.width.unwrap_or(80));
+    let mut lines = markdown::render_in(text, theme, opts.width.unwrap_or(80), name.parent()).lines;
     if let Some(h) = opts.height {
         lines.truncate(usize::from(h));
     }

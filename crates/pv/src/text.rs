@@ -205,3 +205,30 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
     }
     Ok(out)
 }
+
+/// `code` highlighted as the language `lang` (a name or an extension; plain when unknown), by line.
+pub(crate) fn highlight_code(code: &str, lang: &str, theme: &Theme) -> Vec<Vec<(Style, String)>> {
+    use syntect::util::LinesWithEndings;
+    let syntaxes = syntax_set();
+    let syntax = syntaxes.find_syntax_by_token(lang).unwrap_or_else(|| syntaxes.find_syntax_plain_text());
+    let syn_theme = syntax_theme(theme);
+    let mut hl = HighlightLines::new(syntax, &syn_theme);
+    LinesWithEndings::from(code)
+        .map(|line| {
+            hl.highlight_line(line, syntaxes)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(st, piece)| {
+                    let mut style = Style::new().fg(Color::Rgb(st.foreground.r, st.foreground.g, st.foreground.b));
+                    if st.font_style.contains(FontStyle::BOLD) {
+                        style = style.add_modifier(Modifier::BOLD);
+                    }
+                    if st.font_style.contains(FontStyle::ITALIC) {
+                        style = style.add_modifier(Modifier::ITALIC);
+                    }
+                    (style, piece.trim_end_matches(['\n', '\r']).replace('\t', "    "))
+                })
+                .collect()
+        })
+        .collect()
+}
