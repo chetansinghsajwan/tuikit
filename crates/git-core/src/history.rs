@@ -203,6 +203,10 @@ fn blob(repo: &gix::Repository, id: gix::ObjectId) -> Vec<u8> {
 /// A changed file's contents on both sides of a commit.
 struct Side {
     path: String,
+    /// Where a renamed file came from.
+    old_path: Option<String>,
+    /// The file mode before and after, when they differ (`100644` to `100755`).
+    modes: Option<(String, String)>,
     kind: Kind,
     before: Vec<u8>,
     after: Vec<u8>,
@@ -220,22 +224,21 @@ fn sides(repo: &gix::Repository, rev: &str) -> Result<Vec<Side>, Error> {
 
     let mut out = Vec::new();
     for change in list {
-        let (path, kind, before, after) = match change {
-            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => {
-                (location.to_str_lossy().into_owned(), Kind::Added, Vec::new(), blob(repo, id))
+        let mode = |m: gix::object::tree::EntryMode| format!("{:o}", m.value());
+        let (path, old_path, modes, kind, before, after) = match change {
+            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => (location.to_str_lossy().into_owned(), None, None, Kind::Added, Vec::new(), blob(repo, id)),
+            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => (location.to_str_lossy().into_owned(), None, None, Kind::Deleted, blob(repo, id), Vec::new()),
+            Change::Modification { location, previous_id, id, entry_mode, previous_entry_mode, .. } if entry_mode.is_blob() => {
+                let modes = (previous_entry_mode != entry_mode).then(|| (mode(previous_entry_mode), mode(entry_mode)));
+                (location.to_str_lossy().into_owned(), None, modes, Kind::Modified, blob(repo, previous_id), blob(repo, id))
             }
-            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => {
-                (location.to_str_lossy().into_owned(), Kind::Deleted, blob(repo, id), Vec::new())
-            }
-            Change::Modification { location, previous_id, id, entry_mode, .. } if entry_mode.is_blob() => {
-                (location.to_str_lossy().into_owned(), Kind::Modified, blob(repo, previous_id), blob(repo, id))
-            }
-            Change::Rewrite { location, source_id, id, .. } => {
-                (location.to_str_lossy().into_owned(), Kind::Renamed, blob(repo, source_id), blob(repo, id))
+            Change::Rewrite { location, source_location, source_id, id, entry_mode, source_entry_mode, .. } => {
+                let modes = (source_entry_mode != entry_mode).then(|| (mode(source_entry_mode), mode(entry_mode)));
+                (location.to_str_lossy().into_owned(), Some(source_location.to_str_lossy().into_owned()), modes, Kind::Renamed, blob(repo, source_id), blob(repo, id))
             }
             _ => continue, // trees, submodules
         };
-        out.push(Side { path, kind, before, after });
+        out.push(Side { path, old_path, modes, kind, before, after });
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(out)
@@ -279,9 +282,28 @@ pub struct Hunk {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilePatch {
     pub path: String,
+    /// Where a renamed file came from.
+    pub old_path: Option<String>,
+    /// The file mode before and after, when they differ.
+    pub modes: Option<(String, String)>,
     pub kind: Kind,
     pub binary: bool,
     pub hunks: Vec<Hunk>,
+    /// The whole file before and after (empty for binary files and for files over `FULL_TEXT_MAX`), for
+    /// highlighting the hunks in context.
+    pub before: String,
+    pub after: String,
+}
+
+/// Largest file kept whole in a `FilePatch` (bytes).
+const FULL_TEXT_MAX: usize = 1 << 20;
+
+/// The text of one side, or nothing when it is binary or too big to keep.
+pub(crate) fn full_text(bytes: &[u8]) -> String {
+    if bytes.len() > FULL_TEXT_MAX || bytes.contains(&0) {
+        return String::new();
+    }
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Lines of context around each change.
@@ -352,7 +374,7 @@ pub(crate) fn patch(repo: &gix::Repository, rev: &str) -> Result<Vec<FilePatch>,
         .map(|s| {
             let binary = s.before.contains(&0) || s.after.contains(&0);
             let hunks = if binary { Vec::new() } else { hunks(&s.before, &s.after) };
-            FilePatch { path: s.path, kind: s.kind, binary, hunks }
+            FilePatch { path: s.path, old_path: s.old_path, modes: s.modes, kind: s.kind, binary, hunks, before: full_text(&s.before), after: full_text(&s.after) }
         })
         .collect())
 }

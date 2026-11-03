@@ -476,3 +476,9 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 
 ## macOS build verified
 - The Nix darwin build of the whole configuration (crates workspace and the helix fork) succeeds on the user's Mac (checked after the `nu-core` fix in 4e7fcca). `nu`'s native CoreWLAN and IOBluetooth backends now compile and are on by default on macOS; their behaviour on real hardware is still untested here (see the limits listed in the `nu` section: network names need Location Services, no pairing or scanning on macOS).
+
+## pv: diffs drawn like delta
+- New `pv/src/diff.rs` draws every patch (commit preview in `gu`, `pick`, helix; the staged/unstaged file diff in the git panel): a header per file (`old → new` for renames, `mode 100644 → 100755`, a rule), hunk headers with the function they sit in (`@@ -a,b +c,d @@ fn name`, git's own rule plus common keywords), both line numbers, the sign, syntax-highlighted code (the whole old and new file highlighted as far as the last hunk, `syntect`, the design theme; files over 1 MiB are highlighted per hunk) over the faint red or green row, the changed words of a changed line on a stronger background (`git_core::intraline`: tokens diffed with imara-diff; lines with under 35 % in common are not marked), trailing whitespace on added lines in the error colour, conflict markers bold in the warning colour, and old beside new (`│` between) when the width is 140 or more.
+- `git-core`: `FilePatch` carries `old_path`, `modes`, and the whole `before` / `after` text; `words::intraline`; `hunks_of`.
+- `pv::Anchors` (files and hunks start rows) from `preview_commit_marked` / `preview_diff_marked`: `gu` jumps with `}` `{` (hunks) and `)` `(` (files), the git panel with `}` `{`.
+- Not done: moved-line detection, a configurable context size, folding of unchanged parts.

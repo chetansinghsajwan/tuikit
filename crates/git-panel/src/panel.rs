@@ -66,6 +66,8 @@ enum Mode {
 struct Preview {
     key: (PathBuf, bool, u16, u16, u64),
     lines: Vec<Line<'static>>,
+    /// Where the hunks start (for the jump keys).
+    hunks: Vec<usize>,
 }
 
 pub struct Panel {
@@ -267,6 +269,15 @@ impl Panel {
         self.keymap.rows()
     }
 
+    /// Scroll the diff to the next or previous hunk.
+    fn jump_hunk(&mut self, forward: bool) {
+        let Some(p) = &self.preview else { return };
+        let target = if forward { pv::Anchors::next(&p.hunks, self.pscroll) } else { pv::Anchors::prev(&p.hunks, self.pscroll) };
+        if let Some(t) = target {
+            self.pscroll = t;
+        }
+    }
+
     /// Run an action by id (what a key, the leader menu or a palette resolves to).
     pub fn run(&mut self, id: &'static str) -> Action {
         if !keys::owns(id) {
@@ -283,6 +294,8 @@ impl Panel {
             "nav.bottom" => self.cursor = self.items.len().saturating_sub(1),
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "preview.next_hunk" => self.jump_hunk(true),
+            "preview.prev_hunk" => self.jump_hunk(false),
             "item.open" => {
                 if let Some((_, rela, _)) = self.current() {
                     return Action::Open(self.root.join(rela));
@@ -541,11 +554,11 @@ impl Panel {
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let side = if staged { Side::Staged } else { Side::Unstaged };
-            let lines = match pv::preview_diff(&self.root, &rela, side, theme, &opts) {
-                Ok(l) => l,
-                Err(e) => vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
+            let (lines, hunks) = match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
+                Ok((l, a)) => (l, a.hunks),
+                Err(e) => (vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))], Vec::new()),
             };
-            self.preview = Some(Preview { key, lines });
+            self.preview = Some(Preview { key, lines, hunks });
             self.pscroll = 0;
         }
         self.pheight = usize::from(inner.height);

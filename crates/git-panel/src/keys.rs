@@ -26,6 +26,8 @@ pub const ACTIONS: &[Action] = &[
     b!("nav.bottom", "bottom", "go to the last row", ["G", "end"]),
     b!("preview.down", "scroll diff down", "scroll the diff down", ["ctrl-d"]),
     b!("preview.up", "scroll diff up", "scroll the diff up", ["ctrl-u"]),
+    b!("preview.next_hunk", "next hunk", "scroll the diff to the next hunk", ["}"]),
+    b!("preview.prev_hunk", "previous hunk", "scroll the diff to the previous hunk", ["{"]),
     b!("item.open", "open", "open the file in your editor", ["enter"]),
     a!("change.stage", "stage", "stage the file under the cursor", ["s", "leader s"]),
     a!("change.unstage", "unstage", "unstage the file under the cursor", ["u", "leader u"]),

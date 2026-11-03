@@ -6,12 +6,19 @@ mod graph;
 mod history;
 mod lines;
 mod status;
+mod words;
 mod worktree;
 
 pub use graph::{GraphRow, graph, simplify, topo_order};
 pub use history::{CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo};
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
+/// The hunks (3 lines of context) of the difference between two versions of a file.
+pub fn hunks_of(before: &[u8], after: &[u8]) -> Vec<Hunk> {
+    history::hunks(before, after)
+}
+
+pub use words::{Intraline, intraline};
 pub use worktree::{Operation, ResetMode, Side};
 
 use std::path::{Path, PathBuf};

@@ -4,6 +4,7 @@
 mod ansi;
 mod commit;
 mod config;
+mod diff;
 mod dir;
 mod git;
 pub mod markdown;
@@ -16,6 +17,9 @@ use ui::Theme;
 
 pub use ansi::to_ansi;
 pub use commit::render as preview_commit;
+pub use commit::render_marked as preview_commit_marked;
+pub use commit::render_file_diff_marked as preview_diff_marked;
+pub use diff::Anchors;
 pub use commit::render_file_diff as preview_diff;
 pub use config::Config;
 

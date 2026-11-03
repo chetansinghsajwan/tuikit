@@ -72,7 +72,7 @@ impl Repo {
             }
         };
         let binary = before.contains(&0) || after.contains(&0);
-        Ok(FilePatch { path: rela.to_string_lossy().into_owned(), kind, binary, hunks: if binary { Vec::new() } else { hunks(&before, &after) } })
+        Ok(FilePatch { path: rela.to_string_lossy().into_owned(), old_path: None, modes: None, kind, binary, hunks: if binary { Vec::new() } else { hunks(&before, &after) }, before: crate::history::full_text(&before), after: crate::history::full_text(&after) })
     }
 
     /// The checked-out branch, or `None` on a detached HEAD.

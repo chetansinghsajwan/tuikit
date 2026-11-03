@@ -27,8 +27,14 @@ fn rgb(c: ui::theme::Hex) -> SColor {
     }
 }
 
+/// The syntax definitions, loaded once (they are big).
+pub(crate) fn syntax_set() -> &'static SyntaxSet {
+    static SET: std::sync::OnceLock<SyntaxSet> = std::sync::OnceLock::new();
+    SET.get_or_init(two_face::syntax::extra_newlines)
+}
+
 /// Build a syntect theme from the design tokens, so highlighting follows them.
-fn syntax_theme(t: &Theme) -> SynTheme {
+pub(crate) fn syntax_theme(t: &Theme) -> SynTheme {
     let s = &t.colors.syntax;
     let plain = FontStyle::empty();
     let rules: &[(&str, ui::theme::Hex, FontStyle)] = &[
@@ -116,7 +122,7 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
     }
     let text = String::from_utf8_lossy(buf);
 
-    let syntaxes: SyntaxSet = two_face::syntax::extra_newlines();
+    let syntaxes: &SyntaxSet = syntax_set();
     // `flake.lock` is JSON whatever its extension says.
     let by_name = if path.file_name().is_some_and(|n| n == "flake.lock") { syntaxes.find_syntax_by_name("JSON") } else { None };
     let syntax = by_name

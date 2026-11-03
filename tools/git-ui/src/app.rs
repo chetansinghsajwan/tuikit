@@ -184,6 +184,8 @@ struct ListState {
 struct Preview {
     key: (Focus, String, u16),
     lines: Vec<Line<'static>>,
+    /// Where the files and hunks of the patch start (for the jump keys).
+    anchors: pv::Anchors,
 }
 
 pub struct App {
@@ -439,6 +441,16 @@ impl App {
         self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
     }
 
+    /// Scroll the diff to the next or previous hunk (or file).
+    fn jump_diff(&mut self, forward: bool, files: bool) {
+        let Some(p) = &self.preview else { return };
+        let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
+        let target = if forward { pv::Anchors::next(marks, self.pscroll) } else { pv::Anchors::prev(marks, self.pscroll) };
+        if let Some(t) = target {
+            self.pscroll = t;
+        }
+    }
+
     // ---- tabs and search --------------------------------------------------
 
     /// The tab that shows `focus`.
@@ -619,6 +631,10 @@ impl App {
             }
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "preview.next_hunk" => self.jump_diff(true, false),
+            "preview.prev_hunk" => self.jump_diff(false, false),
+            "preview.next_file" => self.jump_diff(true, true),
+            "preview.prev_file" => self.jump_diff(false, true),
             "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
                 if let Some(li) = li {
                     let st = &mut self.lists[li];
@@ -1259,11 +1275,11 @@ impl App {
         let key = (which, rev.clone(), inner.width);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
-            let lines = match pv::preview_commit(&self.root, &rev, theme, &opts) {
-                Ok(l) => l,
-                Err(e) => vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
+            let (lines, anchors) = match pv::preview_commit_marked(&self.root, &rev, theme, &opts) {
+                Ok(r) => r,
+                Err(e) => (vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))], Default::default()),
             };
-            self.preview = Some(Preview { key, lines });
+            self.preview = Some(Preview { key, lines, anchors });
             self.pscroll = 0;
         }
         self.pheight = usize::from(inner.height);
