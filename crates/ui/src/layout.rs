@@ -136,7 +136,8 @@ pub fn workbench(main: Rect, left: u16, right: u16, bottom: u16) -> Workbench {
     const MIN_EDITOR_HEIGHT: u16 = 4;
     let ribbon_h = u16::from(main.height > MIN_EDITOR_HEIGHT);
     let body = Rect { height: main.height - ribbon_h, ..main };
-    let third = body.width / 3;
+    // A side dock takes at most two fifths of the width (a focused files pane widens up to that for a long name).
+    let third = body.width * 2 / 5;
     let mut left = left.min(third);
     let mut right = right.min(third);
     while body.width.saturating_sub(left + right) < MIN_EDITOR_WIDTH.min(body.width) && (left > 0 || right > 0) {
@@ -186,9 +187,9 @@ mod workbench_tests {
         assert_eq!(w.editor, Rect::new(2, 1, 90, 29));
         assert_eq!(w.ribbon, Rect::new(2, 30, 90, 1));
         assert_eq!((w.left.width, w.right.width, w.left.height, w.right.height), (0, 0, 0, 0));
-        // At most a third of the width per side and half of the height.
+        // At most two fifths of the width per side (but the editor keeps 20 columns) and half of the height.
         let w = workbench(main, 80, 80, 100);
-        assert_eq!((w.left.width, w.right.width), (30, 30));
+        assert_eq!((w.left.width, w.right.width), (35, 35));
         assert_eq!(w.bottom.height, 14);
         assert!(w.editor.width >= 20);
         // The pieces never overlap or leave the area.

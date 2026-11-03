@@ -453,6 +453,14 @@ impl Panel {
         pinned.into_iter().chain(self.offset..(self.offset + take).min(self.rows.len())).collect()
     }
 
+    /// The width the pane needs to show the rows on screen without cutting a name off: the longest one
+    /// (guides, icon, name, the git sign) and the pane's own border and padding.
+    pub fn wanted_width(&self, theme: &Theme) -> u16 {
+        let chrome = 100 - Pane::new(theme).inner(Rect::new(0, 0, 100, 10)).width;
+        let longest = self.visible().into_iter().filter_map(|i| self.rows.get(i)).map(|r| usize::from(r.depth) * 2 + 2 + r.name.chars().count() + 5).max().unwrap_or(0);
+        (longest as u16).saturating_add(chrome)
+    }
+
     /// Path under the cursor.
     pub fn current(&self) -> Option<&Path> {
         self.rows.get(self.cursor).map(|r| r.path.as_path())
@@ -1138,6 +1146,24 @@ mod tests {
 
     fn panel(d: &Path) -> Panel {
         Panel::new(d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() })
+    }
+
+    #[test]
+    fn wanted_width_fits_the_longest_name_on_screen() {
+        let d = tree("wanted");
+        let long = "a-name-that-is-forty-characters-long.txt";
+        fs::write(d.join(long), "x").unwrap();
+        let mut p = panel(&d);
+        let theme = Theme::default();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 30, 12));
+        p.render(Rect::new(0, 0, 30, 12), &mut buf, &theme, true);
+        let want = p.wanted_width(&theme);
+        assert!(want >= 40 + 2 + 4, "{want}");
+        // Given that width the name is drawn whole.
+        let mut wide = Buffer::empty(Rect::new(0, 0, want, 12));
+        p.render(Rect::new(0, 0, want, 12), &mut wide, &theme, true);
+        let text: String = (0..12).map(|y| (0..want).map(|x| wide[(x, y)].symbol().to_string()).collect::<String>()).collect::<Vec<_>>().join("\n");
+        assert!(text.contains(long), "{text}");
     }
 
     #[test]
