@@ -137,7 +137,7 @@ fn context_of(lines: &[&str], from: usize) -> Option<String> {
 fn cells_of(text: &str, pieces: Option<&[(Style, String)]>, strong: &[Range<usize>], bg: Option<Color>, strong_bg: Color, base: Style) -> Vec<Cell> {
     let mut out = Vec::new();
     let mut offset = 0usize;
-    let mut push = |c: char, at: usize, style: Style, out: &mut Vec<Cell>| {
+    let push = |c: char, at: usize, style: Style, out: &mut Vec<Cell>| {
         let mut style = style;
         if let Some(bg) = bg {
             style = style.bg(if strong.iter().any(|r| r.contains(&at)) { strong_bg } else { bg });
@@ -164,11 +164,6 @@ fn cells_of(text: &str, pieces: Option<&[(Style, String)]>, strong: &[Range<usiz
         }
     }
     out
-}
-
-/// The display width of a cell row.
-fn width_of(cells: &[Cell]) -> usize {
-    cells.iter().map(|(c, _)| c.width().unwrap_or(0)).sum()
 }
 
 /// `cells` as spans, clipped to `width` columns when given and padded to it with `fill` (the row tint).

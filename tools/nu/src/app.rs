@@ -216,7 +216,7 @@ impl App {
                 return Quit::No;
             }
             Mode::ForgetWifi(ssid) => {
-                if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+                if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
                     match self.wifi.forget(&ssid) {
                         Ok(()) => self.say(format!("forgot {ssid}"), false),
                         Err(e) => self.say(e.to_string(), true),
@@ -226,7 +226,7 @@ impl App {
                 return Quit::No;
             }
             Mode::ForgetDevice(address, name) => {
-                if matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+                if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
                     match self.bt.remove(&address) {
                         Ok(()) => self.say(format!("forgot {name}"), false),
                         Err(e) => self.say(e.to_string(), true),
@@ -636,8 +636,8 @@ impl App {
                 ui::prompt::cursor(buf, area, &label, input.visual_cursor());
                 ui::prompt::line(theme, &label, &"•".repeat(input.value().chars().count()))
             }
-            Mode::ForgetWifi(ssid) => Line::from(Span::styled(format!("Forget {ssid}? (y/n)"), Style::new().fg(c.warning.into()))),
-            Mode::ForgetDevice(_, name) => Line::from(Span::styled(format!("Forget {name}? (y/n)"), Style::new().fg(c.warning.into()))),
+            Mode::ForgetWifi(ssid) => Line::from(Span::styled(format!("Forget {ssid}? (d again or y)"), Style::new().fg(c.warning.into()))),
+            Mode::ForgetDevice(_, name) => Line::from(Span::styled(format!("Forget {name}? (d again or y)"), Style::new().fg(c.warning.into()))),
             Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
             Mode::Normal => match &self.message {
                 Some((m, err)) => Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into()))),

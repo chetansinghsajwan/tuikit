@@ -238,7 +238,7 @@ impl Panel {
             Mode::Commit(input) => return self.commit_key(input, ev, key),
             Mode::Discard(rela, untracked) => {
                 return match key.code {
-                    KeyCode::Char('y' | 'Y') | KeyCode::Enter => {
+                    KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
                         let r = self.repo.discard(&rela, untracked);
                         self.finish(if untracked { "deleted" } else { "discarded" }, r)
                     }
@@ -426,8 +426,8 @@ impl Panel {
                 message.into_iter().chain(std::iter::once(prompt)).collect()
             }
             Mode::Discard(rela, untracked) => {
-                let what = if *untracked { "Delete untracked" } else { "Discard changes to" };
-                vec![Line::from(Span::styled(format!("{what} {}? (y/n)", rela.display()), Style::new().fg(c.warning.into())))]
+                let what = if *untracked { "Delete" } else { "Discard" };
+                vec![Line::from(Span::styled(format!("{what} {}? d again", rela.display()), Style::new().fg(c.warning.into())))]
             }
             Mode::Normal => message.into_iter().collect(),
         }
@@ -678,22 +678,22 @@ mod tests {
         let d = repo("discard");
         let mut p = Panel::new(&d).unwrap();
         on(&mut p, "b.txt"); // staged
-        press(&mut p, "x");
+        press(&mut p, "d");
         assert!(matches!(p.mode, Mode::Normal), "staged files are not discarded");
         assert!(p.message.as_ref().is_some_and(|(_, err)| *err));
 
         on(&mut p, "a.txt");
-        press(&mut p, "x");
-        assert!(draw(&mut p).join("\n").contains("Discard changes to a.txt? (y/n)"));
+        press(&mut p, "d");
+        assert!(draw(&mut p).join("\n").contains("Discard a.txt? d again"));
         assert_eq!(press(&mut p, "n"), Action::None);
         assert_eq!(fs::read_to_string(d.join("a.txt")).unwrap(), "a1\nA2 changed\n");
-        press(&mut p, "x");
-        assert_eq!(press(&mut p, "y"), Action::Changed);
+        press(&mut p, "d");
+        assert_eq!(press(&mut p, "d"), Action::Changed);
         assert_eq!(fs::read_to_string(d.join("a.txt")).unwrap(), "a1\na2\n");
 
         on(&mut p, "new.txt");
-        press(&mut p, "x");
-        assert!(draw(&mut p).join("\n").contains("Delete untracked new.txt? (y/n)"));
+        press(&mut p, "d");
+        assert!(draw(&mut p).join("\n").contains("Delete new.txt? d again"));
         assert_eq!(press(&mut p, "y"), Action::Changed);
         assert!(!d.join("new.txt").exists());
     }

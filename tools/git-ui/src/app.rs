@@ -227,6 +227,8 @@ pub struct App {
     /// The current commit search.
     search: Option<String>,
     filter: Filter,
+    /// The options offered while a filter prompt is open.
+    suggest: ui::prompt::Suggest,
     /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
     watch: Option<ui::watch::Watch>,
 }
@@ -270,6 +272,7 @@ impl App {
             detail: false,
             search: None,
             filter: Filter::default(),
+            suggest: Default::default(),
             watch,
         };
         app.reload_all();
@@ -589,10 +592,30 @@ impl App {
             "search.next" => self.search_step(1),
             "search.prev" => self.search_step(-1),
             "view.detail" => self.detail = !self.detail,
-            "filter.text" => self.mode = Mode::Prompt(PromptKind::FilterText, Input::new(self.filter.text.clone())),
-            "filter.author" => self.mode = Mode::Prompt(PromptKind::FilterAuthor, Input::new(self.filter.author.clone())),
-            "filter.branch" => self.mode = Mode::Prompt(PromptKind::FilterBranch, Input::new(self.filter.branch.clone())),
-            "filter.since" => self.mode = Mode::Prompt(PromptKind::FilterSince, Input::new(self.filter.since.as_ref().map(|(s, _)| s.clone()).unwrap_or_default())),
+            "filter.text" => {
+                self.suggest = Default::default();
+                self.mode = Mode::Prompt(PromptKind::FilterText, Input::new(self.filter.text.clone()));
+            }
+            "filter.author" => {
+                let mut authors: Vec<(usize, String)> = Vec::new();
+                for k in self.repo.commits_all(TAB_LOG_LIMIT).unwrap_or_default() {
+                    match authors.iter_mut().find(|(_, a)| *a == k.author) {
+                        Some((n, _)) => *n += 1,
+                        None => authors.push((1, k.author)),
+                    }
+                }
+                authors.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+                self.suggest = ui::prompt::Suggest::new(authors.into_iter().map(|(_, a)| a).collect());
+                self.mode = Mode::Prompt(PromptKind::FilterAuthor, Input::new(self.filter.author.clone()));
+            }
+            "filter.branch" => {
+                self.suggest = ui::prompt::Suggest::new(self.branches.iter().map(|b| b.name.clone()).collect());
+                self.mode = Mode::Prompt(PromptKind::FilterBranch, Input::new(self.filter.branch.clone()));
+            }
+            "filter.since" => {
+                self.suggest = ui::prompt::Suggest::new(["1d", "3d", "7d", "2w", "1m", "3m", "6m", "1y"].map(String::from).to_vec());
+                self.mode = Mode::Prompt(PromptKind::FilterSince, Input::new(self.filter.since.as_ref().map(|(s, _)| s.clone()).unwrap_or_default()));
+            }
             "filter.clear" => {
                 self.filter = Filter::default();
                 self.refilter("no filters");
@@ -890,6 +913,29 @@ impl App {
     }
 
     fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event, key: &KeyEvent) {
+        // Filter prompts offer options: up and down choose, tab fills the line in.
+        if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince) {
+            let ctrl = key.modifiers.contains(ratatui::crossterm::event::KeyModifiers::CONTROL);
+            let step = match key.code {
+                KeyCode::Down | KeyCode::Tab => Some(1),
+                KeyCode::Up | KeyCode::BackTab => Some(-1),
+                KeyCode::Char('n') if ctrl => Some(1),
+                KeyCode::Char('p') if ctrl => Some(-1),
+                _ => None,
+            };
+            if let Some(d) = step {
+                self.suggest.typed(input.value());
+                if matches!(key.code, KeyCode::Tab) {
+                    if let Some(s) = self.suggest.current() {
+                        input = Input::new(s);
+                    }
+                } else {
+                    self.suggest.step(d);
+                }
+                self.mode = Mode::Prompt(kind, input);
+                return;
+            }
+        }
         match key.code {
             KeyCode::Esc => {}
             KeyCode::Enter => {
@@ -992,13 +1038,15 @@ impl App {
             }
             _ => {
                 input.handle_event(ev);
+                self.suggest.typed(input.value());
                 self.mode = Mode::Prompt(kind, input);
             }
         }
     }
 
     fn confirm_key(&mut self, c: Confirm, key: &KeyEvent) {
-        if !matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) {
+        let again = matches!(c, Confirm::DeleteBranch { .. } | Confirm::DeleteTag(_) | Confirm::DeleteRemote(_) | Confirm::DropStash(_));
+        if !(matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) || (again && matches!(key.code, KeyCode::Char('d' | 'D')))) {
             return;
         }
         match c {
@@ -1312,19 +1360,22 @@ impl App {
                     PromptKind::Reword => "message: ",
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
+                if matches!(kind, PromptKind::FilterAuthor | PromptKind::FilterBranch | PromptKind::FilterSince) {
+                    self.suggest.render(buf, area, theme);
+                }
                 ui::prompt::line(theme, label, input.value())
             }
             Mode::Confirm(cf) => {
                 let q = match cf {
-                    Confirm::DeleteBranch { name, force } => format!("{} branch {name}? (y/n)", if *force { "Force-delete" } else { "Delete" }),
+                    Confirm::DeleteBranch { name, force } => format!("{} branch {name}? (d again or y)", if *force { "Force-delete" } else { "Delete" }),
                     Confirm::Merge(name) => format!("Merge {name} into {}? (y/n)", self.files.branch()),
-                    Confirm::DropStash(i) => format!("Drop stash@{{{i}}}? (y/n)"),
+                    Confirm::DropStash(i) => format!("Drop stash@{{{i}}}? (d again or y)"),
                     Confirm::Rebase(name) => format!("Rebase {} onto {name}? (y/n)", self.files.branch()),
                     Confirm::Revert(_) => "Revert this commit? (y/n)".to_string(),
                     Confirm::Reset { .. } => "Reset hard to this commit and lose uncommitted changes? (y/n)".to_string(),
                     Confirm::ForcePush => format!("Force-push {} (with lease)? (y/n)", self.files.branch()),
-                    Confirm::DeleteTag(name) => format!("Delete tag {name}? (y/n)"),
-                    Confirm::DeleteRemote(name) => format!("Delete {name} on the remote? (y/n)"),
+                    Confirm::DeleteTag(name) => format!("Delete tag {name}? (d again or y)"),
+                    Confirm::DeleteRemote(name) => format!("Delete {name} on the remote? (d again or y)"),
                 };
                 Line::from(Span::styled(q, Style::new().fg(c.warning.into())))
             }
@@ -1348,9 +1399,9 @@ impl App {
             return "/ search  n N next  space f filter  p diff  y copy hash  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
         }
         match self.focus {
-            Focus::Files => "s stage  u unstage  a all (toggle)  x discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
+            Focus::Files => "s stage  u unstage  a all (toggle)  d discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
-            Focus::Commits => "enter checkout  C cherry-pick  R revert  w reword  b branch  t tag  space z reset  space space commands  ? keys",
+            Focus::Commits => "enter checkout  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
         }
     }
@@ -1549,6 +1600,23 @@ mod tests {
     }
 
     #[test]
+    fn filter_prompts_offer_the_authors_and_tab_fills_one_in() {
+        let d = repo("suggest");
+        commit_file(&d, "b.txt", "b\n", "add feature alpha");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        press(&mut app, " ");
+        press(&mut app, "f");
+        press(&mut app, "a");
+        assert!(!app.suggest.is_empty(), "the authors are offered");
+        let who = app.suggest.current().unwrap();
+        assert!(screen(&mut app).join("\n").contains(&who), "the options are drawn");
+        app.handle_event(&key(KeyCode::Tab));
+        app.handle_event(&key(KeyCode::Enter));
+        assert_eq!(app.filter.author, who);
+    }
+
+    #[test]
     fn filters_narrow_the_graph_and_keep_it_connected() {
         let d = repo("filter");
         commit_file(&d, "b.txt", "b\n", "add feature alpha");
@@ -1664,7 +1732,7 @@ mod tests {
         git(&d, &["branch", "taken-a"]);
         app.reload_all();
         app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature")).unwrap();
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..7 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1672,7 +1740,7 @@ mod tests {
         assert!(app.branches.iter().any(|b| b.name == "x/a") && app.branches.iter().any(|b| b.name == "x/c"), "{:?}", app.message);
         let before: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
         app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x")).unwrap();
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..1 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1682,7 +1750,7 @@ mod tests {
         // A name that is not valid says so and changes nothing.
         let snapshot = after.clone();
         app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..7 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1701,7 +1769,7 @@ mod tests {
         press(&mut app, "3");
         // A tag.
         app.lists[0].cursor = ref_row(&app, "v1");
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..2 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1709,7 +1777,7 @@ mod tests {
         assert!(app.branches.iter().any(|b| b.name == "v2") && app.branches.iter().all(|b| b.name != "v1"), "{:?}", app.message);
         // A folder: everything under `feature/` moves to `feat/`.
         app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..7 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1718,7 +1786,7 @@ mod tests {
         assert!(names.contains(&"feat/login") && names.contains(&"feat/signup") && !names.iter().any(|n| n.starts_with("feature/")), "{names:?} {:?}", app.message);
         // A section cannot be renamed.
         app.lists[0].cursor = 0;
-        press(&mut app, "R");
+        press(&mut app, "r");
         assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
     }
 
@@ -1901,7 +1969,7 @@ mod tests {
         let mut app = App::new(&d).unwrap();
         press(&mut app, "2");
         // Reword the last commit.
-        press(&mut app, "w");
+        press(&mut app, "r");
         for _ in 0..6 {
             app.handle_event(&key(KeyCode::Backspace));
         }
@@ -1955,7 +2023,7 @@ mod tests {
         assert!(d.join("m.txt").exists() && d.join("f.txt").exists(), "{:?}", app.message);
         // Rename it.
         app.lists[0].cursor = at(&app, "feat");
-        press(&mut app, "R");
+        press(&mut app, "r");
         for _ in 0..4 {
             app.handle_event(&key(KeyCode::Backspace));
         }

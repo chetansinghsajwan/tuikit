@@ -59,7 +59,7 @@ const BRANCHES: &[Action] = &[
     action("branch.force_delete", "force-delete branch", "delete the local branch even if it is not merged (asks first)", &["D"]),
     action("branch.merge", "merge", "merge the branch into the checked-out one (asks first)", &["M", "leader m"]),
     action("branch.rebase", "rebase onto", "replay the checked-out branch on top of this one (asks first)", &["B", "leader b"]),
-    action("branch.rename", "rename", "rename the branch, tag, remote branch (pushes the new name, deletes the old), remote or folder under the cursor", &["R", "leader e"]),
+    action("branch.rename", "rename", "rename the branch, tag, remote branch (pushes the new name, deletes the old), remote or folder under the cursor", &["r", "leader e"]),
 ];
 
 const COMMITS: &[Action] = &[
@@ -78,7 +78,7 @@ const COMMITS: &[Action] = &[
     action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["leader a"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
     action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
-    action("commit.reword", "reword", "change the message of the last commit", &["w", "leader w"]),
+    action("commit.reword", "reword", "change the message of the last commit", &["r", "leader w"]),
     action("commit.branch", "new branch here", "create a branch at the commit and switch to it", &["b", "leader n"]),
     action("commit.tag", "tag", "create a tag at the commit", &["t", "leader t"]),
     action("commit.reset_soft", "reset soft", "move the branch here, keep the index and the work tree", &["leader z s"]),
