@@ -56,6 +56,26 @@ type Highlighted = Vec<Vec<(Style, String)>>;
 
 /// Highlight `text` as the language of `path`, line by line.
 fn highlight(text: &str, path: &str, theme: &Theme, upto: usize) -> Highlighted {
+    highlight_window(text, path, theme, 0, upto)
+}
+
+/// How many lines before a window are parsed (and not kept) so the window starts in the right state.
+const LEAD_IN: usize = 10;
+
+/// Lines longer than this are not highlighted (Markdown prose and minified files take the highlighter milliseconds a line).
+const LONG_LINE: usize = 240;
+
+/// How many lines one rendering highlights at most; the rest of a huge diff is drawn plain.
+const HIGHLIGHT_BUDGET: usize = 1500;
+
+thread_local! {
+    static BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(HIGHLIGHT_BUDGET) };
+}
+
+/// Highlight lines `from..upto` of `text`: the lines before are only parsed from `LEAD_IN` lines back, and come
+/// out empty. Highlighting is by far the slowest part of a diff, so it covers what a hunk shows and no more.
+fn highlight_window(text: &str, path: &str, theme: &Theme, from: usize, upto: usize) -> Highlighted {
+    let start = from.saturating_sub(LEAD_IN);
     let syntaxes = syntax_set();
     let name = std::path::Path::new(path);
     let syntax = syntaxes
@@ -66,10 +86,18 @@ fn highlight(text: &str, path: &str, theme: &Theme, upto: usize) -> Highlighted 
         .unwrap_or_else(|| syntaxes.find_syntax_plain_text());
     let theme = syntax_theme(theme);
     let mut hl = HighlightLines::new(syntax, &theme);
-    let mut out = Vec::new();
-    // Only as far as the last line a hunk shows: a big file is not highlighted to its end for a change near its top.
-    for line in LinesWithEndings::from(text).take(upto) {
+    let mut out: Vec<Vec<(Style, String)>> = vec![Vec::new(); start];
+    for (n, line) in LinesWithEndings::from(text).enumerate().skip(start).take(upto.saturating_sub(start)) {
+        let spent = BUDGET.with(|b| { let left = b.get(); b.set(left.saturating_sub(1)); left == 0 });
+        if spent || line.len() > LONG_LINE {
+            out.push(Vec::new());
+            continue;
+        }
         let pieces = hl.highlight_line(line, syntaxes).unwrap_or_default();
+        if n < from {
+            out.push(Vec::new());
+            continue;
+        }
         out.push(
             pieces
                 .into_iter()
@@ -209,7 +237,7 @@ struct Row {
 }
 
 /// The rows of one hunk with the syntax and word marks applied.
-fn hunk_rows(h: &Hunk, file: &FilePatch, old_hl: &Highlighted, new_hl: &Highlighted, theme: &Theme) -> Vec<Row> {
+fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
     let c = &theme.colors;
     let (add, del) = (Color::from(c.git.added), Color::from(c.git.deleted));
     let (add_bg, del_bg) = (git::tint(theme, add), git::tint(theme, del));
@@ -217,6 +245,12 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, old_hl: &Highlighted, new_hl: &Highligh
 
     // Where the hunk's lines sit in the highlighted sides (or in the per-hunk highlight when the file is not kept whole).
     let whole = !file.before.is_empty() || !file.after.is_empty();
+    let (old_hl, new_hl) = if whole {
+        let (os, ns) = (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize);
+        (highlight_window(&file.before, &file.path, theme, os, os + h.old_len as usize), highlight_window(&file.after, &file.path, theme, ns, ns + h.new_len as usize))
+    } else {
+        (Vec::new(), Vec::new())
+    };
     let (hunk_old, hunk_new) = if whole { (Vec::new(), Vec::new()) } else { let (o, n) = hunk_sides(h); (highlight(&o, &file.path, theme, usize::MAX), highlight(&n, &file.path, theme, usize::MAX)) };
     let (mut old_idx, mut new_idx) = if whole { (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize) } else { (0, 0) };
     let (mut old_no, mut new_no) = (h.old_start, h.new_start);
@@ -296,6 +330,7 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, old_hl: &Highlighted, new_hl: &Highligh
 
 /// The drawn patch of `files`: lines (at most `limit`) and where the files and hunks start.
 pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) -> (Vec<Line<'static>>, Anchors) {
+    BUDGET.with(|b| b.set(HIGHLIGHT_BUDGET));
     let c = &theme.colors;
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut anchors = Anchors::default();
@@ -338,10 +373,6 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
             out.push(Line::from(Span::styled("  binary file not shown", muted)));
             continue;
         }
-        let (old_hl, new_hl) = if f.before.is_empty() && f.after.is_empty() { (Vec::new(), Vec::new()) } else { {
-            let end = |new: bool| f.hunks.iter().map(|h| if new { h.new_start + h.new_len } else { h.old_start + h.old_len }).max().unwrap_or(0) as usize;
-            (highlight(&f.before, &f.path, theme, end(false)), highlight(&f.after, &f.path, theme, end(true)))
-        } };
         let after_lines: Vec<&str> = f.after.lines().collect();
         let before_lines: Vec<&str> = f.before.lines().collect();
         for h in &f.hunks {
@@ -359,7 +390,7 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
                 header.push(Span::styled(format!(" {ctx}"), muted.add_modifier(Modifier::BOLD)));
             }
             out.push(Line::from(header));
-            let rows = hunk_rows(h, f, &old_hl, &new_hl, theme);
+            let rows = hunk_rows(h, f, theme);
             if side_by_side {
                 side_rows(&rows, digits, width.unwrap_or(0), theme, &mut out, limit);
             } else {

@@ -7,9 +7,9 @@ edition = "2024"
 git-core = { version = "0.1.0", path = "../git-core" }
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }
-syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
+syntect = { version = "5.3.0", default-features = false, features = ["default-onig"] }
 toml = "1.1.8"
-two-face = { version = "0.5.2", default-features = false, features = ["syntect-fancy"] }
+two-face = { version = "0.5.2", default-features = false, features = ["syntect-onig"] }
 pulldown-cmark = { version = "0.13", default-features = false }
 ui = { version = "0.1.0", path = "../ui" }
 unicode-width = "0.2.2"
