@@ -13,6 +13,7 @@ pub mod list;
 pub mod popup;
 pub mod prompt;
 pub mod recent;
+pub mod subject;
 pub mod pane;
 pub mod tabs;
 pub mod theme;

@@ -1309,7 +1309,11 @@ impl App {
                     }
                     spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
                 }
-                spans.push(Span::styled(k.subject.clone(), if hit { Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD) } else { fg }));
+                if hit {
+                    spans.push(Span::styled(k.subject.clone(), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)));
+                } else {
+                    spans.extend(ui::subject::spans(theme, &k.subject, fg));
+                }
                 (Line::from(spans), ago(k.time))
             }
             _ => {
@@ -1438,7 +1442,7 @@ impl App {
             return "/ search  n N next  space f filter  p diff  y copy hash  enter checkout  C cherry-pick  space a/g branches/graph  [ ] tabs  ? keys";
         }
         match self.focus {
-            Focus::Files => "s stage  u unstage  a all (toggle)  d discard  c commit  enter edit  [ ] tabs  space space commands  ? keys",
+            Focus::Files => "s stage  u unstage  a all  d discard  t tree/list  c commit  enter edit  [ ] tabs  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
             Focus::Commits => "enter checkout  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",

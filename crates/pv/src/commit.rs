@@ -71,8 +71,13 @@ pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> R
         Line::default(),
     ];
     for (i, l) in info.message.lines().enumerate() {
-        let style = if i == 0 { fg.add_modifier(Modifier::BOLD) } else { fg };
-        out.push(Line::from(Span::styled(format!("  {l}"), style)));
+        if i == 0 {
+            let mut spans = vec![Span::raw("  ")];
+            spans.extend(ui::subject::spans(theme, l, fg.add_modifier(Modifier::BOLD)));
+            out.push(Line::from(spans));
+        } else {
+            out.push(Line::from(Span::styled(format!("  {l}"), fg)));
+        }
     }
     out.push(Line::default());
 
