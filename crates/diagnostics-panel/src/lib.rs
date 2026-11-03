@@ -170,6 +170,8 @@ impl Panel {
         match code {
             KeyCode::Esc | KeyCode::Char('q') => return Action::Close,
             KeyCode::Char('c') if ctrl => return Action::Close,
+            KeyCode::Char('k') if ctrl => self.move_by(-5),
+            KeyCode::Char('j') if ctrl => self.move_by(5),
             KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
             KeyCode::Char('p') if ctrl => self.move_by(-1),

@@ -394,6 +394,8 @@ impl Help {
         }
         match key.code {
             KeyCode::Char('/') => self.searching = true,
+            KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => self.scroll += 5,
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => self.scroll = self.scroll.saturating_sub(5),
             KeyCode::Down | KeyCode::Char('j') => self.scroll += 1,
             KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
             KeyCode::PageDown => self.scroll += 10,
