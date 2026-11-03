@@ -3444,7 +3444,10 @@ dependencies = [
 name = "mdexport"
 version = "0.1.0"
 dependencies = [
+ "fontdb",
  "pulldown-cmark",
+ "serde",
+ "toml 1.1.8+spec-1.1.0",
  "typst",
  "typst-assets",
  "typst-pdf",

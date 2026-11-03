@@ -16,3 +16,6 @@ pulldown-cmark = { version = "0.13", default-features = false }
 typst = "0.14"
 typst-pdf = "0.14"
 typst-assets = { version = "0.14", features = ["fonts"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
+fontdb = "0.23"

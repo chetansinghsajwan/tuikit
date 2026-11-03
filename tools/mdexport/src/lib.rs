@@ -2,7 +2,10 @@
 //! other program is run). The fonts are the ones `typst-assets` embeds, so the result is the same on
 //! every machine.
 
+mod settings;
 mod world;
+
+pub use settings::Settings;
 
 use pulldown_cmark::{Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::HashMap;
@@ -12,34 +15,70 @@ use std::path::{Path, PathBuf};
 pub struct Export {
     /// The folder relative image paths start from (the Markdown file's folder).
     pub base: Option<PathBuf>,
+    pub settings: Settings,
+}
+
+/// The font families that can be used: the embedded ones and the ones installed on the machine.
+pub fn font_families() -> Vec<String> {
+    let mut fonts = world::embedded_fonts();
+    fonts.extend(world::system_fonts(None).0);
+    world::families(&fonts)
 }
 
 /// The PDF of `markdown`.
 pub fn to_pdf(markdown: &str, export: &Export) -> Result<Vec<u8>, String> {
-    let source = typst_source(markdown, export.base.as_deref());
-    world::compile(source, export.base.clone())
+    let mut settings = export.settings.clone();
+    let mut fonts = world::embedded_fonts();
+    // The machine's fonts are only read when a font that is not embedded is asked for.
+    let have = world::families(&fonts);
+    if !have.contains(&settings.font) || !have.contains(&settings.mono) {
+        let (system, aliases) = world::system_fonts(Some(&[settings.font.as_str(), settings.mono.as_str()]));
+        fonts.extend(system);
+        for name in [&mut settings.font, &mut settings.mono] {
+            if let Some(real) = aliases.get(name.as_str()) {
+                *name = real.clone();
+            }
+        }
+    }
+    let source = typst_source_with(markdown, export.base.as_deref(), &settings);
+    world::compile(source, export.base.clone(), fonts)
 }
 
 /// What the PDF is made from: the Typst markup of `markdown`.
 pub fn typst_source(markdown: &str, base: Option<&Path>) -> String {
-    let mut t = Typst { out: String::new(), base, lists: Vec::new(), notes: HashMap::new(), stack: Vec::new(), image_alt: None, image_src: String::new(), skip: 0 };
-    t.run(markdown);
-    format!("{PREAMBLE}{}", t.out)
+    typst_source_with(markdown, base, &Settings::default())
 }
 
-const PREAMBLE: &str = r##"#set page(paper: "a4", margin: (x: 2.2cm, y: 2.4cm), numbering: "1")
-#set text(font: "Libertinus Serif", size: 11pt)
-#set par(justify: true, leading: 0.65em)
-#set list(indent: 0.6em)
-#set enum(indent: 0.6em)
-#show raw: set text(font: "DejaVu Sans Mono", size: 9pt)
-#show raw.where(block: true): block.with(fill: luma(244), inset: 8pt, radius: 3pt, width: 100%)
+/// `typst_source` with these settings.
+pub fn typst_source_with(markdown: &str, base: Option<&Path>, settings: &Settings) -> String {
+    let mut t = Typst { out: String::new(), base, lists: Vec::new(), notes: HashMap::new(), stack: Vec::new(), image_alt: None, image_src: String::new(), skip: 0 };
+    t.run(markdown);
+    format!("{}{}", preamble(settings), t.out)
+}
+
+/// The page and text setup of the document.
+fn preamble(s: &Settings) -> String {
+    let paper = if s.paper.eq_ignore_ascii_case("letter") { "us-letter" } else { "a4" };
+    let numbering = if s.page_numbers { ", numbering: \"1\"" } else { "" };
+    format!(
+        "#set page(paper: \"{paper}\", margin: (x: {m}cm, y: {m2}cm){numbering})\n#set text(font: ({font}, \"Libertinus Serif\"), size: {size}pt)\n#set par(justify: {justify}, leading: 0.65em)\n#set list(indent: 0.6em)\n#set enum(indent: 0.6em)\n#show raw: set text(font: ({mono}, \"DejaVu Sans Mono\"), size: {raw}pt)\n{REST}",
+        m = s.margin_cm,
+        m2 = s.margin_cm + 0.2,
+        font = string(&s.font),
+        mono = string(&s.mono),
+        size = s.size_pt,
+        raw = (s.size_pt * 0.82 * 10.0).round() / 10.0,
+        justify = s.justify,
+    )
+}
+
+const REST: &str = r##"#show raw.where(block: true): block.with(fill: luma(244), inset: 8pt, radius: 3pt, width: 100%)
 #show raw.where(block: false): box.with(fill: luma(240), inset: (x: 3pt), outset: (y: 3pt), radius: 2pt)
 #show link: set text(fill: rgb("#1a5fb4"))
 #show heading: set block(above: 1.4em, below: 0.8em)
-#show heading.where(level: 1): set text(size: 20pt)
-#show heading.where(level: 2): set text(size: 15pt)
-#show heading.where(level: 3): set text(size: 12.5pt)
+#show heading.where(level: 1): set text(size: 1.8em)
+#show heading.where(level: 2): set text(size: 1.35em)
+#show heading.where(level: 3): set text(size: 1.15em)
 
 "##;
 
@@ -304,7 +343,7 @@ mod tests {
     #[test]
     fn markup_for_headings_emphasis_lists_code_links_and_escapes() {
         let src = typst_source("# Title\n\nSome *em* **strong** `a#b` [x](http://y.z) and 1 < 2 *.\n\n- one\n- two\n\n1. a\n2. b\n\n```rust\nlet x = \"q\";\n```\n", None);
-        let body = src.split_once("\n\n").map(|_| &src[PREAMBLE.len()..]).unwrap();
+        let body = src.split_once("\n\n").map(|_| &src[preamble(&Settings::default()).len()..]).unwrap();
         assert!(body.contains("= Title"), "{body}");
         assert!(body.contains("#emph[em] #strong[strong] #raw(\"a#b\") #link(\"http://y.z\")[x]"), "{body}");
         assert!(body.contains("1 \\< 2 \\*."), "{body}");
@@ -329,5 +368,21 @@ mod tests {
         let pdf = to_pdf(md, &Export::default()).unwrap();
         assert!(pdf.starts_with(b"%PDF-"), "not a PDF");
         assert!(pdf.len() > 2000);
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+
+    #[test]
+    fn settings_shape_the_page_and_the_fonts() {
+        let s = Settings { paper: "letter".into(), margin_cm: 3.0, font: "Inter".into(), size_pt: 12.0, justify: false, page_numbers: false, ..Settings::default() };
+        let src = typst_source_with("hi\n", None, &s);
+        assert!(src.contains("paper: \"us-letter\"") && src.contains("margin: (x: 3cm") && !src.contains("numbering"), "{src}");
+        assert!(src.contains("font: (\"Inter\", \"Libertinus Serif\"), size: 12pt") && src.contains("justify: false"), "{src}");
+        // An unknown font still makes a PDF: the embedded one stands in.
+        let pdf = to_pdf("# Hi\n", &Export { base: None, settings: s }).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
     }
 }
