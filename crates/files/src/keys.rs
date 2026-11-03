@@ -45,6 +45,7 @@ pub const ACTIONS: &[Action] = &[
     a!("view.ignored", "ignored files", "show or hide the entries .gitignore and the other ignore files hide", ["I", "leader v I"]),
     a!("view.columns", "columns", "cycle the columns: permissions, size and time / size and time / permissions and time / off", ["leader v c"]),
     a!("view.refresh", "refresh", "reread the folders and the git status", ["R", "leader v r"]),
+    a!("view.raw", "tables as text", "show CSV, TSV and spreadsheets in the preview as text instead of tables (and back)", ["leader v t"]),
     a!("root.into", "cd into", "make the folder under the cursor the root", ["leader c l"]),
     a!("root.focus", "focus folder", "make the folder the cursor row sits in the root, so only its own entries show", ["leader c f"]),
     a!("root.up", "cd up", "make the parent folder the root", ["leader c h"]),

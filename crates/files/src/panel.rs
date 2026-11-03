@@ -653,6 +653,10 @@ impl Panel {
                 self.opts.hidden = !self.opts.hidden;
                 self.rebuild();
             }
+            "view.raw" => {
+                pv::set_raw_tables(!pv::raw_tables());
+                self.say(if pv::raw_tables() { "tables show as text" } else { "tables show as tables" }, false);
+            }
             "view.columns" => {
                 self.opts.linemode = self.opts.linemode.next();
                 self.say(self.opts.linemode.label(), false);

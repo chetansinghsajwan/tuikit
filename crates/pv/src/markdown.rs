@@ -148,6 +148,10 @@ impl Out {
 }
 
 /// `words` wrapped to lines of at most `avail` columns (a word longer than that gets a line of its own).
+pub(crate) fn wrap_words(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
+    wrap(words, avail)
+}
+
 fn wrap(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
     let mut lines = Vec::new();
     let mut line: Vec<Span<'static>> = Vec::new();
@@ -175,6 +179,22 @@ fn wrap(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
     lines
 }
 
+/// `s` cut to `width` columns, ending in `…`.
+fn clip(s: &str, width: usize) -> String {
+    let mut out = String::new();
+    let mut used = 0;
+    for ch in s.chars() {
+        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + w + 1 > width {
+            break;
+        }
+        out.push(ch);
+        used += w;
+    }
+    out.push('…');
+    out
+}
+
 fn line_width(spans: &[Span<'static>]) -> usize {
     spans.iter().map(|s| s.content.width()).sum()
 }
@@ -191,6 +211,27 @@ fn column_widths(natural: &[usize], room: usize) -> Vec<usize> {
         w[at] -= 1;
     }
     w
+}
+
+/// A grid of plain strings (CSV rows, a sheet) as the lines of a bordered table; at most as many columns as fit.
+/// Returns the lines and how many columns were left out. Numbers align to the right.
+pub(crate) fn grid_lines(head: &[String], rows: &[Vec<String>], theme: &Theme, room: usize) -> (Vec<Vec<Span<'static>>>, usize) {
+    let fg = Style::new().fg(theme.colors.fg.into());
+    let n = head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0));
+    let shown = n.min((room.saturating_sub(1) / 9).max(1));
+    let words = |cell: Option<&String>| -> Words { cell.map(|c| c.split_whitespace().map(|w| (w.to_string(), fg)).collect()).unwrap_or_default() };
+    let numeric = |i: usize| {
+        let cells: Vec<&str> = rows.iter().filter_map(|r| r.get(i)).map(|c| c.trim()).filter(|c| !c.is_empty()).collect();
+        !cells.is_empty() && cells.iter().all(|c| c.replace(',', "").parse::<f64>().is_ok())
+    };
+    let table = Table {
+        aligns: (0..shown).map(|i| if numeric(i) { Alignment::Right } else { Alignment::Left }).collect(),
+        head: (0..shown).map(|i| words(head.get(i))).collect(),
+        rows: rows.iter().map(|r| (0..shown).map(|i| words(r.get(i))).collect()).collect(),
+        row: Vec::new(),
+        in_head: false,
+    };
+    (table_lines(&table, theme, room), n - shown)
 }
 
 /// The lines of a table: bordered, the head row bold, cells wrapped, aligned as the table says.
@@ -218,6 +259,8 @@ fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>>
         let cells: Vec<Vec<Vec<Span<'static>>>> = (0..n)
             .map(|i| {
                 let words: Words = row.get(i).map(|c| c.iter().map(|(w, s)| (w.clone(), if head { accent } else { *s })).collect()).unwrap_or_default();
+                // A word wider than its column is cut with an ellipsis.
+                let words: Words = words.into_iter().map(|(w, s)| if w.width() > widths[i] { (clip(&w, widths[i]), s) } else { (w, s) }).collect();
                 let lines = wrap(&words, widths[i]);
                 if lines.is_empty() { vec![Vec::new()] } else { lines }
             })

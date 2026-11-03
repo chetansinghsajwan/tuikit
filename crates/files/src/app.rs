@@ -43,7 +43,7 @@ type Term = Terminal<CrosstermBackend<File>>;
 
 /// The last preview, kept until the cursor, the pane size or the file changes.
 struct Preview {
-    key: (PathBuf, u16, u16),
+    key: (PathBuf, u16, u16, bool),
     lines: Result<Vec<Line<'static>>, String>,
 }
 
@@ -297,7 +297,7 @@ impl App {
         if inner.width == 0 || inner.height == 0 {
             return;
         }
-        let key = (path.clone(), inner.width, inner.height);
+        let key = (path.clone(), inner.width, inner.height, pv::raw_tables());
         if self.preview.as_ref().is_none_or(|p| p.key != key) {
             let opts = pv::Options { width: Some(inner.width), height: Some(inner.height), git: self.opts.git, focus: None };
             let lines = pv::preview(&path, &theme, &opts).map_err(|e| e.to_string());

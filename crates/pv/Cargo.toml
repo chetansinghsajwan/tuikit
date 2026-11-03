@@ -16,3 +16,6 @@ unicode-width = "0.2.2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 lofty = "0.22"
 mp4 = "0.14"
+csv = "1"
+calamine = "0.30"
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }

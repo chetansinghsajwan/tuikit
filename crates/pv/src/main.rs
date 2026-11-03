@@ -12,12 +12,14 @@ fn main() -> ExitCode {
     for a in std::env::args_os().skip(1) {
         if a == "--no-git" {
             git = false;
+        } else if a == "--raw" {
+            pv::set_raw_tables(true);
         } else {
             paths.push(PathBuf::from(a));
         }
     }
     let [path] = paths.as_slice() else {
-        eprintln!("usage: pv [--no-git] <path>");
+        eprintln!("usage: pv [--no-git] [--raw] <path>");
         return ExitCode::from(1);
     };
     // yazi's piper sets $w and $h to the preview pane size.

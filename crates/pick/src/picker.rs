@@ -396,6 +396,11 @@ impl Picker {
             KeyCode::Char('j') if ctrl => self.move_by(5),
             KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
             KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            // Tables (CSV, spreadsheets) show as text and back.
+            KeyCode::Char('t') if ctrl => {
+                pv::set_raw_tables(!pv::raw_tables());
+                self.preview = None;
+            }
             KeyCode::PageUp => self.move_by(-i64::from(self.page)),
             KeyCode::PageDown => self.move_by(i64::from(self.page)),
             KeyCode::Tab => {

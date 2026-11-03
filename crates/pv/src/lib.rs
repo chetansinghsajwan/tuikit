@@ -7,6 +7,8 @@ mod config;
 mod diff;
 mod dir;
 mod media;
+mod pdf;
+mod tabular;
 mod git;
 pub mod markdown;
 mod text;
@@ -24,6 +26,7 @@ pub use commit::render_file_diff_marked as preview_diff_marked;
 pub use diff::Anchors;
 pub use commit::render_file_diff as preview_diff;
 pub use config::Config;
+pub use tabular::{raw as raw_tables, set_raw as set_raw_tables};
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -99,6 +102,12 @@ pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'s
     } else if meta.is_file() {
         if let Some(kind) = media::kind(path) {
             return media::render(path, kind, theme, opts);
+        }
+        if pdf::is_pdf(path) {
+            return pdf::render(path, theme, opts);
+        }
+        if let Some(kind) = tabular::kind(path).filter(|_| !tabular::raw()) {
+            return tabular::render(path, kind, theme, opts);
         }
         if markdown::is_markdown(path) && opts.focus.is_none() {
             let mut buf = Vec::new();
