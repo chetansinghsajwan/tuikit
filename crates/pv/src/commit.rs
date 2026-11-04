@@ -78,8 +78,15 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
         Line::from(vec![label("commit"), Span::styled(info.oid.clone(), Style::new().fg(c.warning.into()))]),
         Line::from(vec![label("author"), Span::styled(format!("{} <{}>", info.author, info.email), fg)]),
         Line::from(vec![label("date"), Span::styled(format!("{} UTC  ({})", utc(info.time), age(info.time)), fg)]),
-        Line::default(),
     ];
+    // Every ref on the commit, whole: the list in `gu` cuts them to fit its column.
+    if base.is_none() {
+        let names: Vec<String> = repo.refs().unwrap_or_default().into_iter().filter(|r| r.oid == info.oid).map(|r| r.name).collect();
+        if !names.is_empty() {
+            out.push(Line::from(vec![label("refs"), Span::styled(names.join(", "), Style::new().fg(c.accent.into()))]));
+        }
+    }
+    out.push(Line::default());
     if let Some(b) = base {
         // A range: the two commits being compared, not one commit's details.
         out.clear();

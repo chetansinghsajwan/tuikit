@@ -84,7 +84,8 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 - Messages: short, lower case, no full stop (`staged`, `nothing staged to commit (stage with s)`).
 - Questions end the line with the answer key: `Delete a.txt? d again`.
 - Times: relative (`3d`), or `YYYY-MM-DD HH:MM` in UTC when absolute. Hashes: 8 characters.
-- Tables and columns have fixed widths; text that does not fit is cut with `…`, never wrapped into the next row.
+- Tables and columns have fixed widths (one width per column, for every row); text that does not fit is cut with `…`, never wrapped into the next row. A flexible column (gu's refs) is sized from the widest row and takes the space freed when a column is hidden.
+- What a cut column hides is shown whole elsewhere (the commit preview lists every ref).
 - Empty state: one muted line saying why (`clean: nothing to commit`, `nothing matches`).
 
 ## Icons

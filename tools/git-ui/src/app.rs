@@ -339,6 +339,8 @@ pub struct App {
     graph_w: usize,
     /// Width of the refs column in the Commits table.
     refs_w: usize,
+    /// The width every ref of the widest commit needs together (the refs column is sized from it).
+    refs_need: usize,
     /// The columns shown, and the width of the author names.
     cols: Columns,
     author_w: usize,
@@ -397,6 +399,7 @@ impl App {
             graph_rows: Vec::new(),
             graph_w: 0,
             refs_w: 0,
+            refs_need: 0,
             cols: Columns::default(),
             author_w: 0,
             ref_rows: Vec::new(),
@@ -476,7 +479,8 @@ impl App {
         }
         self.author_w = AUTHOR_COL;
         // Every column has one width, whatever the commits are: the refs column too (when any commit has a ref).
-        self.refs_w = if self.commits.iter().any(|k| self.labels.contains_key(&k.oid)) { REFS_COL } else { 0 };
+        self.refs_need = self.commits.iter().filter_map(|k| self.labels.get(&k.oid)).map(|l| pills(l).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0);
+        self.refs_w = self.refs_need.min(REFS_COL);
         self.stashes = self.repo.stashes().unwrap_or_default();
         self.build_ref_rows(keep);
         for (i, len) in [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
@@ -1559,6 +1563,9 @@ impl App {
             }
         }
         let Some(li) = Self::list_index(which) else { return };
+        if which == Focus::Commits {
+            self.fit_columns(inner.width);
+        }
         if n == 0 {
             buf.set_string(inner.x + 1, inner.y, "nothing here", Style::new().fg(theme.colors.muted.into()));
             return;
@@ -1584,6 +1591,41 @@ impl App {
             if room < content.width {
                 buf.set_string(content.right() - rw, y, right, base.fg(theme.colors.muted.into()));
             }
+        }
+    }
+
+    /// Give the flexible columns their widths for a list `width` wide: the refs column as wide as the most
+    /// refs on one commit need (as far as the message keeps room), and when the message is hidden the
+    /// refs (or the author names) take what is left, so the row is always filled.
+    fn fit_columns(&mut self, width: u16) {
+        const MIN_SUBJECT: usize = 24;
+        let width = usize::from(width);
+        let mut fixed = if self.graph { self.graph_w + 1 } else { 0 };
+        if self.cols.hash {
+            fixed += HASH_W + 1;
+        }
+        if self.cols.rel_time {
+            fixed += 9;
+        }
+        if self.cols.abs_time {
+            fixed += 18;
+        }
+        let name_w = if self.cols.author_name { AUTHOR_COL } else { 2 };
+        if self.cols.author {
+            fixed += name_w + 1;
+        }
+        self.author_w = name_w;
+        let free = width.saturating_sub(fixed);
+        let refs_on = self.cols.refs && self.refs_need > 0;
+        self.refs_w = match (refs_on, self.cols.subject) {
+            (false, _) => 0,
+            (true, true) => self.refs_need.min(free.saturating_sub(MIN_SUBJECT)).max(8.min(self.refs_need)),
+            // No message: the refs take the rest of the row.
+            (true, false) => free.saturating_sub(1).max(self.refs_need.min(free)),
+        };
+        if !self.cols.subject && !refs_on && self.cols.author && self.cols.author_name {
+            // Only names are left to fill the row.
+            self.author_w = free.max(AUTHOR_COL);
         }
     }
 
@@ -2468,6 +2510,26 @@ mod tests {
         assert!(text.contains("work tree") && text.contains("b.txt") && text.contains("two changed"), "{text}");
         press(&mut app, "M");
         assert!(!app.work);
+    }
+
+    #[test]
+    fn the_refs_column_fits_the_widest_commit_and_the_free_space_goes_to_what_is_left() {
+        let d = repo("cols");
+        commit_file(&d, "b.txt", "two\n", "second");
+        git(&d, &["tag", "a-rather-long-tag-name"]);
+        git(&d, &["tag", "another-long-tag-name"]);
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        app.fit_columns(120);
+        assert!(app.refs_w > 24, "the refs of the widest commit all fit: {}", app.refs_w);
+        // Without the message the refs take the rest of the row.
+        app.cols.subject = false;
+        app.fit_columns(120);
+        assert!(app.refs_w > app.refs_need, "{} vs {}", app.refs_w, app.refs_need);
+        // In a narrow list the message keeps its room and the refs give way.
+        app.cols.subject = true;
+        app.fit_columns(60);
+        assert!(app.refs_w <= 60 - 24, "{}", app.refs_w);
     }
 
     #[test]
