@@ -85,7 +85,7 @@ const COMMITS: &[Action] = &[
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
     action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
     action("commit.amend", "amend", "add what is staged to the last commit and edit its message (enter keeps it)", &["A", "leader A"]),
-    action("commit.reword", "reword", "change only the message of the last commit (staged changes stay staged)", &["r", "leader w"]),
+    action("commit.reword", "reword", "change only the message of a commit (later commits are rebuilt; files untouched)", &["r", "leader w"]),
     action("commit.branch", "new branch here", "create a branch at the commit and switch to it", &["b", "leader n"]),
     action("commit.tag", "tag", "create a tag at the commit", &["t", "leader t"]),
     action("commit.reset_soft", "reset soft", "move the branch here, keep the index and the work tree", &["leader z s"]),

@@ -414,6 +414,52 @@ impl Repo {
         self.git(&["commit", "-q", "--amend", "--only", "-m", message], &[]).map(|_| ())
     }
 
+    /// Change only the message of any commit on the checked-out history. The commits after it are
+    /// rebuilt on the new one (same trees, authors and dates); the files and the index do not change.
+    pub fn reword_commit(&self, oid: &str, message: &str) -> Result<(), Error> {
+        if message.trim().is_empty() {
+            return Err(Error("empty commit message".into()));
+        }
+        let head = self.git(&["rev-parse", "HEAD"], &[])?.trim().to_string();
+        let target = self.git(&["rev-parse", "--verify", &format!("{oid}^{{commit}}")], &[])?.trim().to_string();
+        if target == head {
+            return self.reword(message);
+        }
+        self.git(&["merge-base", "--is-ancestor", &target, &head], &[]).map_err(|_| Error("that commit is not on the checked-out history".into()))?;
+        let mut chain = vec![target.clone()];
+        chain.extend(self.git(&["rev-list", "--reverse", "--topo-order", "--ancestry-path", &format!("{target}..{head}")], &[])?.lines().map(str::to_string));
+        let mut done: std::collections::HashMap<String, String> = Default::default();
+        for c in &chain {
+            let info = self.git(&["show", "-s", "--date=raw", "--format=%T%n%P%n%an%n%ae%n%ad%n%cn%n%ce%n%cd", c], &[])?;
+            let mut f = info.lines();
+            let mut next = || f.next().unwrap_or("").to_string();
+            let (tree, parents) = (next(), next());
+            let (an, ae, ad, cn, ce, cd) = (next(), next(), next(), next(), next(), next());
+            let body = if *c == target { message.to_string() } else { self.git(&["show", "-s", "--format=%B", c], &[])?.trim_end().to_string() };
+            let mut cmd = Command::new("git");
+            cmd.current_dir(&self.root).args(["commit-tree", &tree]);
+            for p in parents.split_whitespace() {
+                cmd.arg("-p").arg(done.get(p).map(String::as_str).unwrap_or(p));
+            }
+            let out = cmd
+                .args(["-m", &body])
+                .env("GIT_AUTHOR_NAME", an)
+                .env("GIT_AUTHOR_EMAIL", ae)
+                .env("GIT_AUTHOR_DATE", ad)
+                .env("GIT_COMMITTER_NAME", cn)
+                .env("GIT_COMMITTER_EMAIL", ce)
+                .env("GIT_COMMITTER_DATE", cd)
+                .output()
+                .map_err(err)?;
+            if !out.status.success() {
+                return Err(Error(String::from_utf8_lossy(&out.stderr).trim().lines().last().unwrap_or("commit-tree failed").to_string()));
+            }
+            done.insert(c.clone(), String::from_utf8_lossy(&out.stdout).trim().to_string());
+        }
+        let new = &done[chain.last().unwrap()];
+        self.git(&["update-ref", "-m", "reword", "HEAD", new, &head], &[]).map(|_| ())
+    }
+
     /// The operation under way that stopped (a conflict, say), if any.
     pub fn operation(&self) -> Option<Operation> {
         let dir = self.git_dir()?;

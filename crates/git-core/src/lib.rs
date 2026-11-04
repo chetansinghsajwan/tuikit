@@ -544,6 +544,23 @@ mod tests {
         assert_eq!(Repo::discover(&d).unwrap().commits(1).unwrap()[0].subject, "only the message");
         assert!(!Repo::discover(&d).unwrap().status().unwrap().is_empty());
         git(&d, &["reset", "-q", "--hard"]);
+        // Reword an older commit: the ones after it are rebuilt, the files stay.
+        fs::write(d.join("older.txt"), "o\n").unwrap();
+        git(&d, &["add", "older.txt"]);
+        git(&d, &["commit", "-qm", "older"]);
+        fs::write(d.join("newer.txt"), "n\n").unwrap();
+        git(&d, &["add", "newer.txt"]);
+        git(&d, &["commit", "-qm", "newer"]);
+        let before = Repo::discover(&d).unwrap().commits(5).unwrap();
+        assert!(before.len() >= 2);
+        let tree = |rev: &str| String::from_utf8(std::process::Command::new("git").current_dir(&d).args(["rev-parse", &format!("{rev}^{{tree}}")]).output().unwrap().stdout).unwrap();
+        let head_tree = tree("HEAD");
+        r.reword_commit(&before[1].oid, "older, reworded").unwrap();
+        let after = Repo::discover(&d).unwrap().commits(5).unwrap();
+        assert_eq!(after[1].subject, "older, reworded");
+        assert_eq!(after[0].subject, before[0].subject);
+        assert_ne!(after[0].oid, before[0].oid);
+        assert_eq!(tree("HEAD"), head_tree);
         r.delete_tag("v1").unwrap();
         assert!(Repo::discover(&d).unwrap().refs().unwrap().iter().all(|x| x.name != "v1"));
         // Rebase a feature branch onto main, which has moved on.

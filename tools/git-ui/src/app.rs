@@ -61,7 +61,7 @@ enum PromptKind {
     /// A tag at this commit.
     TagAt(String),
     /// A new message for the last commit.
-    Reword,
+    Reword(String),
     /// Check out a branch, tag, remote branch or commit by name.
     SwitchTo,
     /// Amend the last commit with what is staged, with this message (the old one is the value).
@@ -1103,11 +1103,7 @@ impl App {
                     }
                     "commit.revert" => self.mode = Mode::Confirm(Confirm::Revert(k.oid)),
                     "commit.reword" => {
-                        if self.lists[1].cursor == 0 {
-                            self.mode = Mode::Prompt(PromptKind::Reword, Input::new(k.subject));
-                        } else {
-                            self.say("only the last commit can be reworded here", true);
-                        }
+                        self.mode = Mode::Prompt(PromptKind::Reword(k.oid), Input::new(k.subject));
                     }
                     "commit.amend" => {
                         let head = self.commits.first().map(|c| c.subject.clone()).unwrap_or_default();
@@ -1268,9 +1264,9 @@ impl App {
                         let v = value.clone();
                         self.run(format!("tagged {value}"), move |r| r.create_tag(&v, &oid));
                     }
-                    PromptKind::Reword => {
+                    PromptKind::Reword(oid) => {
                         let v = value.clone();
-                        self.run("reworded the last commit".to_string(), move |r| r.reword(&v));
+                        self.run("reworded".to_string(), move |r| r.reword_commit(&oid, &v));
                     }
                     PromptKind::SwitchTo => self.switch_to(value),
                     PromptKind::Amend(old) => {
@@ -1738,7 +1734,7 @@ impl App {
                     PromptKind::RenameFolder { .. } => "rename folder to: ",
                     PromptKind::BranchAt(_) => "new branch here: ",
                     PromptKind::TagAt(_) => "tag name: ",
-                    PromptKind::Reword => "message: ",
+                    PromptKind::Reword(_) => "message: ",
                     PromptKind::Amend(_) => "amend with message: ",
                     PromptKind::SwitchTo => "switch to (branch, tag or commit): ",
                 };
