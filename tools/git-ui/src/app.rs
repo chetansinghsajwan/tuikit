@@ -350,6 +350,8 @@ pub struct App {
     screen: Screen,
     /// The Commits tab shows the diff of the commit under the cursor beside the list.
     detail: bool,
+    /// The commit marked to compare with: the preview shows its diff against the highlighted commit.
+    compare: Option<String>,
     /// The current commit search.
     search: Option<String>,
     filter: Filter,
@@ -400,6 +402,7 @@ impl App {
             labels: Default::default(),
             screen: Screen::Status,
             detail: false,
+            compare: None,
             search: None,
             filter: Filter::default(),
             commit_files: None,
@@ -834,7 +837,9 @@ impl App {
             "focus.stashes" => self.show(Focus::Stashes),
             "back" => {
                 // Esc: clear a search first, then go back to the Status tab.
-                if self.search.is_some() {
+                if self.compare.is_some() {
+                    self.compare = None;
+                } else if self.search.is_some() {
                     self.search = None;
                 } else {
                     self.set_screen(Screen::Status);
@@ -1093,6 +1098,16 @@ impl App {
                         Err(e) => self.say(format!("could not copy: {e}"), true),
                     },
                     "commit.files" => self.open_commit_files(),
+                    "commit.compare" => {
+                        if self.compare.as_deref() == Some(k.oid.as_str()) {
+                            self.compare = None;
+                            self.say("compare cleared", false);
+                        } else {
+                            self.compare = Some(k.oid.clone());
+                            self.detail = true;
+                            self.say(format!("comparing with {}: move to another commit (m clears)", k.short), false);
+                        }
+                    }
                     "commit.checkout" => {
                         let oid = k.oid.clone();
                         self.run(format!("checked out {}", k.short), move |r| r.checkout_commit(&oid));
@@ -1612,7 +1627,7 @@ impl App {
                     spans.push(author);
                 }
                 if self.cols.hash {
-                    spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), muted));
+                    spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), if self.compare.as_deref() == Some(k.oid.as_str()) { Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { muted }));
                 }
                 if self.cols.refs && self.refs_w > 0 {
                     let mut used = 0;
@@ -1672,7 +1687,11 @@ impl App {
             Focus::Commits => match &self.commit_files {
                 // The diff of the file (or folder) of the commit being explored: `oid`, a separator, the path.
                 Some(cf) => Some(format!("{}\u{1}{}", cf.oid, cf.current_path().unwrap_or(""))),
-                None => self.commits.get(self.lists[1].cursor).map(|c| c.oid.clone()),
+                None => self.commits.get(self.lists[1].cursor).map(|c| match &self.compare {
+                    // Two commits: the diff from the marked one to this one.
+                    Some(base) if *base != c.oid => format!("{base}\u{2}{}", c.oid),
+                    _ => c.oid.clone(),
+                }),
             },
             Focus::Stashes => self.stashes.get(self.lists[2].cursor).map(|s| format!("stash@{{{}}}", s.index)),
             Focus::Files => None,
@@ -1681,7 +1700,15 @@ impl App {
 
     fn render_preview(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let rev = self.current_rev(which);
-        let title = rev.clone().unwrap_or_default().split_once('\u{1}').map(|(_, p)| if p.is_empty() { "all files".to_string() } else { p.to_string() }).unwrap_or_else(|| rev.clone().unwrap_or_default());
+        let short = |s: &str| s.chars().take(8).collect::<String>();
+        let whole = rev.clone().unwrap_or_default();
+        let title = if let Some((a, b)) = whole.split_once('\u{2}') {
+            format!("{}..{}", short(a), short(b))
+        } else if let Some((_, p)) = whole.split_once('\u{1}') {
+            if p.is_empty() { "all files".to_string() } else { p.to_string() }
+        } else {
+            whole
+        };
         let icon = match which {
             Focus::Branches => ui::icons::BRANCH,
             Focus::Stashes => ui::icons::STASH,
@@ -1701,6 +1728,10 @@ impl App {
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let result = match rev.split_once('\u{1}') {
+                _ if rev.contains('\u{2}') => {
+                    let (base, oid) = rev.split_once('\u{2}').unwrap_or_default();
+                    pv::preview_range_marked(&self.root, Some(base), oid, theme, &opts)
+                }
                 Some((oid, path)) => pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts),
                 None => pv::preview_commit_marked(&self.root, &rev, theme, &opts),
             };
@@ -1784,7 +1815,7 @@ impl App {
         match self.focus {
             Focus::Files => "s stage/unstage  a all  d discard  t tree/list  c commit  enter edit  [ ] tabs  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
-            Focus::Commits => "enter checkout  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
+            Focus::Commits => "enter checkout  m compare  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
         }
     }
@@ -2403,6 +2434,25 @@ mod tests {
         fs::write(d.join(name), body).unwrap();
         git(d, &["add", name]);
         git(d, &["commit", "-qm", msg]);
+    }
+
+    #[test]
+    fn m_marks_a_commit_and_the_preview_shows_the_diff_to_the_highlighted_one() {
+        let d = repo("compare");
+        commit_file(&d, "b.txt", "two\n", "second");
+        commit_file(&d, "c.txt", "three\n", "third");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        // Newest first: mark the oldest, then move back to the newest.
+        press(&mut app, "G");
+        press(&mut app, "m");
+        press(&mut app, "g");
+        let text = screen(&mut app).join("\n");
+        assert!(text.contains("from") && text.contains("to") && text.contains("b.txt") && text.contains("c.txt"), "{text}");
+        // m on the marked commit, or Esc, clears it.
+        press(&mut app, "G");
+        press(&mut app, "m");
+        assert!(app.compare.is_none());
     }
 
     #[test]

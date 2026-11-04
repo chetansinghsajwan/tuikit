@@ -55,9 +55,18 @@ pub fn render(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<V
 
 /// `render`, with where the files and hunks of the patch start.
 pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+    render_range_marked(root, None, rev, theme, opts)
+}
+
+/// The difference between two commits: `base` against `rev` (with `None`, `rev` against its parent).
+pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let info = repo.commit(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
-    let changes = repo.changes(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
+    let changes = match base {
+        Some(b) => repo.changes_between(b, rev),
+        None => repo.changes(rev),
+    }
+    .map_err(|e| Error::Unsupported(e.to_string()))?;
 
     let c = &theme.colors;
     let muted = Style::new().fg(c.muted.into());
@@ -70,16 +79,28 @@ pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> R
         Line::from(vec![label("date"), Span::styled(format!("{} UTC  ({})", utc(info.time), age(info.time)), fg)]),
         Line::default(),
     ];
-    for (i, l) in info.message.lines().enumerate() {
-        if i == 0 {
-            let mut spans = vec![Span::raw("  ")];
-            spans.extend(ui::subject::spans(theme, l, fg.add_modifier(Modifier::BOLD)));
+    if let Some(b) = base {
+        // A range: the two commits being compared, not one commit's details.
+        out.clear();
+        let base_info = repo.commit(b).map_err(|e| Error::Unsupported(e.to_string()))?;
+        for (name, i) in [("from", &base_info), ("to", &info)] {
+            let mut spans = vec![label(name), Span::styled(format!("{} ", &i.oid[..i.oid.len().min(8)]), Style::new().fg(c.warning.into()))];
+            spans.extend(ui::subject::spans(theme, i.message.lines().next().unwrap_or(""), fg.add_modifier(Modifier::BOLD)));
             out.push(Line::from(spans));
-        } else {
-            out.push(Line::from(Span::styled(format!("  {l}"), fg)));
         }
+        out.push(Line::default());
+    } else {
+        for (i, l) in info.message.lines().enumerate() {
+            if i == 0 {
+                let mut spans = vec![Span::raw("  ")];
+                spans.extend(ui::subject::spans(theme, l, fg.add_modifier(Modifier::BOLD)));
+                out.push(Line::from(spans));
+            } else {
+                out.push(Line::from(Span::styled(format!("  {l}"), fg)));
+            }
+        }
+        out.push(Line::default());
     }
-    out.push(Line::default());
 
     let (added, removed): (u32, u32) = changes.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
     out.push(Line::from(Span::styled(
@@ -113,7 +134,11 @@ pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> R
     let mut anchors = Anchors::default();
     if out.len() < limit {
         let rest = limit - out.len();
-        if let Ok(files) = repo.patch(rev) {
+        let patch = match base {
+            Some(b) => repo.patch_between(b, rev),
+            None => repo.patch(rev),
+        };
+        if let Ok(files) = patch {
             let (lines, a) = diff::render(&files, theme, opts, rest);
             anchors = a.shifted(out.len());
             out.extend(lines);

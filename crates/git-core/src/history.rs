@@ -212,13 +212,20 @@ struct Side {
     after: Vec<u8>,
 }
 
-fn sides(repo: &gix::Repository, rev: &str) -> Result<Vec<Side>, Error> {
+/// The changes of `rev` against its first parent, or against `base` when one is given.
+fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Side>, Error> {
     let id = repo.rev_parse_single(rev).map_err(err)?;
     let commit = repo.find_commit(id).map_err(err)?;
     let new_tree = commit.tree().map_err(err)?;
-    let parent_tree = match commit.parent_ids().next() {
-        Some(p) => Some(repo.find_commit(p).map_err(err)?.tree().map_err(err)?),
-        None => None,
+    let parent_tree = match base {
+        Some(b) => {
+            let id = repo.rev_parse_single(b).map_err(err)?;
+            Some(repo.find_commit(id).map_err(err)?.tree().map_err(err)?)
+        }
+        None => match commit.parent_ids().next() {
+            Some(p) => Some(repo.find_commit(p).map_err(err)?.tree().map_err(err)?),
+            None => None,
+        },
     };
     let list = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&new_tree), None).map_err(err)?;
 
@@ -244,8 +251,8 @@ fn sides(repo: &gix::Repository, rev: &str) -> Result<Vec<Side>, Error> {
     Ok(out)
 }
 
-pub(crate) fn changes(repo: &gix::Repository, rev: &str) -> Result<Vec<FileChange>, Error> {
-    Ok(sides(repo, rev)?
+pub(crate) fn changes(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<FileChange>, Error> {
+    Ok(sides(repo, base, rev)?
         .into_iter()
         .map(|s| {
             let binary = s.before.contains(&0) || s.after.contains(&0);
@@ -368,8 +375,8 @@ pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     out
 }
 
-pub(crate) fn patch(repo: &gix::Repository, rev: &str) -> Result<Vec<FilePatch>, Error> {
-    Ok(sides(repo, rev)?
+pub(crate) fn patch(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<FilePatch>, Error> {
+    Ok(sides(repo, base, rev)?
         .into_iter()
         .map(|s| {
             let binary = s.before.contains(&0) || s.after.contains(&0);

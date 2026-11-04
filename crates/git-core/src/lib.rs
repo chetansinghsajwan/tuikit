@@ -108,13 +108,23 @@ impl Repo {
 
     /// Files changed by `rev` against its first parent, with line counts.
     pub fn changes(&self, rev: &str) -> Result<Vec<FileChange>, Error> {
-        history::changes(&self.repo, rev)
+        history::changes(&self.repo, None, rev)
+    }
+
+    /// Files that differ between `base` and `rev` (two commits, any distance apart), with line counts.
+    pub fn changes_between(&self, base: &str, rev: &str) -> Result<Vec<FileChange>, Error> {
+        history::changes(&self.repo, Some(base), rev)
+    }
+
+    /// The patch that turns `base` into `rev`.
+    pub fn patch_between(&self, base: &str, rev: &str) -> Result<Vec<FilePatch>, Error> {
+        history::patch(&self.repo, Some(base), rev)
     }
 
     /// The patch of `rev` against its first parent: per file, hunks with 3
     /// lines of context. Binary files have no hunks.
     pub fn patch(&self, rev: &str) -> Result<Vec<FilePatch>, Error> {
-        history::patch(&self.repo, rev)
+        history::patch(&self.repo, None, rev)
     }
 
     /// Changed lines of `path` in the work tree compared to `HEAD`.
