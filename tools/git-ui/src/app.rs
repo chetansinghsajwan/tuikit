@@ -326,6 +326,8 @@ pub struct App {
     message: Option<(String, bool)>,
     preview: Option<Preview>,
     pscroll: usize,
+    /// The commit whose files were folded by hand (another commit starts with none).
+    fold_rev: Option<String>,
     pheight: usize,
     /// The keymaps of the Branches, Commits and Stashes panes (the Files pane has its own).
     maps: [Keymap; 3],
@@ -390,6 +392,7 @@ impl App {
             message: None,
             preview: None,
             pscroll: 0,
+            fold_rev: None,
             pheight: 10,
             maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
@@ -677,6 +680,16 @@ impl App {
         Quit::No
     }
 
+    /// Fold or unfold the file whose header is at (or above) the top of the diff.
+    fn fold_file(&mut self) {
+        let Some(p) = &self.preview else { return };
+        let at = p.anchors.files.iter().rposition(|&m| m <= self.pscroll).or(if p.anchors.files.is_empty() { None } else { Some(0) });
+        if let Some(path) = at.and_then(|i| p.anchors.paths.get(i)).cloned() {
+            pv::diff_toggle_fold(&path);
+            self.preview = None;
+        }
+    }
+
     fn jump_diff(&mut self, forward: bool, files: bool) {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
@@ -890,6 +903,13 @@ impl App {
             "preview.prev_hunk" => self.jump_diff(false, false),
             "preview.next_file" => self.jump_diff(true, true),
             "preview.prev_file" => self.jump_diff(false, true),
+            "preview.fold" => self.fold_file(),
+            "preview.whitespace" => {
+                let on = !pv::diff_ignoring_whitespace();
+                pv::diff_ignore_whitespace(on);
+                self.preview = None;
+                self.say(if on { "ignoring whitespace changes" } else { "showing whitespace changes" }, false);
+            }
             "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
                 if let Some(li) = li {
                     let st = &mut self.lists[li];
@@ -1779,7 +1799,14 @@ impl App {
             return;
         }
         let key = (which, rev.clone(), inner.width);
+        let mut same_rev = false;
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
+            // A different commit starts with the files folded the way they fold by themselves.
+            same_rev = self.fold_rev.as_deref() == Some(rev.as_str());
+            if !same_rev {
+                pv::diff_reset_folds();
+                self.fold_rev = Some(rev.clone());
+            }
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let result = match rev.split_once('\u{1}') {
                 _ if rev.ends_with('\u{3}') => {
@@ -1801,7 +1828,9 @@ impl App {
                 Err(e) => (vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))], Default::default()),
             };
             self.preview = Some(Preview { key, lines, anchors });
-            self.pscroll = 0;
+            if !same_rev {
+                self.pscroll = 0;
+            }
         }
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
@@ -2530,6 +2559,26 @@ mod tests {
         app.cols.subject = true;
         app.fit_columns(60);
         assert!(app.refs_w <= 60 - 24, "{}", app.refs_w);
+    }
+
+    #[test]
+    fn z_folds_the_file_at_the_top_of_the_diff_and_w_ignores_whitespace() {
+        let d = repo("fold");
+        commit_file(&d, "b.txt", "two\n", "second");
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        press(&mut app, "p");
+        let before = screen(&mut app).join("\n");
+        assert!(before.contains("⋯ line"), "{before}");
+        press(&mut app, "z");
+        let folded = screen(&mut app).join("\n");
+        assert!(folded.contains("folded"), "{folded}");
+        press(&mut app, "z");
+        assert!(!screen(&mut app).join("\n").contains("folded"));
+        press(&mut app, "w");
+        assert!(pv::diff_ignoring_whitespace());
+        press(&mut app, "w");
+        assert!(!pv::diff_ignoring_whitespace());
     }
 
     #[test]

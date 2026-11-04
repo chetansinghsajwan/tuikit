@@ -30,7 +30,7 @@ pub use commit::render_marked as preview_commit_marked;
 pub use commit::render_range_marked as preview_range_marked;
 pub use commit::render_file_diff_marked as preview_diff_marked;
 pub use commit::render_files_marked as preview_commit_files_marked;
-pub use diff::Anchors;
+pub use diff::{Anchors, ignoring_whitespace as diff_ignoring_whitespace, reset_folds as diff_reset_folds, set_ignore_whitespace as diff_ignore_whitespace, toggle_fold as diff_toggle_fold};
 pub use commit::render_file_diff as preview_diff;
 pub use config::Config;
 pub use tabular::{raw as raw_tables, set_raw as set_raw_tables};
@@ -314,10 +314,12 @@ mod tests {
         let d = git_repo("commit");
         let lines = preview_commit(&d, "HEAD", &Theme::default(), &Options { width: Some(60), ..Options::default() }).unwrap();
         let text: Vec<String> = lines.iter().map(flat).collect();
-        assert!(text[0].starts_with("commit ") && text[1].starts_with("author ") && text[2].starts_with("date "), "{text:?}");
+        // The subject first, then author, age and hash on one line.
+        assert_eq!(text[0].trim(), "i", "{text:?}");
+        assert!(text.iter().any(|l| l.contains("·") && l.contains("now")), "{text:?}");
         assert!(text.iter().any(|l| l.trim() == "i"), "{text:?}");
-        assert!(text.iter().any(|l| l.contains("2 files changed, +4 -0")), "{text:?}");
-        assert!(text.iter().any(|l| l.contains("a.txt") && l.trim_end().ends_with("+3 -0") && l.len() >= 55), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("2 files") && l.contains("+4") && l.contains("−0")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains(" A a.txt") && l.contains("+3") && l.contains("████")), "{text:?}");
         assert!(text.iter().any(|l| l.contains("sub/s.txt")), "{text:?}");
         assert!(preview_commit(&d, "nonexistent-ref", &Theme::default(), &Options::default()).is_err());
     }
@@ -329,7 +331,7 @@ mod tests {
         let lines = preview_commit(&d, "HEAD", &Theme::default(), &o).unwrap();
         let text: Vec<String> = lines.iter().map(flat).collect();
         let at = |s: &str| text.iter().position(|l| l.contains(s)).unwrap_or_else(|| panic!("{s} in {text:?}"));
-        assert!(at("@@ -0,0 +1,3 @@") > at("2 files changed"));
+        assert!(at("⋯ line 1") > at("2 files"));
         let row = at("+ 1");
         assert!(lines[row].spans.iter().all(|s| s.style.bg.is_some()), "added rows are tinted");
         assert!(flat(&lines[row]).len() >= 49, "padded to the pane width");

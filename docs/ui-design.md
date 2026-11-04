@@ -76,7 +76,8 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 | Table | bordered grid, header bold in `accent`, numbers right aligned, wide cells wrap, columns that do not fit are counted, never drawn |
 | Code block | rounded box on a `selection`-tinted ground, the language as its first line inside |
 | Alert | colored left bar and a title (`Note` `Tip` `Important` `Warning` `Caution`) |
-| Diff | file header, hunk header, both line numbers, syntax colors, word-level marks, added and removed rows tinted |
+| Diff | a tinted bar per file (fold mark, state letter, folder muted, name bold, counts at the right), a hunk line naming where it is (`⋯ line 48  fn name`), both line numbers, syntax colors, word-level marks, added and removed rows tinted, whitespace-only changes dimmed; lockfiles and huge files start folded; a line that does not fit ends in `…` |
+| Commit preview | the subject first, the message under it, one muted line (author, age, hash, refs), then the files: folder muted, name in its state color, counts in columns, a bar for the size of the change |
 | Minimap | braille dots, lines on screen tinted, cursor line, diagnostics and git changes in the edge column |
 
 ## Text

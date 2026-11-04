@@ -14,7 +14,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::FontStyle;
 use syntect::util::LinesWithEndings;
 use ui::Theme;
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Width from which a patch is drawn in two columns, old beside new.
 pub const SIDE_BY_SIDE_MIN: u16 = 140;
@@ -27,6 +27,8 @@ const MIN_SIMILARITY: f32 = 0.35;
 pub struct Anchors {
     pub files: Vec<usize>,
     pub hunks: Vec<usize>,
+    /// The path of each file in `files`.
+    pub paths: Vec<String>,
 }
 
 impl Anchors {
@@ -46,6 +48,63 @@ impl Anchors {
         self.hunks.iter_mut().for_each(|m| *m += n);
         self
     }
+}
+
+thread_local! {
+    /// Files the reader folded or unfolded by hand (a file that folds by itself, a lockfile say, is in here when opened).
+    static TOGGLED: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+    static IGNORE_WHITESPACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Fold the file `path` of the patch, or unfold it.
+pub fn toggle_fold(path: &str) {
+    TOGGLED.with(|t| {
+        let mut t = t.borrow_mut();
+        if !t.remove(path) {
+            t.insert(path.to_string());
+        }
+    });
+}
+
+/// Forget the hand-made folds (another commit is shown).
+pub fn reset_folds() {
+    TOGGLED.with(|t| t.borrow_mut().clear());
+}
+
+/// Show changes that only differ in whitespace as unchanged lines.
+pub fn set_ignore_whitespace(on: bool) {
+    IGNORE_WHITESPACE.with(|w| w.set(on));
+}
+
+pub fn ignoring_whitespace() -> bool {
+    IGNORE_WHITESPACE.with(|w| w.get())
+}
+
+/// Files nobody reads line by line: lockfiles, minified and generated output, and anything that changes this much.
+const BIG_FILE: usize = 400;
+
+fn folds_by_itself(f: &FilePatch, changed: usize) -> bool {
+    let name = f.path.rsplit('/').next().unwrap_or(&f.path);
+    let generated = ["Cargo.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "flake.lock", "poetry.lock", "go.sum", "composer.lock", "Gemfile.lock"].contains(&name) || name.ends_with(".min.js") || name.ends_with(".min.css") || name.ends_with(".map");
+    generated || changed > BIG_FILE
+}
+
+/// Whether the file is drawn as its header only.
+pub fn is_folded(f: &FilePatch, changed: usize) -> bool {
+    folds_by_itself(f, changed) != TOGGLED.with(|t| t.borrow().contains(&f.path))
+}
+
+/// Added and removed lines of a file.
+pub fn counts(f: &FilePatch) -> (usize, usize) {
+    let (mut a, mut r) = (0, 0);
+    for l in f.hunks.iter().flat_map(|h| &h.lines) {
+        match l.kind {
+            PatchKind::Added => a += 1,
+            PatchKind::Removed => r += 1,
+            PatchKind::Context => {}
+        }
+    }
+    (a, r)
 }
 
 /// One cell of a drawn code line.
@@ -197,6 +256,10 @@ fn cells_of(text: &str, pieces: Option<&[(Style, String)]>, strong: &[Range<usiz
 /// `cells` as spans, clipped to `width` columns when given and padded to it with `fill` (the row tint).
 fn spans_of(cells: &[Cell], width: Option<usize>, fill: Option<Color>) -> Vec<Span<'static>> {
     let mut out: Vec<Span<'static>> = Vec::new();
+    // A line that does not fit ends in a marker instead of being cut silently.
+    let total: usize = cells.iter().map(|(c, _)| c.width().unwrap_or(0)).sum();
+    let clipped = width.is_some_and(|max| total > max && max > 1);
+    let width = if clipped { width.map(|m| m - 1) } else { width };
     let mut used = 0;
     let mut run = String::new();
     let mut run_style: Option<Style> = None;
@@ -218,6 +281,14 @@ fn spans_of(cells: &[Cell], width: Option<usize>, fill: Option<Color>) -> Vec<Sp
         used += w;
     }
     flush(&mut run, &mut run_style, &mut out);
+    if clipped {
+        let mut s = Style::new().fg(Color::DarkGray);
+        if let Some(bg) = fill {
+            s = s.bg(bg);
+        }
+        out.push(Span::styled("…", s));
+        return out;
+    }
     if let (Some(max), Some(bg)) = (width, fill) {
         if used < max {
             out.push(Span::styled(" ".repeat(max - used), Style::new().bg(bg)));
@@ -257,6 +328,8 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
 
     // Word-level marks for each run of removed lines followed by added lines, paired in order.
     let mut marks: Vec<(Vec<Range<usize>>, Vec<Range<usize>>)> = vec![Default::default(); h.lines.len()];
+    // Pairs that differ only in whitespace: dimmed, and folded into context when whitespace is ignored.
+    let mut ws_only = vec![false; h.lines.len()];
     let mut i = 0;
     while i < h.lines.len() {
         if h.lines[i].kind != PatchKind::Removed {
@@ -272,6 +345,12 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
             i += 1;
         }
         for k in 0..(as_ - rs).min(i - as_) {
+            let (a, b) = (&h.lines[rs + k].text, &h.lines[as_ + k].text);
+            if a != b && a.split_whitespace().eq(b.split_whitespace()) {
+                ws_only[rs + k] = true;
+                ws_only[as_ + k] = true;
+                continue;
+            }
             let d = git_core::intraline(&h.lines[rs + k].text, &h.lines[as_ + k].text);
             if d.similarity >= MIN_SIMILARITY {
                 marks[rs + k].0 = d.old;
@@ -307,6 +386,18 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
                 r
             }
         };
+        // A change in whitespace only is dimmed, or shown as an unchanged line when whitespace is ignored.
+        let ws = ws_only[k];
+        let ignore = ws && ignoring_whitespace();
+        if ignore && kind == PatchKind::Removed {
+            continue;
+        }
+        let (kind, bg, strong, pieces) = match (ws, ignore) {
+            (true, true) => (PatchKind::Context, None, &[][..], None),
+            (true, false) => (kind, Some(ui::mix(c.muted.into(), c.bg.into(), 14)), &[][..], None),
+            _ => (kind, bg, strong, pieces),
+        };
+        let base = if ws { Style::new().fg(c.muted.into()) } else { base };
         let mut cells = if conflict {
             cells_of(&l.text, None, &[], bg, strong_bg, Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD))
         } else {
@@ -353,24 +444,16 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
         // File header: the state sign, the path (`old → new` for a rename), the mode change, a rule.
         out.push(Line::default());
         anchors.files.push(out.len());
-        let kind_color = git::kind_color(theme, f.kind);
-        let name = match &f.old_path {
-            Some(old) => format!("{old} → {}", f.path),
-            None => f.path.clone(),
-        };
-        let mut head = vec![
-            Span::styled(format!("{} ", crate::commit::sign(f.kind)), Style::new().fg(kind_color)),
-            Span::styled(name, Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)),
-        ];
-        if let Some((from, to)) = &f.modes {
-            head.push(Span::styled(format!("   mode {from} → {to}"), muted));
-        }
-        out.push(Line::from(head));
-        if let Some(w) = width {
-            out.push(Line::from(Span::styled("─".repeat(w.min(120)), muted)));
-        }
+        anchors.paths.push(f.path.clone());
+        let (added, removed) = counts(f);
+        let folded = !f.binary && is_folded(f, added + removed);
+        out.push(file_bar(f, folded, added, removed, width, theme));
         if f.binary {
             out.push(Line::from(Span::styled("  binary file not shown", muted)));
+            continue;
+        }
+        if folded {
+            out.push(Line::from(Span::styled(format!("  {} lines changed, folded (fold key opens it)", added + removed), muted)));
             continue;
         }
         let after_lines: Vec<&str> = f.after.lines().collect();
@@ -385,9 +468,10 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
             } else {
                 context_of(&before_lines, h.old_start.saturating_sub(1) as usize)
             };
-            let mut header = vec![Span::styled(format!("@@ -{},{} +{},{} @@", h.old_start, h.old_len, h.new_start, h.new_len), Style::new().fg(c.info.into()))];
+            // Where the change is, by name when there is one: the numbers are in the gutter below.
+            let mut header = vec![Span::styled(format!("  ⋯ line {}", h.new_start.max(1)), Style::new().fg(c.info.into()))];
             if let Some(ctx) = context {
-                header.push(Span::styled(format!(" {ctx}"), muted.add_modifier(Modifier::BOLD)));
+                header.push(Span::styled(format!("  {ctx}"), Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD)));
             }
             out.push(Line::from(header));
             let rows = hunk_rows(h, f, theme);
@@ -404,6 +488,47 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
         }
     }
     (out, anchors)
+}
+
+/// A file's header: one tinted bar across the pane with the fold mark, the state letter, the folder muted and the
+/// file name bold (`old → new` for a rename), and the counts at the right edge, so files stand out while scrolling.
+pub(crate) fn file_bar(f: &FilePatch, folded: bool, added: usize, removed: usize, width: Option<usize>, theme: &Theme) -> Line<'static> {
+    let c = &theme.colors;
+    let bar_bg = ui::mix(c.accent.into(), c.bg.into(), 16);
+    let kind_color = git::kind_color(theme, f.kind);
+    let muted = Style::new().fg(c.muted.into());
+    let (dir, file) = match f.path.rsplit_once('/') {
+        Some((d, n)) => (format!("{d}/"), n.to_string()),
+        None => (String::new(), f.path.clone()),
+    };
+    let mut spans = vec![
+        Span::styled(if folded { "▸ " } else { "▾ " }, muted),
+        Span::styled(format!("{} ", crate::commit::sign(f.kind)), Style::new().fg(kind_color).add_modifier(Modifier::BOLD)),
+    ];
+    if let Some(old) = &f.old_path {
+        spans.push(Span::styled(format!("{old} → "), muted));
+    }
+    spans.push(Span::styled(dir, muted));
+    spans.push(Span::styled(file, Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)));
+    if let Some((from, to)) = &f.modes {
+        spans.push(Span::styled(format!("   mode {from} → {to}"), muted));
+    }
+    let counts = if f.binary {
+        vec![Span::styled("binary", muted)]
+    } else {
+        vec![Span::styled(format!("+{added}"), Style::new().fg(c.git.added.into())), Span::raw(" "), Span::styled(format!("−{removed}"), Style::new().fg(c.git.deleted.into()))]
+    };
+    let used: usize = spans.iter().chain(counts.iter()).map(|s| s.content.width()).sum();
+    if let Some(w) = width {
+        spans.push(Span::raw(" ".repeat(w.saturating_sub(used + 1).max(1))));
+    } else {
+        spans.push(Span::raw("  "));
+    }
+    spans.extend(counts);
+    for s in &mut spans {
+        s.style = s.style.bg(bar_bg);
+    }
+    Line::from(spans)
 }
 
 /// One row of the unified view: both line numbers, the sign, the code, the tint to the edge.
@@ -518,18 +643,64 @@ mod tests {
         let opts = Options { width: Some(80), ..Options::default() };
         let (lines, anchors) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
         let t = text(&lines);
-        assert!(t.iter().any(|l| l.starts_with("@@ -1,4 +1,4 @@")), "{t:#?}");
+        assert!(t.iter().any(|l| l.starts_with("  ⋯ line 1")), "{t:#?}");
         // A hunk header names the function it sits in when it starts below it.
         let long_old = format!("fn first() {{\n}}\n\nfn second() {{\n{}    let a = 1;\n}}\n", "    // pad\n".repeat(6));
         let long_new = long_old.replace("let a = 1", "let a = 2");
         let (lines, _) = render(&[patch(&long_old, &long_new)], &Theme::default(), &opts, 100);
-        assert!(text(&lines).iter().any(|l| l.starts_with("@@") && l.contains("fn second()")), "{:#?}", text(&lines));
+        assert!(text(&lines).iter().any(|l| l.starts_with("  ⋯ line") && l.contains("fn second()")), "{:#?}", text(&lines));
         // The removed row shows its old number, the added row its new one.
         assert!(t.iter().any(|l| l.contains(" 2   - ") || l.contains("2   - ")), "{t:#?}");
         assert!(t.iter().any(|l| l.contains("  2 + ")), "{t:#?}");
         assert_eq!((anchors.files.len(), anchors.hunks.len()), (1, 1));
     }
 
+
+    #[test]
+    fn big_and_generated_files_fold_by_themselves_and_a_fold_can_be_toggled() {
+        reset_folds();
+        let opts = Options { width: Some(80), ..Options::default() };
+        let mut lock = patch("a\n", "a\nb\n");
+        lock.path = "Cargo.lock".into();
+        let (lines, _) = render(&[lock.clone()], &Theme::default(), &opts, 100);
+        let t = text(&lines);
+        assert!(t.iter().any(|l| l.contains("folded")) && !t.iter().any(|l| l.contains("⋯ line")), "{t:#?}");
+        toggle_fold("Cargo.lock");
+        let (lines, _) = render(&[lock], &Theme::default(), &opts, 100);
+        assert!(text(&lines).iter().any(|l| l.contains("⋯ line")));
+        // An ordinary file folds by hand.
+        toggle_fold("src/lib.rs");
+        let (lines, anchors) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+        assert!(text(&lines).iter().any(|l| l.contains("folded")));
+        assert_eq!(anchors.paths, vec!["src/lib.rs".to_string()]);
+        reset_folds();
+    }
+
+    #[test]
+    fn whitespace_only_changes_are_dimmed_or_shown_as_unchanged() {
+        let opts = Options { width: Some(80), ..Options::default() };
+        let (old, new) = ("a\n  b\nc\n", "a\n\tb\nc\nd\n");
+        set_ignore_whitespace(false);
+        let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
+        let t = text(&lines);
+        assert!(t.iter().any(|l| l.contains("- ") && l.contains("  b")) && t.iter().any(|l| l.contains("+ ") && l.contains("b")), "{t:#?}");
+        set_ignore_whitespace(true);
+        let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
+        let t = text(&lines);
+        assert!(!t.iter().any(|l| l.contains(" - ")), "the removed whitespace line is gone: {t:#?}");
+        assert!(t.iter().any(|l| l.contains("+ d")), "{t:#?}");
+        set_ignore_whitespace(false);
+    }
+
+    #[test]
+    fn a_line_that_does_not_fit_ends_in_a_marker() {
+        let cells: Vec<Cell> = "abcdefghij".chars().map(|c| (c, Style::new())).collect();
+        let spans = spans_of(&cells, Some(6), None);
+        let s: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(s, "abcde…");
+        let spans = spans_of(&cells, Some(10), None);
+        assert_eq!(spans.iter().map(|s| s.content.as_ref()).collect::<String>(), "abcdefghij");
+    }
     #[test]
     fn the_changed_word_gets_a_stronger_background_than_the_rest_of_its_row() {
         let opts = Options { width: Some(80), ..Options::default() };
@@ -590,7 +761,7 @@ mod tests {
         assert_eq!(Anchors::next(&marks, 20), None);
         assert_eq!(Anchors::prev(&marks, 10), Some(3));
         assert_eq!(Anchors::prev(&marks, 3), None);
-        assert_eq!(Anchors { files: vec![1], hunks: vec![2] }.shifted(5), Anchors { files: vec![6], hunks: vec![7] });
+        assert_eq!(Anchors { files: vec![1], hunks: vec![2], ..Default::default() }.shifted(5), Anchors { files: vec![6], hunks: vec![7], ..Default::default() });
     }
 
     #[test]

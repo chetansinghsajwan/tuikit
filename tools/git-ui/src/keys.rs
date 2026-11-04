@@ -47,6 +47,8 @@ const COMMON: &[Action] = &[
     basic("preview.prev_hunk", "previous hunk", "scroll the diff to the previous hunk", &["{"]),
     basic("preview.next_file", "next file", "scroll the diff to the next file", &[")"]),
     basic("preview.prev_file", "previous file", "scroll the diff to the previous file", &["("]),
+    action("preview.fold", "fold file", "fold or unfold the file at the top of the diff (lockfiles and huge files start folded)", &["z"]),
+    action("preview.whitespace", "ignore whitespace", "show changes in whitespace only as unchanged lines", &["w"]),
     basic("back", "back to files", "focus the files pane", &["esc"]),
     basic("palette", "commands", "search every action by name and run it", &["leader space"]),
     basic("help", "keys", "list every action with its keys", &["?"]),

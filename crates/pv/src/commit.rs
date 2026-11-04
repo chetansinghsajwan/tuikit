@@ -73,23 +73,11 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
     let muted = Style::new().fg(c.muted.into());
     let fg = Style::new().fg(c.fg.into());
     let label = |s: &str| Span::styled(format!("{s:<7}"), muted);
+    let width = opts.width.map(usize::from);
 
-    let mut out = vec![
-        Line::from(vec![label("commit"), Span::styled(info.oid.clone(), Style::new().fg(c.warning.into()))]),
-        Line::from(vec![label("author"), Span::styled(format!("{} <{}>", info.author, info.email), fg)]),
-        Line::from(vec![label("date"), Span::styled(format!("{} UTC  ({})", utc(info.time), age(info.time)), fg)]),
-    ];
-    // Every ref on the commit, whole: the list in `gu` cuts them to fit its column.
-    if base.is_none() {
-        let names: Vec<String> = repo.refs().unwrap_or_default().into_iter().filter(|r| r.oid == info.oid).map(|r| r.name).collect();
-        if !names.is_empty() {
-            out.push(Line::from(vec![label("refs"), Span::styled(names.join(", "), Style::new().fg(c.accent.into()))]));
-        }
-    }
-    out.push(Line::default());
+    let mut out: Vec<Line<'static>> = Vec::new();
     if let Some(b) = base {
         // A range: the two commits being compared, not one commit's details.
-        out.clear();
         let base_info = repo.commit(b).map_err(|e| Error::Unsupported(e.to_string()))?;
         for (name, i, label_text) in [("from", &base_info, None), ("to", &info, to_label)] {
             let spans = match label_text {
@@ -102,47 +90,84 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
             };
             out.push(Line::from(spans));
         }
-        out.push(Line::default());
     } else {
-        for (i, l) in info.message.lines().enumerate() {
-            if i == 0 {
-                let mut spans = vec![Span::raw("  ")];
-                spans.extend(ui::subject::spans(theme, l, fg.add_modifier(Modifier::BOLD)));
-                out.push(Line::from(spans));
-            } else {
-                out.push(Line::from(Span::styled(format!("  {l}"), fg)));
+        // What it is first (the subject, then the rest of the message), then who, when and where it is, in one line.
+        let mut lines = info.message.lines();
+        let mut subject = Vec::new();
+        subject.extend(ui::subject::spans(theme, lines.next().unwrap_or(""), fg.add_modifier(Modifier::BOLD)));
+        out.push(Line::from(subject));
+        let body: Vec<&str> = lines.skip_while(|l| l.trim().is_empty()).collect();
+        if !body.is_empty() {
+            out.push(Line::default());
+            for l in body {
+                for w in wrap(l, width.map(|w| w.saturating_sub(2))) {
+                    out.push(Line::from(Span::styled(format!("  {w}"), fg)));
+                }
             }
         }
         out.push(Line::default());
-    }
-
-    let (added, removed): (u32, u32) = changes.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
-    out.push(Line::from(Span::styled(
-        format!("{} file{} changed, +{added} -{removed}", changes.len(), if changes.len() == 1 { "" } else { "s" }),
-        muted,
-    )));
-    for f in &changes {
-        let kind_color = git::kind_color(theme, f.kind);
-        let left = format!(" {} {}", sign(f.kind), f.path);
-        let stat = if f.binary { "binary".to_string() } else { format!("+{} -{}", f.added, f.removed) };
-        let mut spans = vec![
-            Span::styled(format!(" {} ", sign(f.kind)), Style::new().fg(kind_color)),
-            Span::styled(f.path.clone(), Style::new().fg(kind_color)),
+        let mut meta = vec![
+            Span::styled(info.author.clone(), fg),
+            Span::styled("  ·  ", muted),
+            Span::styled(age(info.time), muted),
+            Span::styled("  ·  ", muted),
+            Span::styled(info.oid[..info.oid.len().min(8)].to_string(), Style::new().fg(c.warning.into())),
         ];
-        if let Some(w) = opts.width {
-            let pad = (w as usize).saturating_sub(left.width() + stat.width() + 1).max(1);
-            spans.push(Span::raw(" ".repeat(pad)));
-        } else {
-            spans.push(Span::raw("  "));
+        // Every ref on the commit, whole: the list in `gu` cuts them to fit its column.
+        let names: Vec<String> = repo.refs().unwrap_or_default().into_iter().filter(|r| r.oid == info.oid).map(|r| r.name).collect();
+        if !names.is_empty() {
+            meta.push(Span::styled("  ·  ", muted));
+            meta.push(Span::styled(names.join(", "), Style::new().fg(c.accent.into())));
         }
+        out.push(Line::from(meta));
+    }
+    out.push(Line::default());
+
+    // The files: one row each, the folder muted and the name in the colour of its state, the counts in two
+    // right-aligned columns and a bar showing how big the change is next to the others.
+    const MAX_ROWS: usize = 14;
+    const BAR: usize = 8;
+    let (added, removed): (u32, u32) = changes.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
+    out.push(Line::from(vec![
+        Span::styled(format!("{} file{}", changes.len(), if changes.len() == 1 { "" } else { "s" }), fg.add_modifier(Modifier::BOLD)),
+        Span::styled("   ", muted),
+        Span::styled(format!("+{added}"), Style::new().fg(c.git.added.into())),
+        Span::raw(" "),
+        Span::styled(format!("−{removed}"), Style::new().fg(c.git.deleted.into())),
+    ]));
+    let biggest = changes.iter().map(|f| f.added + f.removed).max().unwrap_or(1).max(1);
+    let (aw, rw) = (changes.iter().map(|f| f.added.to_string().len()).max().unwrap_or(1) + 1, changes.iter().map(|f| f.removed.to_string().len()).max().unwrap_or(1) + 1);
+    for f in changes.iter().take(MAX_ROWS) {
+        let kind_color = git::kind_color(theme, f.kind);
+        let (dir, name) = match f.path.rsplit_once('/') {
+            Some((d, n)) => (format!("{d}/"), n.to_string()),
+            None => (String::new(), f.path.clone()),
+        };
+        let counts_w = if f.binary { 6 } else { aw + 1 + rw };
+        let left = 3 + dir.width() + name.width();
+        let tail = counts_w + 2 + BAR;
+        let pad = width.map(|w| w.saturating_sub(left + tail).max(1)).unwrap_or(2);
+        let mut spans = vec![Span::styled(format!(" {} ", sign(f.kind)), Style::new().fg(kind_color)), Span::styled(dir, muted), Span::styled(name, Style::new().fg(kind_color)), Span::raw(" ".repeat(pad))];
         if f.binary {
-            spans.push(Span::styled(stat, muted));
+            spans.push(Span::styled("binary", muted));
         } else {
-            spans.push(Span::styled(format!("+{}", f.added), Style::new().fg(c.git.added.into())));
+            spans.push(Span::styled(format!("{:>aw$}", format!("+{}", f.added)), Style::new().fg(c.git.added.into())));
             spans.push(Span::raw(" "));
-            spans.push(Span::styled(format!("-{}", f.removed), Style::new().fg(c.git.deleted.into())));
+            spans.push(Span::styled(format!("{:<rw$}", format!("−{}", f.removed)), Style::new().fg(c.git.deleted.into())));
         }
+        spans.push(Span::raw("  "));
+        // Filled cells in proportion to the biggest change of the commit, green and red by share.
+        let total = f.added + f.removed;
+        let filled = if total == 0 { 0 } else { ((total as usize * BAR).div_ceil(biggest as usize)).clamp(1, BAR) };
+        let green = if total == 0 { 0 } else { ((f.added as usize * filled).div_ceil(total as usize)).min(filled) };
+        spans.push(Span::styled("█".repeat(green), Style::new().fg(c.git.added.into())));
+        spans.push(Span::styled("█".repeat(filled - green), Style::new().fg(c.git.deleted.into())));
+        spans.push(Span::styled("░".repeat(BAR - filled), Style::new().fg(ui::mix(c.muted.into(), c.bg.into(), 40))));
         out.push(Line::from(spans));
+    }
+    if changes.len() > MAX_ROWS {
+        let rest: u32 = changes.iter().skip(MAX_ROWS).map(|f| f.added + f.removed).sum();
+        out.push(Line::from(Span::styled(format!("   … {} more files, {rest} lines", changes.len() - MAX_ROWS), muted)));
     }
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
     let mut anchors = Anchors::default();
@@ -223,4 +248,22 @@ pub fn render_files_marked(root: &Path, rev: &str, prefix: &str, theme: &Theme, 
     }
     lines.truncate(limit);
     Ok((lines, anchors))
+}
+
+/// `text` broken into lines of at most `width` columns at spaces (as is when there is no width).
+fn wrap(text: &str, width: Option<usize>) -> Vec<String> {
+    let Some(width) = width.filter(|w| *w > 8) else { return vec![text.to_string()] };
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split(' ') {
+        if !line.is_empty() && line.width() + 1 + word.width() > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    lines.push(line);
+    lines
 }
