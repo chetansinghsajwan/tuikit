@@ -2,7 +2,7 @@
 
 How every terminal tool behaves: keys, menus, safety, embedding. The look is in `ui-design.md`. If a tool needs a key or behaviour that is not here, decide it here first, then build it.
 
-Applies to `files`, `pick`, `pv` (where interactive), `gu` (git-ui), `git-panel`, `nu`, the diagnostics and symbols panels, the helix docks and popups, and every future tool.
+Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu` (git-ui), `git-panel`, `nu`, the diagnostics and symbols panels, the helix docks and popups, and every future tool.
 
 ## Rules
 
@@ -86,7 +86,7 @@ leader = "space"
 "remote.push" = "leader r p"
 ```
 
-Tool names: `gu`, `files`, `nu`, `git-panel`, `hx-ui` (the helix docks; not `helix`, which has its own config). `pick` and the diagnostics panel do not use the registry yet. Nix does not generate these files yet; `mdexport` is the exception (fonts from stylix).
+Tool names: `gu`, `files`, `tb`, `nu`, `git-panel`, `hx-ui` (the helix docks; not `helix`, which has its own config). `pick` and the diagnostics panel do not use the registry yet. Nix does not generate these files yet; `mdexport` is the exception (fonts from stylix).
 
 ## Embedding
 
@@ -108,8 +108,9 @@ Tool names: `gu`, `files`, `nu`, `git-panel`, `hx-ui` (the helix docks; not `hel
 | `gu` | Commits | `/` search, `f` filter popup, `F` clear, `v` view menu (`g` graph, `h` hash, `a` author, `n` name, `r` refs, `m` message, `t` time, `d` date, `b` all branches, `p` diff), `l` files of the commit, `enter` check out, `y` copy hash, `r` reword, `A` amend, `R` revert, `leader S` switch to |
 | `gu` | Status | tree of changes, `s` toggle stage, `a` all, `d` discard, `t` tree or list, `c` commit, `C` amend |
 | `files` | all | `.` hidden, `I` ignored, `leader v t` tables as text, `leader f` find, `/` find in this folder |
+| `tb` | grid | `h j k l` cell, `0` `$` first, last column, `enter` edit, `a` `O` add row, `d` delete row (asks), `J` `K` move row, `H` `L` move column, `leader c a` `leader c d` add, delete column, `s` `S` sort, `/` `n` `N` find, `y` `p` copy, paste, `u` `ctrl-r` undo, redo, `ctrl-s` save, `leader t h` header |
 | `pick` | preview | `ctrl-t` tables as text |
-| helix | Space | `e` files, `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `1` `2` `3` docks |
+| helix | Space | `e` files, `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `T` table (`l` `h` `j` `k` cell, `s` `S` sort, `a` `d` add, delete column, `[` `]` move column; `Alt` `h` `j` `k` `l` move by cell), `1` `2` `3` docks |
 
 ## Checklist for a new tool
 

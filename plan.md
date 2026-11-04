@@ -537,3 +537,7 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - helix tabs: `Space t` `c` close, `>` close all to the right, `<` close all to the left, `[` `]` move the tab; `Editor::tabs` / `move_tab` (the strip, next/previous and `Space t 1`-`9` follow the order).
 - Minimap: the lines on screen are an accent band (26 %), the cursor line a stronger band (60 %) across the whole width; the accent is the first RGB color of the theme's cursor, selection or text colors. The editor's cursor line is the accent at 24 % (`home/programs/helix.nix`).
 - Soft wrap is on by default in the fork (`editor.soft-wrap.enable`), `Space W` toggles it.
+
+## Table editor (`tb`)
+
+`home/crates/tb`: `table::Table` (cells kept as written, so an unchanged file round-trips byte for byte; edit, insert/delete/move rows and columns, numeric sort, cell offsets), `grid::Grid` (cell editor: edit, rows/columns, sort, find, undo, save), `keys` (registry), `main.rs` (standalone, draws on /dev/tty). Helix uses `tb::table` for `Space T` and `Alt h/j/k/l` (cell motion, sort, column add/delete/move) on csv, tsv and psv buffers; aligned live view is `ui/table.rs`. csv/tsv/psv only (no xlsx writer). Preview scrolling everywhere: design agreed in chat (shared `ui::scroll::PreviewScroll` + `preview.*` actions + wheel), not built yet.

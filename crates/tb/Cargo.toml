@@ -1,0 +1,18 @@
+[package]
+name = "tb"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+ratatui = "0.30.2"
+tui-input = "0.15.5"
+ui = { version = "0.1.0", path = "../ui" }
+unicode-width = "0.2"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tb"
+path = "src/main.rs"
