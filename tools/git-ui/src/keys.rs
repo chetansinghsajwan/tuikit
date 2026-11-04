@@ -64,6 +64,7 @@ const BRANCHES: &[Action] = &[
 ];
 
 const COMMITS: &[Action] = &[
+    action("commit.files", "files", "explore the files of the commit as a tree, with the diff of each (h or esc goes back)", &["l", "right", "leader l"]),
     action("commit.copy_hash", "copy hash", "copy the full hash of the commit to the clipboard", &["y", "leader y"]),
     action("commit.checkout", "check out", "check out the commit (detached HEAD)", &["enter", "leader k"]),
     action("search.start", "search", "search the commits by hash, subject, author or branch and tag names", &["/", "leader s"]),

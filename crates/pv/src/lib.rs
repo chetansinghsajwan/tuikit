@@ -23,6 +23,7 @@ pub use commit::render as preview_commit;
 pub use commit::utc as format_utc;
 pub use commit::render_marked as preview_commit_marked;
 pub use commit::render_file_diff_marked as preview_diff_marked;
+pub use commit::render_files_marked as preview_commit_files_marked;
 pub use diff::Anchors;
 pub use commit::render_file_diff as preview_diff;
 pub use config::Config;

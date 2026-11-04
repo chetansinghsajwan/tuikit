@@ -164,3 +164,24 @@ pub fn render_file_diff_marked(root: &Path, rela: &Path, side: git_core::Side, t
     lines.truncate(limit);
     Ok((lines, anchors))
 }
+
+/// The diff of `rev` for the files at `prefix` (one file, or every file below a folder; an empty prefix is the
+/// whole commit's patch without its header), with where the files and hunks start.
+pub fn render_files_marked(root: &Path, rev: &str, prefix: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+    let repo = Repo::discover(root).ok_or(Error::NotFound)?;
+    let all = repo.patch(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
+    let below = format!("{}/", prefix.trim_end_matches('/'));
+    let files: Vec<git_core::FilePatch> = all.into_iter().filter(|f| prefix.is_empty() || f.path == prefix || f.path.starts_with(&below)).collect();
+    let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
+    let (mut lines, mut anchors) = diff::render(&files, theme, opts, limit + 1);
+    if lines.first().is_some_and(|l| l.spans.is_empty()) {
+        lines.remove(0);
+        anchors.files.iter_mut().for_each(|m| *m = m.saturating_sub(1));
+        anchors.hunks.iter_mut().for_each(|m| *m = m.saturating_sub(1));
+    }
+    if files.is_empty() {
+        lines.push(Line::from(Span::styled("no changes", Style::new().fg(theme.colors.muted.into()))));
+    }
+    lines.truncate(limit);
+    Ok((lines, anchors))
+}

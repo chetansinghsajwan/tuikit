@@ -1,0 +1,9 @@
+[package]
+name = "symbols-panel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ratatui = "0.30.2"
+tui-input = "0.15.5"
+ui = { version = "0.1.0", path = "../ui" }

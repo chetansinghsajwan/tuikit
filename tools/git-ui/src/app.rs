@@ -133,6 +133,102 @@ impl Default for Columns {
     }
 }
 
+/// The files of one commit, as a folder tree (Commits tab, `l` on a commit); the diff of the one under the
+/// cursor shows beside it.
+struct CommitFiles {
+    oid: String,
+    short: String,
+    subject: String,
+    changes: Vec<git_core::FileChange>,
+    rows: Vec<FileRow>,
+    cursor: usize,
+    offset: usize,
+    folded: std::collections::HashSet<String>,
+}
+
+enum FileRow {
+    Folder { path: String, label: String, depth: usize, count: usize, folded: bool },
+    File { change: git_core::FileChange, depth: usize },
+}
+
+impl FileRow {
+    fn path(&self) -> &str {
+        match self {
+            FileRow::Folder { path, .. } => path,
+            FileRow::File { change, .. } => &change.path,
+        }
+    }
+}
+
+#[derive(Default)]
+struct FileNode {
+    dirs: std::collections::BTreeMap<String, FileNode>,
+    files: Vec<git_core::FileChange>,
+}
+
+impl FileNode {
+    fn count(&self) -> usize {
+        self.files.len() + self.dirs.values().map(FileNode::count).sum::<usize>()
+    }
+}
+
+impl CommitFiles {
+    fn new(oid: String, short: String, subject: String, mut changes: Vec<git_core::FileChange>) -> CommitFiles {
+        changes.sort_by(|a, b| a.path.cmp(&b.path));
+        let mut cf = CommitFiles { oid, short, subject, changes, rows: Vec::new(), cursor: 0, offset: 0, folded: Default::default() };
+        cf.rebuild();
+        cf
+    }
+
+    fn rebuild(&mut self) {
+        let keep = self.rows.get(self.cursor).map(|r| r.path().to_string());
+        let mut root = FileNode::default();
+        for c in &self.changes {
+            let mut node = &mut root;
+            let mut parts: Vec<&str> = c.path.split('/').collect();
+            parts.pop();
+            for part in parts {
+                node = node.dirs.entry(part.to_string()).or_default();
+            }
+            node.files.push(c.clone());
+        }
+        let mut rows = Vec::new();
+        fn push(node: &FileNode, prefix: &str, depth: usize, folded: &std::collections::HashSet<String>, rows: &mut Vec<FileRow>) {
+            for (name, child) in &node.dirs {
+                let (mut label, mut child, mut path) = (name.clone(), child, if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") });
+                // A folder with nothing but one folder in it joins it: `src/lib`.
+                while child.files.is_empty() && child.dirs.len() == 1 {
+                    let (n, c) = child.dirs.iter().next().expect("one folder");
+                    label = format!("{label}/{n}");
+                    path = format!("{path}/{n}");
+                    child = c;
+                }
+                let is_folded = folded.contains(&path);
+                rows.push(FileRow::Folder { path: path.clone(), label, depth, count: child.count(), folded: is_folded });
+                if !is_folded {
+                    push(child, &path, depth + 1, folded, rows);
+                }
+            }
+            for change in &node.files {
+                rows.push(FileRow::File { change: change.clone(), depth });
+            }
+        }
+        push(&root, "", 0, &self.folded, &mut rows);
+        self.rows = rows;
+        self.cursor = keep.and_then(|p| self.rows.iter().position(|r| r.path() == p)).unwrap_or(self.cursor).min(self.rows.len().saturating_sub(1));
+    }
+
+    fn move_by(&mut self, delta: isize) {
+        let last = self.rows.len().saturating_sub(1) as isize;
+        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
+    }
+
+    /// The path of the row under the cursor (a folder's covers every file below it).
+    fn current_path(&self) -> Option<&str> {
+        self.rows.get(self.cursor).map(FileRow::path)
+    }
+}
+
 /// What narrows the commit list. The graph is drawn from what is left.
 #[derive(Default, Clone)]
 struct Filter {
@@ -257,6 +353,8 @@ pub struct App {
     /// The current commit search.
     search: Option<String>,
     filter: Filter,
+    /// The files of the commit being explored, when there is one.
+    commit_files: Option<CommitFiles>,
     /// The options offered while a filter prompt is open.
     suggest: ui::prompt::Suggest,
     /// Changes made outside this screen (a commit in another terminal, a saved file) reload it.
@@ -304,6 +402,7 @@ impl App {
             detail: false,
             search: None,
             filter: Filter::default(),
+            commit_files: None,
             suggest: Default::default(),
             watch,
         };
@@ -493,6 +592,81 @@ impl App {
     }
 
     /// Scroll the diff to the next or previous hunk (or file).
+    /// Open the file tree of the commit under the cursor.
+    fn open_commit_files(&mut self) {
+        let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
+        match self.repo.changes(&k.oid) {
+            Ok(changes) => {
+                self.commit_files = Some(CommitFiles::new(k.oid, k.short, k.subject, changes));
+                self.detail = true;
+                self.preview = None;
+                self.pscroll = 0;
+            }
+            Err(e) => self.say(e.to_string(), true),
+        }
+    }
+
+    /// Keys while the files of a commit show: the tree moves and folds, esc goes back to the commits.
+    fn commit_files_key(&mut self, key: &KeyEvent) -> Quit {
+        use ratatui::crossterm::event::KeyModifiers;
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let page = self.pheight.max(2);
+        let Some(cf) = self.commit_files.as_mut() else { return Quit::No };
+        let before = cf.cursor;
+        match key.code {
+            KeyCode::Char('c') if ctrl => return Quit::Yes,
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => self.commit_files = None,
+            KeyCode::Char('j') | KeyCode::Down if !ctrl => cf.move_by(1),
+            KeyCode::Char('k') | KeyCode::Up if !ctrl => cf.move_by(-1),
+            KeyCode::Char('n') if ctrl => cf.move_by(1),
+            KeyCode::Char('p') if ctrl => cf.move_by(-1),
+            KeyCode::Char('j') if ctrl => cf.move_by(5),
+            KeyCode::Char('k') if ctrl => cf.move_by(-5),
+            KeyCode::PageDown => cf.move_by(page as isize),
+            KeyCode::PageUp => cf.move_by(-(page as isize)),
+            KeyCode::Char('g') | KeyCode::Home => cf.cursor = 0,
+            KeyCode::Char('G') | KeyCode::End => cf.cursor = cf.rows.len().saturating_sub(1),
+            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
+                if let Some(FileRow::Folder { path, folded: true, .. }) = cf.rows.get(cf.cursor) {
+                    let p = path.clone();
+                    cf.folded.remove(&p);
+                    cf.rebuild();
+                }
+            }
+            KeyCode::Char('h') | KeyCode::Left => {
+                // Fold an open folder; otherwise go to the parent folder; at the top, back to the commits.
+                let depth_of = |r: &FileRow| match r {
+                    FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
+                };
+                match cf.rows.get(cf.cursor) {
+                    Some(FileRow::Folder { path, folded: false, .. }) => {
+                        let p = path.clone();
+                        cf.folded.insert(p);
+                        cf.rebuild();
+                    }
+                    Some(row) if depth_of(row) > 0 => {
+                        let want = depth_of(row) - 1;
+                        if let Some(i) = cf.rows[..cf.cursor].iter().rposition(|r| matches!(r, FileRow::Folder { .. }) && depth_of(r) == want) {
+                            cf.cursor = i;
+                        }
+                    }
+                    _ => self.commit_files = None,
+                }
+            }
+            KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
+            KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            KeyCode::Char('}') => self.jump_diff(true, false),
+            KeyCode::Char('{') => self.jump_diff(false, false),
+            KeyCode::Char(')') => self.jump_diff(true, true),
+            KeyCode::Char('(') => self.jump_diff(false, true),
+            _ => {}
+        }
+        if self.commit_files.as_ref().is_some_and(|cf| cf.cursor != before) {
+            self.pscroll = 0;
+        }
+        Quit::No
+    }
+
     fn jump_diff(&mut self, forward: bool, files: bool) {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
@@ -605,6 +779,9 @@ impl App {
                 return Quit::No;
             }
             Mode::Normal => {}
+        }
+        if self.screen == Screen::Commits && self.commit_files.is_some() {
+            return self.commit_files_key(key);
         }
         // The Files pane is the git panel: it has its own keys (and the global ones as commands).
         if self.focus == Focus::Files {
@@ -915,6 +1092,7 @@ impl App {
                         Ok(()) => self.say(format!("copied {} to the clipboard", k.short), false),
                         Err(e) => self.say(format!("could not copy: {e}"), true),
                     },
+                    "commit.files" => self.open_commit_files(),
                     "commit.checkout" => {
                         let oid = k.oid.clone();
                         self.run(format!("checked out {}", k.short), move |r| r.checkout_commit(&oid));
@@ -1186,7 +1364,11 @@ impl App {
         let theme = self.theme.clone();
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
-        if self.detail && body.width >= 60 {
+        if self.commit_files.is_some() {
+            let [left, right] = ui::layout::main_preview(&theme, body);
+            self.render_commit_files(left, buf, &theme);
+            self.render_preview(Focus::Commits, right, buf, &theme);
+        } else if self.detail && body.width >= 60 {
             let [left, right] = ui::layout::main_preview(&theme, body);
             self.render_list(Focus::Commits, left, buf, &theme);
             self.render_preview(Focus::Commits, right, buf, &theme);
@@ -1195,6 +1377,80 @@ impl App {
         }
         self.render_status(status, buf, &theme);
         self.render_overlays(area, buf, &theme);
+    }
+
+    /// The files of the commit being explored, as a tree.
+    fn render_commit_files(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+        let Some(cf) = self.commit_files.as_mut() else { return };
+        let c = &theme.colors;
+        let title = format!("{}  {}", cf.short, cf.subject);
+        let pane = Pane::new(theme).title(&title).icon(ui::icons::COMMIT).focused(true);
+        let inner = pane.inner(area);
+        pane.render(area, buf);
+        if inner.height == 0 || inner.width < 6 {
+            return;
+        }
+        if cf.rows.is_empty() {
+            buf.set_string(inner.x + 1, inner.y, "no files changed", Style::new().fg(c.muted.into()));
+            return;
+        }
+        let page = usize::from(inner.height);
+        if cf.cursor < cf.offset {
+            cf.offset = cf.cursor;
+        } else if cf.cursor >= cf.offset + page {
+            cf.offset = cf.cursor + 1 - page;
+        }
+        let geo = ui::list::Rows::new(area, inner);
+        let git_color = |k: git_core::Kind| -> ratatui::style::Color {
+            let g = &c.git;
+            match k {
+                git_core::Kind::Added => g.added,
+                git_core::Kind::Modified | git_core::Kind::Typechange => g.modified,
+                git_core::Kind::Deleted => g.deleted,
+                git_core::Kind::Renamed => g.renamed,
+                git_core::Kind::Untracked => g.untracked,
+                git_core::Kind::Conflict => g.conflict,
+            }
+            .into()
+        };
+        for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
+            let y = inner.y + (n - cf.offset) as u16;
+            let at = n == cf.cursor;
+            let (tint, line) = match row {
+                FileRow::Folder { label, depth, count, folded, .. } => {
+                    let icon = ui::icons::dir(label.rsplit('/').next().unwrap_or(label), !*folded);
+                    let line = Line::from(vec![
+                        Span::raw("   ".repeat(*depth)),
+                        Span::styled(if *folded { "▸ " } else { "▾ " }, Style::new().fg(c.muted.into())),
+                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
+                        Span::styled(format!("{label}/"), Style::new().fg(c.accent.into())),
+                        Span::styled(format!(" ({count})"), Style::new().fg(c.muted.into())),
+                    ]);
+                    (None, line)
+                }
+                FileRow::File { change, depth } => {
+                    let name = change.path.rsplit('/').next().unwrap_or(&change.path);
+                    let icon = ui::icons::file(name, false);
+                    let color = git_color(change.kind);
+                    let mut spans = vec![
+                        Span::raw("   ".repeat(*depth)),
+                        Span::styled(format!("{} ", change.kind.letter()), Style::new().fg(color)),
+                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
+                        Span::styled(name.to_string(), Style::new().fg(c.fg.into())),
+                    ];
+                    if change.binary {
+                        spans.push(Span::styled("  binary", Style::new().fg(c.muted.into())));
+                    } else {
+                        spans.push(Span::styled(format!("  +{}", change.added), Style::new().fg(c.git.added.into())));
+                        spans.push(Span::styled(format!(" -{}", change.removed), Style::new().fg(c.git.deleted.into())));
+                    }
+                    (Some(color), Line::from(spans))
+                }
+            };
+            let base = ui::list::style(theme, at, tint);
+            buf.set_style(geo.bar(y), base);
+            Paragraph::new(line).style(base).render(geo.content(y), buf);
+        }
     }
 
     /// The Status tab: the changed files and the preview of the one under the cursor.
@@ -1417,7 +1673,11 @@ impl App {
     fn current_rev(&self, which: Focus) -> Option<String> {
         match which {
             Focus::Branches => self.current_ref().map(|b| b.name.clone()),
-            Focus::Commits => self.commits.get(self.lists[1].cursor).map(|c| c.oid.clone()),
+            Focus::Commits => match &self.commit_files {
+                // The diff of the file (or folder) of the commit being explored: `oid`, a separator, the path.
+                Some(cf) => Some(format!("{}\u{1}{}", cf.oid, cf.current_path().unwrap_or(""))),
+                None => self.commits.get(self.lists[1].cursor).map(|c| c.oid.clone()),
+            },
             Focus::Stashes => self.stashes.get(self.lists[2].cursor).map(|s| format!("stash@{{{}}}", s.index)),
             Focus::Files => None,
         }
@@ -1425,7 +1685,7 @@ impl App {
 
     fn render_preview(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let rev = self.current_rev(which);
-        let title = rev.clone().unwrap_or_default();
+        let title = rev.clone().unwrap_or_default().split_once('\u{1}').map(|(_, p)| if p.is_empty() { "all files".to_string() } else { p.to_string() }).unwrap_or_else(|| rev.clone().unwrap_or_default());
         let icon = match which {
             Focus::Branches => ui::icons::BRANCH,
             Focus::Stashes => ui::icons::STASH,
@@ -1444,7 +1704,11 @@ impl App {
         let key = (which, rev.clone(), inner.width);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
-            let (lines, anchors) = match pv::preview_commit_marked(&self.root, &rev, theme, &opts) {
+            let result = match rev.split_once('\u{1}') {
+                Some((oid, path)) => pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts),
+                None => pv::preview_commit_marked(&self.root, &rev, theme, &opts),
+            };
+            let (lines, anchors) = match result {
                 Ok(r) => r,
                 Err(e) => (vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))], Default::default()),
             };
@@ -1516,7 +1780,10 @@ impl App {
 
     fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
-            return "/ search  n N next  f filter  F clear  v view  y copy hash  enter checkout  C cherry-pick  [ ] tabs  ? keys";
+            if self.commit_files.is_some() {
+                return "j k move  l h fold  ctrl-d/u scroll diff  } { hunks  ) ( files  esc back to the commits";
+            }
+            return "/ search  n N next  f filter  F clear  v view  l files  y copy hash  enter checkout  C cherry-pick  [ ] tabs  ? keys";
         }
         match self.focus {
             Focus::Files => "s stage/unstage  a all  d discard  t tree/list  c commit  enter edit  [ ] tabs  space space commands  ? keys",
@@ -1766,6 +2033,38 @@ mod tests {
 
     fn tab(app: &mut App) {
         app.handle_event(&key(KeyCode::Tab));
+    }
+
+    #[test]
+    fn l_on_a_commit_shows_its_files_as_a_tree_with_the_diff_of_each() {
+        let d = repo("cfiles");
+        fs::create_dir_all(d.join("src/deep")).unwrap();
+        fs::write(d.join("src/a.rs"), "fn a() {}\n").unwrap();
+        fs::write(d.join("src/deep/b.rs"), "fn b() {}\n").unwrap();
+        fs::write(d.join("top.txt"), "t\n").unwrap();
+        git(&d, &["add", "."]);
+        git(&d, &["commit", "-q", "-m", "add files"]);
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        press(&mut app, "l");
+        let text = screen(&mut app).join("\n");
+        assert!(text.contains("add files") && text.contains("src/") && text.contains("top.txt") && text.contains("+1"), "{text}");
+        // The diff of the file under the cursor shows beside the tree.
+        let cf = app.commit_files.as_ref().unwrap();
+        let at = cf.rows.iter().position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs")).unwrap();
+        app.commit_files.as_mut().unwrap().cursor = at;
+        let text = screen(&mut app).join("\n");
+        assert!(text.contains("fn a()"), "{text}");
+        // h folds and unfolds a folder, and goes to the parent; esc goes back to the commits.
+        app.commit_files.as_mut().unwrap().cursor = 0;
+        let open = app.commit_files.as_ref().unwrap().rows.len();
+        press(&mut app, "h");
+        assert!(app.commit_files.as_ref().unwrap().rows.len() < open, "the folder is folded");
+        press(&mut app, "l");
+        assert_eq!(app.commit_files.as_ref().unwrap().rows.len(), open);
+        app.handle_event(&key(KeyCode::Esc));
+        assert!(app.commit_files.is_none());
+        assert!(screen(&mut app).join("\n").contains("add files"));
     }
 
     #[test]
