@@ -82,6 +82,7 @@ const COMMITS: &[Action] = &[
     action("view.abs_time", "date", "show or hide the date and time of the commit", &["v d"]),
     action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["v b"]),
     action("view.detail", "diff", "show or hide the diff beside the list", &["v p", "p"]),
+    action("commit.compare_work", "compare with work tree", "show the diff from this commit to the current state of the files (changes not yet committed included)", &["M"]),
     action("commit.compare", "compare", "mark this commit, then move to another to see the diff between the two (again to clear)", &["m"]),
     action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
     action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),

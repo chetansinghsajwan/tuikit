@@ -414,6 +414,14 @@ impl Repo {
         self.git(&["commit", "-q", "--amend", "--only", "-m", message], &[]).map(|_| ())
     }
 
+    /// A commit holding the current state of the tracked files (staged and unstaged changes included),
+    /// made without touching the branch, the index or the work tree; `HEAD` when nothing changed.
+    pub fn worktree_snapshot(&self) -> Result<String, Error> {
+        let out = self.git(&["stash", "create"], &[])?;
+        let id = out.trim();
+        if id.is_empty() { Ok(self.git(&["rev-parse", "HEAD"], &[])?.trim().to_string()) } else { Ok(id.to_string()) }
+    }
+
     /// Change only the message of any commit on the checked-out history. The commits after it are
     /// rebuilt on the new one (same trees, authors and dates); the files and the index do not change.
     pub fn reword_commit(&self, oid: &str, message: &str) -> Result<(), Error> {

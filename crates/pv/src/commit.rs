@@ -55,11 +55,12 @@ pub fn render(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<V
 
 /// `render`, with where the files and hunks of the patch start.
 pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
-    render_range_marked(root, None, rev, theme, opts)
+    render_range_marked(root, None, rev, None, theme, opts)
 }
 
-/// The difference between two commits: `base` against `rev` (with `None`, `rev` against its parent).
-pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+/// The difference between two commits: `base` against `rev` (with `None`, `rev` against its parent). `to_label` names the
+/// `rev` side in the header when it is not a commit of its own (the work tree).
+pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label: Option<&str>, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let info = repo.commit(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
     let changes = match base {
@@ -83,9 +84,15 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, theme: &T
         // A range: the two commits being compared, not one commit's details.
         out.clear();
         let base_info = repo.commit(b).map_err(|e| Error::Unsupported(e.to_string()))?;
-        for (name, i) in [("from", &base_info), ("to", &info)] {
-            let mut spans = vec![label(name), Span::styled(format!("{} ", &i.oid[..i.oid.len().min(8)]), Style::new().fg(c.warning.into()))];
-            spans.extend(ui::subject::spans(theme, i.message.lines().next().unwrap_or(""), fg.add_modifier(Modifier::BOLD)));
+        for (name, i, label_text) in [("from", &base_info, None), ("to", &info, to_label)] {
+            let spans = match label_text {
+                Some(text) => vec![label(name), Span::styled(text.to_string(), fg.add_modifier(Modifier::BOLD))],
+                None => {
+                    let mut s = vec![label(name), Span::styled(format!("{} ", &i.oid[..i.oid.len().min(8)]), Style::new().fg(c.warning.into()))];
+                    s.extend(ui::subject::spans(theme, i.message.lines().next().unwrap_or(""), fg.add_modifier(Modifier::BOLD)));
+                    s
+                }
+            };
             out.push(Line::from(spans));
         }
         out.push(Line::default());

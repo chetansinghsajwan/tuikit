@@ -105,7 +105,7 @@ Tool names: `gu`, `files`, `tb`, `nu`, `git-panel`, `hx-ui` (the helix docks; no
 | Tool | Where | Keys |
 |---|---|---|
 | `gu` | tabs | `1` Status, `2` Commits, `3` Refs, `4` stashes; `[` `]` |
-| `gu` | Commits | `/` search, `f` filter popup, `F` clear, `v` view menu (`g` graph, `h` hash, `a` author, `n` name, `r` refs, `m` message, `t` time, `d` date, `b` all branches, `p` diff), `l` files of the commit, `m` mark a commit to compare (the preview then shows the diff from it to the highlighted commit; `m` again or `Esc` clears), `enter` check out, `y` copy hash, `r` reword, `A` amend, `R` revert, `leader S` switch to |
+| `gu` | Commits | `/` search, `f` filter popup, `F` clear, `v` view menu (`g` graph, `h` hash, `a` author, `n` name, `r` refs, `m` message, `t` time, `d` date, `b` all branches, `p` diff), `l` files of the commit, `m` mark a commit to compare (the preview then shows the diff from it to the highlighted commit; `m` again or `Esc` clears), `M` diff from the highlighted commit to the work tree (tracked files, uncommitted changes included), `enter` check out, `y` copy hash, `r` reword, `A` amend, `R` revert, `leader S` switch to |
 | `gu` | Status | tree of changes, `s` toggle stage, `a` all, `d` discard, `t` tree or list, `c` commit, `C` amend |
 | `files` | all | `.` hidden, `I` ignored, `leader v t` tables as text, `leader f` find, `/` find in this folder |
 | `tb` | grid | `h j k l` cell, `0` `$` first, last column, `enter` edit, `a` `O` add row, `d` delete row (asks), `J` `K` move row, `H` `L` move column, `leader c a` `leader c d` add, delete column, `s` `S` sort, `/` `n` `N` find, `y` `p` copy, paste, `u` `ctrl-r` undo, redo, `ctrl-s` save, `leader t h` header |

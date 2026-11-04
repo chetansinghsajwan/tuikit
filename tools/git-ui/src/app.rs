@@ -352,6 +352,8 @@ pub struct App {
     detail: bool,
     /// The commit marked to compare with: the preview shows its diff against the highlighted commit.
     compare: Option<String>,
+    /// The preview shows the diff from the highlighted commit to the work tree.
+    work: bool,
     /// The current commit search.
     search: Option<String>,
     filter: Filter,
@@ -403,6 +405,7 @@ impl App {
             screen: Screen::Status,
             detail: false,
             compare: None,
+            work: false,
             search: None,
             filter: Filter::default(),
             commit_files: None,
@@ -837,7 +840,9 @@ impl App {
             "focus.stashes" => self.show(Focus::Stashes),
             "back" => {
                 // Esc: clear a search first, then go back to the Status tab.
-                if self.compare.is_some() {
+                if self.work {
+                    self.work = false;
+                } else if self.compare.is_some() {
                     self.compare = None;
                 } else if self.search.is_some() {
                     self.search = None;
@@ -1098,7 +1103,14 @@ impl App {
                         Err(e) => self.say(format!("could not copy: {e}"), true),
                     },
                     "commit.files" => self.open_commit_files(),
+                    "commit.compare_work" => {
+                        self.work = !self.work;
+                        self.compare = None;
+                        self.detail = true;
+                        self.say(if self.work { "diff from the commit to the work tree (M or Esc clears)" } else { "compare cleared" }, false);
+                    }
                     "commit.compare" => {
+                        self.work = false;
                         if self.compare.as_deref() == Some(k.oid.as_str()) {
                             self.compare = None;
                             self.say("compare cleared", false);
@@ -1687,6 +1699,7 @@ impl App {
             Focus::Commits => match &self.commit_files {
                 // The diff of the file (or folder) of the commit being explored: `oid`, a separator, the path.
                 Some(cf) => Some(format!("{}\u{1}{}", cf.oid, cf.current_path().unwrap_or(""))),
+                None if self.work => self.commits.get(self.lists[1].cursor).map(|c| format!("{}\u{3}", c.oid)),
                 None => self.commits.get(self.lists[1].cursor).map(|c| match &self.compare {
                     // Two commits: the diff from the marked one to this one.
                     Some(base) if *base != c.oid => format!("{base}\u{2}{}", c.oid),
@@ -1702,7 +1715,9 @@ impl App {
         let rev = self.current_rev(which);
         let short = |s: &str| s.chars().take(8).collect::<String>();
         let whole = rev.clone().unwrap_or_default();
-        let title = if let Some((a, b)) = whole.split_once('\u{2}') {
+        let title = if let Some(a) = whole.strip_suffix('\u{3}') {
+            format!("{}..work tree", short(a))
+        } else if let Some((a, b)) = whole.split_once('\u{2}') {
             format!("{}..{}", short(a), short(b))
         } else if let Some((_, p)) = whole.split_once('\u{1}') {
             if p.is_empty() { "all files".to_string() } else { p.to_string() }
@@ -1728,9 +1743,16 @@ impl App {
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let result = match rev.split_once('\u{1}') {
+                _ if rev.ends_with('\u{3}') => {
+                    let base = rev.trim_end_matches('\u{3}');
+                    match Repo::discover(&self.root).ok_or_else(|| "not a repository".to_string()).and_then(|r| r.worktree_snapshot().map_err(|e| e.to_string())) {
+                        Ok(snap) => pv::preview_range_marked(&self.root, Some(base), &snap, Some("work tree"), theme, &opts),
+                        Err(e) => Err(pv::Error::Unsupported(e)),
+                    }
+                }
                 _ if rev.contains('\u{2}') => {
                     let (base, oid) = rev.split_once('\u{2}').unwrap_or_default();
-                    pv::preview_range_marked(&self.root, Some(base), oid, theme, &opts)
+                    pv::preview_range_marked(&self.root, Some(base), oid, None, theme, &opts)
                 }
                 Some((oid, path)) => pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts),
                 None => pv::preview_commit_marked(&self.root, &rev, theme, &opts),
@@ -1815,7 +1837,7 @@ impl App {
         match self.focus {
             Focus::Files => "s stage/unstage  a all  d discard  t tree/list  c commit  enter edit  [ ] tabs  space space commands  ? keys",
             Focus::Branches => "enter checkout  n new  d delete  M merge  B rebase  tab stashes  space r fetch/pull/push  [ ] tabs  ? keys",
-            Focus::Commits => "enter checkout  m compare  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
+            Focus::Commits => "enter checkout  m compare  M vs work tree  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys",
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
         }
     }
@@ -2434,6 +2456,21 @@ mod tests {
         fs::write(d.join(name), body).unwrap();
         git(d, &["add", name]);
         git(d, &["commit", "-qm", msg]);
+    }
+
+    #[test]
+    fn capital_m_shows_the_diff_from_a_commit_to_the_work_tree() {
+        let d = repo("workdiff");
+        commit_file(&d, "b.txt", "two\n", "second");
+        fs::write(d.join("b.txt"), "two changed\n").unwrap();
+        let mut app = App::new(&d).unwrap();
+        press(&mut app, "2");
+        press(&mut app, "G");
+        press(&mut app, "M");
+        let text = screen(&mut app).join("\n");
+        assert!(text.contains("work tree") && text.contains("b.txt") && text.contains("two changed"), "{text}");
+        press(&mut app, "M");
+        assert!(!app.work);
     }
 
     #[test]
