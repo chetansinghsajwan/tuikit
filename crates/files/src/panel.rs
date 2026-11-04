@@ -913,6 +913,15 @@ impl Panel {
         }
     }
 
+    /// Every state beneath a folder, most serious first (a file has one sign, see `git_state`).
+    fn git_dir_kinds(&self, row: &Row) -> Vec<Kind> {
+        let Some((repo, status)) = self.git.as_ref() else { return Vec::new() };
+        match repo.relative(&row.path) {
+            Some(rela) if row.is_dir => status.dir_kinds(&rela),
+            _ => Vec::new(),
+        }
+    }
+
     fn git_color(theme: &Theme, kind: Kind) -> Color {
         let g = &theme.colors.git;
         match kind {
@@ -1100,7 +1109,18 @@ impl Panel {
                 Paragraph::new(Line::from(spans)).render(Rect { x, y, width: cols, height: 1 }, buf);
             }
 
-            if let Some((ch, kind)) = git {
+            let kinds = self.git_dir_kinds(row);
+            if kinds.len() > 1 {
+                // A folder with several kinds of change shows one sign for each, the most serious on the left.
+                let room = (usize::from(area.width) / 3).max(1);
+                let shown = kinds.len().min(room.div_ceil(2).max(1));
+                let mut x = area.right().saturating_sub(1);
+                let signs: Vec<Kind> = kinds.iter().take(shown).copied().collect();
+                for (i, k) in signs.iter().enumerate().rev() {
+                    buf.set_string(x, y, k.letter().to_string(), base.fg(Self::git_color(theme, *k)));
+                    x = x.saturating_sub(if i == 0 { 0 } else { 2 });
+                }
+            } else if let Some((ch, kind)) = git {
                 let x = area.right().saturating_sub(1);
                 buf.set_string(x, y, ch.to_string(), base.fg(Self::git_color(theme, kind)));
             }
@@ -1146,6 +1166,34 @@ mod tests {
 
     fn panel(d: &Path) -> Panel {
         Panel::new(d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() })
+    }
+
+    #[test]
+    fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order() {
+        let d = std::env::temp_dir().join(format!("files-test-{}-kinds", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("src")).unwrap();
+        let git = |args: &[&str]| {
+            assert!(std::process::Command::new("git").args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).current_dir(&d).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_SYSTEM", "/dev/null").status().unwrap().success());
+        };
+        git(&["init", "-q", "-b", "main"]);
+        fs::write(d.join("src/a.rs"), "a\n").unwrap();
+        fs::write(d.join("src/b.rs"), "b\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "i"]);
+        fs::write(d.join("src/a.rs"), "changed\n").unwrap();
+        fs::remove_file(d.join("src/b.rs")).unwrap();
+        fs::write(d.join("src/c.rs"), "new\n").unwrap();
+        let d = d.canonicalize().unwrap();
+        let p = &mut Panel::new(&d, PanelOptions { hidden: false, git: true, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
+        let theme = Theme::default();
+        for _ in 0..5 {
+            let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
+            p.render(Rect::new(0, 0, 40, 10), &mut buf, &theme, true);
+            let text: Vec<String> = (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+            assert!(text.iter().any(|l| l.contains("src") && l.contains("D M ?")), "{text:#?}");
+            p.refresh();
+        }
     }
 
     #[test]

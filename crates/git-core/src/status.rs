@@ -57,20 +57,32 @@ impl Status {
         self.files.get(rela)
     }
 
-    /// Most relevant state of a folder: the first changed entry beneath it
-    /// (conflicts win). `None` if nothing beneath it changed.
+    /// Every state found beneath a folder, most serious first (conflict, deleted, modified, added,
+    /// renamed, untracked), each once: the same order whatever the order of the files is.
+    pub fn dir_kinds(&self, rela: &Path) -> Vec<Kind> {
+        let rank = |k: Kind| match k {
+            Kind::Conflict => 0,
+            Kind::Deleted => 1,
+            Kind::Modified | Kind::Typechange => 2,
+            Kind::Added => 3,
+            Kind::Renamed => 4,
+            Kind::Untracked => 5,
+        };
+        let mut kinds: Vec<Kind> = self
+            .files
+            .iter()
+            .filter(|(p, _)| p.starts_with(rela) && *p != rela)
+            .filter_map(|(_, s)| s.primary())
+            .map(|k| if k == Kind::Typechange { Kind::Modified } else { k })
+            .collect();
+        kinds.sort_by_key(|k| rank(*k));
+        kinds.dedup();
+        kinds
+    }
+
+    /// The most serious state of a folder (the first of `dir_kinds`); `None` if nothing beneath it changed.
     pub fn dir(&self, rela: &Path) -> Option<Kind> {
-        let mut found = None;
-        for (p, s) in &self.files {
-            if p.starts_with(rela) && p != rela {
-                match s.primary() {
-                    Some(Kind::Conflict) => return Some(Kind::Conflict),
-                    Some(k) => found = found.or(Some(k)),
-                    None => {}
-                }
-            }
-        }
-        found
+        self.dir_kinds(rela).into_iter().next()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Path, &FileStatus)> {
@@ -161,5 +173,32 @@ impl FileStatus {
             _ => '+',
         };
         Some((c, k))
+    }
+}
+
+#[cfg(test)]
+mod dir_tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_lists_every_state_beneath_it_in_a_fixed_order() {
+        // The map iterates in a different order from one run to the next: the result must not.
+        for _ in 0..20 {
+            let mut s = Status::default();
+            for (name, st) in [
+                ("d/a", FileStatus { staged: None, unstaged: Some(Kind::Untracked) }),
+                ("d/b", FileStatus { staged: Some(Kind::Added), unstaged: None }),
+                ("d/c", FileStatus { staged: None, unstaged: Some(Kind::Modified) }),
+                ("d/e", FileStatus { staged: None, unstaged: Some(Kind::Typechange) }),
+                ("d/f", FileStatus { staged: None, unstaged: Some(Kind::Deleted) }),
+                ("other/x", FileStatus { staged: None, unstaged: Some(Kind::Conflict) }),
+            ] {
+                s.files.insert(PathBuf::from(name), st);
+            }
+            assert_eq!(s.dir_kinds(Path::new("d")), [Kind::Deleted, Kind::Modified, Kind::Added, Kind::Untracked]);
+            assert_eq!(s.dir(Path::new("d")), Some(Kind::Deleted));
+            assert_eq!(s.dir(Path::new("other")), Some(Kind::Conflict));
+            assert_eq!(s.dir(Path::new("clean")), None);
+        }
     }
 }
