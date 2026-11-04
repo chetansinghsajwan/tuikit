@@ -109,7 +109,7 @@ Tool names: `gu`, `files`, `nu`, `git-panel`, `hx-ui` (the helix docks; not `hel
 | `gu` | Status | tree of changes, `s` toggle stage, `a` all, `d` discard, `t` tree or list, `c` commit, `C` amend |
 | `files` | all | `.` hidden, `I` ignored, `leader v t` tables as text, `leader f` find, `/` find in this folder |
 | `pick` | preview | `ctrl-t` tables as text |
-| helix | Space | `e` files, `m` Markdown (`p` preview, `l` live, `s` source, `e` PDF), `M` minimap, `V` dock preview, `1` `2` `3` docks |
+| helix | Space | `e` files, `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `1` `2` `3` docks |
 
 ## Checklist for a new tool
 
