@@ -530,3 +530,10 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - `files`: a folder shows every git state beneath it, most serious first (`Status::dir_kinds`); it flipped between states because the status map has no order.
 - One syntax color set for `pv` and helix: `home/programs/ui/syntax.nix`, used by `ui/theme.json` and by the helix theme (`stylix-tuned`).
 - `docs/ui-design.md`: the look every tool follows.
+
+## History picker, tabs, minimap band, soft wrap
+- `pick`: `--syntax LANG` (rows highlighted as code with `pv::highlight_line`, the match marks stay on top), `--numbers`, `--timestamps` (stdin lines are `EPOCH<TAB>text`, `-` when unknown; the text is the candidate, its age shows as a column). `ui::time::ago` is shared with `gu`.
+- `fh` (Ctrl-R in zsh): bash highlighting, row numbers, when each command last ran (zsh `history.extended` is on now, so new commands carry times; old ones show none), newest first, each command once. `ctrl-x` removes every copy of the highlighted command from the history file (a shell that is already running keeps it in memory) and reopens the list.
+- helix tabs: `Space t` `c` close, `>` close all to the right, `<` close all to the left, `[` `]` move the tab; `Editor::tabs` / `move_tab` (the strip, next/previous and `Space t 1`-`9` follow the order).
+- Minimap: the lines on screen are an accent band (26 %), the cursor line a stronger band (60 %) across the whole width; the accent is the first RGB color of the theme's cursor, selection or text colors. The editor's cursor line is the accent at 24 % (`home/programs/helix.nix`).
+- Soft wrap is on by default in the fork (`editor.soft-wrap.enable`), `Space W` toggles it.

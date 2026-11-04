@@ -19,6 +19,11 @@ use std::path::Path;
 use ui::Theme;
 
 pub use ansi::to_ansi;
+
+/// One line of `code` highlighted as the language `lang` (a name or an extension), as styled pieces.
+pub fn highlight_line(code: &str, lang: &str, theme: &Theme) -> Vec<(ratatui::style::Style, String)> {
+    text::highlight_code(code, lang, theme).into_iter().next().unwrap_or_default()
+}
 pub use commit::render as preview_commit;
 pub use commit::utc as format_utc;
 pub use commit::render_marked as preview_commit_marked;

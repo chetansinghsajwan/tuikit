@@ -10,4 +10,4 @@ mod tree;
 pub mod source;
 
 pub use candidate::{Buffer, Candidate, GitItem, GitKind, Loc};
-pub use picker::{Action, LiveSource, Mode, Picker, PickerOptions};
+pub use picker::{Action, LiveSource, Mode, Picker, PickerOptions, RowStyle};

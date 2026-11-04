@@ -19,6 +19,7 @@ pub mod subject;
 pub mod pane;
 pub mod tabs;
 pub mod theme;
+pub mod time;
 pub mod watch;
 
 pub use pane::Pane;

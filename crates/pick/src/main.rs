@@ -84,6 +84,15 @@ struct Cli {
     /// Disable git status colors and signs.
     #[arg(long)]
     no_git: bool,
+    /// Highlight the candidates as code in this language (`bash`, `sql`, ...).
+    #[arg(long, value_name = "LANG")]
+    syntax: Option<String>,
+    /// Number the rows.
+    #[arg(long)]
+    numbers: bool,
+    /// Each stdin line is `EPOCH<TAB>text` (`-` for an unknown time): the text is the candidate and its age is shown beside it.
+    #[arg(long)]
+    timestamps: bool,
 }
 
 const EXIT_NO_SELECTION: u8 = 1;
@@ -144,6 +153,8 @@ fn run(cli: Cli) -> io::Result<u8> {
         picker.set_icon(ui::icons::GIT);
     }
     picker.set_separator(!cli.no_separator);
+    picker.set_row_style(pick::RowStyle { syntax: cli.syntax.clone(), numbers: cli.numbers });
+    picker.set_timestamps(cli.timestamps);
     if let Some(title) = &cli.title {
         picker.set_title(title.clone());
     }
@@ -171,7 +182,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                 header.push(line.trim_end_matches(['\n', '\r']).to_string());
             }
             picker.set_header(header);
-            let fmt = source::LineFormat { with_nth: cli.with_nth, delimiter: cli.delimiter.clone() };
+            let fmt = source::LineFormat { with_nth: cli.with_nth, delimiter: cli.delimiter.clone(), timestamps: cli.timestamps };
             source::spawn_lines_with(picker.injector(), reader, fmt);
         }
     }

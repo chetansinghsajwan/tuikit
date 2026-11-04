@@ -15,9 +15,17 @@ pub struct LineFormat {
     pub with_nth: Option<usize>,
     /// Field separator for `with_nth` (default: whitespace).
     pub delimiter: Option<String>,
+    /// Each line is `EPOCH<TAB>text` (`-` when the time is unknown): the text is the candidate, the time is shown beside it.
+    pub timestamps: bool,
 }
 
 fn candidate(line: String, fmt: &LineFormat) -> Candidate {
+    if fmt.timestamps {
+        let (stamp, text) = line.split_once('\t').unwrap_or(("-", line.as_str()));
+        let mut c = Candidate::with_raw(text, text);
+        c.time = stamp.trim().parse().ok();
+        return c;
+    }
     let Some(n) = fmt.with_nth.filter(|&n| n >= 1) else { return Candidate::plain(line) };
     let field = match fmt.delimiter.as_deref().filter(|d| !d.is_empty()) {
         Some(d) => line.split(d).nth(n - 1),

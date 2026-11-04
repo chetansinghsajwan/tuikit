@@ -14,6 +14,8 @@ pub struct Candidate {
     /// The whole input line when `display` shows only part of it (`--with-nth`);
     /// that line is what accepting prints and what a preview command receives.
     pub raw: Option<String>,
+    /// When it happened (seconds since the epoch), for input that carries times (`--timestamps`).
+    pub time: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,25 +72,25 @@ pub struct Buffer {
 
 impl Candidate {
     pub fn plain(s: impl Into<String>) -> Self {
-        Candidate { display: s.into(), loc: None, git: None, buffer: None, raw: None }
+        Candidate { display: s.into(), loc: None, git: None, buffer: None, raw: None, time: None }
     }
 
     pub fn grep(loc: Loc) -> Self {
-        Candidate { display: format!("{}:{}: {}", loc.path, loc.line, loc.text), loc: Some(loc), git: None, buffer: None, raw: None }
+        Candidate { display: format!("{}:{}: {}", loc.path, loc.line, loc.text), loc: Some(loc), git: None, buffer: None, raw: None, time: None }
     }
 
     /// Matched against the query as `name subject`, so either finds it.
     pub fn git_item(item: GitItem) -> Self {
-        Candidate { display: format!("{} {}", item.name, item.subject), loc: None, git: Some(item), buffer: None, raw: None }
+        Candidate { display: format!("{} {}", item.name, item.subject), loc: None, git: Some(item), buffer: None, raw: None, time: None }
     }
 
     /// Show `display` but keep the whole `line` for output and previews.
     pub fn with_raw(display: impl Into<String>, line: impl Into<String>) -> Self {
-        Candidate { display: display.into(), loc: None, git: None, buffer: None, raw: Some(line.into()) }
+        Candidate { display: display.into(), loc: None, git: None, buffer: None, raw: Some(line.into()), time: None }
     }
 
     pub fn buffer(display: impl Into<String>, buffer: Buffer) -> Self {
-        Candidate { display: display.into(), loc: None, git: None, buffer: Some(buffer), raw: None }
+        Candidate { display: display.into(), loc: None, git: None, buffer: Some(buffer), raw: None, time: None }
     }
 
     /// The path the preview and git state refer to (file candidates only).

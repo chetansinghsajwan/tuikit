@@ -61,8 +61,18 @@ struct Preview {
 /// It gets the query, where to push candidates, and a flag that is set when the query changes again.
 pub type LiveSource = Box<dyn Fn(&str, Injector<Candidate>, Arc<AtomicBool>) + Send + Sync>;
 
+/// How the rows of a text list look: highlighted as code, numbered, with the age of each.
+#[derive(Debug, Clone, Default)]
+pub struct RowStyle {
+    pub syntax: Option<String>,
+    pub numbers: bool,
+}
+
 pub struct Picker {
     live: Option<LiveSource>,
+    row_style: RowStyle,
+    /// The input carries times (`--timestamps`): the rows show how long ago.
+    timestamps: bool,
     opts: PickerOptions,
     nucleo: Nucleo<Candidate>,
     matcher: Matcher,
@@ -133,6 +143,8 @@ impl Picker {
             title: None,
             icon: None,
             preview_cmd: None,
+            row_style: RowStyle::default(),
+            timestamps: false,
             expect: Vec::new(),
             header: Vec::new(),
             separator: true,
@@ -156,6 +168,15 @@ impl Picker {
     /// Where candidates are pushed in `Mode::Fuzzy`. (Grep mode feeds itself.)
     pub fn injector(&self) -> Injector<Candidate> {
         self.nucleo.injector()
+    }
+
+    /// Highlight the rows as code, number them (`RowStyle`); rows that carry a time show its age.
+    pub fn set_timestamps(&mut self, on: bool) {
+        self.timestamps = on;
+    }
+
+    pub fn set_row_style(&mut self, style: RowStyle) {
+        self.row_style = style;
     }
 
     /// Keys (`ctrl-e`, `alt-x`, `f2`, ...) that accept and report themselves
@@ -483,6 +504,15 @@ impl Picker {
     /// drawn as header rows, so only the file name (or `line:` for a match) shows.
     fn row_spans(&mut self, cand: &Candidate, name_fg: Color, theme: &Theme, snap_index: u32, leaf: bool) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
+        // Row numbers and, for input that carries times, how long ago each was.
+        if self.row_style.numbers {
+            let width = self.nucleo.snapshot().matched_item_count().max(1).to_string().len();
+            spans.push(Span::styled(format!("{:>width$} ", snap_index + 1), Style::new().fg(theme.colors.muted.into())));
+        }
+        if self.timestamps {
+            let age = cand.time.map(ui::time::ago).unwrap_or_default();
+            spans.push(Span::styled(format!("{age:>8}  "), Style::new().fg(theme.colors.muted.into())));
+        }
         // Path rows get a file icon; a grep match under its file header (the hierarchy view) does not.
         if self.opts.paths && !(leaf && cand.loc.is_some()) {
             let path = cand.path();
@@ -539,6 +569,11 @@ impl Picker {
         }
         // In the hierarchy only the file name is drawn; match positions still refer to the full path.
         let skip = if leaf { cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0) } else { 0 };
+        // Code colors for the whole text, when the rows are code.
+        let colored: Vec<Style> = match (&self.row_style.syntax, cand.git.is_none() && cand.loc.is_none()) {
+            (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme).into_iter().flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>()).collect(),
+            _ => Vec::new(),
+        };
         for (i, ch) in cand.display.chars().enumerate() {
             let is_hit = hits.peek() == Some(&(i as u32));
             if is_hit {
@@ -548,7 +583,8 @@ impl Picker {
                 continue;
             }
             let base = if i < name_len { name_color } else { rest_color };
-            spans.push(Span::styled(ch.to_string(), if is_hit { hit } else { Style::new().fg(base) }));
+            let plain = colored.get(i).copied().unwrap_or_else(|| Style::new().fg(base));
+            spans.push(Span::styled(ch.to_string(), if is_hit { hit } else { plain }));
         }
         spans
     }
@@ -1363,7 +1399,7 @@ mod shell_tests {
 
     #[test]
     fn with_nth_shows_one_field_but_prints_and_previews_the_whole_line() {
-        let mut p = picker_from(&["nginx\t/nix/store/aaa-nginx", "curl\t/nix/store/bbb-curl"], LineFormat { with_nth: Some(1), delimiter: None });
+        let mut p = picker_from(&["nginx\t/nix/store/aaa-nginx", "curl\t/nix/store/bbb-curl"], LineFormat { with_nth: Some(1), delimiter: None, timestamps: false });
         p.set_preview_command("printf 'PATH=%s' {2}", None);
         let text = draw(&mut p);
         assert!(text.contains("nginx") && !text.contains("aaa-nginx\n") , "{text}");
