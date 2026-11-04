@@ -48,7 +48,7 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 
 - A side dock is at most two fifths of the width; the editor keeps at least 20 columns.
 - A focused files pane widens to fit its longest name (up to twice its width) and returns when it loses focus.
-- A preview beside the files pane is a separate pane as tall as the editor pane. No title.
+- A preview beside the files pane is a separate pane as tall as the editor pane. No title. The file picker's preview has none either (the list names the file); a commit preview keeps its title.
 - A list and its preview sit side by side, the preview taking `preview_percent` of the width.
 - The minimap is the rightmost strip of an editor view (10 columns, one blank column before it).
 

@@ -41,7 +41,7 @@ const DIR_OPEN: Icon = Icon { glyph: "\u{e5fe}", color: rgb(0x03a9f4) };
 const EXEC: Icon = Icon { glyph: "\u{f489}", color: rgb(0x8bc34a) };
 const FILE: Icon = Icon { glyph: "\u{f15b}", color: rgb(0xffffff) };
 
-/// An icon for a well-known pane title (`Files`, `History`, `Branches`, `Buffers`, ...), so
+/// An icon for a well-known pane title (`Files`, `Shell History`, `Branches`, `Buffers`, ...), so
 /// pickers and panels look alike whatever tool opens them. Case does not matter.
 pub fn for_title(title: &str) -> Option<Icon> {
     let t = title.to_lowercase();
@@ -55,7 +55,13 @@ pub fn for_title(title: &str) -> Option<Icon> {
         icon("\u{f05a}", 0x59c2ff)
     } else if has(&["branch", "refs", "tags"]) {
         Some(BRANCH)
-    } else if has(&["history", "commit", "stash", "log", "changes", "changed", "status"]) {
+    } else if has(&["shell", "command history"]) {
+        icon("\u{f120}", 0x89e051)
+    } else if has(&["clipboard"]) {
+        icon("\u{f0ea}", 0x6d8086)
+    } else if has(&["history"]) {
+        icon("\u{f1da}", 0xe8a838)
+    } else if has(&["commit", "stash", "log", "changes", "changed", "status"]) {
         Some(GIT)
     } else if has(&["diagnostic", "problem"]) {
         Some(DIAGNOSTICS)
@@ -125,7 +131,10 @@ mod tests {
 
     #[test]
     fn titles_get_icons_whatever_the_case() {
-        assert_eq!(for_title("History"), Some(GIT));
+        assert_eq!(for_title("Commits"), Some(GIT));
+        assert_ne!(for_title("Shell History"), Some(GIT));
+        assert_ne!(for_title("Clipboard History"), Some(GIT));
+        assert_ne!(for_title("Shell History"), for_title("Clipboard History"));
         assert_eq!(for_title("history"), for_title("HISTORY"));
         assert_eq!(for_title("Files"), Some(DIR_OPEN));
         assert!(for_title("Branches").is_some() && for_title("Buffers").is_some() && for_title("grep").is_some());

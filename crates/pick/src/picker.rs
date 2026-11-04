@@ -750,15 +750,13 @@ impl Picker {
                 _ => c.display.clone(),
             })
             .unwrap_or_default();
-        let mut pane = Pane::new(theme).title(&title);
-        // A commit, or the icon of the file shown.
+        // The file picker's preview has no title: the list already names the file. A commit keeps its title.
+        let mut pane = Pane::new(theme);
         if let Some(c) = cand.as_ref() {
             if c.git.is_some() {
-                pane = pane.icon(ui::icons::GIT);
-            } else if self.opts.paths {
-                let path = c.path();
-                let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or(path);
-                pane = pane.icon(if path.ends_with('/') { ui::icons::dir(name, false) } else { ui::icons::file(name, false) });
+                pane = pane.title(&title).icon(ui::icons::GIT);
+            } else if !self.opts.paths {
+                pane = pane.title(&title);
             }
         }
         let inner = pane.inner(area);
