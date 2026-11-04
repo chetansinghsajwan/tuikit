@@ -590,15 +590,9 @@ impl Panel {
                 Row::Folder { label, depth, count, folded, .. } => {
                     let base = ui::list::style(theme, i == crow, None);
                     buf.set_style(geo.bar(y), base);
-                    let name = label.rsplit('/').next().unwrap_or(label);
-                    let icon = ui::icons::dir(name, !*folded);
-                    let line = Line::from(vec![
-                        Span::raw("   ".repeat(*depth)),
-                        Span::styled(if *folded { "▸ " } else { "▾ " }, Style::new().fg(c.muted.into())),
-                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                        Span::styled(format!("{label}/"), Style::new().fg(c.accent.into())),
-                        Span::styled(format!(" ({count})"), Style::new().fg(c.muted.into())),
-                    ]);
+                    let mut spans = ui::tree::dir(theme, *depth, label, !*folded);
+                    spans.push(ui::tree::count(theme, *count));
+                    let line = Line::from(spans);
                     Paragraph::new(line).style(base).render(area, buf);
                 }
                 Row::File { change, depth } => {
@@ -615,7 +609,7 @@ impl Panel {
                         None => Span::raw(" "),
                     };
                     let line = Line::from(vec![
-                        Span::raw("   ".repeat(*depth)),
+                        ui::tree::guides(theme, *depth),
                         mark(change.staged),
                         mark(change.unstaged),
                         Span::raw(" "),
@@ -786,15 +780,15 @@ mod tests {
         fs::write(d.join("src/deep/er/two.rs"), "2\n").unwrap();
         let mut p = Panel::new(&d).unwrap();
         let text = draw(&mut p).join("\n");
-        assert!(text.contains("src/ (2)"), "{text}");
-        assert!(text.contains("deep/er/ (1)"), "a chain of single folders is one row: {text}");
+        assert!(text.contains("src (2)"), "{text}");
+        assert!(text.contains("deep/er (1)"), "a chain of single folders is one row: {text}");
         assert!(!text.contains("src/one.rs"), "files show their name only in the tree");
         // Enter on the folder folds it.
         let at = p.items.iter().position(|&i| matches!(&p.rows[i], Row::Folder { path, .. } if path == Path::new("src"))).unwrap();
         p.cursor = at;
         p.handle_event(&key(KeyCode::Enter));
         let text = draw(&mut p).join("\n");
-        assert!(text.contains("▸ ") && text.contains("src/ (2)") && !text.contains("one.rs"), "{text}");
+        assert!(text.contains("src (2)") && !text.contains("one.rs"), "{text}");
         // s on the folder stages everything below it, s again unstages it.
         assert_eq!(press(&mut p, "s"), Action::Changed);
         assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()), "{:?}", p.message);

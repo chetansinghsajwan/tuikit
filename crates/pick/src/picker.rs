@@ -709,8 +709,7 @@ impl Picker {
                     let icon = if self.opts.mode == Mode::Grep { ui::icons::file(last, false) } else { ui::icons::dir(last, true) };
                     let line = Line::from(vec![
                         Span::raw("  "),
-                        // Indentation guides: a thin line at each level, like the editor's.
-                        Span::styled("│ ".repeat(usize::from(*depth)), Style::new().fg(c.muted.into())),
+                        ui::tree::guides(theme, usize::from(*depth)),
                         Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
                         Span::styled(label.clone(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)),
                     ]);
@@ -726,7 +725,7 @@ impl Picker {
                     let marked = self.marked.contains(&cand.output());
                     let mut spans = vec![
                         Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into())),
-                        Span::styled("│ ".repeat(usize::from(*depth)), Style::new().fg(c.muted.into())),
+                        ui::tree::guides(theme, usize::from(*depth)),
                     ];
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));

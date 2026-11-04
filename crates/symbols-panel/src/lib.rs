@@ -370,14 +370,9 @@ impl Panel {
             let at = n == self.cursor;
             let base = if at && !focused { ui::list::active(theme) } else { ui::list::style(theme, at && focused, None) };
             buf.set_style(geo.bar(y), base);
-            let arrow = match row.folded {
-                Some(true) => "▸ ",
-                Some(false) => "▾ ",
-                None => "  ",
-            };
             let mut spans = vec![
-                Span::styled("│ ".repeat(row.depth), Style::new().fg(c.muted.into())),
-                Span::styled(arrow, Style::new().fg(c.muted.into())),
+                ui::tree::guides(theme, row.depth),
+                ui::tree::fold_mark(theme, row.folded),
                 Span::styled(format!("{} ", row.kind.glyph()), Style::new().fg(row.kind.color(theme))),
                 Span::styled(row.name.clone(), Style::new().fg(c.fg.into()).add_modifier(if row.folded.is_some() { Modifier::BOLD } else { Modifier::empty() })),
             ];

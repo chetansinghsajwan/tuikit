@@ -1082,7 +1082,7 @@ impl Panel {
             };
             let line = Line::from(vec![
                 // Indentation guides: a thin line at each level, like the editor's.
-                Span::styled("│ ".repeat(usize::from(row.depth)), Style::new().fg(c.muted.into())),
+                ui::tree::guides(theme, usize::from(row.depth)),
                 Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
                 Span::styled(row.name.clone(), name_style),
             ]);

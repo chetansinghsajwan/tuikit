@@ -1441,14 +1441,9 @@ impl App {
             let at = n == cf.cursor;
             let (tint, line) = match row {
                 FileRow::Folder { label, depth, count, folded, .. } => {
-                    let icon = ui::icons::dir(label.rsplit('/').next().unwrap_or(label), !*folded);
-                    let line = Line::from(vec![
-                        Span::raw("   ".repeat(*depth)),
-                        Span::styled(if *folded { "▸ " } else { "▾ " }, Style::new().fg(c.muted.into())),
-                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                        Span::styled(format!("{label}/"), Style::new().fg(c.accent.into())),
-                        Span::styled(format!(" ({count})"), Style::new().fg(c.muted.into())),
-                    ]);
+                    let mut spans = ui::tree::dir(theme, *depth, label, !*folded);
+                    spans.push(ui::tree::count(theme, *count));
+                    let line = Line::from(spans);
                     (None, line)
                 }
                 FileRow::File { change, depth } => {
@@ -1456,7 +1451,7 @@ impl App {
                     let icon = ui::icons::file(name, false);
                     let color = git_color(change.kind);
                     let mut spans = vec![
-                        Span::raw("   ".repeat(*depth)),
+                        ui::tree::guides(theme, *depth),
                         Span::styled(format!("{} ", change.kind.letter()), Style::new().fg(color)),
                         Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
                         Span::styled(name.to_string(), Style::new().fg(c.fg.into())),
@@ -1602,12 +1597,14 @@ impl App {
                 let accent = Style::new().fg(c.accent.into());
                 match &self.ref_rows[i] {
                     RefRow::Section { key, label, count } => {
-                        let arrow = if self.folded.contains(key) { "▸" } else { "▾" };
-                        (Line::from(vec![Span::styled(format!("{arrow} {label}"), accent.add_modifier(Modifier::BOLD)), Span::styled(format!("  {count}"), muted)]), String::new())
+                        let mut spans = ui::tree::group(theme, 0, self.folded.contains(key), None, label, accent.add_modifier(Modifier::BOLD));
+                        spans.push(ui::tree::count(theme, *count));
+                        (Line::from(spans), String::new())
                     }
                     RefRow::Folder { key, name, depth, count } => {
-                        let arrow = if self.folded.contains(key) { "▸" } else { "▾" };
-                        (Line::from(vec![Span::styled("│ ".repeat(*depth), muted), Span::styled(format!("{arrow} {name}"), accent), Span::styled(format!("  {count}"), muted)]), String::new())
+                        let mut spans = ui::tree::dir(theme, *depth, name, !self.folded.contains(key));
+                        spans.push(ui::tree::count(theme, *count));
+                        (Line::from(spans), String::new())
                     }
                     RefRow::Item { index, name, depth } => {
                         let b = &self.branches[*index];
@@ -1619,7 +1616,7 @@ impl App {
                             fg
                         };
                         // Indentation guides, like the files tree: a thin line at each level.
-                        (Line::from(vec![Span::styled("│ ".repeat(*depth), muted), Span::styled(name.clone(), style)]), ago(b.time))
+                        (Line::from(vec![ui::tree::guides(theme, *depth), Span::styled(name.clone(), style)]), ago(b.time))
                     }
                 }
             }
