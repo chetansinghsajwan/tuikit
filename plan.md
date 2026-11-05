@@ -51,14 +51,14 @@ The repo is a Nix flake (see `agents.md`); this plan is about replacing and unif
 
 ## Repo structure (current)
 
-Rust code lives in `pkgs/`, one flake per part, all locked by the single root `flake.lock` and wired in through `home/flake.nix` (`tools.<name>.packages.<system>.default`, installed by `home/programs/crates.nix`):
+Rust code lives in `pkgs/`: one flake (`pkgs/flake.nix`) and one Cargo workspace (`pkgs/Cargo.toml`, one `Cargo.lock`) for the toolkit and every tool, so crane compiles the third-party dependencies once and each tool only compiles our code on top. The helix fork keeps its own workspace and is built by the same flake. Locked by the single root `flake.lock`; home takes it as the input `lpkgs` (`lpkgs.packages.<system>.<name>`, installed by `home/programs/crates.nix` and `helix.nix`):
 
-- `pkgs/term-toolkit/`: library crates only, one Cargo workspace: `ui` (tokens, keys, widgets), `git-core`, `pv`, `pick`, `files`, `git-panel`, `tb`, `diagnostics-panel`, `symbols-panel`. Its flake exports `lib.mkTool` (crane build of a tool against this source), `lib.composeSrc`, and runs the toolkit's tests as a check.
+- `pkgs/term-toolkit/`: library crates only, one Cargo workspace: `ui` (tokens, keys, widgets), `git-core`, `pv`, `pick`, `files`, `git-panel`, `tb`, `diagnostics-panel`, `symbols-panel`. `nix flake check` runs the workspace tests.
 - `pkgs/{pick,pv,files,tb}/`: thin binary crates (`pick-cli`, `pv-cli`, ...; the binary keeps the short name) on the matching toolkit library. `pkgs/gu/` (the git screen, formerly `git-ui`), `pkgs/nu/` (with `core/`, the connection backends) and `pkgs/mdexport/` hold their own library code, since nothing else uses it.
 - `pkgs/helix/`: the fork (own Cargo workspace and `Cargo.lock`); it embeds the toolkit libraries by path (`../../term-toolkit/...`). `default.nix` here replaced `home/helix-fork.nix`. The fork is always used (the `editor.helixFork` option is gone).
 - Rule: code goes into the toolkit when a second consumer (a tool or helix) uses it; code only one tool uses stays in that tool. Toolkit libraries carry no CLI dependencies (`clap` lives in the bin crates), so helix does not build them.
 - The `git-panel` and `ui-demo` binaries were dropped (the panel stays as a library; helix and `gu` embed it).
-- Dev loop: `cd pkgs/term-toolkit && cargo test`, or `cd pkgs/<tool> && cargo run`. A tool's Cargo path dependencies point at `../term-toolkit/<crate>`, and each tool has its own `Cargo.lock`.
+- Dev loop: `cd pkgs && cargo test --workspace`, or `cargo run -p pick-cli`. A tool's Cargo path dependencies point at `../term-toolkit/<crate>`. Editing any `Cargo.toml` or the shared `Cargo.lock` rebuilds the dependencies of every tool; editing code does not.
 - Old paths in the sections below: `home/crates/<lib>` is now `pkgs/term-toolkit/<lib>`, `home/crates/git-ui` is `pkgs/gu`, `home/helix` is `pkgs/helix`. Build output (`target/`) and fetched grammar sources (`pkgs/helix/runtime/grammars/sources`) must stay out of the repo copy: path inputs copy them into the Nix store.
 
 ## Current repo state (as of writing)

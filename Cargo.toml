@@ -1,3 +1,24 @@
+# One workspace for the toolkit libraries and the tools built on them: one Cargo.lock, and
+# `flake.nix` compiles the dependencies once for all of them. The helix fork keeps its own
+# workspace (it is a fork, and rebases cleanly that way); it uses the toolkit by path.
 [workspace]
-members = ["crates/ui", "crates/git-core", "crates/pv", "crates/pick", "crates/files", "crates/git-panel", "crates/tb", "crates/diagnostics-panel", "crates/symbols-panel"]
+members = [
+    "crates/ui",
+    "crates/git-core",
+    "crates/pv",
+    "crates/pick",
+    "crates/files",
+    "crates/git-panel",
+    "crates/tb",
+    "crates/diagnostics-panel",
+    "crates/symbols-panel",
+    "tools/pick",
+    "tools/pv",
+    "tools/files",
+    "tools/gu",
+    "tools/tb",
+    "tools/nu",
+    "tools/nu/core",
+    "tools/mdexport",
+]
 resolver = "3"

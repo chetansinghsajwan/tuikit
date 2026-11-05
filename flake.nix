@@ -1,14 +1,15 @@
-# The shared terminal toolkit: Rust library crates only (design tokens, git, preview, picker,
-# panels). The tools and the helix fork are flakes of their own that build against this source
-# and use `lib.mkTool` from here.
-#
+# Our Rust code: the term-toolkit libraries, the tools built on them, and the helix fork.
 # Locking happens in the repo root flake.lock; this flake has no lock of its own.
+#
+# All tools share one Cargo workspace (Cargo.toml, Cargo.lock), so crane compiles the
+# dependencies once (`cargoArtifacts`) and each tool only compiles our own code on top.
+# The helix fork keeps its own workspace and is built from the same flake.
 {
     inputs = {
         nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
         llib = {
-            url = "path:../../lib";
+            url = "path:../lib";
             inputs.nixpkgs.follows = "nixpkgs";
         };
 
@@ -18,89 +19,139 @@
 
     outputs =
         {
-            self,
             nixpkgs,
             llib,
             crane,
             ...
         }:
         let
-            # No local build output (target/, fetched grammar sources), so a build never depends on it.
-            clean =
-                pkgs: src:
-                pkgs.lib.cleanSourceWith {
-                    inherit src;
-                    filter = path: _: baseNameOf path != "target" && !(pkgs.lib.hasSuffix "/runtime/grammars/sources" path);
-                };
-
-            # Source tree `<name>/` (the tool) beside `term-toolkit/`, so the tool's
-            # `../term-toolkit/<crate>` path dependencies resolve inside the build directory.
-            composeSrc =
-                {
-                    pkgs,
-                    name,
-                    src,
-                }:
-                pkgs.runCommand "${name}-src" { } ''
-                    mkdir -p $out
-                    cp -r --no-preserve=mode ${clean pkgs src} $out/${name}
-                    cp -r --no-preserve=mode ${clean pkgs self} $out/term-toolkit
-                '';
-
-            # One Cargo package (the tool's `src`, with its own Cargo.lock) built with crane:
-            # a cached dependency build, then our code. Installs every binary of the package.
-            # Tests run in the dev loop (`cargo test`), not here.
-            mkTool =
-                {
-                    pkgs,
-                    name,
-                    src,
-                    version ? "0.1.0",
-                    cargoExtraArgs ? "--locked",
-                    extraArgs ? { },
-                }:
-                let
-                    craneLib = crane.mkLib pkgs;
-                    commonArgs = {
-                        pname = name;
-                        inherit version cargoExtraArgs;
-                        src = composeSrc { inherit pkgs name src; };
-                        # The package is in a subdirectory, next to `term-toolkit`.
-                        postUnpack = "cd $sourceRoot/${name}; sourceRoot=.";
-                        cargoLock = src + "/Cargo.lock";
-                        strictDeps = true;
-                        doCheck = false;
-                    }
-                    // extraArgs;
-                    cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-                in
-                craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
-        in
-        {
-            lib = {
-                inherit (llib) forEachSystem;
-                inherit mkTool composeSrc;
-                craneFor = crane.mkLib;
+            # Cargo package of each tool; the binary has the short name.
+            tools = {
+                pick = "pick-cli";
+                pv = "pv-cli";
+                files = "files-cli";
+                gu = "gu";
+                tb = "tb-cli";
+                nu = "nu";
+                mdexport = "mdexport";
             };
 
-            # `nix flake check`: the toolkit's own tests.
+            workspaceDirs = [
+                "term-toolkit"
+                "pick"
+                "pv"
+                "files"
+                "gu"
+                "tb"
+                "nu"
+                "mdexport"
+            ];
+            helixDirs = [
+                "helix"
+                "term-toolkit"
+            ];
+
+            # The part of this directory a build needs, so editing anything else (nix files, docs,
+            # the other workspace) does not rebuild it. Never local build output (target/) or the
+            # fetched helix grammar sources.
+            sourceOf =
+                lib: dirs: files:
+                lib.cleanSourceWith {
+                    src = ./.;
+                    filter =
+                        path: _:
+                        let
+                            rel = lib.removePrefix "${toString ./.}/" (toString path);
+                            inDir = d: rel == d || lib.hasPrefix "${d}/" rel;
+                        in
+                        (rel == (toString ./.) || builtins.elem rel files || lib.any inDir dirs)
+                        && baseNameOf path != "target"
+                        && !(lib.hasSuffix "runtime/grammars/sources" rel);
+                };
+        in
+        {
+            packages = llib.forEachSystem (
+                sys:
+                let
+                    pkgs = nixpkgs.legacyPackages.${sys};
+                    craneLib = crane.mkLib pkgs;
+
+                    common = {
+                        pname = "pkgs";
+                        version = "0.1.0";
+                        src = sourceOf pkgs.lib workspaceDirs [
+                            "Cargo.toml"
+                            "Cargo.lock"
+                        ];
+                        strictDeps = true;
+                    };
+
+                    # Every dependency of the whole workspace, built once from the manifests alone:
+                    # editing our code does not rebuild them.
+                    cargoArtifacts = craneLib.buildDepsOnly (common // { cargoExtraArgs = "--locked --workspace"; });
+
+                    # Tests run in the dev loop and in `checks`, not here.
+                    mkTool =
+                        name: crate:
+                        craneLib.buildPackage (
+                            common
+                            // {
+                                inherit cargoArtifacts;
+                                pname = name;
+                                cargoExtraArgs = "--locked -p ${crate}";
+                                doCheck = false;
+                            }
+                        );
+                in
+                (builtins.mapAttrs mkTool tools)
+                // {
+                    helix = pkgs.callPackage ./helix/default.nix {
+                        inherit craneLib;
+                        src = sourceOf pkgs.lib helixDirs [ ];
+                    };
+                }
+            );
+
+            # `nix flake check`: the workspace's own tests.
             checks = llib.forEachSystem (
                 sys:
                 let
                     pkgs = nixpkgs.legacyPackages.${sys};
                     craneLib = crane.mkLib pkgs;
-                    args = {
-                        pname = "term-toolkit";
+                    common = {
+                        pname = "pkgs";
                         version = "0.1.0";
-                        src = clean pkgs self;
+                        src = sourceOf pkgs.lib workspaceDirs [
+                            "Cargo.toml"
+                            "Cargo.lock"
+                        ];
                         strictDeps = true;
                         nativeCheckInputs = [ pkgs.git ];
+                        cargoExtraArgs = "--locked --workspace";
                     };
                 in
                 {
-                    tests = craneLib.cargoTest (
-                        args // { cargoArtifacts = craneLib.buildDepsOnly args; }
-                    );
+                    tests = craneLib.cargoTest (common // { cargoArtifacts = craneLib.buildDepsOnly common; });
+                }
+            );
+
+            devShells = llib.forEachSystem (
+                sys:
+                let
+                    pkgs = nixpkgs.legacyPackages.${sys};
+                in
+                {
+                    default = pkgs.mkShell {
+                        packages = with pkgs; [
+                            cargo
+                            rustc
+                            clippy
+                            rustfmt
+                            rust-analyzer
+                            gcc
+                            git
+                        ];
+                    };
                 }
             );
         };
