@@ -40,6 +40,7 @@ The repo is a Nix flake (see `agents.md`); this plan is about replacing and unif
 - Docs: use helix in read-only mode once ready.
 - Keyboard: leave to kanata. No terminal-level or zellij-level key remapping. Considered and dropped: kitty keyboard protocol + `keyberon` in our own tools.
 - Git status highlighting is on by default, with a flag to disable it (section 5).
+- Ask the user when ownership is unclear (toolkit or tool?) instead of defaulting to the caller. Example of the mistake: the active-guide scope was calculated by each tool (picker, files, gu) when it is the toolkit's job.
 - Structure and drawing of an element (file or tree row, list, pane, ...) belong to the shared toolkit (`pkgs/term-toolkit`, mostly `ui`). A tool supplies only the content and switches optional parts on or off (git markers, sub-entry counts, `+n -n` line counts, size and time columns); a tool that does not need a part leaves it off. Tools do not write their own renderers. Reason: the commit file list in `gu` and the `files` panel drew the same kind of row differently. User decision, very important.
 
 ## Open questions
