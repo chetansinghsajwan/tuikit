@@ -1,0 +1,12 @@
+[package]
+name = "pv-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "pv"
+path = "src/main.rs"
+
+[dependencies]
+ui = { path = "../../crates/ui" }
+pv = { path = "../../crates/pv" }

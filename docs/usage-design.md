@@ -2,7 +2,7 @@
 
 How every terminal tool behaves: keys, menus, safety, embedding. The look is in `ui-design.md`. If a tool needs a key or behaviour that is not here, decide it here first, then build it.
 
-Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu` (git-ui), `git-panel`, `nu`, the diagnostics and symbols panels, the helix docks and popups, and every future tool.
+Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu`, the git panel, `nu`, the diagnostics and symbols panels, the helix docks and popups, and every future tool.
 
 ## Rules
 
@@ -86,7 +86,7 @@ leader = "space"
 "remote.push" = "leader r p"
 ```
 
-Tool names: `gu`, `files`, `tb`, `nu`, `git-panel`, `hx-ui` (the helix docks; not `helix`, which has its own config). `pick` and the diagnostics panel do not use the registry yet. Nix does not generate these files yet; `mdexport` is the exception (fonts from stylix).
+Tool names: `gu`, `files`, `tb`, `nu`, `hx-ui` (the helix docks; not `helix`, which has its own config). `pick` and the diagnostics panel do not use the registry yet. Nix does not generate these files yet; `mdexport` is the exception (fonts from stylix).
 
 ## Embedding
 

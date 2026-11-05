@@ -1,0 +1,17 @@
+[package]
+name = "files-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "files"
+path = "src/main.rs"
+
+[dependencies]
+tui-input = "0.15.5"
+unicode-width = "0.2.2"
+clap = { version = "4.6.7", features = ["derive"] }
+ratatui = "0.30.2"
+files = { path = "../../crates/files" }
+pv = { path = "../../crates/pv" }
+ui = { path = "../../crates/ui" }

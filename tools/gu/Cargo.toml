@@ -1,5 +1,5 @@
 [package]
-name = "git-ui"
+name = "gu"
 version = "0.1.0"
 edition = "2024"
 
@@ -13,5 +13,5 @@ tui-input = "0.15.5"
 ui = { version = "0.1.0", path = "../../crates/ui" }
 
 [[bin]]
-name = "git-ui"
+name = "gu"
 path = "src/main.rs"

@@ -1,5 +1,5 @@
 use clap::Parser;
-use git_ui::{App, Quit};
+use gu::{App, Quit};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
@@ -39,7 +39,7 @@ fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(code) => ExitCode::from(code),
         Err(e) => {
-            eprintln!("git-ui: {e}");
+            eprintln!("gu: {e}");
             ExitCode::from(2)
         }
     }
@@ -48,7 +48,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> io::Result<u8> {
     let dir = cli.dir.map(Ok).unwrap_or_else(std::env::current_dir)?;
     let Some(mut app) = App::new(&dir) else {
-        eprintln!("git-ui: not a git repository: {}", dir.display());
+        eprintln!("gu: not a git repository: {}", dir.display());
         return Ok(2);
     };
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
@@ -80,7 +80,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                 if !popup {
                     leave(&mut term)?;
                 }
-                let picked = ui::keys::choose("git-ui", &app.keys_rows(), "Commands");
+                let picked = ui::keys::choose("gu", &app.keys_rows(), "Commands");
                 if !popup {
                     enter(&mut term)?;
                 }

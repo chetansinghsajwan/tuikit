@@ -1,4 +1,4 @@
-//! `git-ui`'s actions and default keys (see `docs/usage-design.md`). The Files pane is the
+//! `gu`'s actions and default keys (see `docs/usage-design.md`). The Files pane is the
 //! `git-panel` panel with its own table; the others share movement, the global actions and
 //! the common ones, plus what is specific to the pane.
 
@@ -52,7 +52,7 @@ const COMMON: &[Action] = &[
     basic("back", "back to files", "focus the files pane", &["esc"]),
     basic("palette", "commands", "search every action by name and run it", &["leader space"]),
     basic("help", "keys", "list every action with its keys", &["?"]),
-    basic("quit", "quit", "close git-ui", &["q", "ctrl-c", "leader q"]),
+    basic("quit", "quit", "close gu", &["q", "ctrl-c", "leader q"]),
 ];
 
 const BRANCHES: &[Action] = &[
