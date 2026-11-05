@@ -585,38 +585,33 @@ impl Panel {
         let geo = ui::list::Rows::new(area, inner);
         for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (i - self.offset) as u16;
-            let area = Rect { y, height: 1, ..inner };
+            let selected = i == crow;
             match row {
                 Row::Folder { label, depth, count, folded, .. } => {
-                    let base = ui::list::style(theme, i == crow, None);
-                    buf.set_style(geo.bar(y), base);
-                    let mut spans = ui::tree::dir(theme, *depth, label, !*folded);
-                    spans.push(ui::tree::count(theme, *count));
-                    let line = Line::from(spans);
-                    Paragraph::new(line).style(base).render(area, buf);
+                    ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), selected, focused: true, ..Default::default() });
                 }
                 Row::File { change, depth } => {
-                    let selected = i == crow;
-                    let color = Self::kind_color(theme, change.kind());
-                    let base = ui::list::style(theme, selected, Some(color));
-                    buf.set_style(geo.bar(y), base);
-                    let rela = &change.rela;
-                    let name = if self.tree { rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { rela.display().to_string() };
-                    let icon = ui::icons::file(&rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), false);
+                    let name = if self.tree { change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { change.rela.display().to_string() };
                     // Two marks like `git status -s`: what is staged, then what is not.
                     let mark = |kind: Option<Kind>| match kind {
-                        Some(k) => Span::styled(kind_char(k).to_string(), Style::new().fg(Self::kind_color(theme, k))),
-                        None => Span::raw(" "),
+                        Some(k) => (kind_char(k), Self::kind_color(theme, k)),
+                        None => (' ', c.fg.into()),
                     };
-                    let line = Line::from(vec![
-                        ui::tree::guides(theme, *depth),
-                        mark(change.staged),
-                        mark(change.unstaged),
-                        Span::raw(" "),
-                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                        Span::styled(name, Style::new().fg(c.fg.into())),
-                    ]);
-                    Paragraph::new(line).style(base).render(area, buf);
+                    ui::tree::file_row(
+                        theme,
+                        buf,
+                        &geo,
+                        y,
+                        &ui::tree::FileRow {
+                            depth: *depth,
+                            name: &name,
+                            tint: Some(Self::kind_color(theme, change.kind())),
+                            selected,
+                            focused: true,
+                            signs: vec![mark(change.staged), mark(change.unstaged)],
+                            ..Default::default()
+                        },
+                    );
                 }
             }
         }
@@ -735,14 +730,14 @@ mod tests {
         let text = draw(&mut p).join("\n");
         assert!(!text.contains("Staged (") && !text.contains("Unstaged (") && !text.contains("Untracked ("), "no sections: {text}");
         let pos = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in\n{text}"));
-        // Sorted by name; the first mark is staged, the second not staged (`?` for a new file).
+        // Sorted by name; the marks sit at the right edge: the first is staged, the second not staged (`?` for a new file).
         assert!(pos("main") < pos("a.txt") && pos("a.txt") < pos("b.txt") && pos("b.txt") < pos("new.txt"), "{text}");
         assert!(text.contains(" M ") && text.contains("M  ") && text.contains(" ? "), "{text}");
-        // A file that is partly staged is one row with both marks.
+        // A file that is partly staged is one row with both marks (`M M`).
         fs::write(p.root.join("b.txt"), "b1\nmore\n").unwrap();
         p.refresh();
         assert_eq!(p.all.iter().filter(|c| c.rela == Path::new("b.txt")).count(), 1);
-        assert!(draw(&mut p).join("\n").contains("MM "));
+        assert!(draw(&mut p).join("\n").contains("M M"));
     }
 
     #[test]

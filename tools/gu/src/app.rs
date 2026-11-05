@@ -1462,36 +1462,30 @@ impl App {
         };
         for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
             let y = inner.y + (n - cf.offset) as u16;
-            let at = n == cf.cursor;
-            let (tint, line) = match row {
-                FileRow::Folder { label, depth, count, folded, .. } => {
-                    let mut spans = ui::tree::dir(theme, *depth, label, !*folded);
-                    spans.push(ui::tree::count(theme, *count));
-                    let line = Line::from(spans);
-                    (None, line)
-                }
+            let selected = n == cf.cursor;
+            let file_row = match row {
+                FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), ..Default::default() },
                 FileRow::File { change, depth } => {
-                    let name = change.path.rsplit('/').next().unwrap_or(&change.path);
-                    let icon = ui::icons::file(name, false);
                     let color = git_color(change.kind);
-                    let mut spans = vec![
-                        ui::tree::guides(theme, *depth),
-                        Span::styled(format!("{} ", change.kind.letter()), Style::new().fg(color)),
-                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                        Span::styled(name.to_string(), Style::new().fg(c.fg.into())),
-                    ];
-                    if change.binary {
-                        spans.push(Span::styled("  binary", Style::new().fg(c.muted.into())));
+                    // The line counts, left of the sign (when there is room for them).
+                    let trailing = if inner.width < 30 {
+                        Vec::new()
+                    } else if change.binary {
+                        vec![Span::styled("binary ", Style::new().fg(c.muted.into()))]
                     } else {
-                        spans.push(Span::styled(format!("  +{}", change.added), Style::new().fg(c.git.added.into())));
-                        spans.push(Span::styled(format!(" -{}", change.removed), Style::new().fg(c.git.deleted.into())));
+                        vec![Span::styled(format!("+{}", change.added), Style::new().fg(c.git.added.into())), Span::styled(format!(" -{} ", change.removed), Style::new().fg(c.git.deleted.into()))]
+                    };
+                    ui::tree::FileRow {
+                        depth: *depth,
+                        name: change.path.rsplit('/').next().unwrap_or(&change.path),
+                        tint: Some(color),
+                        trailing,
+                        signs: vec![(change.kind.letter(), color)],
+                        ..Default::default()
                     }
-                    (Some(color), Line::from(spans))
                 }
             };
-            let base = ui::list::style(theme, at, tint);
-            buf.set_style(geo.bar(y), base);
-            Paragraph::new(line).style(base).render(geo.content(y), buf);
+            ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { selected, focused: true, ..file_row });
         }
     }
 

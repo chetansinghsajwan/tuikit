@@ -7,7 +7,7 @@ use ignore::WalkBuilder;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::collections::BTreeSet;
@@ -1058,45 +1058,17 @@ impl Panel {
             let area = rows.content(y);
             let selected = i == self.cursor;
             let git = self.git_state(row);
-            // The whole row takes a faded tint of its git color; the hovered row is a faded blue.
             let tint = git.map(|(_, k)| Self::git_color(theme, k));
-            let base = if selected && !focused { ui::list::active(theme) } else { ui::list::style(theme, selected && focused, tint) };
-            buf.set_style(rows.bar(y), base);
 
-            let color = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() });
-            let mut name_style = Style::new().fg(color);
-            if row.is_dir {
-                name_style = name_style.add_modifier(Modifier::BOLD);
-            }
-            // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
-            if self.marked.contains(&row.path) {
-                name_style = name_style.fg(c.warning.into()).add_modifier(Modifier::UNDERLINED);
-            }
-            if self.clip.as_ref().is_some_and(|k| k.cut && k.paths.contains(&row.path)) {
-                name_style = name_style.add_modifier(Modifier::DIM);
-            }
-            let icon = if row.is_dir {
-                ui::icons::dir(&row.name, self.expanded.contains(&row.path))
-            } else {
-                ui::icons::file(&row.name, is_executable(&row.path))
-            };
-            let line = Line::from(vec![
-                // Indentation guides: a thin line at each level, like the editor's.
-                ui::tree::guides(theme, usize::from(row.depth)),
-                Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                Span::styled(row.name.clone(), name_style),
-            ]);
             // Size and modified-time columns sit left of the git sign, when there is room.
             let cols = if area.width >= 44 { self.opts.linemode.width() } else { 0 };
-            let text_area = Rect { width: area.width - cols, ..area };
-            Paragraph::new(line).style(base).render(text_area, buf);
+            let mut trailing: Vec<Span<'static>> = Vec::new();
             if cols > 0 {
                 let mode = self.opts.linemode;
-                let muted = base.fg(c.muted.into());
-                let mut spans: Vec<Span<'static>> = Vec::new();
+                let muted = Style::new().fg(c.muted.into());
                 if matches!(mode, Linemode::Full | Linemode::PermTime) {
-                    spans.extend(meta::perm_spans(theme, &meta::perm_string(row.mode), false).into_iter().map(|s| Span::styled(s.content, s.style.bg(base.bg.unwrap_or(ratatui::style::Color::Reset)))));
-                    spans.push(Span::styled(" ", muted));
+                    trailing.extend(meta::perm_spans(theme, &meta::perm_string(row.mode), false));
+                    trailing.push(Span::styled(" ", muted));
                 }
                 let mut text = String::new();
                 if matches!(mode, Linemode::Full | Linemode::SizeTime) {
@@ -1104,26 +1076,43 @@ impl Panel {
                     text.push_str(&format!("{size:>5} "));
                 }
                 text.push_str(&format!("{:>8}", meta::time_relative(row.modified)));
-                spans.push(Span::styled(text, muted));
-                let x = area.right().saturating_sub(cols + 1);
-                Paragraph::new(Line::from(spans)).render(Rect { x, y, width: cols, height: 1 }, buf);
+                trailing.push(Span::styled(text, muted));
             }
 
+            // A folder with several kinds of change shows one sign for each, the most serious on the left.
             let kinds = self.git_dir_kinds(row);
-            if kinds.len() > 1 {
-                // A folder with several kinds of change shows one sign for each, the most serious on the left.
+            let signs: Vec<(char, Color)> = if kinds.len() > 1 {
                 let room = (usize::from(area.width) / 3).max(1);
                 let shown = kinds.len().min(room.div_ceil(2).max(1));
-                let mut x = area.right().saturating_sub(1);
-                let signs: Vec<Kind> = kinds.iter().take(shown).copied().collect();
-                for (i, k) in signs.iter().enumerate().rev() {
-                    buf.set_string(x, y, k.letter().to_string(), base.fg(Self::git_color(theme, *k)));
-                    x = x.saturating_sub(if i == 0 { 0 } else { 2 });
-                }
+                kinds.iter().take(shown).map(|k| (k.letter(), Self::git_color(theme, *k))).collect()
             } else if let Some((ch, kind)) = git {
-                let x = area.right().saturating_sub(1);
-                buf.set_string(x, y, ch.to_string(), base.fg(Self::git_color(theme, kind)));
-            }
+                vec![(ch, Self::git_color(theme, kind))]
+            } else {
+                Vec::new()
+            };
+
+            ui::tree::file_row(
+                theme,
+                buf,
+                &rows,
+                y,
+                &ui::tree::FileRow {
+                    depth: usize::from(row.depth),
+                    name: &row.name,
+                    is_dir: row.is_dir,
+                    open: self.expanded.contains(&row.path),
+                    executable: !row.is_dir && is_executable(&row.path),
+                    tint,
+                    selected,
+                    focused,
+                    // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
+                    marked: self.marked.contains(&row.path),
+                    cut: self.clip.as_ref().is_some_and(|k| k.cut && k.paths.contains(&row.path)),
+                    trailing,
+                    signs,
+                    ..Default::default()
+                },
+            );
         }
         self.sizes_shown = self.size_signature();
     }
