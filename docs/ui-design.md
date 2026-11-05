@@ -86,6 +86,7 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 - Questions end the line with the answer key: `Delete a.txt? d again`.
 - Times: relative (`3d`), or `YYYY-MM-DD HH:MM` in UTC when absolute. Hashes: 8 characters.
 - Tables and columns have fixed widths (one width per column, for every row); text that does not fit is cut with `…`, never wrapped into the next row. A flexible column (gu's refs) is sized from the widest row and takes the space freed when a column is hidden.
+- Indent guides: the guide of the scope the cursor is in is highlighted in every tree view (`ui::tree::active_scope`, one call, no option), and code previews draw guides at each indent level (`ui::tree::mark_indent`). Staged changes are marked in the staged color (green), unstaged ones in the color of their change.
 - Line counts (`+12 −3`) are aligned in columns: `ui::tree::CountWidths` sizes them from the whole list and `ui::tree::line_counts` lays out each row, so a tool only passes the numbers (gu's commit files and the commit preview use it).
 - The name is the part that gives way: when a row is too narrow, the name of a file, folder or ref is cut with `…` and the columns, counts and signs beside it keep their place and alignment. A column that would leave the name under four cells is dropped instead. Widths are in cells (wide characters count double). This is built into `ui::tree::file_row`; a tool never trims by hand.
 - What a cut column hides is shown whole elsewhere (the commit preview lists every ref).

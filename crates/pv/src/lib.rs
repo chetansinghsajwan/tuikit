@@ -153,6 +153,18 @@ mod tests {
     }
 
     #[test]
+    fn code_shows_indent_guides_also_through_blank_lines() {
+        let d = tmp("guides");
+        let f = d.join("a.rs");
+        fs::write(&f, "fn main() {\n    if x {\n        y();\n\n        z();\n    }\n}\n").unwrap();
+        let lines = preview(&f, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
+        let t: Vec<String> = lines.iter().map(flat).collect();
+        assert!(t[2].contains("│   │   y();"), "{t:?}");
+        assert!(t[3].contains('│'), "a blank line inside the block keeps the guides: {t:?}");
+        assert!(!t[0].contains('│') && !t[6].contains('│'), "{t:?}");
+    }
+
+    #[test]
     fn binary_is_unsupported() {
         let d = tmp("bin");
         let f = d.join("b");

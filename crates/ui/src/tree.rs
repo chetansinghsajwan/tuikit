@@ -22,6 +22,33 @@ pub fn guides(theme: &Theme, depth: usize) -> Span<'static> {
     Span::styled("│ ".repeat(depth), Style::new().fg(theme.colors.muted.into()))
 }
 
+/// The scope the cursor is in, for the highlighted indent guide: the rows `from < row < to` share the guide at
+/// column `col`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Scope {
+    pub from: usize,
+    pub to: usize,
+    pub col: usize,
+}
+
+impl Scope {
+    /// The guide column to highlight on `row` (pass it as [`FileRow::active_guide`] or to [`guides_marked`]).
+    pub fn col_at(&self, row: usize) -> Option<usize> {
+        (row > self.from && row < self.to).then_some(self.col)
+    }
+}
+
+/// The scope of the row under the cursor, from the depth of every row of a tree: the folder it is (it has
+/// deeper rows right below), else the folder that holds it. A row at the top with nothing below has none.
+/// Every tree view calls this, so the highlight needs no option and behaves the same everywhere.
+pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
+    let cur = *depths.get(cursor)?;
+    let folder = if depths.get(cursor + 1).is_some_and(|d| *d > cur) { cursor } else { depths[..cursor].iter().rposition(|d| *d + 1 == cur)? };
+    let depth = depths[folder];
+    let to = depths[folder + 1..].iter().position(|d| *d <= depth).map_or(depths.len(), |n| folder + 1 + n);
+    Some(Scope { from: folder, to, col: depth })
+}
+
 /// The indent guides with the one at column `active` highlighted (the accent), like the editor marks the
 /// scope the cursor is in. Without an active column it is just [`guides`].
 pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<Span<'static>> {
@@ -59,6 +86,51 @@ pub fn group(theme: &Theme, depth: usize, folded: bool, icon: Option<Icon>, labe
 /// The count after a folder or group name: ` 3`.
 pub fn count(theme: &Theme, n: usize) -> Span<'static> {
     Span::styled(format!(" {n}"), Style::new().fg(theme.colors.muted.into()))
+}
+
+/// Draws indent guides into the spans of a line of code: a thin `│` (muted) in place of the space at every
+/// `unit`-th column left of `indent`, the line's own (or, for a blank line, its neighbors') indentation. Only
+/// leading spaces change; the rest of the line is untouched. A tool passes the content and the indentation; the
+/// drawing is the toolkit's, so the guides of every code view look alike.
+pub fn mark_indent(theme: &Theme, spans: Vec<Span<'static>>, indent: usize, unit: usize) -> Vec<Span<'static>> {
+    let guide = Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::DIM);
+    let mut out: Vec<Span<'static>> = Vec::new();
+    let mut col = 0;
+    for span in spans {
+        if col >= indent || unit == 0 {
+            out.push(span);
+            continue;
+        }
+        let mut plain = String::new();
+        let mut rest = String::new();
+        let mut chars = span.content.chars();
+        for ch in chars.by_ref() {
+            if col >= indent || ch != ' ' {
+                // Past the indentation (or the first non-space): the rest of this span stays as it is.
+                rest.push(ch);
+                rest.extend(chars.by_ref());
+                break;
+            }
+            if col % unit == 0 {
+                if !plain.is_empty() {
+                    out.push(Span::styled(std::mem::take(&mut plain), span.style));
+                }
+                out.push(Span::styled("│", guide.bg(span.style.bg.unwrap_or(Color::Reset))));
+            } else {
+                plain.push(ch);
+            }
+            col += 1;
+        }
+        plain.push_str(&rest);
+        if !plain.is_empty() {
+            out.push(Span::styled(plain, span.style));
+        }
+        // A character that stopped the leading run ends the indentation for the following spans too.
+        if !rest.is_empty() {
+            col = indent;
+        }
+    }
+    out
 }
 
 /// The widths of the line-count columns (`+12 −3`) of a list of changes. Every row of the list is laid out with
@@ -285,6 +357,31 @@ mod tests {
         // Wide characters are counted by cells, so the sign stays in the last cell.
         let t = row_text(&FileRow { name: "日本語日本語日本語日本語", signs: vec![('M', Color::Red)], ..Default::default() }, 16);
         assert!(t.trim_end().ends_with('M') && t.contains('…'), "{t}");
+    }
+
+    #[test]
+    fn the_scope_is_the_folder_under_the_cursor_or_the_one_holding_it() {
+        // a / a/b / a/b/x / a/y / z
+        let depths = [0, 1, 2, 1, 0];
+        assert_eq!(active_scope(&depths, 1), Some(Scope { from: 1, to: 3, col: 1 }), "an open folder: its contents");
+        assert_eq!(active_scope(&depths, 2), Some(Scope { from: 1, to: 3, col: 1 }), "a file: the folder that holds it");
+        assert_eq!(active_scope(&depths, 3), Some(Scope { from: 0, to: 4, col: 0 }));
+        assert_eq!(active_scope(&depths, 4), None, "a top-level file has no scope");
+        assert_eq!(active_scope(&depths, 0).and_then(|s| s.col_at(2)), Some(0));
+        assert_eq!(active_scope(&depths, 0).and_then(|s| s.col_at(4)), None);
+    }
+
+    #[test]
+    fn indent_guides_replace_the_leading_spaces_at_each_unit() {
+        let theme = Theme::load();
+        let text = |s: &[Span]| -> String { s.iter().map(|s| s.content.as_ref()).collect() };
+        let line = vec![Span::raw("        "), Span::raw("let x = 1;")];
+        assert_eq!(text(&mark_indent(&theme, line, 8, 4)), "│   │   let x = 1;");
+        // Only up to the indentation given (a blank line borrows its neighbors'), and never inside the code.
+        assert_eq!(text(&mark_indent(&theme, vec![Span::raw("      a  b")], 4, 2)), "│ │   a  b");
+        assert_eq!(text(&mark_indent(&theme, vec![Span::raw("    ")], 0, 4)), "    ");
+        // The spaces of one span split across highlight pieces still count as one column run.
+        assert_eq!(text(&mark_indent(&theme, vec![Span::raw("  "), Span::raw("  "), Span::raw("x")], 4, 2)), "│ │ x");
     }
 
     #[test]

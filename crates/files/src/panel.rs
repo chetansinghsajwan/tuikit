@@ -461,14 +461,10 @@ impl Panel {
         (longest as u16).saturating_add(chrome)
     }
 
-    /// The scope the cursor is in, for the highlighted indent guide: the open folder under the cursor, or the
-    /// folder that holds it. `(folder row, first row after its contents, guide column)`.
-    fn active_guide_span(&self) -> Option<(usize, usize, usize)> {
-        let cur = self.rows.get(self.cursor)?;
-        let folder = if cur.is_dir && self.expanded.contains(&cur.path) { self.cursor } else { self.rows[..self.cursor].iter().rposition(|r| r.depth + 1 == cur.depth)? };
-        let depth = self.rows[folder].depth;
-        let end = self.rows[folder + 1..].iter().position(|r| r.depth <= depth).map_or(self.rows.len(), |n| folder + 1 + n);
-        Some((folder, end, usize::from(depth)))
+    /// The scope the cursor is in, for the highlighted indent guide.
+    fn active_scope(&self) -> Option<ui::tree::Scope> {
+        let depths: Vec<usize> = self.rows.iter().map(|r| usize::from(r.depth)).collect();
+        ui::tree::active_scope(&depths, self.cursor)
     }
 
     /// Path under the cursor.
@@ -1048,7 +1044,7 @@ impl Panel {
         self.count_visible_dirs();
         let sizes = &self.dir_sizes;
         let shown = self.visible();
-        let active = self.active_guide_span();
+        let active = self.active_scope();
 
         for (k, &i) in shown.iter().enumerate() {
             let row = &self.rows[i];
@@ -1097,7 +1093,7 @@ impl Panel {
                 &ui::tree::FileRow {
                     depth: usize::from(row.depth),
                     name: &row.name,
-                    active_guide: active.and_then(|(from, to, col)| (i > from && i < to).then_some(col)),
+                    active_guide: active.and_then(|s| s.col_at(i)),
                     is_dir: row.is_dir,
                     open: self.expanded.contains(&row.path),
                     executable: !row.is_dir && is_executable(&row.path),
@@ -1192,16 +1188,14 @@ mod tests {
         let at = |p: &Panel, name: &str| p.rows.iter().position(|r| r.name == name).unwrap();
         let (src, deep) = (at(&p, "src"), at(&p, "deep"));
         // On a file: the folder that holds it, from the folder row to the end of its contents.
-        let (from, to, col) = p.active_guide_span().unwrap();
-        assert_eq!((from, col), (deep, 2 - 1));
-        assert_eq!(to, at(&p, "inner.txt") + 1);
+        let s = p.active_scope().unwrap();
+        assert_eq!((s.from, s.col, s.to), (deep, 1, at(&p, "inner.txt") + 1));
         // On an open folder: its own contents. On a top-level file: no guide.
         p.cursor = src;
-        let (from, to, col) = p.active_guide_span().unwrap();
-        assert_eq!((from, col), (src, 0));
-        assert_eq!(to, at(&p, "docs").max(at(&p, "README.md")).max(to).min(p.rows.len()));
+        let s = p.active_scope().unwrap();
+        assert_eq!((s.from, s.col), (src, 0));
         p.cursor = at(&p, "README.md");
-        assert!(p.active_guide_span().is_none());
+        assert!(p.active_scope().is_none());
     }
 
     #[test]

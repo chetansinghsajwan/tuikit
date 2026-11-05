@@ -1449,6 +1449,8 @@ impl App {
         }
         let geo = ui::list::Rows::new(area, inner);
         let counts = ui::tree::CountWidths::of(cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))));
+        let depths: Vec<usize> = cf.rows.iter().map(|r| match r { FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth }).collect();
+        let scope = ui::tree::active_scope(&depths, cf.cursor);
         for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
             let y = inner.y + (n - cf.offset) as u16;
             let selected = n == cf.cursor;
@@ -1474,7 +1476,7 @@ impl App {
                     }
                 }
             };
-            ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { selected, focused: true, ..file_row });
+            ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { selected, focused: true, active_guide: scope.and_then(|s| s.col_at(n)), ..file_row });
         }
     }
 

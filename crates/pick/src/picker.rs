@@ -791,7 +791,7 @@ impl Picker {
     /// indented beneath them. `offset` counts rows here, not results.
     fn render_tree_rows(&mut self, list: Rect, rows_geo: ui::list::Rows, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
-        let rows: Vec<crate::tree::Row> = {
+        let (rows, scope): (Vec<(usize, crate::tree::Row)>, Option<ui::tree::Scope>) = {
             let Some(tree) = self.tree.as_ref() else { return };
             // The folders above the top row stay pinned at the top, so scrolling never loses the
             // path; they take lines from the window, which the scrolling below accounts for.
@@ -804,17 +804,22 @@ impl Picker {
                     self.offset += 1;
                 }
             }
-            let mut pinned: Vec<crate::tree::Row> = crate::tree::ancestors(&tree.rows, self.offset as usize).into_iter().map(|i| tree.rows[i].clone()).collect();
+            let mut pinned: Vec<(usize, crate::tree::Row)> = crate::tree::ancestors(&tree.rows, self.offset as usize).into_iter().map(|i| (i, tree.rows[i].clone())).collect();
             // In a tiny pane keep at least one scrolling row: drop the outermost pins first.
             let keep = (self.page as usize).saturating_sub(1);
             if pinned.len() > keep {
                 pinned.drain(..pinned.len() - keep);
             }
             let take = (self.page as usize).saturating_sub(pinned.len());
-            pinned.into_iter().chain(tree.rows.iter().skip(self.offset as usize).take(take).cloned()).collect()
+            // The guide of the scope the cursor is in is highlighted, as in the files panel.
+            let depths: Vec<usize> = tree.rows.iter().map(|r| match r { crate::tree::Row::Dir { depth, .. } | crate::tree::Row::Item { depth, .. } => usize::from(*depth) }).collect();
+            let scope = ui::tree::active_scope(&depths, crow as usize);
+            let window = tree.rows.iter().enumerate().skip(self.offset as usize).take(take).map(|(i, r)| (i, r.clone()));
+            (pinned.into_iter().chain(window).collect(), scope)
         };
 
-        for (i, row) in rows.iter().enumerate() {
+        for (i, (at, row)) in rows.iter().enumerate() {
+            let guide = scope.and_then(|s| s.col_at(*at));
             let y = list.y + i as u16;
             let row_area = Rect { y, height: 1, ..list };
             match row {
@@ -822,12 +827,11 @@ impl Picker {
                     // In grep mode the header is a file, otherwise a folder.
                     let last = label.rsplit('/').next().unwrap_or(label);
                     let icon = if self.opts.mode == Mode::Grep { ui::icons::file(last, false) } else { ui::icons::dir(last, true) };
-                    let line = Line::from(vec![
-                        Span::raw("  "),
-                        ui::tree::guides(theme, usize::from(*depth)),
-                        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-                        Span::styled(label.clone(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)),
-                    ]);
+                    let mut spans = vec![Span::raw("  ")];
+                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
+                    spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+                    spans.push(Span::styled(label.clone(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)));
+                    let line = Line::from(spans);
                     Paragraph::new(line).render(row_area, buf);
                 }
                 crate::tree::Row::Item { idx, depth } => {
@@ -838,10 +842,8 @@ impl Picker {
                     buf.set_style(rows_geo.bar(y), base);
 
                     let marked = self.marked.contains(&cand.output());
-                    let mut spans = vec![
-                        Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into())),
-                        ui::tree::guides(theme, usize::from(*depth)),
-                    ];
+                    let mut spans = vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
+                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
                     Paragraph::new(Line::from(spans)).style(base).render(row_area, buf);

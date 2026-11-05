@@ -569,21 +569,22 @@ impl Panel {
         } else if crow >= self.offset + self.page {
             self.offset = crow + 1 - self.page;
         }
+        let depths: Vec<usize> = self.rows.iter().map(|r| match r { Row::Folder { depth, .. } | Row::File { depth, .. } => *depth }).collect();
+        let scope = ui::tree::active_scope(&depths, crow);
         let geo = ui::list::Rows::new(area, inner);
         for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (i - self.offset) as u16;
             let selected = i == crow;
             match row {
                 Row::Folder { label, depth, count, folded, .. } => {
-                    ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), selected, focused: true, ..Default::default() });
+                    ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), selected, focused: true, active_guide: scope.and_then(|s| s.col_at(i)), ..Default::default() });
                 }
                 Row::File { change, depth } => {
                     let name = if self.tree { change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { change.rela.display().to_string() };
-                    // Two marks like `git status -s`: what is staged, then what is not.
-                    let mark = |kind: Option<Kind>| match kind {
-                        Some(k) => (kind_char(k), pv::kind_color(theme, k)),
-                        None => (' ', c.fg.into()),
-                    };
+                    // Two marks like `git status -s`: what is staged (always in the staged color, green, so a staged file
+                    // is told apart at a glance), then what is not (in the color of its change).
+                    let staged = |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), c.success.into()));
+                    let unstaged = |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), pv::kind_color(theme, k)));
                     ui::tree::file_row(
                         theme,
                         buf,
@@ -595,7 +596,8 @@ impl Panel {
                             tint: Some(pv::kind_color(theme, change.kind())),
                             selected,
                             focused: true,
-                            signs: vec![mark(change.staged), mark(change.unstaged)],
+                            signs: vec![staged(change.staged), unstaged(change.unstaged)],
+                            active_guide: scope.and_then(|s| s.col_at(i)),
                             ..Default::default()
                         },
                     );
@@ -725,6 +727,21 @@ mod tests {
         p.refresh();
         assert_eq!(p.all.iter().filter(|c| c.rela == Path::new("b.txt")).count(), 1);
         assert!(draw(&mut p).join("\n").contains("M M"));
+    }
+
+    #[test]
+    fn staged_marks_are_drawn_in_the_staged_color() {
+        let mut p = Panel::new(&repo("stagedcolor")).unwrap();
+        let theme = Theme::default();
+        let area = Rect::new(0, 0, 100, 16);
+        let mut b = Buffer::empty(area);
+        p.render(area, &mut b, &theme);
+        let success: ratatui::style::Color = theme.colors.success.into();
+        let row = |name: &str| (0..16).find(|&y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().contains(name)).unwrap_or_else(|| panic!("{name} listed"));
+        // b.txt is staged, a.txt is changed but not staged: the mark of the staged one is green, the other is not.
+        let green_mark = |y: u16| (0..100).any(|x| b[(x, y)].symbol() == "M" && b[(x, y)].style().fg == Some(success));
+        assert!(green_mark(row("b.txt")), "staged mark");
+        assert!(!green_mark(row("a.txt")), "unstaged mark");
     }
 
     #[test]

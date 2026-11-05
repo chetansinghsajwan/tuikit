@@ -137,6 +137,7 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
     let digits = total.max(1).to_string().len().max(3); // room for rows up to 999
     let gutter = Style::new().fg(theme.colors.muted.into());
     let marks = if git_marks && opts.git { line_marks(path, total) } else { Vec::new() };
+    let (depths, unit) = indent_depths(&text);
     // With a focus line and a height, show a window centered on it.
     let start = match (opts.focus, opts.height) {
         (Some(f), Some(_)) => {
@@ -166,6 +167,7 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
             });
         }
         spans.push(Span::styled(format!("{:>digits$} ", i + 1), gutter));
+        let mut code: Vec<Span<'static>> = Vec::new();
         for (st, piece) in regions {
             let piece = piece.trim_end_matches(['\n', '\r']).replace('\t', TAB);
             if piece.is_empty() {
@@ -182,8 +184,14 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
             if st.font_style.contains(FontStyle::UNDERLINE) {
                 style = style.add_modifier(Modifier::UNDERLINED);
             }
-            spans.push(Span::styled(piece, style));
+            code.push(Span::styled(piece, style));
         }
+        // Indent guides: a thin line at each level of the line's indentation (a blank line takes its neighbors').
+        let depth = depths.get(i).copied().unwrap_or(0);
+        if code.is_empty() && depth > 0 {
+            code.push(Span::raw(" ".repeat(depth)));
+        }
+        spans.extend(ui::tree::mark_indent(theme, code, depth, unit));
         // The focus line wins over a git tint; both span the full width.
         let row_bg = if opts.focus == Some(i as u32 + 1) {
             Some(Color::from(theme.colors.selection))
@@ -231,4 +239,28 @@ pub(crate) fn highlight_code(code: &str, lang: &str, theme: &Theme) -> Vec<Vec<(
                 .collect()
         })
         .collect()
+}
+
+/// The indentation of every line of `text` in cells (a tab is one `TAB`), and the indent unit of the file for
+/// the guides: the smallest indentation of two or more cells, 4 when there is none. A blank line takes the smaller
+/// of its neighbors' indentation, so the guides run through it.
+fn indent_depths(text: &str) -> (Vec<usize>, usize) {
+    let own: Vec<Option<usize>> = text
+        .lines()
+        .map(|l| {
+            if l.trim().is_empty() {
+                None
+            } else {
+                Some(l.chars().take_while(|c| *c == ' ' || *c == '\t').map(|c| if c == '\t' { TAB.len() } else { 1 }).sum())
+            }
+        })
+        .collect();
+    let unit = own.iter().take(400).flatten().copied().filter(|n| *n >= 2).min().unwrap_or(4).clamp(2, 8);
+    let mut before = 0;
+    let before: Vec<usize> = own.iter().map(|d| { if let Some(d) = d { before = *d; } before }).collect();
+    let mut after = 0;
+    let mut after_rev: Vec<usize> = own.iter().rev().map(|d| { if let Some(d) = d { after = *d; } after }).collect();
+    after_rev.reverse();
+    let depths = own.iter().enumerate().map(|(i, d)| d.unwrap_or_else(|| before[i].min(after_rev[i]))).collect();
+    (depths, unit)
 }
