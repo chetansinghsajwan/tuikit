@@ -136,25 +136,19 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
         Span::styled(format!("−{removed}"), Style::new().fg(c.git.deleted.into())),
     ]));
     let biggest = changes.iter().map(|f| f.added + f.removed).max().unwrap_or(1).max(1);
-    let (aw, rw) = (changes.iter().map(|f| f.added.to_string().len()).max().unwrap_or(1) + 1, changes.iter().map(|f| f.removed.to_string().len()).max().unwrap_or(1) + 1);
+    let counts = ui::tree::CountWidths::of(changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))));
     for f in changes.iter().take(MAX_ROWS) {
         let kind_color = git::kind_color(theme, f.kind);
         let (dir, name) = match f.path.rsplit_once('/') {
             Some((d, n)) => (format!("{d}/"), n.to_string()),
             None => (String::new(), f.path.clone()),
         };
-        let counts_w = if f.binary { 6 } else { aw + 1 + rw };
+        let counts_w = counts.width();
         let left = 3 + dir.width() + name.width();
         let tail = counts_w + 2 + BAR;
         let pad = width.map(|w| w.saturating_sub(left + tail).max(1)).unwrap_or(2);
         let mut spans = vec![Span::styled(format!(" {} ", sign(f.kind)), Style::new().fg(kind_color)), Span::styled(dir, muted), Span::styled(name, Style::new().fg(kind_color)), Span::raw(" ".repeat(pad))];
-        if f.binary {
-            spans.push(Span::styled("binary", muted));
-        } else {
-            spans.push(Span::styled(format!("{:>aw$}", format!("+{}", f.added)), Style::new().fg(c.git.added.into())));
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(format!("{:<rw$}", format!("−{}", f.removed)), Style::new().fg(c.git.deleted.into())));
-        }
+        spans.extend(ui::tree::line_counts(theme, (!f.binary).then_some((f.added, f.removed)), counts));
         spans.push(Span::raw("  "));
         // Filled cells in proportion to the biggest change of the commit, green and red by share.
         let total = f.added + f.removed;

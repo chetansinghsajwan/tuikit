@@ -1448,6 +1448,7 @@ impl App {
             cf.offset = cf.cursor + 1 - page;
         }
         let geo = ui::list::Rows::new(area, inner);
+        let counts = ui::tree::CountWidths::of(cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))));
         for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
             let y = inner.y + (n - cf.offset) as u16;
             let selected = n == cf.cursor;
@@ -1455,13 +1456,13 @@ impl App {
                 FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), ..Default::default() },
                 FileRow::File { change, depth } => {
                     let color = pv::kind_color(theme, change.kind);
-                    // The line counts, left of the sign (when there is room for them).
+                    // The line counts in aligned columns, left of the sign (when there is room for them).
                     let trailing = if inner.width < 30 {
                         Vec::new()
-                    } else if change.binary {
-                        vec![Span::styled("binary ", Style::new().fg(c.muted.into()))]
                     } else {
-                        vec![Span::styled(format!("+{}", change.added), Style::new().fg(c.git.added.into())), Span::styled(format!(" -{} ", change.removed), Style::new().fg(c.git.deleted.into()))]
+                        let mut t = ui::tree::line_counts(theme, (!change.binary).then_some((change.added, change.removed)), counts);
+                        t.push(Span::raw(" "));
+                        t
                     };
                     ui::tree::FileRow {
                         depth: *depth,

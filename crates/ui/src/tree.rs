@@ -61,6 +61,56 @@ pub fn count(theme: &Theme, n: usize) -> Span<'static> {
     Span::styled(format!(" {n}"), Style::new().fg(theme.colors.muted.into()))
 }
 
+/// The widths of the line-count columns (`+12 −3`) of a list of changes. Every row of the list is laid out with
+/// the same ones, so the `+`s line up and so do the `−`s. The tool gives the numbers; the layout is the toolkit's.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CountWidths {
+    added: usize,
+    removed: usize,
+    binary: bool,
+}
+
+impl CountWidths {
+    /// From the `(added, removed)` of every row of the list, `None` for a binary file.
+    pub fn of(changes: impl IntoIterator<Item = Option<(u32, u32)>>) -> CountWidths {
+        let mut w = CountWidths { added: 2, removed: 2, binary: false };
+        for c in changes {
+            match c {
+                Some((a, r)) => {
+                    w.added = w.added.max(a.to_string().len() + 1);
+                    w.removed = w.removed.max(r.to_string().len() + 1);
+                }
+                None => w.binary = true,
+            }
+        }
+        w
+    }
+
+    /// Cells one row of counts takes.
+    pub fn width(&self) -> usize {
+        (self.added + 1 + self.removed).max(if self.binary { 6 } else { 0 })
+    }
+}
+
+/// One row's line counts in the columns of `widths`: `+12` right-aligned, `−3` left-aligned, in the git
+/// colors; `None` (a binary file) reads `binary`, muted. Always `widths.width()` cells.
+pub fn line_counts(theme: &Theme, change: Option<(u32, u32)>, widths: CountWidths) -> Vec<Span<'static>> {
+    let c = &theme.colors;
+    let total = widths.width();
+    match change {
+        Some((a, r)) => {
+            let used = widths.added + 1 + widths.removed;
+            vec![
+                Span::raw(" ".repeat(total - used)),
+                Span::styled(format!("{:>w$}", format!("+{a}"), w = widths.added), Style::new().fg(c.git.added.into())),
+                Span::raw(" "),
+                Span::styled(format!("{:<w$}", format!("−{r}"), w = widths.removed), Style::new().fg(c.git.deleted.into())),
+            ]
+        }
+        None => vec![Span::styled(format!("{:>total$}", "binary"), Style::new().fg(c.muted.into()))],
+    }
+}
+
 /// What a tool passes to [`file_row`]: the content of one row of a file tree and which optional
 /// parts it wants. The structure and the drawing are the toolkit's; a tool never draws this row
 /// itself. A part left at its default is simply not shown.
@@ -235,6 +285,19 @@ mod tests {
         // Wide characters are counted by cells, so the sign stays in the last cell.
         let t = row_text(&FileRow { name: "日本語日本語日本語日本語", signs: vec![('M', Color::Red)], ..Default::default() }, 16);
         assert!(t.trim_end().ends_with('M') && t.contains('…'), "{t}");
+    }
+
+    #[test]
+    fn line_counts_line_up_in_columns() {
+        let theme = Theme::load();
+        let text = |s: &[Span]| -> String { s.iter().map(|s| s.content.as_ref()).collect() };
+        let changes = [Some((3, 120)), Some((1204, 4)), None];
+        let w = CountWidths::of(changes);
+        let rows: Vec<String> = changes.iter().map(|c| text(&line_counts(&theme, *c, w))).collect();
+        assert!(rows.iter().all(|r| r.chars().count() == w.width()), "{rows:?}");
+        assert_eq!(rows[0], "   +3 −120", "{rows:?}");
+        assert_eq!(rows[1], "+1204 −4  ", "{rows:?}");
+        assert_eq!(rows[2], "    binary", "{rows:?}");
     }
 
     #[test]
