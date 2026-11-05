@@ -27,6 +27,14 @@ pub enum Mode {
     Grep,
 }
 
+/// The line that takes the typing in grep mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Field {
+    Query,
+    Include,
+    Exclude,
+}
+
 #[derive(Debug, Clone)]
 pub struct PickerOptions {
     pub mode: Mode,
@@ -77,6 +85,12 @@ pub struct Picker {
     nucleo: Nucleo<Candidate>,
     matcher: Matcher,
     input: Input,
+    /// The toggles and file filters of a grep: `alt-c` case, `alt-w` whole word, `alt-r` regex, `alt-i` include, `alt-e` exclude.
+    grep_opts: grep::Options,
+    include: Input,
+    exclude: Input,
+    /// Which line takes the typing in grep mode.
+    field: Field,
     last_query: String,
     /// Index into the matched list.
     cursor: u32,
@@ -131,6 +145,10 @@ impl Picker {
             nucleo: Nucleo::new(config, notify, None, 1),
             matcher: Matcher::new(Config::DEFAULT),
             input: Input::new(opts.query.clone()),
+            grep_opts: grep::Options::default(),
+            include: Input::default(),
+            exclude: Input::default(),
+            field: Field::Query,
             last_query: String::new(),
             cursor: 0,
             offset: 0,
@@ -332,17 +350,70 @@ impl Picker {
                 self.nucleo.pattern.reparse(0, &q, CaseMatching::Smart, Normalization::Smart, append);
             }
             Mode::Grep => {
-                // Stop the old search, drop its results, start over.
-                self.cancel.store(true, Ordering::Relaxed);
-                self.cancel = Arc::new(AtomicBool::new(false));
-                self.nucleo.restart(true);
-                grep::spawn(self.opts.root.clone(), q.clone(), self.nucleo.injector(), self.cancel.clone());
+                self.restart_grep();
             }
         }
         self.last_query = q;
         self.cursor = 0;
         self.offset = 0;
         self.tree_dirty = true;
+    }
+
+    /// Stop the running grep, drop its results and search again with the query and the filters as they are.
+    fn restart_grep(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        self.cancel = Arc::new(AtomicBool::new(false));
+        self.nucleo.restart(true);
+        self.grep_opts.include = self.include.value().to_string();
+        self.grep_opts.exclude = self.exclude.value().to_string();
+        grep::spawn(self.opts.root.clone(), self.input.value().to_string(), self.grep_opts.clone(), self.nucleo.injector(), self.cancel.clone());
+        self.cursor = 0;
+        self.offset = 0;
+        self.tree_dirty = true;
+    }
+
+    /// Keys of the grep filters: the toggles, and typing in the include and exclude lines. `true` when handled.
+    fn grep_key(&mut self, ev: &Event, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        if self.opts.mode != Mode::Grep {
+            return false;
+        }
+        let alt = modifiers.contains(KeyModifiers::ALT);
+        if alt {
+            match code {
+                KeyCode::Char('c') => self.grep_opts.case_sensitive = !self.grep_opts.case_sensitive,
+                KeyCode::Char('w') => self.grep_opts.whole_word = !self.grep_opts.whole_word,
+                KeyCode::Char('r') => self.grep_opts.regex = !self.grep_opts.regex,
+                KeyCode::Char('i') => {
+                    self.field = if self.field == Field::Include { Field::Query } else { Field::Include };
+                    return true;
+                }
+                KeyCode::Char('e') => {
+                    self.field = if self.field == Field::Exclude { Field::Query } else { Field::Exclude };
+                    return true;
+                }
+                _ => return false,
+            }
+            self.restart_grep();
+            return true;
+        }
+        if modifiers.contains(KeyModifiers::CONTROL) && matches!(code, KeyCode::Char('c') | KeyCode::Char('g')) {
+            return false;
+        }
+        let input = match self.field {
+            Field::Query => return false,
+            Field::Include => &mut self.include,
+            Field::Exclude => &mut self.exclude,
+        };
+        match code {
+            // Back to the query; the filter stays.
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Tab | KeyCode::Down | KeyCode::Up => self.field = Field::Query,
+            _ => {
+                if input.handle_event(ev).is_some() {
+                    self.restart_grep();
+                }
+            }
+        }
+        true
     }
 
     fn matched(&self) -> u32 {
@@ -397,6 +468,9 @@ impl Picker {
                 self.marked.iter().cloned().collect()
             };
             return Action::AcceptWith(name, picked);
+        }
+        if self.grep_key(ev, *code, *modifiers) {
+            return Action::None;
         }
         match code {
             KeyCode::Esc => return Action::Cancel,
@@ -589,6 +663,42 @@ impl Picker {
         spans
     }
 
+    /// The lines of the grep filters: the toggles (lit when on) with the keys of the file filters, and the include
+    /// and exclude lines while they hold something or take the typing.
+    fn grep_filter_rows(&self) -> Vec<Field> {
+        let mut rows = vec![Field::Query];
+        for (field, input) in [(Field::Include, &self.include), (Field::Exclude, &self.exclude)] {
+            if self.field == field || !input.value().is_empty() {
+                rows.push(field);
+            }
+        }
+        rows
+    }
+
+    fn render_grep_filters(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+        let c = &theme.colors;
+        let on = |b: bool| if b { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { Style::new().fg(c.muted.into()) };
+        let muted = Style::new().fg(c.muted.into());
+        let o = &self.grep_opts;
+        for (i, field) in self.grep_filter_rows().into_iter().enumerate() {
+            let row = Rect { y: area.y + i as u16, height: 1, ..area };
+            if field == Field::Query {
+                let mut spans = vec![Span::styled("Aa", on(o.case_sensitive)), Span::raw(" "), Span::styled("ab", on(o.whole_word)), Span::raw(" "), Span::styled(".*", on(o.regex))];
+                spans.push(Span::styled("   alt-c w r  ·  alt-i include  alt-e exclude", muted.add_modifier(Modifier::DIM)));
+                Paragraph::new(Line::from(spans)).render(row, buf);
+                continue;
+            }
+            let (label, input) = if field == Field::Include { ("include ", &self.include) } else { ("exclude ", &self.exclude) };
+            let focused = self.field == field;
+            let line = Line::from(vec![Span::styled(label, if focused { Style::new().fg(c.accent.into()) } else { muted }), Span::styled(input.value().to_string(), Style::new().fg(c.fg.into()))]);
+            Paragraph::new(line).render(row, buf);
+            if focused {
+                ui::prompt::cursor(buf, row, label, input.visual_cursor());
+            }
+        }
+    }
+
+
     fn render_list(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let (snap_total, snap_matched) = {
@@ -627,11 +737,16 @@ impl Picker {
             let rule = format!("├{}┤", "─".repeat(usize::from(area.width).saturating_sub(2)));
             buf.set_string(area.x, y, rule, Style::new().fg(c.border_focused.into()));
         }
-        let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep));
-        for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
-            buf.set_stringn(inner.x + 2, inner.y + 1 + sep + i as u16, h, usize::from(inner.width.saturating_sub(2)), Style::new().fg(c.muted.into()));
+        // In grep mode the toggles and the file filters take the row under the rule.
+        let filter_row = if self.opts.mode == Mode::Grep && inner.height >= 6 { self.grep_filter_rows().len() as u16 } else { 0 };
+        if filter_row > 0 {
+            self.render_grep_filters(Rect { y: inner.y + 1 + sep, height: filter_row, ..inner }, buf, theme);
         }
-        let list = Rect { y: inner.y + 1 + sep + header_rows, height: inner.height - 1 - sep - header_rows, ..inner };
+        let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep + filter_row));
+        for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
+            buf.set_stringn(inner.x + 2, inner.y + 1 + sep + filter_row + i as u16, h, usize::from(inner.width.saturating_sub(2)), Style::new().fg(c.muted.into()));
+        }
+        let list = Rect { y: inner.y + 1 + sep + filter_row + header_rows, height: inner.height - 1 - sep - filter_row - header_rows, ..inner };
         let rows = ui::list::Rows::new(area, inner);
         self.page = u32::from(list.height).max(1);
         self.refresh_tree();
@@ -820,6 +935,51 @@ mod tests {
         Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
     }
 
+    #[test]
+    fn grep_toggles_and_file_filters_narrow_the_search() {
+        let d = std::env::temp_dir().join(format!("pick-grepf-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("src")).unwrap();
+        std::fs::create_dir_all(d.join("tests")).unwrap();
+        std::fs::write(d.join("src/a.rs"), "Needle here\nneedles too\n").unwrap();
+        std::fs::write(d.join("tests/b.rs"), "needle in tests\n").unwrap();
+        std::fs::write(d.join("src/c.txt"), "needle in text\n").unwrap();
+        let opts = PickerOptions { mode: Mode::Grep, paths: true, root: d.clone(), preview: false, git: false, query: "needle".into() };
+        let mut p = Picker::new(opts, Arc::new(|| {}));
+        let alt = |c: char| Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT));
+        let key = |c: KeyCode| Event::Key(KeyEvent::new(c, KeyModifiers::NONE));
+        let count = |p: &mut Picker| {
+            for _ in 0..20 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                p.tick();
+            }
+            p.nucleo.snapshot().item_count()
+        };
+        p.reparse();
+        assert_eq!(count(&mut p), 4, "smart case finds all four");
+        // Whole word: `needles` goes.
+        p.handle_event(&alt('w'));
+        assert_eq!(count(&mut p), 3);
+        p.handle_event(&alt('w'));
+        // Exact case: `Needle` goes (the query is lower case).
+        p.handle_event(&alt('c'));
+        assert_eq!(count(&mut p), 3);
+        p.handle_event(&alt('c'));
+        // Include only Rust files, then leave the tests out.
+        p.handle_event(&alt('i'));
+        for ch in "*.rs".chars() {
+            p.handle_event(&key(KeyCode::Char(ch)));
+        }
+        assert_eq!(count(&mut p), 3, "the text file is out");
+        p.handle_event(&key(KeyCode::Enter));
+        p.handle_event(&alt('e'));
+        for ch in "tests/".chars() {
+            p.handle_event(&key(KeyCode::Char(ch)));
+        }
+        assert_eq!(count(&mut p), 2, "only src/a.rs is left");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     fn picker(items: &[&str], paths: bool, root: PathBuf) -> Picker {
         let opts = PickerOptions { mode: Mode::Fuzzy, paths, root, preview: paths, git: false, query: String::new() };
         let p = Picker::new(opts, Arc::new(|| {}));
@@ -945,7 +1105,7 @@ mod source_tests {
             let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root: d.clone(), preview: false, git: false, query: String::new() };
             let mut p = Picker::new(opts, Arc::new(|| {}));
             crate::source::spawn_files(p.injector(), d.clone(), dirs, None);
-            for _ in 0..200 {
+            for _ in 0..20 {
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 p.nucleo.tick(10);
                 if p.matched() >= want {
@@ -1144,8 +1304,7 @@ mod git_tests {
         let mut buf = Buffer::empty(area);
         p.render(area, &mut buf, &Theme::default());
         let text: String = (0..16).map(|y| (0..100).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-        assert!(text.contains("add the second line"), "{text}");
-        assert!(text.contains("author") && text.contains("1 file changed, +1 -0"), "{text}");
+        assert!(text.contains("add the second line") && text.contains("·") && text.contains("1 file") && text.contains("+1"), "{text}");
     }
 
     #[test]

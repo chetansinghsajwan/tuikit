@@ -18,20 +18,63 @@ const MAX_MATCHES: usize = 20_000;
 /// Longest line kept per match, in bytes.
 const MAX_LINE: usize = 400;
 
+/// What narrows a search, like the toggles and the file filters of the search panels of VS Code and Zed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Options {
+    /// Match the case exactly (off: smart case, which ignores case until the query has a capital).
+    pub case_sensitive: bool,
+    /// Match whole words only.
+    pub whole_word: bool,
+    /// The query is a regular expression (off: it is plain text).
+    pub regex: bool,
+    /// Only files matching these globs, separated by commas (`*.rs, src/`).
+    pub include: String,
+    /// Not the files matching these globs (`target/, *.lock`).
+    pub exclude: String,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options { case_sensitive: false, whole_word: false, regex: true, include: String::new(), exclude: String::new() }
+    }
+}
+
+/// The globs of `opts` as an override set for the walker: includes whitelist, excludes start with `!`.
+/// `None` when there are none (or one does not parse: the search then is not narrowed).
+fn globs(root: &std::path::Path, opts: &Options) -> Option<ignore::overrides::Override> {
+    let split = |s: &str| s.split(',').map(str::trim).filter(|p| !p.is_empty()).map(str::to_string).collect::<Vec<_>>();
+    let (inc, exc) = (split(&opts.include), split(&opts.exclude));
+    if inc.is_empty() && exc.is_empty() {
+        return None;
+    }
+    let mut b = ignore::overrides::OverrideBuilder::new(root);
+    for p in inc {
+        b.add(&p).ok()?;
+    }
+    for p in exc {
+        b.add(&format!("!{p}")).ok()?;
+    }
+    b.build().ok()
+}
+
 /// Search `root` for `query` on a background thread. Set `cancel` to stop it.
 /// An invalid regex (likely mid-typing) falls back to a literal search.
-pub fn spawn(root: PathBuf, query: String, inj: Injector<Candidate>, cancel: Arc<AtomicBool>) {
+pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidate>, cancel: Arc<AtomicBool>) {
     if query.is_empty() {
         return;
     }
     thread::spawn(move || {
-        let build = |fixed: bool| RegexMatcherBuilder::new().case_smart(true).fixed_strings(fixed).build(&query);
-        let Ok(matcher) = build(false).or_else(|_| build(true)) else { return };
+        let build = |fixed: bool| RegexMatcherBuilder::new().case_smart(!opts.case_sensitive).word(opts.whole_word).fixed_strings(fixed).build(&query);
+        let Ok(matcher) = (if opts.regex { build(false).or_else(|_| build(true)) } else { build(true) }) else { return };
         let mut searcher = SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
 
         let mut found = 0usize;
-        let walker = ignore::WalkBuilder::new(&root).hidden(false).filter_entry(|e| e.file_name() != ".git").build();
-        for entry in walker.flatten() {
+        let mut walk = ignore::WalkBuilder::new(&root);
+        walk.hidden(false).filter_entry(|e| e.file_name() != ".git");
+        if let Some(ov) = globs(&root, &opts) {
+            walk.overrides(ov);
+        }
+        for entry in walk.build().flatten() {
             if cancel.load(Ordering::Relaxed) || found >= MAX_MATCHES {
                 return;
             }
@@ -73,4 +116,35 @@ fn clip(s: &str) -> String {
         end -= 1;
     }
     s[..end].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn globs_include_and_exclude_by_comma_list() {
+        let d = std::env::temp_dir().join(format!("pick-globs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("src")).unwrap();
+        std::fs::create_dir_all(d.join("tests")).unwrap();
+        for f in ["src/a.rs", "src/b.txt", "tests/c.rs"] {
+            std::fs::write(d.join(f), "x").unwrap();
+        }
+        let found = |inc: &str, exc: &str| -> Vec<String> {
+            let o = Options { include: inc.into(), exclude: exc.into(), ..Options::default() };
+            let mut walk = ignore::WalkBuilder::new(&d);
+            if let Some(ov) = globs(&d, &o) {
+                walk.overrides(ov);
+            }
+            let mut v: Vec<String> = walk.build().flatten().filter(|e| e.path().is_file()).map(|e| e.path().strip_prefix(&d).unwrap().to_string_lossy().into_owned()).collect();
+            v.sort();
+            v
+        };
+        assert_eq!(found("", "").len(), 3);
+        assert_eq!(found("*.rs", ""), ["src/a.rs", "tests/c.rs"]);
+        assert_eq!(found("*.rs", "tests/"), ["src/a.rs"]);
+        assert_eq!(found("", "*.txt, tests/"), ["src/a.rs"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
