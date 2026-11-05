@@ -780,15 +780,15 @@ mod tests {
         fs::write(d.join("src/deep/er/two.rs"), "2\n").unwrap();
         let mut p = Panel::new(&d).unwrap();
         let text = draw(&mut p).join("\n");
-        assert!(text.contains("src (2)"), "{text}");
-        assert!(text.contains("deep/er (1)"), "a chain of single folders is one row: {text}");
+        assert!(text.contains("src 2"), "{text}");
+        assert!(text.contains("deep/er 1"), "a chain of single folders is one row: {text}");
         assert!(!text.contains("src/one.rs"), "files show their name only in the tree");
         // Enter on the folder folds it.
         let at = p.items.iter().position(|&i| matches!(&p.rows[i], Row::Folder { path, .. } if path == Path::new("src"))).unwrap();
         p.cursor = at;
         p.handle_event(&key(KeyCode::Enter));
         let text = draw(&mut p).join("\n");
-        assert!(text.contains("src (2)") && !text.contains("one.rs"), "{text}");
+        assert!(text.contains("src 2") && !text.contains("one.rs"), "{text}");
         // s on the folder stages everything below it, s again unstages it.
         assert_eq!(press(&mut p, "s"), Action::Changed);
         assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()), "{:?}", p.message);

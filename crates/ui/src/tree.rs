@@ -43,9 +43,9 @@ pub fn group(theme: &Theme, depth: usize, folded: bool, icon: Option<Icon>, labe
     spans
 }
 
-/// The count after a folder or group name: `(3)`.
+/// The count after a folder or group name: ` 3`.
 pub fn count(theme: &Theme, n: usize) -> Span<'static> {
-    Span::styled(format!(" ({n})"), Style::new().fg(theme.colors.muted.into()))
+    Span::styled(format!(" {n}"), Style::new().fg(theme.colors.muted.into()))
 }
 
 #[cfg(test)]
@@ -63,6 +63,6 @@ mod tests {
         assert!(d.starts_with("│ │ ") && d.ends_with("src") && !d.contains('▾'), "{d}");
         assert!(text(&group(&theme, 1, true, None, "Tags", Style::new())).starts_with("│ ▸ Tags"));
         assert!(text(&group(&theme, 0, false, None, "Tags", Style::new())).starts_with("▾ Tags"));
-        assert_eq!(text(&[count(&theme, 3)]), " (3)");
+        assert_eq!(text(&[count(&theme, 3)]), " 3");
     }
 }
