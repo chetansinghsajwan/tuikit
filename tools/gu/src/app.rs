@@ -1448,25 +1448,13 @@ impl App {
             cf.offset = cf.cursor + 1 - page;
         }
         let geo = ui::list::Rows::new(area, inner);
-        let git_color = |k: git_core::Kind| -> ratatui::style::Color {
-            let g = &c.git;
-            match k {
-                git_core::Kind::Added => g.added,
-                git_core::Kind::Modified | git_core::Kind::Typechange => g.modified,
-                git_core::Kind::Deleted => g.deleted,
-                git_core::Kind::Renamed => g.renamed,
-                git_core::Kind::Untracked => g.untracked,
-                git_core::Kind::Conflict => g.conflict,
-            }
-            .into()
-        };
         for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
             let y = inner.y + (n - cf.offset) as u16;
             let selected = n == cf.cursor;
             let file_row = match row {
                 FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), ..Default::default() },
                 FileRow::File { change, depth } => {
-                    let color = git_color(change.kind);
+                    let color = pv::kind_color(theme, change.kind);
                     // The line counts, left of the sign (when there is room for them).
                     let trailing = if inner.width < 30 {
                         Vec::new()

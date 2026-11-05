@@ -20,9 +20,9 @@ struct Cli {
     /// On exit, write the folder the explorer was in to this file (for a shell `cd`).
     #[arg(long, value_name = "FILE")]
     cwd_file: Option<PathBuf>,
-    /// Show hidden files from the start.
+    /// Start without the hidden (dot) files; they are shown by default. `.` toggles them.
     #[arg(long)]
-    hidden: bool,
+    no_hidden: bool,
     /// No preview pane.
     #[arg(long)]
     no_preview: bool,
@@ -51,7 +51,7 @@ impl From<Cli> for app::Options {
             dir: c.dir.unwrap_or_else(|| PathBuf::from(".")),
             chooser_file: c.chooser_file,
             cwd_file: c.cwd_file,
-            hidden: c.hidden,
+            hidden: !c.no_hidden,
             preview: !c.no_preview,
             git: !c.no_git,
         }

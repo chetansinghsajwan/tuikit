@@ -1,4 +1,4 @@
-//! Directory tree: everything when it fits (down to four levels), else two entries
+//! Directory tree, drawn with the common file row (`ui::tree::file_row`): everything when it fits (down to four levels), else two entries
 //! per folder with a `… N more` marker, as deep as the room allows. A folder that
 //! holds one folder reads as one row (`a/b/c`); empty folders go last and several in
 //! a row become one `· N empty folders` line. Right column: permissions + age.
@@ -11,7 +11,6 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 use ui::Theme;
-use unicode_width::UnicodeWidthStr;
 
 struct Entry {
     name: String,
@@ -21,11 +20,12 @@ struct Entry {
     path: std::path::PathBuf,
 }
 
+/// The entries of `dir`: dot files too, but not what git ignores, and never `.git`.
 fn entries(dir: &Path) -> Vec<Entry> {
-    let mut v: Vec<Entry> = fs::read_dir(dir)
-        .into_iter()
+    let walk = ignore::WalkBuilder::new(dir).max_depth(Some(1)).hidden(false).filter_entry(|e| e.file_name() != ".git").build();
+    let mut v: Vec<Entry> = walk
         .flatten()
-        .flatten()
+        .filter(|e| e.depth() == 1)
         .filter_map(|e| {
             let md = e.metadata().ok()?;
             #[cfg(unix)]
@@ -37,7 +37,7 @@ fn entries(dir: &Path) -> Vec<Entry> {
                 is_dir: md.is_dir(),
                 mode,
                 mtime: md.modified().ok(),
-                path: e.path(),
+                path: e.into_path(),
             })
         })
         .collect();
@@ -79,44 +79,33 @@ fn perm_spans(mode: u32, theme: &Theme) -> Vec<Span<'static>> {
     out
 }
 
-fn row(prefix: &str, e: &Entry, opts: &Options, state: Option<(char, Kind)>, theme: &Theme, note: Option<&str>) -> Line<'static> {
-    let width = opts.width;
+/// One entry as the common file-tree row (`ui::tree::file_row`): guides, icon, git-colored name, and with a
+/// width the right column (permissions, age) and the git sign. The name shrinks to leave them room.
+fn row(depth: usize, open: bool, e: &Entry, opts: &Options, state: Option<(char, Kind)>, theme: &Theme, note: Option<&str>) -> Line<'static> {
     let c = &theme.colors;
-    let name = e.name.clone();
-    let icon = if e.is_dir { ui::icons::dir(&e.name, false) } else { ui::icons::file(&e.name, e.mode & 0o111 != 0) };
-    let mut name_style = if e.is_dir {
-        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
-    } else {
-        Style::new().fg(c.fg.into())
-    };
-    if let Some((_, kind)) = state {
-        name_style = name_style.fg(git::kind_color(theme, kind));
-    }
-    let mut spans = vec![
-        Span::styled(prefix.to_string(), Style::new().fg(c.muted.into())),
-        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-        Span::styled(name.clone(), name_style),
-    ];
-    if let Some(note) = note {
-        spans.push(Span::styled(format!("  {note}"), Style::new().fg(c.muted.into())));
-    }
-    if let Some(w) = width {
-        let mut right = perm_spans(e.mode, theme);
-        right.push(Span::styled(format!("  {:>8}", relative(e.mtime)), Style::new().fg(c.muted.into())));
+    let (mut trailing, mut signs) = (Vec::new(), Vec::new());
+    if opts.width.is_some() {
+        trailing = perm_spans(e.mode, theme);
+        trailing.push(Span::styled(format!("  {:>8}", relative(e.mtime)), Style::new().fg(c.muted.into())));
         if opts.git {
-            right.push(Span::raw(" "));
-            right.push(match state {
-                Some((ch, kind)) => Span::styled(ch.to_string(), Style::new().fg(git::kind_color(theme, kind))),
-                None => Span::raw(" "),
-            });
+            trailing.push(Span::raw(" "));
+            signs = state.map(|(ch, kind)| (ch, git::kind_color(theme, kind))).into_iter().collect();
         }
-        let right_w: usize = right.iter().map(|s| s.content.width()).sum();
-        let left_w = prefix.width() + 2 + name.width() + note.map_or(0, |n| n.width() + 2);
-        let pad = (w as usize).saturating_sub(left_w + right_w + 2).max(1);
-        spans.push(Span::raw(" ".repeat(pad)));
-        spans.extend(right);
     }
-    Line::from(spans)
+    let row = ui::tree::FileRow {
+        depth,
+        name: &e.name,
+        is_dir: e.is_dir,
+        open,
+        executable: e.mode & 0o111 != 0,
+        tint: state.map(|(_, kind)| git::kind_color(theme, kind)),
+        focused: true,
+        note,
+        trailing,
+        signs,
+        ..Default::default()
+    };
+    ui::tree::file_row_line(theme, &row, opts.width)
 }
 
 /// Levels shown when there is room: the folder's entries are level 1.
@@ -210,7 +199,7 @@ struct Ctx<'a> {
 
 /// Flatten `nodes` into rows. With `cap`, each folder below the top level shows that
 /// many entries and then a `… N more` row; folders are expanded down to `depth` levels.
-fn flatten(cx: &Ctx, nodes: &[Node], unread: bool, lead: &str, level: usize, cap: Option<usize>, depth: usize, out: &mut Vec<Line<'static>>) {
+fn flatten(cx: &Ctx, nodes: &[Node], unread: bool, level: usize, cap: Option<usize>, depth: usize, out: &mut Vec<Line<'static>>) {
     let c = &cx.theme.colors;
     let shown = match cap {
         Some(n) if level >= 2 && nodes.len() > n => &nodes[..n],
@@ -218,21 +207,18 @@ fn flatten(cx: &Ctx, nodes: &[Node], unread: bool, lead: &str, level: usize, cap
     };
     let hidden: usize = nodes[shown.len()..].iter().map(weight).sum();
     let more = hidden > 0 || unread;
-    for (i, n) in shown.iter().enumerate() {
-        let last = i + 1 == shown.len() && !more;
-        let prefix = format!("{lead}{}", if last { "└── " } else { "├── " });
+    // Remarks (`… 3 more`) start under the names, after the guides and the icon column.
+    let remark = |text: String, style: Style| Line::from(vec![ui::tree::guides(cx.theme, level - 1), Span::styled(format!("  {text}"), style)]);
+    for n in shown {
         if n.run > 0 {
-            out.push(Line::from(vec![
-                Span::styled(prefix, Style::new().fg(c.muted.into())),
-                Span::styled(format!("· {} empty folders", n.run), Style::new().fg(c.muted.into())),
-            ]));
+            out.push(remark(format!("· {} empty folders", n.run), Style::new().fg(c.muted.into())));
             continue;
         }
         let e = n.e.as_ref().expect("a node without a run has an entry");
-        out.push(row(&prefix, e, cx.opts, state_of(e, cx.git), cx.theme, if n.empty { Some("(empty)") } else { None }));
-        if !n.kids.is_empty() && level < depth {
-            let next = format!("{lead}{}", if last { "    " } else { "│   " });
-            flatten(cx, &n.kids, n.unread, &next, level + 1, cap, depth, out);
+        let open = !n.kids.is_empty() && level < depth;
+        out.push(row(level - 1, open, e, cx.opts, state_of(e, cx.git), cx.theme, if n.empty { Some("(empty)") } else { None }));
+        if open {
+            flatten(cx, &n.kids, n.unread, level + 1, cap, depth, out);
         }
     }
     if more {
@@ -241,7 +227,7 @@ fn flatten(cx: &Ctx, nodes: &[Node], unread: bool, lead: &str, level: usize, cap
             (true, 0) => "… more not shown".to_string(),
             (true, n) => format!("… {n}+ more"),
         };
-        out.push(Line::from(Span::styled(format!("{lead}└── {text}"), Style::new().fg(c.muted.into()).add_modifier(Modifier::BOLD))));
+        out.push(remark(text, Style::new().fg(c.muted.into()).add_modifier(Modifier::BOLD)));
     }
 }
 
@@ -253,7 +239,7 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
     let cx = Ctx { theme, opts, git: &git };
     let build = |cap: Option<usize>, depth: usize| {
         let mut out = Vec::new();
-        flatten(&cx, &tree, unread, "", 1, cap, depth, &mut out);
+        flatten(&cx, &tree, unread, 1, cap, depth, &mut out);
         out
     };
     // Everything, if it fits.

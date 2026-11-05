@@ -8,6 +8,7 @@
 use crate::theme::{Theme, mix};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rows {
@@ -44,6 +45,29 @@ pub fn style(theme: &Theme, hovered: bool, tint: Option<Color>) -> Style {
         (false, Some(t)) => Style::new().bg(mix(t, c.bg.into(), 14)),
         (false, None) => Style::new(),
     }
+}
+
+/// `text` cut to at most `width` cells, with a `…` marking the cut. The one rule for text that does not fit:
+/// the name (of a file, a folder, a ref) is the part that shrinks, so what sits beside it stays where it is.
+/// Counts cells, not chars, so wide characters can not push the columns out of line.
+pub fn fit(text: &str, width: usize) -> String {
+    if text.width() <= width {
+        return text.to_string();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let (mut out, mut used) = (String::new(), 0);
+    for ch in text.chars() {
+        let w = ch.width().unwrap_or(0);
+        if used + w > width - 1 {
+            break;
+        }
+        out.push(ch);
+        used += w;
+    }
+    out.push('…');
+    out
 }
 
 /// The row that is current while its pane does not have the focus (the file open in the editor): a

@@ -10,6 +10,7 @@ mod media;
 mod pdf;
 mod tabular;
 mod git;
+pub use git::kind_color;
 pub mod markdown;
 mod text;
 
@@ -272,6 +273,27 @@ mod tests {
         assert!(flat(&on[0]).starts_with(' ') && on[0].spans.iter().all(|s| s.style.bg.is_none()));
         let off = preview(&d.join("a.txt"), &Theme::default(), &Options { width: Some(20), height: None, git: false, focus: None }).unwrap();
         assert!(!flat(&off[1]).contains('▎') && off[1].spans.iter().all(|s| s.style.bg.is_none()));
+    }
+
+    #[test]
+    fn dir_shows_dot_files_but_not_ignored_ones_and_a_long_name_shrinks() {
+        let d = tmp("dotignored");
+        assert!(std::process::Command::new("git").args(["init", "-q"]).current_dir(&d).status().unwrap().success());
+        fs::write(d.join(".gitignore"), "build\n").unwrap();
+        fs::create_dir(d.join("build")).unwrap();
+        fs::write(d.join("build/out.o"), "x").unwrap();
+        fs::write(d.join(".env"), "x").unwrap();
+        let long = format!("{}.txt", "n".repeat(60));
+        fs::write(d.join(&long), "x").unwrap();
+        let opts = Options { width: Some(50), height: None, git: false, focus: None };
+        let text: Vec<String> = preview(&d, &Theme::default(), &opts).unwrap().iter().map(flat).collect();
+        let all = text.join("\n");
+        assert!(all.contains(".env") && all.contains(".gitignore"), "dot files show: {all}");
+        assert!(!all.contains("build") && !all.contains(".git\n") && !all.contains("out.o"), "ignored and .git stay out: {all}");
+        let row = text.iter().find(|l| l.contains('…')).unwrap_or_else(|| panic!("the long name is cut: {all}"));
+        let width = |l: &String| unicode_width::UnicodeWidthStr::width(l.as_str());
+        let short = text.iter().find(|l| l.contains(".env")).unwrap();
+        assert_eq!(width(row), width(short), "the right column keeps its place: {row:?} {short:?}");
     }
 
     #[test]

@@ -3,7 +3,7 @@ use crate::keys;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
@@ -478,19 +478,6 @@ impl Panel {
         }
     }
 
-    fn kind_color(theme: &Theme, kind: Kind) -> Color {
-        let g = &theme.colors.git;
-        match kind {
-            Kind::Added => g.added,
-            Kind::Modified | Kind::Typechange => g.modified,
-            Kind::Deleted => g.deleted,
-            Kind::Renamed => g.renamed,
-            Kind::Untracked => g.untracked,
-            Kind::Conflict => g.conflict,
-        }
-        .into()
-    }
-
     /// The footer rows: the commit prompt, a discard question, or the last
     /// message. While the commit prompt is open an error (a refused commit) is
     /// shown above it, so it is not hidden by what you are typing.
@@ -594,7 +581,7 @@ impl Panel {
                     let name = if self.tree { change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { change.rela.display().to_string() };
                     // Two marks like `git status -s`: what is staged, then what is not.
                     let mark = |kind: Option<Kind>| match kind {
-                        Some(k) => (kind_char(k), Self::kind_color(theme, k)),
+                        Some(k) => (kind_char(k), pv::kind_color(theme, k)),
                         None => (' ', c.fg.into()),
                     };
                     ui::tree::file_row(
@@ -605,7 +592,7 @@ impl Panel {
                         &ui::tree::FileRow {
                             depth: *depth,
                             name: &name,
-                            tint: Some(Self::kind_color(theme, change.kind())),
+                            tint: Some(pv::kind_color(theme, change.kind())),
                             selected,
                             focused: true,
                             signs: vec![mark(change.staged), mark(change.unstaged)],

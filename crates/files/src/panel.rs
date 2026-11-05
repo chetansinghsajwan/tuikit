@@ -40,7 +40,7 @@ pub struct PanelOptions {
 
 impl Default for PanelOptions {
     fn default() -> Self {
-        PanelOptions { hidden: false, git: true, linemode: Linemode::Off, bookmarks: bookmarks::default_path(), background_bytes: Some(8 << 20), leader: "space".into(), actions: Vec::new() }
+        PanelOptions { hidden: true, git: true, linemode: Linemode::Off, bookmarks: bookmarks::default_path(), background_bytes: Some(8 << 20), leader: "space".into(), actions: Vec::new() }
     }
 }
 
@@ -459,6 +459,16 @@ impl Panel {
         let chrome = 100 - Pane::new(theme).inner(Rect::new(0, 0, 100, 10)).width;
         let longest = self.visible().into_iter().filter_map(|i| self.rows.get(i)).map(|r| usize::from(r.depth) * 2 + 2 + r.name.chars().count() + 5).max().unwrap_or(0);
         (longest as u16).saturating_add(chrome)
+    }
+
+    /// The scope the cursor is in, for the highlighted indent guide: the open folder under the cursor, or the
+    /// folder that holds it. `(folder row, first row after its contents, guide column)`.
+    fn active_guide_span(&self) -> Option<(usize, usize, usize)> {
+        let cur = self.rows.get(self.cursor)?;
+        let folder = if cur.is_dir && self.expanded.contains(&cur.path) { self.cursor } else { self.rows[..self.cursor].iter().rposition(|r| r.depth + 1 == cur.depth)? };
+        let depth = self.rows[folder].depth;
+        let end = self.rows[folder + 1..].iter().position(|r| r.depth <= depth).map_or(self.rows.len(), |n| folder + 1 + n);
+        Some((folder, end, usize::from(depth)))
     }
 
     /// Path under the cursor.
@@ -922,19 +932,6 @@ impl Panel {
         }
     }
 
-    fn git_color(theme: &Theme, kind: Kind) -> Color {
-        let g = &theme.colors.git;
-        match kind {
-            Kind::Added => g.added,
-            Kind::Modified | Kind::Typechange => g.modified,
-            Kind::Deleted => g.deleted,
-            Kind::Renamed => g.renamed,
-            Kind::Untracked => g.untracked,
-            Kind::Conflict => g.conflict,
-        }
-        .into()
-    }
-
     /// Start counting the visible folders' sizes (a few at a time) while the size column is on.
     fn count_visible_dirs(&mut self) {
         if !matches!(self.opts.linemode, Linemode::Full | Linemode::SizeTime) {
@@ -1051,6 +1048,7 @@ impl Panel {
         self.count_visible_dirs();
         let sizes = &self.dir_sizes;
         let shown = self.visible();
+        let active = self.active_guide_span();
 
         for (k, &i) in shown.iter().enumerate() {
             let row = &self.rows[i];
@@ -1058,7 +1056,7 @@ impl Panel {
             let area = rows.content(y);
             let selected = i == self.cursor;
             let git = self.git_state(row);
-            let tint = git.map(|(_, k)| Self::git_color(theme, k));
+            let tint = git.map(|(_, k)| pv::kind_color(theme, k));
 
             // Size and modified-time columns sit left of the git sign, when there is room.
             let cols = if area.width >= 44 { self.opts.linemode.width() } else { 0 };
@@ -1084,9 +1082,9 @@ impl Panel {
             let signs: Vec<(char, Color)> = if kinds.len() > 1 {
                 let room = (usize::from(area.width) / 3).max(1);
                 let shown = kinds.len().min(room.div_ceil(2).max(1));
-                kinds.iter().take(shown).map(|k| (k.letter(), Self::git_color(theme, *k))).collect()
+                kinds.iter().take(shown).map(|k| (k.letter(), pv::kind_color(theme, *k))).collect()
             } else if let Some((ch, kind)) = git {
-                vec![(ch, Self::git_color(theme, kind))]
+                vec![(ch, pv::kind_color(theme, kind))]
             } else {
                 Vec::new()
             };
@@ -1099,6 +1097,7 @@ impl Panel {
                 &ui::tree::FileRow {
                     depth: usize::from(row.depth),
                     name: &row.name,
+                    active_guide: active.and_then(|(from, to, col)| (i > from && i < to).then_some(col)),
                     is_dir: row.is_dir,
                     open: self.expanded.contains(&row.path),
                     executable: !row.is_dir && is_executable(&row.path),
@@ -1183,6 +1182,26 @@ mod tests {
             assert!(text.iter().any(|l| l.contains("src") && l.contains("D M ?")), "{text:#?}");
             p.refresh();
         }
+    }
+
+    #[test]
+    fn the_active_indent_guide_is_the_scope_the_cursor_is_in() {
+        let d = tree("guide");
+        let mut p = panel(&d);
+        p.reveal(&d.join("src/deep/inner.txt"));
+        let at = |p: &Panel, name: &str| p.rows.iter().position(|r| r.name == name).unwrap();
+        let (src, deep) = (at(&p, "src"), at(&p, "deep"));
+        // On a file: the folder that holds it, from the folder row to the end of its contents.
+        let (from, to, col) = p.active_guide_span().unwrap();
+        assert_eq!((from, col), (deep, 2 - 1));
+        assert_eq!(to, at(&p, "inner.txt") + 1);
+        // On an open folder: its own contents. On a top-level file: no guide.
+        p.cursor = src;
+        let (from, to, col) = p.active_guide_span().unwrap();
+        assert_eq!((from, col), (src, 0));
+        assert_eq!(to, at(&p, "docs").max(at(&p, "README.md")).max(to).min(p.rows.len()));
+        p.cursor = at(&p, "README.md");
+        assert!(p.active_guide_span().is_none());
     }
 
     #[test]
