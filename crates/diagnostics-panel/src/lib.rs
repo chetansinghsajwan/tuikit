@@ -253,10 +253,14 @@ impl Panel {
                     let base = ui::list::style(theme, selected && focused, None);
                     buf.set_style(geo.bar(y), base);
                     let head = format!("{}:{}", it.line, it.col);
-                    let source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
+                    let mut source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
                     // The first line of the message, cut to the room left.
-                    let used = 2 + 2 + head.width() + 2 + source.width();
-                    let room = usize::from(inner.width).saturating_sub(used);
+                    let fixed = 2 + 2 + head.width() + 2;
+                    // The source goes when it would leave the message under 4 cells.
+                    if usize::from(inner.width).saturating_sub(fixed + source.width()) < 4 {
+                        source.clear();
+                    }
+                    let room = usize::from(inner.width).saturating_sub(fixed + source.width());
                     let mut msg: String = it.message.lines().next().unwrap_or("").to_string();
                     if msg.width() > room {
                         let mut cut = String::new();

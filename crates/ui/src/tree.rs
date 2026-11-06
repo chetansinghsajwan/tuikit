@@ -262,7 +262,7 @@ pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row:
     // the signs. The name shrinks (`…`) to fit; trailing text that would leave it under `MIN_NAME` cells
     // is dropped, so a narrow pane keeps the name.
     let width = usize::from(area.width);
-    let signs = row.signs.len().saturating_mul(2).saturating_sub(1).max(1);
+    let signs = if row.signs.is_empty() { 1 } else { row.signs.len() * 2 };
     let count_w = row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
     let budget = |trailing: usize| width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0))).saturating_sub(row.depth * 2 + 2 + count_w);
     let mut trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();

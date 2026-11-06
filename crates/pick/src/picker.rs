@@ -720,11 +720,13 @@ impl Picker {
         }
 
         // Prompt row: "> query" with the count flush right.
-        let prompt_area = Rect { height: 1, ..inner };
+        let cw = count.len() as u16;
+        let show_count = inner.width > cw + 4;
+        // The query stops one cell short of the count.
+        let prompt_area = Rect { height: 1, width: if show_count { inner.width - cw - 1 } else { inner.width }, ..inner };
         let prompt = ui::prompt::line(theme, "> ", self.input.value());
         Paragraph::new(prompt).render(prompt_area, buf);
-        let cw = count.len() as u16;
-        if inner.width > cw + 4 {
+        if show_count {
             buf.set_string(inner.right() - cw, inner.y, &count, Style::new().fg(c.muted.into()));
         }
         ui::prompt::cursor(buf, prompt_area, "> ", self.input.visual_cursor());
@@ -778,7 +780,7 @@ impl Picker {
             )];
             let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
             spans.extend(self.row_spans(&cand, name_fg, theme, idx, false));
-            Paragraph::new(Line::from(spans)).style(base).render(row_area, buf);
+            Paragraph::new(Line::from(spans)).style(base).render(Rect { width: row_area.width.saturating_sub(if git.is_some() { 2 } else { 0 }), ..row_area }, buf);
 
             if let Some((ch, kind)) = git {
                 let x = list.right().saturating_sub(1);
@@ -846,7 +848,7 @@ impl Picker {
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
-                    Paragraph::new(Line::from(spans)).style(base).render(row_area, buf);
+                    Paragraph::new(Line::from(spans)).style(base).render(Rect { width: row_area.width.saturating_sub(if git.is_some() { 2 } else { 0 }), ..row_area }, buf);
 
                     if let Some((ch, kind)) = git {
                         let x = list.right().saturating_sub(1);
