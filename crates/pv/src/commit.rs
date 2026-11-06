@@ -186,16 +186,7 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
 const MAX_LINES: usize = 4000;
 
 #[cfg(test)]
-mod tests {
-    use super::utc;
-
-    #[test]
-    fn formats_utc() {
-        assert_eq!(utc(0), "1970-01-01 00:00");
-        assert_eq!(utc(1_793_108_415), "2026-10-27 13:40");
-        assert_eq!(utc(951_782_400 + 3600 * 5 + 60 * 7), "2000-02-29 05:07"); // leap day
-    }
-}
+mod tests;
 
 /// Preview of one file's uncommitted change in the repository at `root`:
 /// `side` picks staged (HEAD against the index) or unstaged (index against the

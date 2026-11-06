@@ -59,55 +59,10 @@ pub fn main_preview(theme: &Theme, area: Rect) -> [Rect; 2] {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn gap_changes_every_split() {
-        let area = Rect::new(0, 0, 100, 10);
-        let mut t = Theme::default();
-        t.layout.gap = 0;
-        let a = sidebar_main_preview(&t, area);
-        assert_eq!(a[1].x, a[0].right());
-        t.layout.gap = 2;
-        let b = sidebar_main_preview(&t, area);
-        assert_eq!(b[1].x, b[0].right() + 2);
-        let c = main_preview(&t, area);
-        assert_eq!(c[1].x, c[0].right() + 2);
-    }
-
-    #[test]
-    fn parses_json() {
-        let t: Theme = serde_json::from_str(
-            r##"{"chrome":{"border":"double"},"layout":{"gap":3},"colors":{"bg":"#102030"}}"##,
-        )
-        .unwrap();
-        assert_eq!(t.layout.gap, 3);
-        assert_eq!(t.chrome.border, "double");
-    }
-}
+mod tests;
 
 #[cfg(test)]
-mod popup_tests {
-    use super::*;
-
-    #[test]
-    fn popup_is_centered_and_follows_the_percent_token() {
-        let mut t = Theme::default();
-        assert_eq!(t.layout.popup_percent, 90);
-        let p = popup(&t, Rect::new(0, 0, 100, 50));
-        assert_eq!((p.x, p.y, p.width, p.height), (5, 2, 90, 45));
-        t.layout.popup_percent = 100;
-        assert_eq!(popup(&t, Rect::new(0, 0, 100, 50)), Rect::new(0, 0, 100, 50));
-        t.layout.popup_percent = 50;
-        let q = popup(&t, Rect::new(4, 2, 101, 51));
-        assert_eq!((q.width, q.height), (50, 25));
-        assert!(q.x >= 4 && q.right() <= 105 && q.y >= 2 && q.bottom() <= 53);
-        // Out-of-range values are clamped, never larger than the area.
-        t.layout.popup_percent = 500;
-        assert_eq!(popup(&t, Rect::new(0, 0, 30, 10)), Rect::new(0, 0, 30, 10));
-    }
-}
+mod popup_tests;
 
 /// Where the docks, the editor and the ribbon go (see `workbench`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,57 +111,4 @@ pub fn workbench(main: Rect, left: u16, right: u16, bottom: u16) -> Workbench {
 }
 
 #[cfg(test)]
-mod workbench_tests {
-    use super::*;
-
-    #[test]
-    fn the_ribbon_is_the_whole_bottom_row_and_the_docks_stop_above_it() {
-        let main = Rect::new(0, 0, 120, 40);
-        let w = workbench(main, 30, 25, 0);
-        assert_eq!(w.ribbon, Rect::new(0, 39, 120, 1));
-        assert_eq!(w.left, Rect::new(0, 0, 30, 39));
-        assert_eq!(w.right, Rect::new(95, 0, 25, 39));
-        assert_eq!(w.editor, Rect::new(30, 0, 65, 39));
-        assert_eq!(w.bottom.height, 0);
-    }
-
-    #[test]
-    fn a_bottom_dock_sits_under_the_editor_and_the_ribbon_stays_below_it() {
-        let w = workbench(Rect::new(0, 0, 120, 40), 30, 25, 12);
-        assert_eq!(w.bottom, Rect::new(30, 27, 65, 12));
-        assert_eq!(w.editor, Rect::new(30, 0, 65, 27));
-        assert_eq!((w.left.height, w.right.height), (39, 39));
-        assert_eq!(w.ribbon, Rect::new(0, 39, 120, 1), "never moves");
-        assert_eq!(w.bottom.bottom(), w.ribbon.y, "the dock ends right above the ribbon");
-    }
-
-    #[test]
-    fn closed_docks_take_no_room_and_big_ones_are_limited() {
-        let main = Rect::new(2, 1, 90, 30);
-        let w = workbench(main, 0, 0, 0);
-        assert_eq!(w.editor, Rect::new(2, 1, 90, 29));
-        assert_eq!(w.ribbon, Rect::new(2, 30, 90, 1));
-        assert_eq!((w.left.width, w.right.width, w.left.height, w.right.height), (0, 0, 0, 0));
-        // At most two fifths of the width per side (but the editor keeps 20 columns) and half of the height.
-        let w = workbench(main, 80, 80, 100);
-        assert_eq!((w.left.width, w.right.width), (35, 35));
-        assert_eq!(w.bottom.height, 14);
-        assert!(w.editor.width >= 20);
-        // The pieces never overlap or leave the area.
-        for r in [w.left, w.right, w.bottom, w.editor, w.ribbon] {
-            assert!(r.x >= main.x && r.right() <= main.right() && r.y >= main.y && r.bottom() <= main.bottom(), "{r:?}");
-        }
-        assert!(w.left.right() <= w.editor.x && w.editor.right() <= w.right.x && w.editor.bottom() <= w.bottom.y && w.bottom.bottom() <= w.ribbon.y);
-    }
-
-    #[test]
-    fn tiny_screens_keep_a_usable_editor_and_drop_the_ribbon_last() {
-        let w = workbench(Rect::new(0, 0, 40, 10), 30, 30, 8);
-        assert!(w.editor.width >= 20 && w.editor.height >= 4, "{w:?}");
-        assert_eq!(w.ribbon.height, 1);
-        // With almost no rows left there is no ribbon, and nothing overlaps.
-        let w = workbench(Rect::new(0, 0, 40, 4), 10, 10, 10);
-        assert_eq!(w.ribbon.height, 0);
-        assert_eq!(w.editor.height, 4);
-    }
-}
+mod workbench_tests;
