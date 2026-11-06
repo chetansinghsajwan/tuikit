@@ -264,13 +264,13 @@ pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row:
     let width = usize::from(area.width);
     let signs = row.signs.len().saturating_mul(2).saturating_sub(1).max(1);
     let count_w = row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
-    let budget = |trailing: usize| width.saturating_sub(signs.max(1 + trailing)).saturating_sub(row.depth * 2 + 2 + count_w);
+    let budget = |trailing: usize| width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0))).saturating_sub(row.depth * 2 + 2 + count_w);
     let mut trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
     let show_trailing = trailing > 0 && budget(trailing) >= MIN_NAME;
     if !show_trailing {
         trailing = 0;
     }
-    let limit = width.saturating_sub(signs.max(1 + trailing));
+    let limit = width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0)));
     spans[name_at] = Span::styled(crate::list::fit(row.name, budget(trailing)), name_style);
     let trailing = trailing as u16;
     Paragraph::new(Line::from(spans)).style(base).render(Rect { width: limit as u16, ..area }, buf);
