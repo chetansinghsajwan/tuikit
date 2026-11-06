@@ -3,7 +3,7 @@
 use super::super::*;
 
 impl App {
-    pub(super) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(in crate::app) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let line = match &self.mode {
             Mode::Prompt(kind, input) => {
@@ -58,7 +58,7 @@ impl App {
         Paragraph::new(line).render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
     }
 
-    pub(super) fn hints(&self) -> &'static str {
+    pub(in crate::app) fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
             if self.commit_files.is_some() {
                 return "j k move  l h fold  ctrl-d/u scroll diff  } { hunks  ) ( files  esc back to the commits";

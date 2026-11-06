@@ -3,7 +3,7 @@
 use super::super::*;
 
 impl App {
-    pub(super) fn render_list(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(in crate::app) fn render_list(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let (title, n) = match which {
             Focus::Branches => ("Refs", self.ref_rows.len()),
             Focus::Commits => ("Commits", self.commits.len()),
@@ -65,7 +65,7 @@ impl App {
     /// Give the flexible columns their widths for a list `width` wide: the refs column as wide as the most
     /// refs on one commit need (as far as the message keeps room), and when the message is hidden the
     /// refs (or the author names) take what is left, so the row is always filled.
-    pub(super) fn fit_columns(&mut self, width: u16) {
+    pub(in crate::app) fn fit_columns(&mut self, width: u16) {
         const MIN_SUBJECT: usize = 24;
         let width = usize::from(width);
         let mut fixed = if self.graph { self.graph_w + 1 } else { 0 };
@@ -98,7 +98,7 @@ impl App {
     }
 
     /// The text of row `i`: the entry, and its age for the right edge.
-    pub(super) fn row(&self, which: Focus, i: usize, theme: &Theme) -> (Line<'static>, String) {
+    pub(in crate::app) fn row(&self, which: Focus, i: usize, theme: &Theme) -> (Line<'static>, String) {
         let c = &theme.colors;
         let fg = Style::new().fg(c.fg.into());
         let muted = Style::new().fg(c.muted.into());
@@ -190,7 +190,7 @@ impl App {
     }
 
     /// The graph cells of a row as coloured spans, padded to the width of the column.
-    pub(super) fn graph_spans(&self, row: &git_core::GraphRow, theme: &Theme) -> Vec<Span<'static>> {
+    pub(in crate::app) fn graph_spans(&self, row: &git_core::GraphRow, theme: &Theme) -> Vec<Span<'static>> {
         let c = &theme.colors;
         let palette = [c.accent, c.success, c.warning, c.info, c.error, c.git.renamed];
         let mut spans: Vec<Span<'static>> = row.cells.iter().take(self.graph_w).map(|(ch, lane)| Span::styled(ch.to_string(), Style::new().fg(palette[lane % palette.len()].into()))).collect();
@@ -200,7 +200,7 @@ impl App {
     }
 
     /// The rev to preview for the highlighted entry of a list pane.
-    pub(super) fn current_rev(&self, which: Focus) -> Option<String> {
+    pub(in crate::app) fn current_rev(&self, which: Focus) -> Option<String> {
         match which {
             Focus::Branches => self.current_ref().map(|b| b.name.clone()),
             Focus::Commits => match &self.commit_files {

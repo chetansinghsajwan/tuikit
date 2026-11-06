@@ -3,7 +3,7 @@
 use super::super::*;
 
 impl App {
-    pub(super) fn render_preview(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(in crate::app) fn render_preview(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let rev = self.current_rev(which);
         let short = |s: &str| s.chars().take(8).collect::<String>();
         let whole = rev.clone().unwrap_or_default();
