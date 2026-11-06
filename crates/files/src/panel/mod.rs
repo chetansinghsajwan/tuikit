@@ -23,6 +23,7 @@ mod render;
 mod types;
 use paste::*;
 use types::*;
+pub use types::{Action, Linemode, PanelOptions, Search};
 
 #[cfg(test)]
 mod tests;
