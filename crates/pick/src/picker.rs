@@ -317,7 +317,7 @@ impl Picker {
             }
         }
         let was_tree = self.tree.is_some();
-        self.tree = Some(crate::tree::build(entries));
+        self.tree = Some(crate::tree::build(entries, !self.input.value().is_empty()));
         if !was_tree {
             self.offset = 0;
             // With nothing typed the list starts at its top: the cursor takes the first row

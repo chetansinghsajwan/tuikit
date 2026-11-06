@@ -36,25 +36,35 @@ pub struct Tree {
 struct Node {
     dirs: BTreeMap<(String, String), Node>,
     items: Vec<(String, u32)>,
+    /// The best (lowest) match index anywhere below this folder.
+    best: u32,
 }
 
-pub fn build(entries: Vec<Entry>) -> Tree {
-    let mut root = Node::default();
+/// `ranked`: order by how well things matched (the folder holding the best match first, the best match first
+/// within its folder); otherwise by name, folders before files.
+pub fn build(entries: Vec<Entry>, ranked: bool) -> Tree {
+    let mut root = Node { best: u32::MAX, ..Node::default() };
     for e in entries {
         let mut node = &mut root;
+        node.best = node.best.min(e.idx);
         for d in e.dirs {
-            node = node.dirs.entry((d.to_lowercase(), d)).or_default();
+            node = node.dirs.entry((d.to_lowercase(), d)).or_insert_with(|| Node { best: u32::MAX, ..Node::default() });
+            node.best = node.best.min(e.idx);
         }
         node.items.push((e.sort, e.idx));
     }
     let mut tree = Tree::default();
-    emit(&root, 0, &mut tree);
+    emit(&root, 0, ranked, &mut tree);
     tree
 }
 
-fn emit(node: &Node, depth: u16, tree: &mut Tree) {
+fn emit(node: &Node, depth: u16, ranked: bool, tree: &mut Tree) {
     // Folders first, then the items of this folder.
-    for ((_, name), child) in &node.dirs {
+    let mut dirs: Vec<(&(String, String), &Node)> = node.dirs.iter().collect();
+    if ranked {
+        dirs.sort_by_key(|(_, n)| n.best);
+    }
+    for ((_, name), child) in dirs {
         let mut label = name.clone();
         let mut cur = child;
         while cur.items.is_empty() && cur.dirs.len() == 1 {
@@ -64,10 +74,14 @@ fn emit(node: &Node, depth: u16, tree: &mut Tree) {
             cur = next;
         }
         tree.rows.push(Row::Dir { depth, label });
-        emit(cur, depth + 1, tree);
+        emit(cur, depth + 1, ranked, tree);
     }
     let mut items: Vec<&(String, u32)> = node.items.iter().collect();
-    items.sort();
+    if ranked {
+        items.sort_by_key(|(_, idx)| *idx);
+    } else {
+        items.sort();
+    }
     for (_, idx) in items {
         tree.row_of.insert(*idx, tree.rows.len());
         tree.pos_of.insert(*idx, tree.order.len());
@@ -112,7 +126,7 @@ mod tests {
 
     #[test]
     fn ancestors_are_the_enclosing_headers_outermost_first() {
-        let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/ui/c.rs"), e(3, "docs/x.md")]);
+        let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/ui/c.rs"), e(3, "docs/x.md")], false);
         // rows: docs/, #3, src/, ui/, #2, #1, #0
         assert_eq!(ancestors(&t.rows, 4), vec![2, 3]); // c.rs: src, ui
         assert_eq!(ancestors(&t.rows, 5), vec![2]); // b.rs: src
@@ -133,7 +147,7 @@ mod tests {
 
     #[test]
     fn folders_first_items_indented_and_single_chains_merged() {
-        let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/a.rs"), e(3, "src/ui/c.rs"), e(4, "docs/guide/x.md"), e(5, "Zed/y.txt")]);
+        let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/a.rs"), e(3, "src/ui/c.rs"), e(4, "docs/guide/x.md"), e(5, "Zed/y.txt")], false);
         assert_eq!(
             shape(&t),
             vec![
@@ -157,14 +171,29 @@ mod tests {
 
     #[test]
     fn a_folder_with_items_or_siblings_is_not_merged() {
-        let t = build(vec![e(0, "a/x.rs"), e(1, "a/b/y.rs"), e(2, "a/c/z.rs")]);
+        let t = build(vec![e(0, "a/x.rs"), e(1, "a/b/y.rs"), e(2, "a/c/z.rs")], false);
         assert_eq!(shape(&t), vec!["a/", "  b/", "    #1", "  c/", "    #2", "  #0"]);
     }
 
     #[test]
     fn empty_and_flat_inputs() {
-        assert!(build(vec![]).rows.is_empty());
-        let t = build(vec![e(0, "b.txt"), e(1, "a.txt")]);
+        assert!(build(vec![], false).rows.is_empty());
+        let t = build(vec![e(0, "b.txt"), e(1, "a.txt")], false);
         assert_eq!(shape(&t), vec!["#1", "#0"]);
+    }
+}
+
+#[cfg(test)]
+mod ranked_tests {
+    use super::*;
+
+    #[test]
+    fn ranked_puts_the_folder_with_the_best_match_first_and_the_best_match_first_inside_it() {
+        let e = |idx, dirs: &[&str], name: &str| Entry { idx, dirs: dirs.iter().map(|s| s.to_string()).collect(), sort: name.into() };
+        let entries = vec![e(0, &["zed"], "best.rs"), e(1, &["alpha"], "a.rs"), e(2, &["zed"], "a.rs"), e(3, &[], "top.rs")];
+        let by_name = build(entries.clone(), false);
+        assert_eq!(by_name.order, vec![1, 2, 0, 3]);
+        let ranked = build(entries, true);
+        assert_eq!(ranked.order, vec![0, 2, 1, 3], "zed (holds #0) first, #0 before #2, then alpha");
     }
 }

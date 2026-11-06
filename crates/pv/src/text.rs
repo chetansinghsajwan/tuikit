@@ -256,11 +256,5 @@ fn indent_depths(text: &str) -> (Vec<usize>, usize) {
         })
         .collect();
     let unit = own.iter().take(400).flatten().copied().filter(|n| *n >= 2).min().unwrap_or(4).clamp(2, 8);
-    let mut before = 0;
-    let before: Vec<usize> = own.iter().map(|d| { if let Some(d) = d { before = *d; } before }).collect();
-    let mut after = 0;
-    let mut after_rev: Vec<usize> = own.iter().rev().map(|d| { if let Some(d) = d { after = *d; } after }).collect();
-    after_rev.reverse();
-    let depths = own.iter().enumerate().map(|(i, d)| d.unwrap_or_else(|| before[i].min(after_rev[i]))).collect();
-    (depths, unit)
+    (ui::tree::indent_levels(&own), unit)
 }

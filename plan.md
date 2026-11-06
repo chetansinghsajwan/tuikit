@@ -31,6 +31,7 @@ The repo is a Nix flake (see `agents.md`); this plan is about replacing and unif
 
 ## Decisions log
 
+- Picker hierarchy view orders by rank when a query is typed (folder with the best match first); helix editor highlights the active indent guide via `ui::tree::code_scope` (the editor passes lines and cursor).
 - Animation: toolkit-owned `ui::anim` (cursor fade, spinner, frame timing, `animations` config); tools only call `finish`/`poll_timeout`/`take_redraw` in their loop. Also: scroll glide, fold reveal, change flash, overlay and tab fade (post-draw, via rows noted by `file_row`); every list row goes through the shared `ui::list::ListRow`.
 
 - Picker: build our own in Rust (`pick`), not a wrapper around fzf. fzf gets replaced in in-scope tools.

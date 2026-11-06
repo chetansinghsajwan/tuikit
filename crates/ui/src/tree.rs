@@ -48,6 +48,25 @@ pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
     Some(Scope { from: folder, to, col: depth })
 }
 
+/// The indentation of every line with the blank ones (`None`) filled in: a blank line takes the smaller of its
+/// neighbors' indentation, so guides run through it.
+pub fn indent_levels(own: &[Option<usize>]) -> Vec<usize> {
+    let mut before = 0;
+    let before: Vec<usize> = own.iter().map(|d| { if let Some(d) = d { before = *d; } before }).collect();
+    let mut after = 0;
+    let mut after_rev: Vec<usize> = own.iter().rev().map(|d| { if let Some(d) = d { after = *d; } after }).collect();
+    after_rev.reverse();
+    own.iter().enumerate().map(|(i, d)| d.unwrap_or_else(|| before[i].min(after_rev[i]))).collect()
+}
+
+/// The scope the cursor line is in, for code (an editor, a preview with a cursor): `indents` is each line's leading
+/// whitespace in cells (`None` for a blank line) and `unit` the cells of one indent level. The same rule as in a tree:
+/// the block the cursor line opens, else the block that holds it. The caller passes the lines and the cursor, nothing else.
+pub fn code_scope(indents: &[Option<usize>], unit: usize, cursor: usize) -> Option<Scope> {
+    let depths: Vec<usize> = indent_levels(indents).into_iter().map(|c| c / unit.max(1)).collect();
+    active_scope(&depths, cursor)
+}
+
 /// The indent guides with the one at column `active` highlighted (the accent), like the editor marks the
 /// scope the cursor is in. Without an active column it is just [`guides`].
 pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<Span<'static>> {
@@ -423,5 +442,28 @@ mod tests {
         };
         let t = row_text(&full, 40);
         assert!(t.trim_end().ends_with("+3 -1M"), "trailing text ends just left of the sign cell: {t}");
+    }
+}
+
+#[cfg(test)]
+mod code_scope_tests {
+    use super::*;
+
+    #[test]
+    fn the_cursor_in_a_block_gets_that_blocks_column_and_blank_lines_belong_to_it() {
+        // fn a() {        0
+        //     x;          1
+        //                 (blank)
+        //     if b {      1
+        //         y;      2
+        //     }           1
+        // }               0
+        let own = [Some(0), Some(4), None, Some(4), Some(8), Some(4), Some(0)];
+        assert_eq!(indent_levels(&own), vec![0, 4, 4, 4, 8, 4, 0]);
+        let s = code_scope(&own, 4, 4).unwrap(); // `y;` sits in the `if` block
+        assert_eq!((s.from, s.to, s.col), (3, 5, 1));
+        let s = code_scope(&own, 4, 1).unwrap(); // `x;` sits in the fn body
+        assert_eq!((s.from, s.col), (0, 0));
+        assert!(code_scope(&own, 4, 6).is_none(), "the closing line at the top has no scope");
     }
 }
