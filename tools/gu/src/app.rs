@@ -1865,7 +1865,7 @@ impl App {
                 Line::from(Span::styled(q, Style::new().fg(c.warning.into())))
             }
             Mode::Popup(_) => Line::default(),
-            Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
+            Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} {}", ui::anim::spinner(), self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
             Mode::Normal => match &self.message {
                 Some((m, err)) => Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into()))),
                 None => match self.operation_name() {

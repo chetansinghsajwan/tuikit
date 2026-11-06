@@ -2,6 +2,7 @@
 //! screen splitting in `layout`. Tools draw through these and never compute
 //! their own borders, colors or gaps.
 
+pub mod anim;
 pub mod ansi;
 pub mod clipboard;
 pub mod config;

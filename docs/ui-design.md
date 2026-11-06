@@ -97,6 +97,10 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 - Nerd Font glyphs from `ui::icons`, colored per type.
 - On pane titles, previews and list rows whose icon varies (files, folders, symbols). Not on rows that are all the same kind.
 
+## Motion
+
+The toolkit owns animation (`ui::anim`); a tool never animates. The cursor row fades in (140 ms) when it lands on a new line, and `ui::anim::spinner()` replaces `…` while something runs. A tool's event loop calls `ui::anim::finish` after drawing, waits with `poll_timeout`, and redraws on `take_redraw`; a still screen costs no CPU. Config: `animations = "on" | "reduced" | "off"` (`reduced`: spinner only). Not built yet: eased scrolling (the scroll offset is each tool's today), fold reveal, popup fade.
+
 ## Adding something
 
 1. Does `ui` or `pv` already draw it? Use it.

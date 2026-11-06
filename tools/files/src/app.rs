@@ -107,6 +107,7 @@ impl App {
     }
 
     fn event_loop(&mut self, term: &mut Term) -> io::Result<u8> {
+        let theme = self.theme.clone();
         let mut dirty = true;
         let mut shown = None;
         loop {
@@ -114,13 +115,14 @@ impl App {
                 term.draw(|f| {
                     let area = f.area();
                     self.render(area, f.buffer_mut());
+                    ui::anim::finish(f.buffer_mut(), &theme);
                 })?;
                 shown = self.dirsize.as_ref().map(DirSize::state);
             }
-            if !event::poll(Duration::from_millis(100))? {
+            if !event::poll(ui::anim::poll_timeout(Duration::from_millis(100)))? {
                 // A folder size still being counted changes what is on screen.
                 let props = self.dirsize.as_ref().map(DirSize::state) != shown;
-                dirty = self.panel().tick() || props;
+                dirty = self.panel().tick() || props || ui::anim::take_redraw();
                 continue;
             }
             let ev = event::read()?;

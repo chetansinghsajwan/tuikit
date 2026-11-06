@@ -80,16 +80,18 @@ fn run(cli: Cli) -> io::Result<u8> {
     let mut term: Term = Terminal::new(CrosstermBackend::new(tty))?;
     enter(&mut term)?;
     let result = (|| -> io::Result<()> {
+        let theme = ui::Theme::load();
         let mut dirty = true;
         loop {
             if dirty {
                 term.draw(|f| {
                     let area = f.area();
                     app.render(area, f.buffer_mut());
+                    ui::anim::finish(f.buffer_mut(), &theme);
                 })?;
             }
-            if !event::poll(Duration::from_millis(200))? {
-                dirty = app.tick();
+            if !event::poll(ui::anim::poll_timeout(Duration::from_millis(200)))? {
+                dirty = app.tick() | ui::anim::take_redraw();
                 continue;
             }
             let ev = event::read()?;

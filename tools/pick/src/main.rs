@@ -204,10 +204,13 @@ fn run(cli: Cli) -> io::Result<u8> {
             tty_term.0.draw(|f| {
                 let area = f.area();
                 picker.render(area, f.buffer_mut(), &theme);
+                ui::anim::finish(f.buffer_mut(), &theme);
             })?;
             dirty = false;
         }
-        if event::poll(Duration::from_millis(30))? {
+        if !event::poll(ui::anim::poll_timeout(Duration::from_millis(30)))? {
+            dirty |= ui::anim::take_redraw();
+        } else {
             let ev = event::read()?;
             dirty = true;
             if let Event::Key(_) = ev {

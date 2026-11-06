@@ -2,6 +2,7 @@
 //!
 //! ```toml
 //! leader = "space"            # the key `leader` stands for in bindings
+//! animations = "on"           # "on", "reduced" (spinner only) or "off"
 //!
 //! [keys]                      # action id -> key(s); an empty list unbinds the action
 //! "nav.down" = ["j", "down"]
@@ -23,6 +24,8 @@ use std::sync::OnceLock;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Config {
     pub leader: Option<String>,
+    /// `on`, `reduced` or `off` (see `anim`).
+    pub animations: Option<String>,
     /// Action id -> its keys.
     pub keys: BTreeMap<String, Vec<String>>,
 }
@@ -37,6 +40,7 @@ enum Keys {
 #[derive(Deserialize, Default)]
 struct File {
     leader: Option<String>,
+    animations: Option<String>,
     #[serde(default)]
     keys: BTreeMap<String, Keys>,
 }
@@ -81,6 +85,9 @@ impl Config {
     fn merge(&mut self, f: File) {
         if f.leader.is_some() {
             self.leader = f.leader;
+        }
+        if f.animations.is_some() {
+            self.animations = f.animations;
         }
         for (id, keys) in f.keys {
             self.keys.insert(id, match keys {

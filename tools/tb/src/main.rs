@@ -72,8 +72,9 @@ fn event_loop(term: &mut Term, grid: &mut Grid) -> io::Result<()> {
                 let rows = grid.keys_rows();
                 h.render(area, f.buffer_mut(), &theme, "Keys", &rows);
             }
+            ui::anim::finish(f.buffer_mut(), &theme);
         })?;
-        if !event::poll(Duration::from_millis(250))? {
+        if !event::poll(ui::anim::poll_timeout(Duration::from_millis(250)))? {
             continue;
         }
         let ev = event::read()?;

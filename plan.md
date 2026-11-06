@@ -31,6 +31,8 @@ The repo is a Nix flake (see `agents.md`); this plan is about replacing and unif
 
 ## Decisions log
 
+- Animation: toolkit-owned `ui::anim` (cursor fade, spinner, frame timing, `animations` config); tools only call `finish`/`poll_timeout`/`take_redraw` in their loop. Eased scroll, fold reveal and popup fade are open.
+
 - Picker: build our own in Rust (`pick`), not a wrapper around fzf. fzf gets replaced in in-scope tools.
 - Search is owned by the picker.
 - File explorer: stay on yazi. Embed the `yazi-*` crates as a library for the files panel inside helix. Pin versions (no API stability).
