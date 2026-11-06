@@ -111,7 +111,7 @@ Tool names: `gu`, `files`, `tb`, `nu`, `hx-ui` (the helix docks; not `helix`, wh
 | `tb` | grid | `h j k l` cell, `0` `$` first, last column, `enter` edit, `a` `O` add row, `d` delete row (asks), `J` `K` move row, `H` `L` move column, `leader c a` `leader c d` add, delete column, `s` `S` sort, `/` `n` `N` find, `y` `p` copy, paste, `u` `ctrl-r` undo, redo, `ctrl-s` save, `leader t h` header |
 | `pick` | preview | `ctrl-t` tables as text |
 | `pick` | grep (also helix `Space /`) | `alt-c` match case, `alt-w` whole word, `alt-r` regex or plain text (lit when on); `alt-i` include and `alt-e` exclude files by comma-separated globs (`*.rs, src/` and `target/, *.lock`), `enter` or `esc` back to the query; the search restarts on every change |
-| helix | Space | `e` files, `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `T` table (`l` `h` `j` `k` cell, `s` `S` sort, `a` `d` add, delete column, `[` `]` move column; `Alt` `h` `j` `k` `l` move by cell), `1` `2` `3` docks |
+| helix | Space | `e` files, `l` fuzzy-find a line of the buffer, `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `T` table (`l` `h` `j` `k` cell, `s` `S` sort, `a` `d` add, delete column, `[` `]` move column; `Alt` `h` `j` `k` `l` move by cell), `1` `2` `3` docks |
 
 ## Checklist for a new tool
 
