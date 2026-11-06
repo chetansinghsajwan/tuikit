@@ -1,9 +1,21 @@
 [package]
-name = "diagnostics-panel"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-diagnostics-panel"
+description = "Editor-independent diagnostics panel for tuikit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "diagnostics_panel"
 
 [dependencies]
-ratatui = "0.30.2"
-ui = { version = "0.1.0", path = "../ui" }
+ratatui.workspace = true
+tuikit-ui.workspace = true
 unicode-width = "0.2.3"

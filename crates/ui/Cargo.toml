@@ -1,12 +1,24 @@
 [package]
+name = "tuikit-ui"
+description = "Shared terminal UI design for tuikit: theme, keys, config, lists, prompts, animation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
 name = "ui"
-version = "0.1.0"
-edition = "2024"
 
 [dependencies]
-ratatui = "0.30.2"
-unicode-width = "0.2.2"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
-toml = "1.1.8"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+ratatui.workspace = true
+serde.workspace = true
+serde_json = "1.0.154"
+toml.workspace = true
+unicode-width.workspace = true

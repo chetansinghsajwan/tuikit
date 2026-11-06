@@ -1,21 +1,28 @@
 [package]
-name = "mdexport"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-mdexport"
+description = "mdexport: Markdown to PDF through Typst"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
 
-[lib]
-name = "mdexport"
-path = "src/lib.rs"
+[lints]
+workspace = true
 
 [[bin]]
 name = "mdexport"
 path = "src/main.rs"
 
+[lib]
+name = "mdexport"
+path = "src/lib.rs"
+
 [dependencies]
-pulldown-cmark = { version = "0.13", default-features = false }
-typst = "0.14"
-typst-pdf = "0.14"
-typst-assets = { version = "0.14", features = ["fonts"] }
-serde = { version = "1.0.229", features = ["derive"] }
-toml = "1.1.8"
 fontdb = "0.23"
+pulldown-cmark.workspace = true
+serde.workspace = true
+toml.workspace = true
+typst = "0.14"
+typst-assets = { version = "0.14", features = ["fonts"] }
+typst-pdf = "0.14"

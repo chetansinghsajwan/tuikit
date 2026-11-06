@@ -1,22 +1,34 @@
 [package]
+name = "tuikit-pv"
+description = "File preview and rendering for tuikit: code, Markdown, images, media, documents, tables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
 name = "pv"
-version = "0.1.0"
-edition = "2024"
 
 [dependencies]
-git-core = { version = "0.1.0", path = "../git-core" }
-ratatui = "0.30.2"
-serde = { version = "1.0.229", features = ["derive"] }
-syntect = { version = "5.3.0", default-features = false, features = ["default-onig"] }
-toml = "1.1.8"
-two-face = { version = "0.5.2", default-features = false, features = ["syntect-onig"] }
-pulldown-cmark = { version = "0.13", default-features = false }
-ui = { version = "0.1.0", path = "../ui" }
-unicode-width = "0.2.2"
-ignore = "0.4.34"
+calamine = "0.30"
+csv = "1"
+ignore.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 lofty = "0.22"
-mp4 = "0.14"
-csv = "1"
-calamine = "0.30"
 lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
+mp4 = "0.14"
+pulldown-cmark.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+syntect = { version = "5.3.0", default-features = false, features = ["default-onig"] }
+toml.workspace = true
+tuikit-git-core.workspace = true
+tuikit-ui.workspace = true
+two-face = { version = "0.5.2", default-features = false, features = ["syntect-onig"] }
+unicode-width.workspace = true

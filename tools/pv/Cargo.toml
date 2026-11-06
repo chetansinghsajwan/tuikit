@@ -1,12 +1,19 @@
 [package]
-name = "pv-cli"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-pv-cli"
+description = "pv: preview files in the terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "pv"
 path = "src/main.rs"
 
 [dependencies]
-ui = { path = "../../crates/ui" }
-pv = { path = "../../crates/pv" }
+tuikit-pv.workspace = true
+tuikit-ui.workspace = true

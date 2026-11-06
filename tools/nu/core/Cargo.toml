@@ -1,15 +1,27 @@
 [package]
-name = "nu-core"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-nu-core"
+description = "Connection backends for nu: NetworkManager and BlueZ on Linux, CoreWLAN and IOBluetooth on macOS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
-[dependencies]
-zbus = "5"
+[lib]
+name = "nu_core"
+
+[lints]
+workspace = true
 
 [features]
 # Native macOS backends (CoreWLAN for Wi-Fi, IOBluetooth for Bluetooth); `nu` turns them on for
 # macOS builds, where they replace NetworkManager and BlueZ.
 macos = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-core-wlan", "dep:objc2-io-bluetooth"]
+
+[dependencies]
+zbus = "5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", optional = true }

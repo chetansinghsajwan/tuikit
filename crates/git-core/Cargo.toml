@@ -1,7 +1,19 @@
 [package]
-name = "git-core"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-git-core"
+description = "Git status, diffs and history for tuikit, on gix"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "git_core"
 
 [dependencies]
 gix = { version = "0.90.0", default-features = false, features = ["status", "blob-diff", "index", "sha1", "parallel", "revision"] }

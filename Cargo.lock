@@ -1038,15 +1038,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diagnostics-panel"
-version = "0.1.0"
-dependencies = [
- "ratatui",
- "ui",
- "unicode-width",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,36 +1291,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "files"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "git-core",
- "ignore",
- "imagesize 0.14.0",
- "infer",
- "mime_guess",
- "pv",
- "ratatui",
- "trash",
- "tui-input",
- "ui",
-]
-
-[[package]]
-name = "files-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "files",
- "pv",
- "ratatui",
- "tui-input",
- "ui",
- "unicode-width",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1539,24 +1500,6 @@ checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
 dependencies = [
  "color_quant",
  "weezl",
-]
-
-[[package]]
-name = "git-core"
-version = "0.1.0"
-dependencies = [
- "gix",
-]
-
-[[package]]
-name = "git-panel"
-version = "0.1.0"
-dependencies = [
- "git-core",
- "pv",
- "ratatui",
- "tui-input",
- "ui",
 ]
 
 [[package]]
@@ -2479,19 +2422,6 @@ dependencies = [
  "log",
  "memchr",
  "memmap2",
-]
-
-[[package]]
-name = "gu"
-version = "0.1.0"
-dependencies = [
- "clap",
- "git-core",
- "git-panel",
- "pv",
- "ratatui",
- "tui-input",
- "ui",
 ]
 
 [[package]]
@@ -3452,19 +3382,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mdexport"
-version = "0.1.0"
-dependencies = [
- "fontdb",
- "pulldown-cmark",
- "serde",
- "toml 1.1.8+spec-1.1.0",
- "typst",
- "typst-assets",
- "typst-pdf",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3661,28 +3578,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a437a9308232ce794b1e7fdf540d38ea37efc3c73492640c13b4c8568b8f108"
 dependencies = [
  "bitflags 2.13.2",
-]
-
-[[package]]
-name = "nu"
-version = "0.1.0"
-dependencies = [
- "clap",
- "nu-core",
- "ratatui",
- "tui-input",
- "ui",
-]
-
-[[package]]
-name = "nu-core"
-version = "0.1.0"
-dependencies = [
- "objc2",
- "objc2-core-wlan",
- "objc2-foundation",
- "objc2-io-bluetooth",
- "zbus",
 ]
 
 [[package]]
@@ -4164,31 +4059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pick"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "git-core",
- "grep",
- "ignore",
- "nucleo",
- "pv",
- "ratatui",
- "tui-input",
- "ui",
-]
-
-[[package]]
-name = "pick-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "pick",
- "ratatui",
- "ui",
-]
-
-[[package]]
 name = "pico-args"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4381,36 +4251,6 @@ dependencies = [
  "bitflags 2.13.2",
  "memchr",
  "unicase",
-]
-
-[[package]]
-name = "pv"
-version = "0.1.0"
-dependencies = [
- "calamine",
- "csv",
- "git-core",
- "ignore",
- "image",
- "lofty",
- "lopdf",
- "mp4",
- "pulldown-cmark",
- "ratatui",
- "serde",
- "syntect",
- "toml 1.1.8+spec-1.1.0",
- "two-face 0.5.2+bat-0.26.1",
- "ui",
- "unicode-width",
-]
-
-[[package]]
-name = "pv-cli"
-version = "0.1.0"
-dependencies = [
- "pv",
- "ui",
 ]
 
 [[package]]
@@ -5136,15 +4976,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "symbols-panel"
-version = "0.1.0"
-dependencies = [
- "ratatui",
- "tui-input",
- "ui",
-]
-
-[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5219,26 +5050,6 @@ dependencies = [
  "thiserror 2.0.21",
  "walkdir",
  "yaml-rust",
-]
-
-[[package]]
-name = "tb"
-version = "0.1.0"
-dependencies = [
- "ratatui",
- "tui-input",
- "ui",
- "unicode-width",
-]
-
-[[package]]
-name = "tb-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "ratatui",
- "tb",
- "ui",
 ]
 
 [[package]]
@@ -5633,6 +5444,207 @@ dependencies = [
 ]
 
 [[package]]
+name = "tuikit-diagnostics-panel"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "tuikit-ui",
+ "unicode-width",
+]
+
+[[package]]
+name = "tuikit-files"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ignore",
+ "imagesize 0.14.0",
+ "infer",
+ "mime_guess",
+ "ratatui",
+ "trash",
+ "tui-input",
+ "tuikit-git-core",
+ "tuikit-pv",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-files-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tui-input",
+ "tuikit-files",
+ "tuikit-pv",
+ "tuikit-ui",
+ "unicode-width",
+]
+
+[[package]]
+name = "tuikit-git-core"
+version = "0.1.0"
+dependencies = [
+ "gix",
+]
+
+[[package]]
+name = "tuikit-git-panel"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "tui-input",
+ "tuikit-git-core",
+ "tuikit-pv",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-gu"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tui-input",
+ "tuikit-git-core",
+ "tuikit-git-panel",
+ "tuikit-pv",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-mdexport"
+version = "0.1.0"
+dependencies = [
+ "fontdb",
+ "pulldown-cmark",
+ "serde",
+ "toml 1.1.8+spec-1.1.0",
+ "typst",
+ "typst-assets",
+ "typst-pdf",
+]
+
+[[package]]
+name = "tuikit-nu"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tui-input",
+ "tuikit-nu-core",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-nu-core"
+version = "0.1.0"
+dependencies = [
+ "objc2",
+ "objc2-core-wlan",
+ "objc2-foundation",
+ "objc2-io-bluetooth",
+ "zbus",
+]
+
+[[package]]
+name = "tuikit-pick"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "grep",
+ "ignore",
+ "nucleo",
+ "ratatui",
+ "tui-input",
+ "tuikit-git-core",
+ "tuikit-pv",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-pick-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tuikit-pick",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-pv"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "csv",
+ "ignore",
+ "image",
+ "lofty",
+ "lopdf",
+ "mp4",
+ "pulldown-cmark",
+ "ratatui",
+ "serde",
+ "syntect",
+ "toml 1.1.8+spec-1.1.0",
+ "tuikit-git-core",
+ "tuikit-ui",
+ "two-face 0.5.2+bat-0.26.1",
+ "unicode-width",
+]
+
+[[package]]
+name = "tuikit-pv-cli"
+version = "0.1.0"
+dependencies = [
+ "tuikit-pv",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-symbols-panel"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "tui-input",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-tb"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "tui-input",
+ "tuikit-ui",
+ "unicode-width",
+]
+
+[[package]]
+name = "tuikit-tb-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tuikit-tb",
+ "tuikit-ui",
+]
+
+[[package]]
+name = "tuikit-ui"
+version = "0.1.0"
+dependencies = [
+ "notify",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "toml 1.1.8+spec-1.1.0",
+ "unicode-width",
+]
+
+[[package]]
 name = "two-face"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5975,18 +5987,6 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys",
-]
-
-[[package]]
-name = "ui"
-version = "0.1.0"
-dependencies = [
- "notify",
- "ratatui",
- "serde",
- "serde_json",
- "toml 1.1.8+spec-1.1.0",
- "unicode-width",
 ]
 
 [[package]]

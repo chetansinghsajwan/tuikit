@@ -22,13 +22,13 @@
 
             # Cargo package of each tool; the binary has the short name.
             tools = {
-                pick = "pick-cli";
-                pv = "pv-cli";
-                files = "files-cli";
-                gu = "gu";
-                tb = "tb-cli";
-                nu = "nu";
-                mdexport = "mdexport";
+                pick = "tuikit-pick-cli";
+                pv = "tuikit-pv-cli";
+                files = "tuikit-files-cli";
+                gu = "tuikit-gu";
+                tb = "tuikit-tb-cli";
+                nu = "tuikit-nu";
+                mdexport = "tuikit-mdexport";
             };
 
             # The part of this repo a build needs, so editing anything else (nix files, docs)

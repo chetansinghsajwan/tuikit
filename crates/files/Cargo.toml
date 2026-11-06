@@ -1,18 +1,29 @@
 [package]
+name = "tuikit-files"
+description = "File explorer panel for tuikit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
 name = "files"
-version = "0.1.0"
-edition = "2024"
 
 [dependencies]
-git-core = { version = "0.1.0", path = "../git-core" }
-ignore = "0.4.34"
-ratatui = "0.30.2"
-trash = "5.2.9"
-tui-input = "0.15.5"
-ui = { version = "0.1.0", path = "../ui" }
-pv = { version = "0.1.0", path = "../pv" }
-
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+ignore.workspace = true
 imagesize = "0.14"
 infer = "0.19"
 mime_guess = "2"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+ratatui.workspace = true
+trash = "5.2.9"
+tui-input.workspace = true
+tuikit-git-core.workspace = true
+tuikit-pv.workspace = true
+tuikit-ui.workspace = true

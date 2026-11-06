@@ -1,11 +1,23 @@
 [package]
-name = "git-panel"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-git-panel"
+description = "Git panel for tuikit: conflicts, staged, unstaged and untracked changes with diff preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "git_panel"
 
 [dependencies]
-git-core = { version = "0.1.0", path = "../git-core" }
-pv = { version = "0.1.0", path = "../pv" }
-ratatui = "0.30.2"
-tui-input = "0.15.5"
-ui = { version = "0.1.0", path = "../ui" }
+ratatui.workspace = true
+tui-input.workspace = true
+tuikit-git-core.workspace = true
+tuikit-pv.workspace = true
+tuikit-ui.workspace = true

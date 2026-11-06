@@ -1,13 +1,23 @@
 [package]
-name = "tb"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-tb"
+description = "Table editor for tuikit: edit, insert, move rows and columns, round-trip Markdown tables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
-[dependencies]
-ratatui = "0.30.2"
-tui-input = "0.15.5"
-ui = { version = "0.1.0", path = "../ui" }
-unicode-width = "0.2"
+[lints]
+workspace = true
 
 [lib]
+name = "tb"
 path = "src/lib.rs"
+
+[dependencies]
+ratatui.workspace = true
+tui-input.workspace = true
+tuikit-ui.workspace = true
+unicode-width.workspace = true

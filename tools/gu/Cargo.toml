@@ -1,17 +1,28 @@
 [package]
-name = "gu"
-version = "0.1.0"
-edition = "2024"
+name = "tuikit-gu"
+description = "gu: multi-pane git screen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
 
-[dependencies]
-clap = { version = "4.6.7", features = ["derive"] }
-git-core = { version = "0.1.0", path = "../../crates/git-core" }
-git-panel = { version = "0.1.0", path = "../../crates/git-panel" }
-pv = { version = "0.1.0", path = "../../crates/pv" }
-ratatui = "0.30.2"
-tui-input = "0.15.5"
-ui = { version = "0.1.0", path = "../../crates/ui" }
+[lints]
+workspace = true
+
+[lib]
+name = "gu"
+path = "src/lib.rs"
 
 [[bin]]
 name = "gu"
 path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ratatui.workspace = true
+tui-input.workspace = true
+tuikit-git-core.workspace = true
+tuikit-git-panel.workspace = true
+tuikit-pv.workspace = true
+tuikit-ui.workspace = true

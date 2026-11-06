@@ -1,24 +1,41 @@
-# One workspace for the toolkit libraries and the tools built on them: one Cargo.lock, and
-# `flake.nix` compiles the dependencies once for all of them. The helix fork keeps its own
-# workspace (it is a fork, and rebases cleanly that way); it uses the toolkit by path.
 [workspace]
-members = [
-    "crates/ui",
-    "crates/git-core",
-    "crates/pv",
-    "crates/pick",
-    "crates/files",
-    "crates/git-panel",
-    "crates/tb",
-    "crates/diagnostics-panel",
-    "crates/symbols-panel",
-    "tools/pick",
-    "tools/pv",
-    "tools/files",
-    "tools/gu",
-    "tools/tb",
-    "tools/nu",
-    "tools/nu/core",
-    "tools/mdexport",
-]
+members = ["crates/*", "tools/*", "tools/nu/core"]
 resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/chetansinghsajwan/tuikit"
+readme = "README.md"
+keywords = ["tui", "terminal", "ratatui"]
+categories = ["command-line-interface"]
+
+# Internal crates: path for the workspace, version for publishing.
+[workspace.dependencies]
+tuikit-diagnostics-panel = { version = "0.1.0", path = "crates/diagnostics-panel" }
+tuikit-files = { version = "0.1.0", path = "crates/files" }
+tuikit-git-core = { version = "0.1.0", path = "crates/git-core" }
+tuikit-git-panel = { version = "0.1.0", path = "crates/git-panel" }
+tuikit-nu-core = { version = "0.1.0", path = "tools/nu/core" }
+tuikit-pick = { version = "0.1.0", path = "crates/pick" }
+tuikit-pv = { version = "0.1.0", path = "crates/pv" }
+tuikit-symbols-panel = { version = "0.1.0", path = "crates/symbols-panel" }
+tuikit-tb = { version = "0.1.0", path = "crates/tb" }
+tuikit-ui = { version = "0.1.0", path = "crates/ui" }
+
+# Third-party crates used by more than one member.
+clap = { version = "4.6.7", features = ["derive"] }
+ignore = "0.4.34"
+pulldown-cmark = { version = "0.13", default-features = false }
+ratatui = "0.30.2"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
+tui-input = "0.15.5"
+unicode-width = "0.2.2"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
