@@ -368,8 +368,6 @@ impl Panel {
         for (n, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (n - self.offset) as u16;
             let at = n == self.cursor;
-            let base = if at && !focused { ui::list::active(theme) } else { ui::list::style(theme, at && focused, None) };
-            buf.set_style(geo.bar(y), base);
             let mut spans = vec![
                 ui::tree::guides(theme, row.depth),
                 ui::tree::fold_mark(theme, row.folded),
@@ -379,7 +377,7 @@ impl Panel {
             if !row.detail.is_empty() {
                 spans.push(Span::styled(format!(" {}", row.detail), Style::new().fg(c.muted.into())));
             }
-            Paragraph::new(Line::from(spans)).style(base).render(geo.content(y), buf);
+            ui::list::ListRow { id: ui::anim::hash_of(&(row.depth, &row.name, row.kind.glyph())), left: spans, selected: at, focused, ..Default::default() }.draw(theme, buf, &geo, y);
         }
     }
 }

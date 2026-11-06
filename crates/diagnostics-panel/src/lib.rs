@@ -250,8 +250,6 @@ impl Panel {
                 Row::Item(idx) => {
                     let it = &self.items[*idx];
                     let selected = i == crow;
-                    let base = ui::list::style(theme, selected && focused, None);
-                    buf.set_style(geo.bar(y), base);
                     let head = format!("{}:{}", it.line, it.col);
                     let mut source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
                     // The first line of the message, cut to the room left.
@@ -280,7 +278,7 @@ impl Panel {
                         Span::styled(msg, Style::new().fg(c.fg.into())),
                         Span::styled(source, Style::new().fg(c.muted.into())),
                     ]);
-                    Paragraph::new(line).style(base).render(line_area, buf);
+                    ui::list::ListRow { id: ui::anim::hash_of(&(it.line, it.col, &it.message)), left: line.spans, selected, focused, ..Default::default() }.draw(theme, buf, &geo, y);
                 }
             }
         }

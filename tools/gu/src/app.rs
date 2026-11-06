@@ -1586,16 +1586,8 @@ impl App {
         let rows = ui::list::Rows::new(area, inner);
         for (row, i) in (offset..(offset + page).min(n)).enumerate() {
             let y = inner.y + row as u16;
-            let base = ui::list::style(theme, i == cursor && focused, None);
-            buf.set_style(rows.bar(y), base);
             let (left, right) = self.row(which, i, theme);
-            let content = rows.content(y);
-            let rw = right.chars().count() as u16;
-            let room = if rw > 0 && content.width > rw + 12 { content.width - rw - 1 } else { content.width };
-            Paragraph::new(left).style(base).render(Rect { width: room, ..content }, buf);
-            if room < content.width {
-                buf.set_string(content.right() - rw, y, right, base.fg(theme.colors.muted.into()));
-            }
+            ui::list::ListRow { left: left.spans, right: vec![Span::raw(right)], min_left: 12, selected: i == cursor, focused, ..Default::default() }.draw(theme, buf, &rows, y);
         }
     }
 

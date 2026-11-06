@@ -768,11 +768,7 @@ impl Picker {
             let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|i| i.data.clone()) else { break };
             let y = list.y + row as u16;
             let selected = idx == self.cursor;
-            let row_area = Rect { y, height: 1, ..list };
             let git = self.git_state(cand.path());
-            let base = ui::list::style(theme, selected, git.map(|(_, k)| Self::git_color(theme, k)));
-            buf.set_style(rows.bar(y), base);
-
             let marked = self.marked.contains(&cand.output());
             let mut spans = vec![Span::styled(
                 if marked { "● " } else { "  " },
@@ -780,12 +776,17 @@ impl Picker {
             )];
             let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
             spans.extend(self.row_spans(&cand, name_fg, theme, idx, false));
-            Paragraph::new(Line::from(spans)).style(base).render(Rect { width: row_area.width.saturating_sub(if git.is_some() { 2 } else { 0 }), ..row_area }, buf);
-
-            if let Some((ch, kind)) = git {
-                let x = list.right().saturating_sub(1);
-                buf.set_string(x, y, ch.to_string(), base.fg(Self::git_color(theme, kind)));
+            ui::list::ListRow {
+                id: ui::anim::hash_of(&cand.output()),
+                left: spans,
+                signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
+                sign_cell: true,
+                tint: git.map(|(_, k)| Self::git_color(theme, k)),
+                selected,
+                focused: true,
+                ..Default::default()
             }
+            .draw(theme, buf, &rows, y);
         }
     }
 
@@ -823,7 +824,6 @@ impl Picker {
         for (i, (at, row)) in rows.iter().enumerate() {
             let guide = scope.and_then(|s| s.col_at(*at));
             let y = list.y + i as u16;
-            let row_area = Rect { y, height: 1, ..list };
             match row {
                 crate::tree::Row::Dir { depth, label } => {
                     // In grep mode the header is a file, otherwise a folder.
@@ -833,27 +833,28 @@ impl Picker {
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
                     spans.push(Span::styled(label.clone(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)));
-                    let line = Line::from(spans);
-                    Paragraph::new(line).render(row_area, buf);
+                    ui::list::ListRow { id: ui::anim::hash_of(&(depth, label)), left: spans, focused: true, ..Default::default() }.draw(theme, buf, &rows_geo, y);
                 }
                 crate::tree::Row::Item { idx, depth } => {
                     let Some(cand) = self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone()) else { continue };
                     let selected = *idx == self.cursor;
                     let git = self.git_state(cand.path());
-                    let base = ui::list::style(theme, selected, git.map(|(_, k)| Self::git_color(theme, k)));
-                    buf.set_style(rows_geo.bar(y), base);
-
                     let marked = self.marked.contains(&cand.output());
                     let mut spans = vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
-                    Paragraph::new(Line::from(spans)).style(base).render(Rect { width: row_area.width.saturating_sub(if git.is_some() { 2 } else { 0 }), ..row_area }, buf);
-
-                    if let Some((ch, kind)) = git {
-                        let x = list.right().saturating_sub(1);
-                        buf.set_string(x, y, ch.to_string(), base.fg(Self::git_color(theme, kind)));
+                    ui::list::ListRow {
+                        id: ui::anim::hash_of(&cand.output()),
+                        left: spans,
+                        signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
+                        sign_cell: true,
+                        tint: git.map(|(_, k)| Self::git_color(theme, k)),
+                        selected,
+                        focused: true,
+                        ..Default::default()
                     }
+                    .draw(theme, buf, &rows_geo, y);
                 }
             }
         }

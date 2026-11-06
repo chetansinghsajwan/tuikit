@@ -14,7 +14,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
 use unicode_width::UnicodeWidthStr;
 
 /// The indent guides: a thin line at each level.
@@ -230,17 +229,12 @@ const MIN_NAME: usize = 4;
 /// Draws one row of a file tree at line `y`: the bar and highlight, the indent guides, the icon, the name
 /// (git-colored, folders bold in the accent), then the optional count, trailing text and signs.
 pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &FileRow) {
-    draw_row(theme, buf, rows, y, row);
-    // Noted for the motion (`anim`): the row is identified by its place in the tree, its content leaves out the cursor.
-    let content = crate::anim::hash_of(&(row.tint, row.is_dir, row.executable, row.marked, row.cut, row.count, row.note, row.signs.clone(), row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>()));
-    crate::anim::note_row(rows.id(), y, crate::anim::hash_of(&(row.depth, row.name)), content, rows.bar(y));
+    list_row(theme, usize::from(rows.content(y).width), row).draw(theme, buf, rows, y);
 }
 
-fn draw_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &FileRow) {
+/// The row as a [`list::ListRow`] for a row `width` cells wide.
+fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     let c = &theme.colors;
-    let base = if row.selected && !row.focused { list::active(theme) } else { list::style(theme, row.selected && row.focused, row.tint) };
-    buf.set_style(rows.bar(y), base);
-    let area = rows.content(y);
 
     let mut name_style = Style::new().fg(row.tint.unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() }));
     if row.is_dir {
@@ -267,29 +261,25 @@ fn draw_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &Fi
 
     // Room for the name: what is left of the row after the guides, the icon, the count, the trailing text and
     // the signs. The name shrinks (`…`) to fit; trailing text that would leave it under `MIN_NAME` cells
-    // is dropped, so a narrow pane keeps the name.
-    let width = usize::from(area.width);
+    // is dropped, so a narrow pane keeps the name. The rest (bar, columns, signs, motion) is `list::ListRow`.
     let signs = if row.signs.is_empty() { 1 } else { row.signs.len() * 2 };
     let count_w = row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
     let budget = |trailing: usize| width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0))).saturating_sub(row.depth * 2 + 2 + count_w);
-    let mut trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
+    let trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
     let show_trailing = trailing > 0 && budget(trailing) >= MIN_NAME;
-    if !show_trailing {
-        trailing = 0;
-    }
-    let limit = width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0)));
-    spans[name_at] = Span::styled(crate::list::fit(row.name, budget(trailing)), name_style);
-    let trailing = trailing as u16;
-    Paragraph::new(Line::from(spans)).style(base).render(Rect { width: limit as u16, ..area }, buf);
-    if show_trailing {
-        let x = area.right().saturating_sub(trailing + 1);
-        Paragraph::new(Line::from(row.trailing.clone())).style(base).render(Rect { x, width: trailing, ..area }, buf);
-    }
-
-    let mut x = area.right().saturating_sub(1);
-    for (i, (ch, color)) in row.signs.iter().enumerate().rev() {
-        buf.set_string(x, y, ch.to_string(), base.fg(*color));
-        x = x.saturating_sub(if i == 0 { 0 } else { 2 });
+    spans[name_at] = Span::styled(crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })), name_style);
+    list::ListRow {
+        id: crate::anim::hash_of(&(row.depth, row.name)),
+        // What the row shows apart from the cursor.
+        content: crate::anim::hash_of(&(row.tint, row.is_dir, row.executable, row.marked, row.cut, row.count, row.note, row.signs.clone(), row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>())),
+        left: spans,
+        right: if show_trailing { row.trailing.clone() } else { Vec::new() },
+        signs: row.signs.clone(),
+        sign_cell: true,
+        tint: row.tint,
+        selected: row.selected,
+        focused: row.focused,
+        ..Default::default()
     }
 }
 
@@ -314,7 +304,7 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
     };
     let area = Rect::new(0, 0, w, 1);
     let mut buf = Buffer::empty(area);
-    draw_row(theme, &mut buf, &list::Rows::new(area, area), 0, row);
+    list_row(theme, usize::from(w), row).paint(theme, &mut buf, &list::Rows::new(area, area), 0);
     let mut runs: Vec<(Style, String)> = Vec::new();
     for x in 0..w {
         let cell = &buf[(x, 0)];

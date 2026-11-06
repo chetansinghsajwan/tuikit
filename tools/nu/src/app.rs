@@ -496,15 +496,7 @@ impl App {
         for (row, i) in (offset..(offset + page).min(rows.len())).enumerate() {
             let (left, right, active) = &rows[i];
             let y = inner.y + row as u16;
-            let base = ui::list::style(theme, i == cursor && focused, active.then(|| c.success.into()));
-            buf.set_style(geo.bar(y), base);
-            let content = geo.content(y);
-            let tw = right.chars().count() as u16;
-            let room = if content.width > tw + 12 { content.width - tw - 1 } else { content.width };
-            Paragraph::new(left.clone()).style(base).render(Rect { width: room, ..content }, buf);
-            if room < content.width {
-                buf.set_string(content.right() - tw, y, right, base.fg(c.muted.into()));
-            }
+            ui::list::ListRow { left: left.spans.clone(), right: vec![Span::raw(right.clone())], min_left: 12, tint: active.then(|| c.success.into()), selected: i == cursor, focused, ..Default::default() }.draw(theme, buf, &geo, y);
         }
     }
 
