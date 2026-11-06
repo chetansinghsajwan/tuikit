@@ -20,6 +20,7 @@ use ui::{Pane, Theme, layout};
 mod render;
 mod types;
 use types::*;
+pub use types::{Action, LiveSource, Mode, PickerOptions, RowStyle};
 
 #[cfg(test)]
 mod tests;
