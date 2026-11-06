@@ -25,6 +25,11 @@ impl Rows {
         Rows { inner, left, right }
     }
 
+    /// Which list this is, for the motion: where its content starts.
+    pub fn id(&self) -> (u16, u16) {
+        (self.inner.x, self.inner.y)
+    }
+
     /// The row's background at `y`, reaching into the padding on both sides.
     pub fn bar(&self, y: u16) -> Rect {
         Rect { x: self.inner.x - self.left, y, width: self.inner.width + self.left + self.right, height: 1 }

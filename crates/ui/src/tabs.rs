@@ -294,6 +294,8 @@ pub fn render(area: Rect, buf: &mut Buffer, theme: &Theme, labels: &[Label], act
         line.push(Span::styled(format!(" {}›", labels.len() - 1 - hi), muted));
     }
     Paragraph::new(Line::from(line)).render(Rect { height: 1, ..area }, buf);
+    let below = area.bottom().min(buf.area.bottom());
+    crate::anim::tab((area.x, area.y), active, Rect { x: area.x, y: below, width: area.width, height: buf.area.bottom() - below });
 }
 
 #[cfg(test)]

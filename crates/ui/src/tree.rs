@@ -230,6 +230,13 @@ const MIN_NAME: usize = 4;
 /// Draws one row of a file tree at line `y`: the bar and highlight, the indent guides, the icon, the name
 /// (git-colored, folders bold in the accent), then the optional count, trailing text and signs.
 pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &FileRow) {
+    draw_row(theme, buf, rows, y, row);
+    // Noted for the motion (`anim`): the row is identified by its place in the tree, its content leaves out the cursor.
+    let content = crate::anim::hash_of(&(row.tint, row.is_dir, row.executable, row.marked, row.cut, row.count, row.note, row.signs.clone(), row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>()));
+    crate::anim::note_row(rows.id(), y, crate::anim::hash_of(&(row.depth, row.name)), content, rows.bar(y));
+}
+
+fn draw_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &FileRow) {
     let c = &theme.colors;
     let base = if row.selected && !row.focused { list::active(theme) } else { list::style(theme, row.selected && row.focused, row.tint) };
     buf.set_style(rows.bar(y), base);
@@ -307,7 +314,7 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
     };
     let area = Rect::new(0, 0, w, 1);
     let mut buf = Buffer::empty(area);
-    file_row(theme, &mut buf, &list::Rows::new(area, area), 0, row);
+    draw_row(theme, &mut buf, &list::Rows::new(area, area), 0, row);
     let mut runs: Vec<(Style, String)> = Vec::new();
     for x in 0..w {
         let cell = &buf[(x, 0)];

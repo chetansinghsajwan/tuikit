@@ -31,7 +31,7 @@ The repo is a Nix flake (see `agents.md`); this plan is about replacing and unif
 
 ## Decisions log
 
-- Animation: toolkit-owned `ui::anim` (cursor fade, spinner, frame timing, `animations` config); tools only call `finish`/`poll_timeout`/`take_redraw` in their loop. Eased scroll, fold reveal and popup fade are open.
+- Animation: toolkit-owned `ui::anim` (cursor fade, spinner, frame timing, `animations` config); tools only call `finish`/`poll_timeout`/`take_redraw` in their loop. Also: scroll glide, fold reveal, change flash, overlay and tab fade (post-draw, via rows noted by `file_row`); other list renderers are not covered until they use a shared row.
 
 - Picker: build our own in Rust (`pick`), not a wrapper around fzf. fzf gets replaced in in-scope tools.
 - Search is owned by the picker.

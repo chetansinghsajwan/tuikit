@@ -420,6 +420,7 @@ impl Help {
         if rect.width < 20 || rect.height < 6 {
             return;
         }
+        crate::anim::overlay(buf, area);
         crate::dim::dim(buf, area, theme);
         let c = &theme.colors;
         Clear.render(rect, buf);
@@ -469,6 +470,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     if menu.entries.is_empty() || area.width < 12 || area.height < 4 {
         return;
     }
+    crate::anim::overlay(buf, area);
     crate::dim::dim(buf, area, theme);
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
