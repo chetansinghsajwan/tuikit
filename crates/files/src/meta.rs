@@ -42,7 +42,10 @@ impl Meta {
         let is_link = sym.file_type().is_symlink();
         let meta = fs::metadata(path).unwrap_or_else(|_| sym.clone());
         let link = is_link.then(|| {
-            (fs::read_link(path).map(|t| t.display().to_string()).unwrap_or_default(), fs::metadata(path).is_err())
+            (
+                fs::read_link(path).map(|t| t.display().to_string()).unwrap_or_default(),
+                fs::metadata(path).is_err(),
+            )
         });
         let is_dir = meta.is_dir();
         let mime = if is_dir { "inode/directory".to_string() } else { mime_of(path) };
@@ -73,7 +76,10 @@ impl Meta {
         let label = |t: &str| Span::styled(format!("{t:<9}"), dim);
         let val = |t: String| Span::styled(t, Style::new().fg(c.fg.into()));
 
-        let mut name = vec![Span::styled(self.name.clone(), Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD))];
+        let mut name = vec![Span::styled(
+            self.name.clone(),
+            Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD),
+        )];
         if let Some((target, orphan)) = &self.link {
             if *orphan {
                 name[0].style = Style::new().fg(c.error.into()).add_modifier(Modifier::CROSSED_OUT);
@@ -144,7 +150,13 @@ pub fn perm_spans(theme: &Theme, perm: &str, spaced: bool) -> Vec<Span<'static>>
 }
 
 /// Draw the panel in `area` for `path` (a bordered pane titled "properties").
-pub fn render(area: Rect, buf: &mut Buffer, theme: &Theme, meta: Option<&Meta>, dir_size: Option<(u64, bool)>) {
+pub fn render(
+    area: Rect,
+    buf: &mut Buffer,
+    theme: &Theme,
+    meta: Option<&Meta>,
+    dir_size: Option<(u64, bool)>,
+) {
     let mut pane = Pane::new(theme).title("properties");
     if let Some(icon) = ui::icons::for_title("properties") {
         pane = pane.icon(icon);
@@ -210,7 +222,9 @@ impl Drop for DirSize {
 /// `rwxr-xr-x` for a Unix mode (dashes where there is none).
 pub fn perm_string(mode: u32) -> String {
     let mut p = String::new();
-    for (i, (r, w, x)) in [(0o400, 0o200, 0o100), (0o040, 0o020, 0o010), (0o004, 0o002, 0o001)].into_iter().enumerate()
+    for (i, (r, w, x)) in [(0o400, 0o200, 0o100), (0o040, 0o020, 0o010), (0o004, 0o002, 0o001)]
+        .into_iter()
+        .enumerate()
     {
         let special = [(0o4000, 's', 'S'), (0o2000, 's', 'S'), (0o1000, 't', 'T')][i];
         p.push(if mode & r != 0 { 'r' } else { '-' });
@@ -263,7 +277,8 @@ pub fn size_short(n: u64) -> String {
 }
 /// How long ago, for a column: `now`, `5m ago`, `4h ago`, `3d ago`, `2mo ago`, `1y ago` (8 cells at most).
 pub fn time_relative(t: Option<SystemTime>) -> String {
-    t.map(|t| ago(SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0))).unwrap_or_default()
+    t.map(|t| ago(SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0)))
+        .unwrap_or_default()
 }
 
 /// A modification time for a column, 11 cells: `MM-DD HH:MM` this year, `YY-MM-DD` before.

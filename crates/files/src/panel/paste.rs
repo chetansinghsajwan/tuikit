@@ -25,7 +25,11 @@ pub(super) struct Job {
 }
 
 /// The work of a paste: copy or move each `(from, to)`, reporting through `progress`.
-pub(super) fn run_paste(pairs: Vec<(PathBuf, PathBuf)>, cut: bool, progress: &Progress) -> PasteResult {
+pub(super) fn run_paste(
+    pairs: Vec<(PathBuf, PathBuf)>,
+    cut: bool,
+    progress: &Progress,
+) -> PasteResult {
     let mut res = PasteResult { moved: Vec::new(), done: 0, failed: Vec::new() };
     for (src, dest) in pairs {
         if progress.cancel.load(Ordering::Relaxed) {
@@ -36,8 +40,11 @@ pub(super) fn run_paste(pairs: Vec<(PathBuf, PathBuf)>, cut: bool, progress: &Pr
             progress.done.fetch_add(n, Ordering::Relaxed);
             !progress.cancel.load(Ordering::Relaxed)
         };
-        let result =
-            if cut { ops::move_progress(&src, &dest, &mut tick) } else { ops::copy_progress(&src, &dest, &mut tick) };
+        let result = if cut {
+            ops::move_progress(&src, &dest, &mut tick)
+        } else {
+            ops::copy_progress(&src, &dest, &mut tick)
+        };
         let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         match result {
             Ok(()) => {
@@ -117,7 +124,10 @@ impl Panel {
         self.expanded.insert(dir);
         self.refresh();
         if result.failed.is_empty() {
-            self.say(format!("pasted {} item{}", result.done, if result.done == 1 { "" } else { "s" }), false);
+            self.say(
+                format!("pasted {} item{}", result.done, if result.done == 1 { "" } else { "s" }),
+                false,
+            );
         } else {
             self.say(result.failed.join("; "), true);
         }
@@ -147,8 +157,11 @@ impl Panel {
         let j = self.job.as_ref()?;
         let p = &j.progress;
         let pct = (p.done.load(Ordering::Relaxed) * 100).checked_div(p.total).unwrap_or(0).min(100);
-        let text =
-            format!("pasting {pct}% ({}/{}) - Esc cancels", p.items_done.load(Ordering::Relaxed).min(p.items), p.items);
+        let text = format!(
+            "pasting {pct}% ({}/{}) - Esc cancels",
+            p.items_done.load(Ordering::Relaxed).min(p.items),
+            p.items
+        );
         Some(Line::from(Span::styled(text, Style::new().fg(theme.colors.accent.into()))))
     }
 }

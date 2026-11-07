@@ -40,7 +40,9 @@ impl World for Doc {
     fn file(&self, id: FileId) -> FileResult<Bytes> {
         let rel = id.vpath().as_rootless_path();
         let base = self.base.as_ref().ok_or_else(|| FileError::NotFound(rel.to_path_buf()))?;
-        std::fs::read(base.join(rel)).map(Bytes::new).map_err(|_| FileError::NotFound(rel.to_path_buf()))
+        std::fs::read(base.join(rel))
+            .map(Bytes::new)
+            .map_err(|_| FileError::NotFound(rel.to_path_buf()))
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -63,11 +65,15 @@ fn norm(s: &str) -> String {
     s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
-pub fn system_fonts(wanted: Option<&[&str]>) -> (Vec<Font>, std::collections::HashMap<String, String>) {
+pub fn system_fonts(
+    wanted: Option<&[&str]>,
+) -> (Vec<Font>, std::collections::HashMap<String, String>) {
     let mut aliases = std::collections::HashMap::new();
     let mut db = fontdb::Database::new();
     db.load_system_fonts();
-    for d in std::env::var("MDEXPORT_FONT_DIRS").unwrap_or_default().split(':').filter(|s| !s.is_empty()) {
+    for d in
+        std::env::var("MDEXPORT_FONT_DIRS").unwrap_or_default().split(':').filter(|s| !s.is_empty())
+    {
         db.load_fonts_dir(d);
     }
     let mut out = Vec::new();
@@ -105,10 +111,18 @@ pub fn families(fonts: &[Font]) -> Vec<String> {
 pub fn compile(source: String, base: Option<PathBuf>, fonts: Vec<Font>) -> Result<Vec<u8>, String> {
     let book = FontBook::from_infos(fonts.iter().map(|f| f.info().clone()));
     let main = Source::new(FileId::new(None, VirtualPath::new("/main.typ")), source);
-    let world = Doc { library: LazyHash::new(Library::default()), book: LazyHash::new(book), fonts, main, base };
-    let document = typst::compile::<typst::layout::PagedDocument>(&world)
-        .output
-        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))?;
-    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
-        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))
+    let world = Doc {
+        library: LazyHash::new(Library::default()),
+        book: LazyHash::new(book),
+        fonts,
+        main,
+        base,
+    };
+    let document =
+        typst::compile::<typst::layout::PagedDocument>(&world).output.map_err(|errors| {
+            errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; ")
+        })?;
+    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default()).map_err(|errors| {
+        errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; ")
+    })
 }

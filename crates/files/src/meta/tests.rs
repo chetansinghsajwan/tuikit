@@ -13,7 +13,8 @@ fn text(lines: &[Line]) -> Vec<String> {
 
 #[test]
 fn relative_times() {
-    let ago_of = |s: u64| time_relative(Some(SystemTime::now() - std::time::Duration::from_secs(s)));
+    let ago_of =
+        |s: u64| time_relative(Some(SystemTime::now() - std::time::Duration::from_secs(s)));
     assert_eq!(ago_of(5), "now");
     assert_eq!(ago_of(300), "5m ago");
     assert_eq!(ago_of(4 * 3600), "4h ago");
@@ -42,7 +43,10 @@ fn file_rows_and_csv_extra() {
     assert_eq!(rows[0], "t.csv");
     assert!(rows.iter().any(|r| r.starts_with("Size") && r.ends_with("18 B")), "{rows:?}");
     assert!(rows.iter().any(|r| r.starts_with("Type") && r.contains("csv")), "{rows:?}");
-    assert!(rows.iter().any(|r| r.starts_with("CSV") && r.ends_with("3 rows × 3 cols")), "{rows:?}");
+    assert!(
+        rows.iter().any(|r| r.starts_with("CSV") && r.ends_with("3 rows × 3 cols")),
+        "{rows:?}"
+    );
     #[cfg(unix)]
     assert!(rows.iter().any(|r| r.starts_with("Perm") && r.contains("rw")), "{rows:?}");
 }

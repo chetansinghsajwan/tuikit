@@ -22,7 +22,10 @@ fn identity() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git").args(args).current_dir(dir).status().unwrap().success(), "git {args:?}");
+    assert!(
+        Command::new("git").args(args).current_dir(dir).status().unwrap().success(),
+        "git {args:?}"
+    );
 }
 
 fn repo(name: &str) -> PathBuf {
@@ -61,7 +64,13 @@ fn screen(app: &mut App) -> Vec<String> {
     let mut buf = Buffer::empty(area);
     app.render(area, &mut buf);
     (0..36)
-        .map(|y| (0..120).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+        .map(|y| {
+            (0..120)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
         .collect()
 }
 
@@ -83,12 +92,19 @@ fn the_commits_tab_shows_every_branch_and_searches() {
     // `]` opens the Commits tab: every branch, with the graph and the ref labels.
     press(&mut app, "]");
     let all = screen(&mut app).join("\n");
-    assert!(all.contains("needle on a side branch") && all.contains("side") && all.contains("●"), "{all}");
+    assert!(
+        all.contains("needle on a side branch") && all.contains("side") && all.contains("●"),
+        "{all}"
+    );
     // `/` searches: the cursor lands on the match and the message counts it.
     press(&mut app, "/");
     type_text(&mut app, "needle");
     assert_eq!(app.commits[app.lists[1].cursor].subject, "needle on a side branch");
-    assert!(app.message.as_ref().is_some_and(|(m, _)| m.contains("match 1 of 1")), "{:?}", app.message);
+    assert!(
+        app.message.as_ref().is_some_and(|(m, _)| m.contains("match 1 of 1")),
+        "{:?}",
+        app.message
+    );
     // Esc clears the search first, then leaves the tab and restores the pane's scope.
     app.handle_event(&key(KeyCode::Esc));
     assert!(app.search.is_none());
@@ -156,13 +172,19 @@ fn l_on_a_commit_shows_its_files_as_a_tree_with_the_diff_of_each() {
     press(&mut app, "l");
     let text = screen(&mut app).join("\n");
     assert!(
-        text.contains("add files") && text.contains("src/") && text.contains("top.txt") && text.contains("+1"),
+        text.contains("add files")
+            && text.contains("src/")
+            && text.contains("top.txt")
+            && text.contains("+1"),
         "{text}"
     );
     // The diff of the file under the cursor shows beside the tree.
     let cf = app.commit_files.as_ref().unwrap();
-    let at =
-        cf.rows.iter().position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs")).unwrap();
+    let at = cf
+        .rows
+        .iter()
+        .position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs"))
+        .unwrap();
     app.commit_files.as_mut().unwrap().cursor = at;
     let text = screen(&mut app).join("\n");
     assert!(text.contains("fn a()"), "{text}");
@@ -301,21 +323,28 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     // A folder rename that cannot be done as a whole does nothing at all.
     git(&d, &["branch", "taken-a"]);
     app.reload_all();
-    app.lists[0].cursor =
-        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature")).unwrap();
+    app.lists[0].cursor = app
+        .ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature"))
+        .unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut app, "x");
     assert!(
-        app.branches.iter().any(|b| b.name == "x/a") && app.branches.iter().any(|b| b.name == "x/c"),
+        app.branches.iter().any(|b| b.name == "x/a")
+            && app.branches.iter().any(|b| b.name == "x/c"),
         "{:?}",
         app.message
     );
     let before: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
-    app.lists[0].cursor =
-        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x")).unwrap();
+    app.lists[0].cursor = app
+        .ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x"))
+        .unwrap();
     press(&mut app, "r");
     for _ in 0..1 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -325,8 +354,11 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     assert_ne!(before, after);
     // A name that is not valid says so and changes nothing.
     let snapshot = after.clone();
-    app.lists[0].cursor =
-        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor = app
+        .ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
+        .unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -357,8 +389,11 @@ fn tags_and_folders_of_refs_can_be_renamed() {
         app.message
     );
     // A folder: everything under `feature/` moves to `feat/`.
-    app.lists[0].cursor =
-        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor = app
+        .ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
+        .unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -397,12 +432,25 @@ fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
     };
     assert_eq!(
         shape(&app),
-        vec!["Branches", " feature/", "  login", "  signup/", "   form", " main", " other", "Tags", " v1"]
+        vec![
+            "Branches",
+            " feature/",
+            "  login",
+            "  signup/",
+            "   form",
+            " main",
+            " other",
+            "Tags",
+            " v1"
+        ]
     );
     // Enter on a folder folds it; the cursor stays on the folder.
     press(&mut app, "3");
-    app.lists[0].cursor =
-        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor = app
+        .ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
+        .unwrap();
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(shape(&app), vec!["Branches", " feature/", " main", " other", "Tags", " v1"]);
     assert!(matches!(app.ref_rows[app.lists[0].cursor], RefRow::Folder { .. }));
@@ -483,7 +531,8 @@ fn a_branch_and_its_remote_branch_share_a_pill() {
         r("origin/other", RefKind::Remote),
         r("v1", RefKind::Tag),
     ];
-    let got: Vec<(String, Vec<String>)> = pills(&refs).into_iter().map(|(r, o)| (r.name, o)).collect();
+    let got: Vec<(String, Vec<String>)> =
+        pills(&refs).into_iter().map(|(r, o)| (r.name, o)).collect();
     assert_eq!(
         got,
         vec![
@@ -538,14 +587,18 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
         _ => panic!(),
     };
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
-    assert!(names.contains(&"new branch") && names.contains(&"merge") && names.contains(&"commands"), "{names:?}");
+    assert!(
+        names.contains(&"new branch") && names.contains(&"merge") && names.contains(&"commands"),
+        "{names:?}"
+    );
     press_raw(&mut app, 'n');
     assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));
     app.handle_event(&key(KeyCode::Esc));
     // The palette rows of a pane hold the basic keys too (they are filtered when shown).
     let rows = app.keys_rows();
     assert!(
-        rows.iter().any(|r| r.id == "nav.down" && r.basic) && rows.iter().any(|r| r.id == "branch.merge" && !r.basic)
+        rows.iter().any(|r| r.id == "nav.down" && r.basic)
+            && rows.iter().any(|r| r.id == "branch.merge" && !r.basic)
     );
     // The palette's pick runs in the pane; `?` opens the help, any other key closes it with Esc.
     assert_eq!(app.run_palette("branch.new"), Quit::No);
@@ -588,7 +641,10 @@ fn capital_m_shows_the_diff_from_a_commit_to_the_work_tree() {
     press(&mut app, "G");
     press(&mut app, "M");
     let text = screen(&mut app).join("\n");
-    assert!(text.contains("work tree") && text.contains("b.txt") && text.contains("two changed"), "{text}");
+    assert!(
+        text.contains("work tree") && text.contains("b.txt") && text.contains("two changed"),
+        "{text}"
+    );
     press(&mut app, "M");
     assert!(!app.work);
 }
@@ -645,7 +701,13 @@ fn m_marks_a_commit_and_the_preview_shows_the_diff_to_the_highlighted_one() {
     press(&mut app, "m");
     press(&mut app, "g");
     let text = screen(&mut app).join("\n");
-    assert!(text.contains("from") && text.contains("to") && text.contains("b.txt") && text.contains("c.txt"), "{text}");
+    assert!(
+        text.contains("from")
+            && text.contains("to")
+            && text.contains("b.txt")
+            && text.contains("c.txt"),
+        "{text}"
+    );
     // m on the marked commit, or Esc, clears it.
     press(&mut app, "G");
     press(&mut app, "m");
@@ -750,7 +812,12 @@ fn remote_commands_run_in_the_background_and_report() {
     press_raw(&mut app, 'P');
     assert!(app.job.is_some());
     wait(&mut app);
-    assert_eq!(app.message.as_ref().map(|(m, e)| (m.as_str(), *e)), Some(("pushed", false)), "{:?}", app.message);
+    assert_eq!(
+        app.message.as_ref().map(|(m, e)| (m.as_str(), *e)),
+        Some(("pushed", false)),
+        "{:?}",
+        app.message
+    );
     assert!(app.repo.has_upstream());
     // Fetch and pull report too; force push asks first.
     for k in ['f', 'p'] {

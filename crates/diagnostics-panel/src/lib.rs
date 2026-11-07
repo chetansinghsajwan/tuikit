@@ -122,7 +122,11 @@ impl Panel {
     /// call this every frame.
     pub fn set_items(&mut self, mut items: Vec<Item>) {
         items.sort_by(|a, b| {
-            a.path.cmp(&b.path).then(a.line.cmp(&b.line)).then(a.col.cmp(&b.col)).then(a.severity.cmp(&b.severity))
+            a.path
+                .cmp(&b.path)
+                .then(a.line.cmp(&b.line))
+                .then(a.col.cmp(&b.col))
+                .then(a.severity.cmp(&b.severity))
         });
         if items == self.items {
             return;
@@ -158,7 +162,9 @@ impl Panel {
                 last = Some(it.path.as_path());
                 self.rows.push(Row::File(it.path.clone(), 0));
             }
-            if let Some(Row::File(_, n)) = self.rows.iter_mut().rev().find(|r| matches!(r, Row::File(..))) {
+            if let Some(Row::File(_, n)) =
+                self.rows.iter_mut().rev().find(|r| matches!(r, Row::File(..)))
+            {
                 *n += 1;
             }
             self.selectable.push(self.rows.len());
@@ -167,7 +173,9 @@ impl Panel {
         // Stay on the same problem if it is still there.
         self.cursor = keep
             .and_then(|k| {
-                self.selectable.iter().position(|&r| matches!(&self.rows[r], Row::Item(i) if self.items[*i] == k))
+                self.selectable
+                    .iter()
+                    .position(|&r| matches!(&self.rows[r], Row::Item(i) if self.items[*i] == k))
             })
             .unwrap_or(self.cursor)
             .min(self.selectable.len().saturating_sub(1));
@@ -196,7 +204,9 @@ impl Panel {
             KeyCode::PageUp => self.move_by(-(self.page as isize)),
             KeyCode::PageDown => self.move_by(self.page as isize),
             KeyCode::Home | KeyCode::Char('g') => self.cursor = 0,
-            KeyCode::End | KeyCode::Char('G') => self.cursor = self.selectable.len().saturating_sub(1),
+            KeyCode::End | KeyCode::Char('G') => {
+                self.cursor = self.selectable.len().saturating_sub(1)
+            }
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 if let Some(it) = self.current() {
                     return Action::Open { path: it.path.clone(), line: it.line, col: it.col };
@@ -234,7 +244,12 @@ impl Panel {
         let title = if self.items.is_empty() {
             "diagnostics".to_string()
         } else {
-            format!("diagnostics: {}, {}{}", plural(e, "error"), plural(w, "warning"), self.filter.label())
+            format!(
+                "diagnostics: {}, {}{}",
+                plural(e, "error"),
+                plural(w, "warning"),
+                self.filter.label()
+            )
         };
         let pane = Pane::new(theme).title(&title).icon(ui::icons::DIAGNOSTICS).focused(focused);
         let inner = pane.inner(area);
@@ -243,7 +258,8 @@ impl Panel {
             return;
         }
         if self.rows.is_empty() {
-            let msg = if self.items.is_empty() { "no problems" } else { "nothing at this filter (f)" };
+            let msg =
+                if self.items.is_empty() { "no problems" } else { "nothing at this filter (f)" };
             buf.set_string(inner.x + 1, inner.y, msg, Style::new().fg(c.muted.into()));
             return;
         }
@@ -275,7 +291,8 @@ impl Panel {
                     let it = &self.items[*idx];
                     let selected = i == crow;
                     let head = format!("{}:{}", it.line, it.col);
-                    let mut source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
+                    let mut source =
+                        it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
                     // The first line of the message, cut to the room left.
                     let fixed = 2 + 2 + head.width() + 2;
                     // The source goes when it would leave the message under 4 cells.
@@ -295,7 +312,10 @@ impl Panel {
                         msg = format!("{cut}…");
                     }
                     let line = Line::from(vec![
-                        Span::styled(if selected { "▸ " } else { "  " }, Style::new().fg(c.accent.into())),
+                        Span::styled(
+                            if selected { "▸ " } else { "  " },
+                            Style::new().fg(c.accent.into()),
+                        ),
                         Span::styled("● ", Style::new().fg(Self::sev_color(theme, it.severity))),
                         Span::styled(head, Style::new().fg(c.muted.into())),
                         Span::raw("  "),

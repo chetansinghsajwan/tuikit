@@ -255,7 +255,10 @@ impl App {
                 self.panel().clear_marks();
                 self.panel().refresh();
                 match result {
-                    Ok(n) => self.panel().notify(format!("renamed {n} item{}", if n == 1 { "" } else { "s" }), false),
+                    Ok(n) => self.panel().notify(
+                        format!("renamed {n} item{}", if n == 1 { "" } else { "s" }),
+                        false,
+                    ),
                     Err(e) => self.panel().notify(e, true),
                 }
             }
@@ -352,10 +355,15 @@ impl App {
         let current = self.tabs.active().current().map(Path::to_path_buf);
         let theme = self.theme.clone();
         let area = self.render_meta(area, buf, current.as_deref());
-        let title =
-            current.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let title = current
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         let pane = match current.as_deref() {
-            Some(p) if p.is_dir() => Pane::new(&theme).title(&title).icon(ui::icons::dir(&title, false)),
+            Some(p) if p.is_dir() => {
+                Pane::new(&theme).title(&title).icon(ui::icons::dir(&title, false))
+            }
             Some(_) => Pane::new(&theme).title(&title).icon(ui::icons::file(&title, false)),
             None => Pane::new(&theme).title(&title),
         };
@@ -367,14 +375,21 @@ impl App {
         }
         let key = (path.clone(), inner.width, inner.height, pv::raw_tables());
         if self.preview.as_ref().is_none_or(|p| p.key != key) {
-            let opts =
-                pv::Options { width: Some(inner.width), height: Some(inner.height), git: self.opts.git, focus: None };
+            let opts = pv::Options {
+                width: Some(inner.width),
+                height: Some(inner.height),
+                git: self.opts.git,
+                focus: None,
+            };
             let lines = pv::preview(&path, &theme, &opts).map_err(|e| e.to_string());
             self.preview = Some(Preview { key, lines });
         }
         let lines = match &self.preview.as_ref().expect("set above").lines {
             Ok(lines) => lines.clone(),
-            Err(e) => vec![Line::from(Span::styled(e.clone(), Style::new().fg(theme.colors.muted.into())))],
+            Err(e) => vec![Line::from(Span::styled(
+                e.clone(),
+                Style::new().fg(theme.colors.muted.into()),
+            ))],
         };
         Paragraph::new(lines).render(inner, buf);
     }
@@ -382,13 +397,18 @@ impl App {
 
 fn is_text(path: &Path) -> bool {
     let mut buf = [0u8; 8192];
-    File::open(path).and_then(|mut f| f.read(&mut buf)).map(|n| !buf[..n].contains(&0)).unwrap_or(false)
+    File::open(path)
+        .and_then(|mut f| f.read(&mut buf))
+        .map(|n| !buf[..n].contains(&0))
+        .unwrap_or(false)
 }
 
 /// Open with the editor (text) or the system opener (anything else).
 fn open(path: &Path) -> Result<(), String> {
     if is_text(path) {
-        let editor = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".into());
+        let editor = std::env::var("VISUAL")
+            .or_else(|_| std::env::var("EDITOR"))
+            .unwrap_or_else(|_| "vi".into());
         open_with(&editor, path)
     } else {
         let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
@@ -444,8 +464,11 @@ fn search(kind: &Search, root: &Path) -> Option<PathBuf> {
 fn bulk_rename(root: &Path, paths: &[PathBuf]) -> Result<usize, String> {
     let tmp = std::env::temp_dir().join(format!("files-rename-{}.txt", std::process::id()));
     fs::write(&tmp, ops::bulk_rename_text(root, paths)).map_err(|e| e.to_string())?;
-    let editor = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".into());
-    let edited = open_with(&editor, &tmp).and_then(|()| fs::read_to_string(&tmp).map_err(|e| e.to_string()));
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .unwrap_or_else(|_| "vi".into());
+    let edited =
+        open_with(&editor, &tmp).and_then(|()| fs::read_to_string(&tmp).map_err(|e| e.to_string()));
     let _ = fs::remove_file(&tmp);
     let moves = ops::plan_bulk_rename(root, paths, &edited?)?;
     ops::apply_moves(&moves).map_err(|e| e.to_string())?;

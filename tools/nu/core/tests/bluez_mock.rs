@@ -216,7 +216,10 @@ fn the_backend_speaks_bluezs_dbus_api() {
         .unwrap();
     for (i, d) in devices.iter().enumerate() {
         builder = builder
-            .serve_at(format!("{ADAPTER}/dev_{}", d.address.replace(':', "_")), Device(state.clone(), i))
+            .serve_at(
+                format!("{ADAPTER}/dev_{}", d.address.replace(':', "_")),
+                Device(state.clone(), i),
+            )
             .unwrap();
     }
     let _server = builder.build().unwrap();
@@ -225,7 +228,10 @@ fn the_backend_speaks_bluezs_dbus_api() {
 
     // Status and devices: connected first, then paired, then by signal.
     let status = bt.status().unwrap();
-    assert_eq!((status.adapter.as_deref(), status.powered, status.discovering), (Some("hci0"), true, false));
+    assert_eq!(
+        (status.adapter.as_deref(), status.powered, status.discovering),
+        (Some("hci0"), true, false)
+    );
     let list = bt.devices().unwrap();
     let names: Vec<(&str, Kind, bool, bool)> =
         list.iter().map(|d| (d.name.as_str(), d.kind, d.paired, d.connected)).collect();
@@ -245,7 +251,14 @@ fn the_backend_speaks_bluezs_dbus_api() {
     bt.connect("AA:00:00:00:00:03").unwrap();
     let calls = state.lock().unwrap().calls.clone();
     let tail: Vec<&str> = calls.iter().rev().take(3).rev().map(String::as_str).collect();
-    assert_eq!(tail, vec!["Pair AA:00:00:00:00:03", "Trusted AA:00:00:00:00:03 true", "Connect AA:00:00:00:00:03"]);
+    assert_eq!(
+        tail,
+        vec![
+            "Pair AA:00:00:00:00:03",
+            "Trusted AA:00:00:00:00:03 true",
+            "Connect AA:00:00:00:00:03"
+        ]
+    );
     assert!(bt.devices().unwrap().iter().all(|d| d.paired && d.trusted));
 
     // Disconnect, trust, scan, power and remove (forget).

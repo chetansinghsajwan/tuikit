@@ -6,9 +6,13 @@ fn markup_for_headings_emphasis_lists_code_links_and_escapes() {
         "# Title\n\nSome *em* **strong** `a#b` [x](http://y.z) and 1 < 2 *.\n\n- one\n- two\n\n1. a\n2. b\n\n```rust\nlet x = \"q\";\n```\n",
         None,
     );
-    let body = src.split_once("\n\n").map(|_| &src[preamble(&Settings::default()).len()..]).unwrap();
+    let body =
+        src.split_once("\n\n").map(|_| &src[preamble(&Settings::default()).len()..]).unwrap();
     assert!(body.contains("= Title"), "{body}");
-    assert!(body.contains("#emph[em] #strong[strong] #raw(\"a#b\") #link(\"http://y.z\")[x]"), "{body}");
+    assert!(
+        body.contains("#emph[em] #strong[strong] #raw(\"a#b\") #link(\"http://y.z\")[x]"),
+        "{body}"
+    );
     assert!(body.contains("1 \\< 2 \\*."), "{body}");
     assert!(body.contains("- one\n- two") && body.contains("1. a\n2. b"), "{body}");
     assert!(body.contains("#raw(block: true, lang: \"rust\", \"let x = \\\"q\\\";\")"), "{body}");

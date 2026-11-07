@@ -28,8 +28,11 @@ fn info(doc: &lopdf::Document, key: &[u8]) -> Option<String> {
     let bytes = value.as_str().ok()?;
     // UTF-16 with a byte order mark, else Latin-1 (close enough for a title).
     let text = if bytes.starts_with(&[0xFE, 0xFF]) {
-        let units: Vec<u16> =
-            bytes[2..].chunks(2).filter(|c| c.len() == 2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+        let units: Vec<u16> = bytes[2..]
+            .chunks(2)
+            .filter(|c| c.len() == 2)
+            .map(|c| u16::from_be_bytes([c[0], c[1]]))
+            .collect();
         String::from_utf16_lossy(&units)
     } else {
         bytes.iter().map(|&b| b as char).collect()
@@ -46,7 +49,10 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
     let (muted, fg) = (Style::new().fg(c.muted.into()), Style::new().fg(c.fg.into()));
     let mut out = Vec::new();
     if let Some(t) = info(&doc, b"Title") {
-        out.push(Line::from(Span::styled(t, Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))));
+        out.push(Line::from(Span::styled(
+            t,
+            Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+        )));
     }
     let author = info(&doc, b"Author").map(|a| format!("{a} · ")).unwrap_or_default();
     out.push(Line::from(Span::styled(
@@ -66,7 +72,8 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
             break;
         }
         let Ok(text) = doc.extract_text(&[n]) else { continue };
-        let words: Vec<(String, Style)> = text.split_whitespace().map(|w| (w.to_string(), fg)).collect();
+        let words: Vec<(String, Style)> =
+            text.split_whitespace().map(|w| (w.to_string(), fg)).collect();
         if words.is_empty() {
             continue;
         }

@@ -194,7 +194,8 @@ impl Table {
             if i == r {
                 return n + row.iter().take(c).map(|x| x.chars().count() + 1).sum::<usize>();
             }
-            n += row.iter().map(|x| x.chars().count() + 1).sum::<usize>().max(1) - 1 + self.eol.chars().count();
+            n += row.iter().map(|x| x.chars().count() + 1).sum::<usize>().max(1) - 1
+                + self.eol.chars().count();
         }
         n
     }

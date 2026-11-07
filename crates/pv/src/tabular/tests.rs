@@ -9,7 +9,11 @@ fn tmp(name: &str, body: &str) -> std::path::PathBuf {
 }
 
 fn flat(lines: &[Line]) -> String {
-    lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect::<Vec<_>>().join("\n")
+    lines
+        .iter()
+        .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[test]

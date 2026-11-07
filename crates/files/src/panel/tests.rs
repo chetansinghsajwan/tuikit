@@ -89,8 +89,9 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
     for _ in 0..5 {
         let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
         p.render(Rect::new(0, 0, 40, 10), &mut buf, &theme, true);
-        let text: Vec<String> =
-            (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+        let text: Vec<String> = (0..10)
+            .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+            .collect();
         assert!(text.iter().any(|l| l.contains("src") && l.contains("D M ?")), "{text:#?}");
         p.refresh();
     }
@@ -211,7 +212,11 @@ fn respects_gitignore_and_shows_git_state() {
     fs::write(d.join("src/new.rs"), "n").unwrap();
 
     let mut p = Panel::new(&d, PanelOptions::default());
-    assert!(!names(&p).contains(&"docs".to_string()), "gitignored folder is hidden: {:?}", names(&p));
+    assert!(
+        !names(&p).contains(&"docs".to_string()),
+        "gitignored folder is hidden: {:?}",
+        names(&p)
+    );
     assert_eq!(p.ignored_hidden, 1);
     p.handle_event(&key(KeyCode::Char('I')));
     assert!(names(&p).contains(&"docs".to_string()));
@@ -225,7 +230,9 @@ fn respects_gitignore_and_shows_git_state() {
     let text: Vec<String> = (0..8).map(row).collect();
     // src has an untracked file beneath it (`?`), README.md is modified (M).
     assert!(
-        text.iter().any(|l| l.contains("src") && l.trim_end().trim_end_matches('│').trim_end().ends_with('?')),
+        text.iter()
+            .any(|l| l.contains("src")
+                && l.trim_end().trim_end_matches('│').trim_end().ends_with('?')),
         "{text:?}"
     );
     assert!(text.iter().any(|l| l.contains("README.md") && l.contains('M')), "{text:?}");
@@ -241,14 +248,16 @@ fn renders_a_pane_with_the_root_name_and_scrolls() {
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let all: String =
-        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let all: String = (0..8)
+        .map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(all.contains("files-test-") && all.contains("docs"), "{all}");
     p.handle_event(&key(KeyCode::Char('G')));
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let all: String =
-        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let all: String = (0..8)
+        .map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(all.contains("file29.txt") && !all.contains("docs"), "{all}");
 }
 
@@ -259,7 +268,11 @@ fn type_text(p: &mut Panel, s: &str) {
 }
 
 fn cursor_on(p: &mut Panel, name: &str) {
-    let i = p.rows.iter().position(|r| r.name == name).unwrap_or_else(|| panic!("{name} in {:?}", names(p)));
+    let i = p
+        .rows
+        .iter()
+        .position(|r| r.name == name)
+        .unwrap_or_else(|| panic!("{name} in {:?}", names(p)));
     p.cursor = i;
 }
 
@@ -289,7 +302,11 @@ fn creating_something_that_exists_shows_an_error_and_esc_cancels_the_prompt() {
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "README.md");
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::None);
-    assert!(p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("already exists")), "{:?}", p.message);
+    assert!(
+        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("already exists")),
+        "{:?}",
+        p.message
+    );
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "abc");
     assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::None);
@@ -311,7 +328,10 @@ fn r_renames_with_the_name_prefilled_and_keeps_folders_open() {
         p.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut p, "lib");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Moved(vec![(d.join("src"), d.join("lib"))]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::Enter)),
+        Action::Moved(vec![(d.join("src"), d.join("lib"))])
+    );
     assert!(d.join("lib/main.rs").is_file() && !d.join("src").exists());
     assert!(names(&p).contains(&"  main.rs".to_string()), "still expanded: {:?}", names(&p));
     assert_eq!(p.current().unwrap(), d.join("lib"));
@@ -360,7 +380,11 @@ fn y_then_p_copies_and_x_then_p_moves_with_unique_names() {
     assert!(!d.join("src/main.rs").exists() && d.join("docs/main.rs").is_file());
     // The cut clipboard is spent.
     p.handle_event(&key(KeyCode::Char('p')));
-    assert!(p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("nothing to paste")), "{:?}", p.message);
+    assert!(
+        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("nothing to paste")),
+        "{:?}",
+        p.message
+    );
 }
 
 #[test]
@@ -371,7 +395,9 @@ fn footer_shows_the_prompt_and_messages_in_the_render() {
     let draw = |p: &mut Panel| {
         let mut b = Buffer::empty(area);
         p.render(area, &mut b, &Theme::default(), true);
-        (0..8).map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect::<String>()
+        (0..8)
+            .map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+            .collect::<String>()
     };
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "foo");
@@ -427,13 +453,15 @@ fn columns_show_size_and_time_for_files_when_wide() {
     let area = Rect::new(0, 0, 70, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> = (0..8).map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
+    let text: Vec<String> =
+        (0..8).map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
     assert!(text.iter().any(|l| l.contains("README.md") && l.contains("2.0K")), "{text:?}");
     // Narrow panes (a sidebar) drop the columns.
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> = (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
+    let text: Vec<String> =
+        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
     assert!(!text.iter().any(|l| l.contains("2.0K")), "{text:?}");
 }
 
@@ -457,7 +485,9 @@ fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
     let draw = |p: &mut Panel| {
         let mut buf = Buffer::empty(area);
         p.render(area, &mut buf, &Theme::default(), true);
-        (0..8).map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect::<Vec<_>>()
+        (0..8)
+            .map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+            .collect::<Vec<_>>()
     };
     draw(&mut p); // starts counting the visible folders
     for _ in 0..300 {
@@ -469,7 +499,10 @@ fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
     }
     let text = draw(&mut p);
     // src holds main.rs (3000 B) and a deeper file: counted, no `+` left.
-    assert!(text.iter().any(|l| l.contains("src") && l.contains("2.9K") && !l.contains('+')), "{text:?}");
+    assert!(
+        text.iter().any(|l| l.contains("src") && l.contains("2.9K") && !l.contains('+')),
+        "{text:?}"
+    );
     leader(&mut p, "vc");
     let text = draw(&mut p);
     assert!(text.iter().any(|l| l.contains("src") && l.contains("rwx")), "{text:?}");
@@ -547,8 +580,9 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     let area = Rect::new(0, 0, 60, 30);
     let mut buf = Buffer::empty(area);
     ui::keys::render_menu(area, &mut buf, &Theme::default(), &menu);
-    let text: String =
-        (0..30).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String = (0..30)
+        .map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(text.contains("grep") && text.contains("bookmarks"), "{text}");
     // A group opens a deeper menu; Esc closes it without doing anything.
     p.handle_event(&key(KeyCode::Char('v')));
@@ -561,12 +595,21 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     p.handle_event(&key(KeyCode::Char('z'))); // not bound: the sequence ends
     assert_eq!(p.rows.len(), rows);
     assert!(p.menu().is_some());
-    assert!(p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("not bound")), "{:?}", p.message);
+    assert!(
+        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("not bound")),
+        "{:?}",
+        p.message
+    );
     p.handle_event(&key(KeyCode::Esc));
     assert!(p.menu().is_none());
     // Host actions come back as commands; the leader key is configurable.
-    let acts =
-        vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false, keys: &["leader t n"] }];
+    let acts = vec![ui::keys::Action {
+        id: "tab.new",
+        name: "new tab",
+        desc: "x",
+        basic: false,
+        keys: &["leader t n"],
+    }];
     let mut p = Panel::new(
         &d,
         PanelOptions {
@@ -596,18 +639,24 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> =
-        (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+    let text: Vec<String> = (0..8)
+        .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+        .collect();
     // Border, then the folders above the first scrolling row, outermost first, then files.
     assert!(text[1].contains("src") && !text[1].contains("deep"), "{text:#?}");
     assert!(text[2].contains("deep") && text[3].contains("er"), "{text:#?}");
     assert!(text.iter().any(|l| l.contains("f29.txt")), "the cursor row stays in view: {text:#?}");
-    assert_eq!(text.iter().filter(|l| l.contains("src")).count(), 1, "nothing is drawn twice: {text:#?}");
+    assert_eq!(
+        text.iter().filter(|l| l.contains("src")).count(),
+        1,
+        "nothing is drawn twice: {text:#?}"
+    );
     // At the top nothing is pinned.
     p.handle_event(&key(KeyCode::Char('g')));
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> =
-        (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+    let text: Vec<String> = (0..8)
+        .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+        .collect();
     assert!(text[1].contains("docs"), "{text:#?}");
 }

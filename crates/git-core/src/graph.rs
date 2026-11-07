@@ -26,7 +26,8 @@ impl GraphRow {
 pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
     use std::cmp::Reverse;
     use std::collections::{BinaryHeap, HashMap};
-    let index: HashMap<String, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid.clone(), i)).collect();
+    let index: HashMap<String, usize> =
+        commits.iter().enumerate().map(|(i, c)| (c.oid.clone(), i)).collect();
     // How many commits of the list still have to come before each one.
     let mut waiting = vec![0usize; commits.len()];
     for c in &commits {
@@ -36,8 +37,10 @@ pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
             }
         }
     }
-    let mut ready: BinaryHeap<(i64, Reverse<usize>)> =
-        (0..commits.len()).filter(|&i| waiting[i] == 0).map(|i| (commits[i].time, Reverse(i))).collect();
+    let mut ready: BinaryHeap<(i64, Reverse<usize>)> = (0..commits.len())
+        .filter(|&i| waiting[i] == 0)
+        .map(|i| (commits[i].time, Reverse(i)))
+        .collect();
     let mut order = Vec::with_capacity(commits.len());
     while let Some((_, Reverse(i))) = ready.pop() {
         order.push(i);
@@ -59,7 +62,8 @@ pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
 /// `commits` is newest first, children before parents.
 pub fn simplify(commits: Vec<CommitInfo>, keep: impl Fn(&CommitInfo) -> bool) -> Vec<CommitInfo> {
     use std::collections::{HashMap, HashSet};
-    let index: HashMap<&str, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid.as_str(), i)).collect();
+    let index: HashMap<&str, usize> =
+        commits.iter().enumerate().map(|(i, c)| (c.oid.as_str(), i)).collect();
     let kept: Vec<bool> = commits.iter().map(keep).collect();
     // For every commit, the kept commits reached first going down through its parents.
     // Parents come later in the list, so walking it backwards has them done already.
@@ -94,8 +98,12 @@ pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
     let mut lanes: Vec<Option<String>> = Vec::new();
     let mut rows = Vec::with_capacity(commits.len());
     for c in commits {
-        let incoming: Vec<usize> =
-            lanes.iter().enumerate().filter(|(_, w)| w.as_deref() == Some(c.oid.as_str())).map(|(i, _)| i).collect();
+        let incoming: Vec<usize> = lanes
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w.as_deref() == Some(c.oid.as_str()))
+            .map(|(i, _)| i)
+            .collect();
         let col = match incoming.first() {
             Some(&i) => i,
             None => match lanes.iter().position(Option::is_none) {

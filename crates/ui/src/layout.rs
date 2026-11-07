@@ -23,7 +23,12 @@ pub fn popup(theme: &Theme, area: Rect) -> Rect {
     let p = u32::from(theme.layout.popup_percent.clamp(10, 100));
     let w = (u32::from(area.width) * p / 100) as u16;
     let h = (u32::from(area.height) * p / 100) as u16;
-    Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h }
+    Rect {
+        x: area.x + (area.width - w) / 2,
+        y: area.y + (area.height - h) / 2,
+        width: w,
+        height: h,
+    }
 }
 
 /// `[sidebar | main | preview]` using the theme's sidebar width and preview share.
@@ -32,8 +37,11 @@ pub fn sidebar_main_preview(theme: &Theme, area: Rect) -> [Rect; 3] {
     let p = l.preview_percent.min(100);
     let rest = area.width.saturating_sub(l.sidebar_width + 2 * l.gap);
     let preview = rest * p / 100;
-    let v =
-        columns(theme, area, &[Constraint::Length(l.sidebar_width), Constraint::Min(0), Constraint::Length(preview)]);
+    let v = columns(
+        theme,
+        area,
+        &[Constraint::Length(l.sidebar_width), Constraint::Min(0), Constraint::Length(preview)],
+    );
     [v[0], v[1], v[2]]
 }
 
@@ -81,14 +89,21 @@ pub fn workbench(main: Rect, left: u16, right: u16, bottom: u16) -> Workbench {
     let third = body.width * 2 / 5;
     let mut left = left.min(third);
     let mut right = right.min(third);
-    while body.width.saturating_sub(left + right) < MIN_EDITOR_WIDTH.min(body.width) && (left > 0 || right > 0) {
+    while body.width.saturating_sub(left + right) < MIN_EDITOR_WIDTH.min(body.width)
+        && (left > 0 || right > 0)
+    {
         if left >= right { left -= 1 } else { right -= 1 }
     }
     let bottom = bottom.min(body.height / 2).min(body.height.saturating_sub(MIN_EDITOR_HEIGHT));
     let mid_x = body.x + left;
     let mid_w = body.width - left - right;
     Workbench {
-        left: Rect { x: body.x, y: body.y, width: left, height: if left == 0 { 0 } else { body.height } },
+        left: Rect {
+            x: body.x,
+            y: body.y,
+            width: left,
+            height: if left == 0 { 0 } else { body.height },
+        },
         right: Rect {
             x: body.right() - right,
             y: body.y,

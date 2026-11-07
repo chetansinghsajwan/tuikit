@@ -29,8 +29,18 @@ const WIFI: &[Action] = &[
         "connect to the network (asks for the password of a new protected one); on the connected network, disconnect",
         &["enter", "leader c"],
     ),
-    action("wifi.disconnect", "disconnect", "disconnect from the current network", &["x", "leader x"]),
-    action("wifi.forget", "forget", "delete the saved connection of the network (asks first)", &["d", "leader d"]),
+    action(
+        "wifi.disconnect",
+        "disconnect",
+        "disconnect from the current network",
+        &["x", "leader x"],
+    ),
+    action(
+        "wifi.forget",
+        "forget",
+        "delete the saved connection of the network (asks first)",
+        &["d", "leader d"],
+    ),
     action("wifi.scan", "scan", "ask the radio for a fresh scan", &["s", "leader s"]),
     action("wifi.power", "toggle Wi-Fi", "turn the Wi-Fi radio on or off", &["leader p"]),
 ];

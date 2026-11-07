@@ -8,7 +8,10 @@ fn write(name: &str, text: &str) -> PathBuf {
 
 #[test]
 fn the_tool_file_overrides_the_shared_one_and_keys_take_one_or_many() {
-    let shared = write("shared", "leader = \"ctrl-space\"\n[keys]\n\"nav.down\" = \"n\"\n\"quit\" = [\"q\", \"Q\"]\n");
+    let shared = write(
+        "shared",
+        "leader = \"ctrl-space\"\n[keys]\n\"nav.down\" = \"n\"\n\"quit\" = [\"q\", \"Q\"]\n",
+    );
     let own = write("own", "[keys]\n\"nav.down\" = [\"j\", \"down\"]\n\"help\" = []\n");
     let (cfg, problems) = Config::read(&[shared, own, PathBuf::from("/nonexistent/config.toml")]);
     assert!(problems.is_empty(), "{problems:?}");

@@ -71,12 +71,20 @@ impl Root {
             .map(|b| String::from_utf8_lossy(&b).into_owned())
             .unwrap_or_default();
         let security = settings.get("802-11-wireless-security");
-        let key_mgmt = security.and_then(|x| x.get("key-mgmt")).map(text).unwrap_or_else(|| "none-set".into());
+        let key_mgmt =
+            security.and_then(|x| x.get("key-mgmt")).map(text).unwrap_or_else(|| "none-set".into());
         let psk = security.and_then(|x| x.get("psk")).map(text).unwrap_or_default();
-        let kind = settings.get("connection").and_then(|c| c.get("type")).map(text).unwrap_or_default();
-        s.calls.push(format!("add {ssid} type={kind} key-mgmt={key_mgmt} psk={psk} ap={}", ap.as_str()));
+        let kind =
+            settings.get("connection").and_then(|c| c.get("type")).map(text).unwrap_or_default();
+        s.calls.push(format!(
+            "add {ssid} type={kind} key-mgmt={key_mgmt} psk={psk} ap={}",
+            ap.as_str()
+        ));
         s.active_ap = ap.as_str().to_string();
-        (path("/org/freedesktop/NetworkManager/Settings/9"), path("/org/freedesktop/NetworkManager/ActiveConnection/2"))
+        (
+            path("/org/freedesktop/NetworkManager/Settings/9"),
+            path("/org/freedesktop/NetworkManager/ActiveConnection/2"),
+        )
     }
 
     #[zbus(property)]
@@ -209,7 +217,10 @@ impl Saved {
                     ("id".to_string(), v(Value::from("home"))),
                 ]),
             ),
-            ("802-11-wireless".to_string(), HashMap::from([("ssid".to_string(), v(Value::from(b"home".to_vec())))])),
+            (
+                "802-11-wireless".to_string(),
+                HashMap::from([("ssid".to_string(), v(Value::from(b"home".to_vec())))]),
+            ),
         ])
     }
 
@@ -278,15 +289,22 @@ fn the_backend_speaks_networkmanagers_dbus_api() {
         eprintln!("no dbus-daemon: skipped");
         return;
     };
-    let state: Shared =
-        Arc::new(Mutex::new(State { enabled: true, active_ap: "/".into(), home_saved: true, calls: Vec::new() }));
+    let state: Shared = Arc::new(Mutex::new(State {
+        enabled: true,
+        active_ap: "/".into(),
+        home_saved: true,
+        calls: Vec::new(),
+    }));
     let _server = serve(&address, &state);
     let client = Builder::address(address.as_str()).unwrap().build().unwrap();
     let nm = Nm::with_connection(client, NAME);
 
     // Status and networks: the Wi-Fi device is found among the devices, access points merge per SSID.
     let status = nm.status().unwrap();
-    assert_eq!((status.device.as_deref(), status.enabled, status.active.as_deref()), (Some("wlan0"), true, None));
+    assert_eq!(
+        (status.device.as_deref(), status.enabled, status.active.as_deref()),
+        (Some("wlan0"), true, None)
+    );
     let nets = nm.networks().unwrap();
     let summary: Vec<(&str, u8, Security, bool, bool)> =
         nets.iter().map(|n| (n.ssid.as_str(), n.strength, n.security, n.known, n.active)).collect();
@@ -302,7 +320,13 @@ fn the_backend_speaks_networkmanagers_dbus_api() {
     // A saved network is activated with its saved connection and the strongest access point.
     nm.connect("home", None).unwrap();
     assert!(
-        state.lock().unwrap().calls.last().unwrap().ends_with(&format!("activate {SAVED_HOME} {AP_HOME}")),
+        state
+            .lock()
+            .unwrap()
+            .calls
+            .last()
+            .unwrap()
+            .ends_with(&format!("activate {SAVED_HOME} {AP_HOME}")),
         "{:?}",
         state.lock().unwrap().calls
     );

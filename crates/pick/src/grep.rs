@@ -48,7 +48,13 @@ impl Default for Options {
 /// The globs of `opts` as an override set for the walker: includes whitelist, excludes start with `!`.
 /// `None` when there are none (or one does not parse: the search then is not narrowed).
 fn globs(root: &std::path::Path, opts: &Options) -> Option<ignore::overrides::Override> {
-    let split = |s: &str| s.split(',').map(str::trim).filter(|p| !p.is_empty()).map(str::to_string).collect::<Vec<_>>();
+    let split = |s: &str| {
+        s.split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
     let (inc, exc) = (split(&opts.include), split(&opts.exclude));
     if inc.is_empty() && exc.is_empty() {
         return None;
@@ -65,7 +71,13 @@ fn globs(root: &std::path::Path, opts: &Options) -> Option<ignore::overrides::Ov
 
 /// Search `root` for `query` on a background thread. Set `cancel` to stop it.
 /// An invalid regex (likely mid-typing) falls back to a literal search.
-pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidate>, cancel: Arc<AtomicBool>) {
+pub fn spawn(
+    root: PathBuf,
+    query: String,
+    opts: Options,
+    inj: Injector<Candidate>,
+    cancel: Arc<AtomicBool>,
+) {
     if query.is_empty() {
         return;
     }
@@ -77,10 +89,15 @@ pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidat
                 .fixed_strings(fixed)
                 .build(&query)
         };
-        let Ok(matcher) = (if opts.regex { build(false).or_else(|_| build(true)) } else { build(true) }) else {
+        let Ok(matcher) =
+            (if opts.regex { build(false).or_else(|_| build(true)) } else { build(true) })
+        else {
             return;
         };
-        let mut searcher = SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
+        let mut searcher = SearcherBuilder::new()
+            .binary_detection(BinaryDetection::quit(0))
+            .line_number(true)
+            .build();
 
         let mut found = 0usize;
         let mut walk = ignore::WalkBuilder::new(&root);
@@ -96,7 +113,10 @@ pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidat
                 continue;
             }
             let path = entry.path();
-            let Some(rela) = path.strip_prefix(&root).unwrap_or(path).to_str().map(str::to_string) else { continue };
+            let Some(rela) = path.strip_prefix(&root).unwrap_or(path).to_str().map(str::to_string)
+            else {
+                continue;
+            };
             let _ = searcher.search_path(
                 &matcher,
                 path,
@@ -110,9 +130,18 @@ pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidat
                     // Keep the hit inside the clipped text.
                     let (start, end) = (start.min(text.len()), end.min(text.len()));
                     let col = line[..start.min(line.len())].chars().count() as u32 + 1;
-                    let hit =
-                        if text.is_char_boundary(start) && text.is_char_boundary(end) { start..end } else { 0..0 };
-                    let c = Candidate::grep(Loc { path: rela.clone(), line: lnum as u32, col, text, hit });
+                    let hit = if text.is_char_boundary(start) && text.is_char_boundary(end) {
+                        start..end
+                    } else {
+                        0..0
+                    };
+                    let c = Candidate::grep(Loc {
+                        path: rela.clone(),
+                        line: lnum as u32,
+                        col,
+                        text,
+                        hit,
+                    });
                     inj.push(c, |c, cols| cols[0] = c.display.as_str().into());
                     found += 1;
                     Ok(true)

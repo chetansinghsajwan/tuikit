@@ -12,6 +12,12 @@ fn parses_names_and_matches_events() {
     for bad in ["", "ctrl-", "f13", "hello", "ctrl-ab"] {
         assert!(parse(bad).is_none(), "{bad}");
     }
-    assert!(matches(&KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL), &parse("ctrl-e").unwrap()));
-    assert!(!matches(&KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE), &parse("ctrl-e").unwrap()));
+    assert!(matches(
+        &KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL),
+        &parse("ctrl-e").unwrap()
+    ));
+    assert!(!matches(
+        &KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        &parse("ctrl-e").unwrap()
+    ));
 }

@@ -29,10 +29,17 @@ fn rows_carry_both_line_numbers_and_the_function_context() {
     let t = text(&lines);
     assert!(t.iter().any(|l| l.starts_with("  ⋯ line 1")), "{t:#?}");
     // A hunk header names the function it sits in when it starts below it.
-    let long_old = format!("fn first() {{\n}}\n\nfn second() {{\n{}    let a = 1;\n}}\n", "    // pad\n".repeat(6));
+    let long_old = format!(
+        "fn first() {{\n}}\n\nfn second() {{\n{}    let a = 1;\n}}\n",
+        "    // pad\n".repeat(6)
+    );
     let long_new = long_old.replace("let a = 1", "let a = 2");
     let (lines, _) = render(&[patch(&long_old, &long_new)], &Theme::default(), &opts, 100);
-    assert!(text(&lines).iter().any(|l| l.starts_with("  ⋯ line") && l.contains("fn second()")), "{:#?}", text(&lines));
+    assert!(
+        text(&lines).iter().any(|l| l.starts_with("  ⋯ line") && l.contains("fn second()")),
+        "{:#?}",
+        text(&lines)
+    );
     // The removed row shows its old number, the added row its new one.
     assert!(t.iter().any(|l| l.contains(" 2   - ") || l.contains("2   - ")), "{t:#?}");
     assert!(t.iter().any(|l| l.contains("  2 + ")), "{t:#?}");
@@ -47,7 +54,10 @@ fn big_and_generated_files_fold_by_themselves_and_a_fold_can_be_toggled() {
     lock.path = "Cargo.lock".into();
     let (lines, _) = render(&[lock.clone()], &Theme::default(), &opts, 100);
     let t = text(&lines);
-    assert!(t.iter().any(|l| l.contains("folded")) && !t.iter().any(|l| l.contains("⋯ line")), "{t:#?}");
+    assert!(
+        t.iter().any(|l| l.contains("folded")) && !t.iter().any(|l| l.contains("⋯ line")),
+        "{t:#?}"
+    );
     toggle_fold("Cargo.lock");
     let (lines, _) = render(&[lock], &Theme::default(), &opts, 100);
     assert!(text(&lines).iter().any(|l| l.contains("⋯ line")));
@@ -92,7 +102,10 @@ fn a_line_that_does_not_fit_ends_in_a_marker() {
 fn the_changed_word_gets_a_stronger_background_than_the_rest_of_its_row() {
     let opts = Options { width: Some(80), ..Options::default() };
     let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
-    let added = lines.iter().find(|l| l.spans.iter().any(|s| s.content.contains("step"))).expect("the added row");
+    let added = lines
+        .iter()
+        .find(|l| l.spans.iter().any(|s| s.content.contains("step")))
+        .expect("the added row");
     let bgs: std::collections::HashSet<_> = added.spans.iter().filter_map(|s| s.style.bg).collect();
     // Two backgrounds: the row tint and the stronger one on `step`.
     assert!(bgs.len() >= 2, "{added:?}");
@@ -113,14 +126,18 @@ fn code_is_syntax_highlighted_inside_the_diff() {
 #[test]
 fn trailing_whitespace_on_an_added_line_and_conflict_markers_are_called_out() {
     let opts = Options { width: Some(80), ..Options::default() };
-    let (lines, _) = render(&[patch("a\nb\n", "a\nb  \n<<<<<<< HEAD\n")], &Theme::default(), &opts, 100);
+    let (lines, _) =
+        render(&[patch("a\nb\n", "a\nb  \n<<<<<<< HEAD\n")], &Theme::default(), &opts, 100);
     let ws = lines
         .iter()
         .find(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>().contains("+ b  "))
         .expect("the b row");
     let bgs: std::collections::HashSet<_> = ws.spans.iter().filter_map(|s| s.style.bg).collect();
     assert!(bgs.len() >= 2, "{ws:?}");
-    let marker = lines.iter().find(|l| l.spans.iter().any(|s| s.content.contains("<<<<<<<"))).expect("the marker row");
+    let marker = lines
+        .iter()
+        .find(|l| l.spans.iter().any(|s| s.content.contains("<<<<<<<")))
+        .expect("the marker row");
     assert!(
         marker.spans.iter().any(|s| s.content.contains("<<<<<<<") && s.style.add_modifier.contains(Modifier::BOLD))
     );
@@ -132,9 +149,14 @@ fn renames_and_mode_changes_show_in_the_file_header() {
     p.kind = Kind::Renamed;
     p.old_path = Some("src/old.rs".into());
     p.modes = Some(("100644".into(), "100755".into()));
-    let (lines, _) = render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
+    let (lines, _) =
+        render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
     let t = text(&lines);
-    assert!(t.iter().any(|l| l.contains("src/old.rs → src/lib.rs") && l.contains("mode 100644 → 100755")), "{t:#?}");
+    assert!(
+        t.iter()
+            .any(|l| l.contains("src/old.rs → src/lib.rs") && l.contains("mode 100644 → 100755")),
+        "{t:#?}"
+    );
 }
 
 #[test]
@@ -142,11 +164,17 @@ fn wide_screens_draw_old_beside_new() {
     let opts = Options { width: Some(160), ..Options::default() };
     let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
     let t = text(&lines);
-    let pair =
-        t.iter().find(|l| l.contains("count + 1") && l.contains("count + step")).expect("old and new on one row");
+    let pair = t
+        .iter()
+        .find(|l| l.contains("count + 1") && l.contains("count + step"))
+        .expect("old and new on one row");
     assert!(pair.contains('│'), "{pair}");
     assert!(lines.iter().all(|l| {
-        l.spans.iter().map(|s| unicode_width::UnicodeWidthStr::width(s.content.as_ref())).sum::<usize>() <= 160
+        l.spans
+            .iter()
+            .map(|s| unicode_width::UnicodeWidthStr::width(s.content.as_ref()))
+            .sum::<usize>()
+            <= 160
     }));
 }
 
@@ -168,7 +196,8 @@ fn a_file_too_big_to_keep_whole_is_still_highlighted_per_hunk() {
     let mut p = patch(OLD, NEW);
     p.before.clear();
     p.after.clear();
-    let (lines, _) = render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
+    let (lines, _) =
+        render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
     let colours: std::collections::HashSet<_> =
         lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
     assert!(colours.len() >= 5, "{colours:?}");

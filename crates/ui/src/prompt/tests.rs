@@ -12,7 +12,8 @@ fn the_cursor_cell_is_reversed_after_the_label() {
 
 #[test]
 fn suggestions_match_anywhere_prefixes_first_and_step_around() {
-    let mut s = Suggest::new(vec!["Ada Lovelace".into(), "Grace Hopper".into(), "Alan Adams".into()]);
+    let mut s =
+        Suggest::new(vec!["Ada Lovelace".into(), "Grace Hopper".into(), "Alan Adams".into()]);
     s.typed("ad");
     assert_eq!(s.matches(), ["Ada Lovelace", "Alan Adams"]);
     assert_eq!(s.current().as_deref(), Some("Ada Lovelace"));

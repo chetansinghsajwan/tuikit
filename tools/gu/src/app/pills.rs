@@ -73,7 +73,12 @@ pub(super) fn ref_pill(theme: &Theme, r: &RefInfo, remotes: &[String]) -> Vec<Sp
         body = body.add_modifier(Modifier::BOLD);
     }
     let cap = Style::new().fg(bg);
-    vec![Span::styled("\u{e0b6}", cap), Span::styled(text, body), Span::styled("\u{e0b4}", cap), Span::raw(" ")]
+    vec![
+        Span::styled("\u{e0b6}", cap),
+        Span::styled(text, body),
+        Span::styled("\u{e0b4}", cap),
+        Span::raw(" "),
+    ]
 }
 
 /// The author as two letters: the first letters of the first two words (`Chetan Singh Sajwan` ->
@@ -91,8 +96,16 @@ pub(super) fn initials(name: &str) -> String {
 /// A stable color per author, from the theme's accents, so one person always looks the same.
 pub(super) fn author_color(theme: &Theme, name: &str) -> ratatui::style::Color {
     let c = &theme.colors;
-    let palette =
-        [c.success, c.warning, c.info, c.accent, c.git.untracked, c.git.renamed, c.git.modified, c.git.conflict];
+    let palette = [
+        c.success,
+        c.warning,
+        c.info,
+        c.accent,
+        c.git.untracked,
+        c.git.renamed,
+        c.git.modified,
+        c.git.conflict,
+    ];
     let hash = name.bytes().fold(5381u32, |h, b| h.wrapping_mul(33).wrapping_add(u32::from(b)));
     palette[hash as usize % palette.len()].into()
 }

@@ -14,7 +14,9 @@ impl App {
             RefKind::Remote => 1,
             RefKind::Tag => 2,
         };
-        refs.sort_by(|a, b| rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time)));
+        refs.sort_by(|a, b| {
+            rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time))
+        });
         // The row the cursor is on, by identity (before the refs change under it).
         let keep = self.ref_row_id(self.lists[0].cursor);
         self.branches = refs;
@@ -50,7 +52,8 @@ impl App {
         }
         self.commits = commits;
         self.graph_rows = if self.graph { git_core::graph(&self.commits) } else { Vec::new() };
-        self.graph_w = self.graph_rows.iter().map(|r| r.cells.len()).max().unwrap_or(0).min(GRAPH_MAX);
+        self.graph_w =
+            self.graph_rows.iter().map(|r| r.cells.len()).max().unwrap_or(0).min(GRAPH_MAX);
         self.labels.clear();
         for r in &self.branches {
             self.labels.entry(r.oid.clone()).or_default().push(r.clone());
@@ -67,7 +70,9 @@ impl App {
         self.refs_w = self.refs_need.min(REFS_COL);
         self.stashes = self.repo.stashes().unwrap_or_default();
         self.build_ref_rows(keep);
-        for (i, len) in [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate() {
+        for (i, len) in
+            [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate()
+        {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
         }
         self.preview = None;

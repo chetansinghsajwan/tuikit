@@ -12,7 +12,14 @@ fn dir(name: &str) -> PathBuf {
 }
 
 fn grep_picker(root: PathBuf, query: &str) -> Picker {
-    let opts = PickerOptions { mode: Mode::Grep, paths: false, root, preview: true, git: false, query: query.into() };
+    let opts = PickerOptions {
+        mode: Mode::Grep,
+        paths: false,
+        root,
+        preview: true,
+        git: false,
+        query: query.into(),
+    };
     Picker::new(opts, Arc::new(|| {}))
 }
 
@@ -41,7 +48,8 @@ fn type_str(p: &mut Picker, s: &str) {
 fn finds_matches_with_location_and_output_format() {
     let mut p = grep_picker(dir("find"), "needle");
     wait_items(&mut p, 2);
-    let all: Vec<Candidate> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.clone()).collect();
+    let all: Vec<Candidate> =
+        p.nucleo.snapshot().matched_items(..).map(|i| i.data.clone()).collect();
     assert_eq!(all.len(), 2);
     let a = all.iter().find(|c| c.path() == "a.txt").unwrap();
     assert_eq!(a.output(), "a.txt:2:1:needle here");
@@ -76,16 +84,18 @@ fn invalid_regex_falls_back_to_literal() {
 #[test]
 fn preview_focuses_the_matching_line() {
     let d = dir("prev");
-    let body: String =
-        (1..=60).map(|n| if n == 40 { "needle line\n".to_string() } else { format!("filler {n}\n") }).collect();
+    let body: String = (1..=60)
+        .map(|n| if n == 40 { "needle line\n".to_string() } else { format!("filler {n}\n") })
+        .collect();
     std::fs::write(d.join("big.txt"), body).unwrap();
     let mut p = grep_picker(d, "needle line");
     wait_items(&mut p, 1);
     let area = Rect::new(0, 0, 90, 12);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default());
-    let text: String =
-        (0..12).map(|y| (0..90).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String = (0..12)
+        .map(|y| (0..90).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(text.contains("big.txt:40"), "{text}");
     assert!(text.contains("needle line"), "{text}");
     assert!(text.contains("filler 38") || text.contains("filler 39"), "{text}");

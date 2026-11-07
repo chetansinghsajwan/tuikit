@@ -14,7 +14,9 @@ const FORWARD_ENV: [&str; 3] = ["PATH", "UI_THEME", "XDG_CONFIG_HOME"];
 
 /// Popup mode applies inside zellij, unless turned off.
 pub fn wanted(no_popup_flag: bool) -> bool {
-    !no_popup_flag && std::env::var_os("ZELLIJ").is_some() && std::env::var_os("PICK_NO_POPUP").is_none()
+    !no_popup_flag
+        && std::env::var_os("ZELLIJ").is_some()
+        && std::env::var_os("PICK_NO_POPUP").is_none()
 }
 
 /// Single-quote `s` for `sh`.
@@ -74,7 +76,9 @@ pub fn zellij_args(
     script.push_str(&format!(" > {}; echo $? > {}", q(out.as_os_str()), q(code.as_os_str())));
 
     let mut v: Vec<String> =
-        ["run", "--floating", "--close-on-exit", "--blocking", "--name", "pick"].map(String::from).to_vec();
+        ["run", "--floating", "--close-on-exit", "--blocking", "--name", "pick"]
+            .map(String::from)
+            .to_vec();
     // pick draws its own (design-token) border, so the pane has none of its own.
     v.extend(["--borderless".into(), "true".into()]);
     v.extend(["--cwd".into(), cwd.to_string_lossy().into_owned()]);
@@ -108,13 +112,26 @@ fn run_in(dir: &Path, args: Vec<OsString>, percent: u16) -> io::Result<i32> {
 
     let exe = std::env::current_exe()?;
     let cwd = std::env::current_dir()?;
-    let env: Vec<(String, String)> =
-        FORWARD_ENV.iter().filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v))).collect();
+    let env: Vec<(String, String)> = FORWARD_ENV
+        .iter()
+        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v)))
+        .collect();
     // About as many rows as the pane the tool runs in has: used to center the popup vertically.
     let rows = ratatui::crossterm::terminal::size().ok().map(|(_, r)| r);
-    let zargs = zellij_args(&exe, &args, &cwd, has_input.then_some(input.as_path()), &out, &code, percent, rows, &env);
+    let zargs = zellij_args(
+        &exe,
+        &args,
+        &cwd,
+        has_input.then_some(input.as_path()),
+        &out,
+        &code,
+        percent,
+        rows,
+        &env,
+    );
 
-    let status = Command::new("zellij").args(&zargs).stdout(std::process::Stdio::null()).status()?;
+    let status =
+        Command::new("zellij").args(&zargs).stdout(std::process::Stdio::null()).status()?;
     if !status.success() {
         return Err(io::Error::other(format!("zellij exited with {status}")));
     }

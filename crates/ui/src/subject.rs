@@ -13,16 +13,18 @@ pub fn category_len(subject: &str) -> Option<usize> {
     // One word or two (`git panel: one tree`).
     let words: Vec<&str> = word.split(' ').collect();
     if words.len() > 2
-        || words.iter().any(|w| w.is_empty() || !w.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_'))
+        || words.iter().any(|w| {
+            w.is_empty() || !w.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')
+        })
     {
         return None;
     }
     // After the word only an optional `(scope)` and an optional `!` may come.
     let rest = &head[word_end..];
     let rest = match rest.strip_prefix('(') {
-        Some(r) => {
-            r.split_once(')').and_then(|(scope, r)| (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r))?
-        }
+        Some(r) => r.split_once(')').and_then(|(scope, r)| {
+            (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r)
+        })?,
         None => rest,
     };
     (rest.is_empty() || rest == "!").then_some(colon + 1)
@@ -48,7 +50,9 @@ pub fn category_color(theme: &Theme, subject: &str) -> Color {
         c.git.untracked.into(),
     ];
     let word = category_word(subject).unwrap_or_default();
-    let hash = word.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
+    let hash = word
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
     palette[(hash % palette.len() as u64) as usize]
 }
 
@@ -58,7 +62,9 @@ pub fn spans(theme: &Theme, subject: &str, base: Style) -> Vec<Span<'static>> {
         Some(n) => vec![
             Span::styled(
                 subject[..n].to_string(),
-                Style::new().fg(category_color(theme, subject)).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::new()
+                    .fg(category_color(theme, subject))
+                    .add_modifier(ratatui::style::Modifier::BOLD),
             ),
             Span::styled(subject[n..].to_string(), base),
         ],

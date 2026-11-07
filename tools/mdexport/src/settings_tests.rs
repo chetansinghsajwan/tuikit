@@ -13,11 +13,14 @@ fn settings_shape_the_page_and_the_fonts() {
     };
     let src = typst_source_with("hi\n", None, &s);
     assert!(
-        src.contains("paper: \"us-letter\"") && src.contains("margin: (x: 3cm") && !src.contains("numbering"),
+        src.contains("paper: \"us-letter\"")
+            && src.contains("margin: (x: 3cm")
+            && !src.contains("numbering"),
         "{src}"
     );
     assert!(
-        src.contains("font: (\"Inter\", \"Libertinus Serif\"), size: 12pt") && src.contains("justify: false"),
+        src.contains("font: (\"Inter\", \"Libertinus Serif\"), size: 12pt")
+            && src.contains("justify: false"),
         "{src}"
     );
     // An unknown font still makes a PDF: the embedded one stands in.

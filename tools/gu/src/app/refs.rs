@@ -7,7 +7,9 @@ impl App {
     pub(super) fn ref_row_id(&self, i: usize) -> Option<String> {
         match self.ref_rows.get(i)? {
             RefRow::Section { key, .. } | RefRow::Folder { key, .. } => Some(key.clone()),
-            RefRow::Item { index, .. } => self.branches.get(*index).map(|r| format!("{:?}:{}", r.kind, r.name)),
+            RefRow::Item { index, .. } => {
+                self.branches.get(*index).map(|r| format!("{:?}:{}", r.kind, r.name))
+            }
         }
     }
 
@@ -23,9 +25,11 @@ impl App {
     /// (`feature/login` under `feature`, `origin/main` under `origin`). Folded sections and folders hide what is in them.
     pub(super) fn build_ref_rows(&mut self, keep: Option<String>) {
         let mut rows = Vec::new();
-        for (kind, label, tag) in
-            [(RefKind::Branch, "Branches", "b"), (RefKind::Remote, "Remotes", "r"), (RefKind::Tag, "Tags", "t")]
-        {
+        for (kind, label, tag) in [
+            (RefKind::Branch, "Branches", "b"),
+            (RefKind::Remote, "Remotes", "r"),
+            (RefKind::Tag, "Tags", "t"),
+        ] {
             let mut items: Vec<(usize, &RefInfo)> =
                 self.branches.iter().enumerate().filter(|(_, r)| r.kind == kind).collect();
             if items.is_empty() {
@@ -44,7 +48,8 @@ impl App {
             for (index, r) in items {
                 let parts: Vec<&str> = r.name.split('/').collect();
                 let (folders, leaf) = parts.split_at(parts.len() - 1);
-                let common = open.iter().zip(folders.iter()).take_while(|(a, b)| a.as_str() == **b).count();
+                let common =
+                    open.iter().zip(folders.iter()).take_while(|(a, b)| a.as_str() == **b).count();
                 open.truncate(common);
                 if hidden_under.is_some_and(|d| d > common) {
                     hidden_under = None;
@@ -58,22 +63,36 @@ impl App {
                     let count = self
                         .branches
                         .iter()
-                        .filter(|b| b.kind == kind && b.name.starts_with(&format!("{}/", open.join("/"))))
+                        .filter(|b| {
+                            b.kind == kind && b.name.starts_with(&format!("{}/", open.join("/")))
+                        })
                         .count();
-                    rows.push(RefRow::Folder { key: key.clone(), name: (*name).to_string(), depth: d + 1, count });
+                    rows.push(RefRow::Folder {
+                        key: key.clone(),
+                        name: (*name).to_string(),
+                        depth: d + 1,
+                        count,
+                    });
                     if self.folded.contains(&key) {
                         hidden_under = Some(d + 1);
                     }
                 }
                 if hidden_under.is_none() {
-                    rows.push(RefRow::Item { index, name: leaf[0].to_string(), depth: folders.len() + 1 });
+                    rows.push(RefRow::Item {
+                        index,
+                        name: leaf[0].to_string(),
+                        depth: folders.len() + 1,
+                    });
                 }
             }
         }
         // The cursor stays on the same row when it is still there.
         self.ref_rows = rows;
         let at = keep
-            .and_then(|k| (0..self.ref_rows.len()).find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str())))
+            .and_then(|k| {
+                (0..self.ref_rows.len())
+                    .find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str()))
+            })
             .unwrap_or(self.lists[0].cursor);
         self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
     }
@@ -133,10 +152,9 @@ impl App {
                     }
                     Some(row) if depth_of(row) > 0 => {
                         let want = depth_of(row) - 1;
-                        if let Some(i) = cf.rows[..cf.cursor]
-                            .iter()
-                            .rposition(|r| matches!(r, FileRow::Folder { .. }) && depth_of(r) == want)
-                        {
+                        if let Some(i) = cf.rows[..cf.cursor].iter().rposition(|r| {
+                            matches!(r, FileRow::Folder { .. }) && depth_of(r) == want
+                        }) {
                             cf.cursor = i;
                         }
                     }
@@ -144,7 +162,9 @@ impl App {
                 }
             }
             KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
-            KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            KeyCode::Char('u') if ctrl => {
+                self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1))
+            }
             KeyCode::Char('}') => self.jump_diff(true, false),
             KeyCode::Char('{') => self.jump_diff(false, false),
             KeyCode::Char(')') => self.jump_diff(true, true),
@@ -160,11 +180,12 @@ impl App {
     /// Fold or unfold the file whose header is at (or above) the top of the diff.
     pub(super) fn fold_file(&mut self) {
         let Some(p) = &self.preview else { return };
-        let at = p.anchors.files.iter().rposition(|&m| m <= self.pscroll).or(if p.anchors.files.is_empty() {
-            None
-        } else {
-            Some(0)
-        });
+        let at = p
+            .anchors
+            .files
+            .iter()
+            .rposition(|&m| m <= self.pscroll)
+            .or(if p.anchors.files.is_empty() { None } else { Some(0) });
         if let Some(path) = at.and_then(|i| p.anchors.paths.get(i)).cloned() {
             pv::diff_toggle_fold(&path);
             self.preview = None;
@@ -174,8 +195,11 @@ impl App {
     pub(super) fn jump_diff(&mut self, forward: bool, files: bool) {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
-        let target =
-            if forward { pv::Anchors::next(marks, self.pscroll) } else { pv::Anchors::prev(marks, self.pscroll) };
+        let target = if forward {
+            pv::Anchors::next(marks, self.pscroll)
+        } else {
+            pv::Anchors::prev(marks, self.pscroll)
+        };
         if let Some(t) = target {
             self.pscroll = t;
         }

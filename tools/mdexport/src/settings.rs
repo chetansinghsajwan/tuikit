@@ -53,7 +53,13 @@ impl Settings {
     pub fn lines(&self) -> String {
         format!(
             "paper={}\nmargin={}\nfont={}\nmono={}\nsize={}\njustify={}\nnumbers={}\n",
-            self.paper, self.margin_cm, self.font, self.mono, self.size_pt, self.justify, self.page_numbers
+            self.paper,
+            self.margin_cm,
+            self.font,
+            self.mono,
+            self.size_pt,
+            self.justify,
+            self.page_numbers
         )
     }
 }

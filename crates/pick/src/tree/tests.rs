@@ -8,7 +8,10 @@ fn e(idx: u32, path: &str) -> Entry {
 
 #[test]
 fn ancestors_are_the_enclosing_headers_outermost_first() {
-    let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/ui/c.rs"), e(3, "docs/x.md")], false);
+    let t = build(
+        vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/ui/c.rs"), e(3, "docs/x.md")],
+        false,
+    );
     // rows: docs/, #3, src/, ui/, #2, #1, #0
     assert_eq!(ancestors(&t.rows, 4), vec![2, 3]); // c.rs: src, ui
     assert_eq!(ancestors(&t.rows, 5), vec![2]); // b.rs: src

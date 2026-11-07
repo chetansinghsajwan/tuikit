@@ -32,7 +32,9 @@ fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 12);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default());
-    (0..12).map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect()
+    (0..12)
+        .map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect()
 }
 
 #[test]
@@ -49,7 +51,10 @@ fn expect_keys_accept_and_report_the_key() {
         Action::AcceptWith("f2".into(), vec!["beta".into()])
     );
     // Enter still accepts normally, and a plain `e` still types.
-    assert_eq!(p.handle_event(&key(KeyCode::Enter, KeyModifiers::NONE)), Action::Accept(vec!["beta".into()]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::Enter, KeyModifiers::NONE)),
+        Action::Accept(vec!["beta".into()])
+    );
     assert!(p.set_expect(&["bogus-key".to_string()]).is_err());
 }
 

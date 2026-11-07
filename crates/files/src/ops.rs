@@ -27,7 +27,10 @@ pub fn create(dir: &Path, name: &str) -> io::Result<(PathBuf, bool)> {
     let rela = check_relative(name)?;
     let path = dir.join(rela);
     if path.symlink_metadata().is_ok() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{} already exists", rela.display())));
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("{} already exists", rela.display()),
+        ));
     }
     let is_dir = name.ends_with('/');
     if is_dir {
@@ -50,7 +53,10 @@ pub fn rename(from: &Path, name: &str) -> io::Result<PathBuf> {
         return Ok(to);
     }
     if to.symlink_metadata().is_ok() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{} already exists", rela.display())));
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("{} already exists", rela.display()),
+        ));
     }
     if let Some(parent) = to.parent() {
         std::fs::create_dir_all(parent)?;
@@ -75,7 +81,8 @@ pub fn unique_among(dest: PathBuf, taken: &[PathBuf]) -> PathBuf {
     let ext = dest.extension().map(|e| format!(".{}", e.to_string_lossy()));
     for n in 1.. {
         let suffix = if n == 1 { " copy".to_string() } else { format!(" copy {n}") };
-        let candidate = dest.with_file_name(format!("{stem}{suffix}{}", ext.as_deref().unwrap_or("")));
+        let candidate =
+            dest.with_file_name(format!("{stem}{suffix}{}", ext.as_deref().unwrap_or("")));
         if free(&candidate) {
             return candidate;
         }
@@ -164,7 +171,11 @@ pub fn move_progress(src: &Path, dest: &Path, tick: &mut dyn FnMut(u64) -> bool)
 
 /// Delete permanently.
 pub fn remove(path: &Path) -> io::Result<()> {
-    if path.symlink_metadata()?.is_dir() { std::fs::remove_dir_all(path) } else { std::fs::remove_file(path) }
+    if path.symlink_metadata()?.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
 }
 
 /// Move `src` to `dest` (which must not exist); across file systems this copies, then removes.
@@ -195,7 +206,11 @@ pub fn bulk_rename_text(base: &Path, paths: &[PathBuf]) -> String {
 /// same order as `olds`) and return the `(from, to)` pairs that change. Fails, and
 /// changes nothing, on a wrong line count, a bad or duplicate name, or a name that
 /// exists and is not itself being renamed away.
-pub fn plan_bulk_rename(base: &Path, olds: &[PathBuf], edited: &str) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+pub fn plan_bulk_rename(
+    base: &Path,
+    olds: &[PathBuf],
+    edited: &str,
+) -> Result<Vec<(PathBuf, PathBuf)>, String> {
     let lines: Vec<&str> = edited.lines().collect();
     if lines.len() != olds.len() {
         return Err(format!("expected {} names, got {}", olds.len(), lines.len()));
@@ -214,7 +229,10 @@ pub fn plan_bulk_rename(base: &Path, olds: &[PathBuf], edited: &str) -> Result<V
     }
     for (_, to) in &moves {
         if to.symlink_metadata().is_ok() && !olds.contains(to) {
-            return Err(format!("{} already exists", to.strip_prefix(base).unwrap_or(to).display()));
+            return Err(format!(
+                "{} already exists",
+                to.strip_prefix(base).unwrap_or(to).display()
+            ));
         }
     }
     Ok(moves)

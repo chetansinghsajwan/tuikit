@@ -33,7 +33,12 @@ impl Rows {
 
     /// The row's background at `y`, reaching into the padding on both sides.
     pub fn bar(&self, y: u16) -> Rect {
-        Rect { x: self.inner.x - self.left, y, width: self.inner.width + self.left + self.right, height: 1 }
+        Rect {
+            x: self.inner.x - self.left,
+            y,
+            width: self.inner.width + self.left + self.right,
+            height: 1,
+        }
     }
 
     /// The row's content area at `y`, inside the padding.
@@ -47,7 +52,9 @@ impl Rows {
 pub fn style(theme: &Theme, hovered: bool, tint: Option<Color>) -> Style {
     let c = &theme.colors;
     match (hovered, tint) {
-        (true, _) => Style::new().bg(mix(c.accent.into(), c.bg.into(), 28)).add_modifier(Modifier::BOLD),
+        (true, _) => {
+            Style::new().bg(mix(c.accent.into(), c.bg.into(), 28)).add_modifier(Modifier::BOLD)
+        }
         (false, Some(t)) => Style::new().bg(mix(t, c.bg.into(), 14)),
         (false, None) => Style::new(),
     }
@@ -133,7 +140,10 @@ impl ListRow {
     /// Draw the row at line `y` and report it to the motion.
     pub fn draw(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
         let (id, content) = if self.id == 0 && self.content == 0 {
-            (crate::anim::hash_of(&text_of(&self.left)), crate::anim::hash_of(&text_of(&self.right)))
+            (
+                crate::anim::hash_of(&text_of(&self.left)),
+                crate::anim::hash_of(&text_of(&self.right)),
+            )
         } else {
             (self.id, self.content)
         };
@@ -161,15 +171,24 @@ impl ListRow {
         let show_right = right_w > 0 && width.saturating_sub(with_right) >= self.min_left;
         let limit = width.saturating_sub(if show_right { with_right } else { signs });
         let left = clip_spans(self.left, limit);
-        Paragraph::new(Line::from(left)).style(base).render(Rect { width: limit as u16, ..area }, buf);
+        Paragraph::new(Line::from(left))
+            .style(base)
+            .render(Rect { width: limit as u16, ..area }, buf);
         if show_right {
             let x = area.right().saturating_sub((cell + right_w) as u16);
             let right: Vec<Span> = self
                 .right
                 .iter()
-                .map(|s| Span::styled(s.content.to_string(), Style::new().fg(theme.colors.muted.into()).patch(s.style)))
+                .map(|s| {
+                    Span::styled(
+                        s.content.to_string(),
+                        Style::new().fg(theme.colors.muted.into()).patch(s.style),
+                    )
+                })
                 .collect();
-            Paragraph::new(Line::from(right)).style(base).render(Rect { x, width: right_w as u16, ..area }, buf);
+            Paragraph::new(Line::from(right))
+                .style(base)
+                .render(Rect { x, width: right_w as u16, ..area }, buf);
         }
         let mut x = area.right().saturating_sub(1);
         for (i, (ch, color)) in self.signs.iter().enumerate().rev() {

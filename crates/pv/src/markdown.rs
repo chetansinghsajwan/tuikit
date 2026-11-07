@@ -2,7 +2,9 @@
 //! alerts, footnotes, front matter, math and rules drawn as styled terminal lines (the markup
 //! characters are gone), wrapped to the width.
 
-use pulldown_cmark::{Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::collections::HashMap;
@@ -12,8 +14,9 @@ use unicode_width::UnicodeWidthStr;
 
 /// Whether `path` is a Markdown file by its extension.
 pub fn is_markdown(path: &std::path::Path) -> bool {
-    path.extension()
-        .is_some_and(|e| matches!(e.to_str().map(str::to_ascii_lowercase).as_deref(), Some("md" | "markdown")))
+    path.extension().is_some_and(|e| {
+        matches!(e.to_str().map(str::to_ascii_lowercase).as_deref(), Some("md" | "markdown"))
+    })
 }
 
 /// The tallest an inline image gets, in rows.
@@ -205,7 +208,8 @@ fn line_width(spans: &[Span<'static>]) -> usize {
 fn column_widths(natural: &[usize], room: usize) -> Vec<usize> {
     let mut w: Vec<usize> = natural.iter().map(|&n| n.max(3)).collect();
     while w.iter().sum::<usize>() > room {
-        let (at, widest) = w.iter().enumerate().max_by_key(|(_, v)| **v).map(|(i, v)| (i, *v)).unwrap_or((0, 0));
+        let (at, widest) =
+            w.iter().enumerate().max_by_key(|(_, v)| **v).map(|(i, v)| (i, *v)).unwrap_or((0, 0));
         if widest <= 6 {
             break;
         }
@@ -226,15 +230,22 @@ pub(crate) fn grid_lines(
     let n = head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0));
     let shown = n.min((room.saturating_sub(1) / 9).max(1));
     let words = |cell: Option<&String>| -> Words {
-        cell.map(|c| c.split_whitespace().map(|w| (w.to_string(), fg)).collect()).unwrap_or_default()
+        cell.map(|c| c.split_whitespace().map(|w| (w.to_string(), fg)).collect())
+            .unwrap_or_default()
     };
     let numeric = |i: usize| {
-        let cells: Vec<&str> =
-            rows.iter().filter_map(|r| r.get(i)).map(|c| c.trim()).filter(|c| !c.is_empty()).collect();
+        let cells: Vec<&str> = rows
+            .iter()
+            .filter_map(|r| r.get(i))
+            .map(|c| c.trim())
+            .filter(|c| !c.is_empty())
+            .collect();
         !cells.is_empty() && cells.iter().all(|c| c.replace(',', "").parse::<f64>().is_ok())
     };
     let table = Table {
-        aligns: (0..shown).map(|i| if numeric(i) { Alignment::Right } else { Alignment::Left }).collect(),
+        aligns: (0..shown)
+            .map(|i| if numeric(i) { Alignment::Right } else { Alignment::Left })
+            .collect(),
         head: (0..shown).map(|i| words(head.get(i))).collect(),
         rows: rows.iter().map(|r| (0..shown).map(|i| words(r.get(i))).collect()).collect(),
         row: Vec::new(),
@@ -246,14 +257,17 @@ pub(crate) fn grid_lines(
 /// The lines of a table: bordered, the head row bold, cells wrapped, aligned as the table says.
 fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>> {
     let c = &theme.colors;
-    let (muted, accent) =
-        (Style::new().fg(c.muted.into()), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD));
+    let (muted, accent) = (
+        Style::new().fg(c.muted.into()),
+        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+    );
     let n = t.aligns.len().max(t.head.len()).max(t.rows.iter().map(Vec::len).max().unwrap_or(0));
     if n == 0 {
         return Vec::new();
     }
-    let text_of =
-        |cell: &Words| cell.iter().map(|(w, _)| w.as_str()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+    let text_of = |cell: &Words| {
+        cell.iter().map(|(w, _)| w.as_str()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ")
+    };
     let mut natural = vec![0usize; n];
     for row in std::iter::once(&t.head).chain(t.rows.iter()) {
         for (i, cell) in row.iter().enumerate() {
@@ -271,12 +285,18 @@ fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>>
             .map(|i| {
                 let words: Words = row
                     .get(i)
-                    .map(|c| c.iter().map(|(w, s)| (w.clone(), if head { accent } else { *s })).collect())
+                    .map(|c| {
+                        c.iter().map(|(w, s)| (w.clone(), if head { accent } else { *s })).collect()
+                    })
                     .unwrap_or_default();
                 // A word wider than its column is cut with an ellipsis.
                 let words: Words = words
                     .into_iter()
-                    .map(|(w, s)| if w.width() > widths[i] { (clip(&w, widths[i]), s) } else { (w, s) })
+                    .map(
+                        |(w, s)| {
+                            if w.width() > widths[i] { (clip(&w, widths[i]), s) } else { (w, s) }
+                        },
+                    )
                     .collect();
                 let lines = wrap(&words, widths[i]);
                 if lines.is_empty() { vec![Vec::new()] } else { lines }
@@ -387,7 +407,9 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     out.in_code = true;
                     out.code.clear();
                     out.code_lang = match kind {
-                        CodeBlockKind::Fenced(l) => l.split([' ', ',', '{']).next().unwrap_or("").to_string(),
+                        CodeBlockKind::Fenced(l) => {
+                            l.split([' ', ',', '{']).next().unwrap_or("").to_string()
+                        }
                         CodeBlockKind::Indented => String::new(),
                     };
                 }
@@ -409,16 +431,27 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                 }
                 Tag::Emphasis => out.styles.push(out.style().add_modifier(Modifier::ITALIC)),
                 Tag::Strong => out.styles.push(out.style().add_modifier(Modifier::BOLD)),
-                Tag::Strikethrough => out.styles.push(out.style().add_modifier(Modifier::CROSSED_OUT)),
+                Tag::Strikethrough => {
+                    out.styles.push(out.style().add_modifier(Modifier::CROSSED_OUT))
+                }
                 Tag::Link { dest_url, .. } => {
                     link_url.push(dest_url.to_string());
-                    out.styles.push(out.style().fg(Color::from(c.info)).add_modifier(Modifier::UNDERLINED));
+                    out.styles.push(
+                        out.style().fg(Color::from(c.info)).add_modifier(Modifier::UNDERLINED),
+                    );
                 }
-                Tag::Image { dest_url, .. } => out.image = Some((dest_url.to_string(), String::new())),
+                Tag::Image { dest_url, .. } => {
+                    out.image = Some((dest_url.to_string(), String::new()))
+                }
                 Tag::Table(aligns) => {
                     out.flush();
-                    out.table =
-                        Some(Table { aligns, head: Vec::new(), rows: Vec::new(), row: Vec::new(), in_head: false });
+                    out.table = Some(Table {
+                        aligns,
+                        head: Vec::new(),
+                        rows: Vec::new(),
+                        row: Vec::new(),
+                        in_head: false,
+                    });
                 }
                 Tag::TableHead => {
                     if let Some(t) = out.table.as_mut() {
@@ -477,7 +510,10 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     if !lang.is_empty() {
                         let label: String = lang.chars().take(inner.saturating_sub(2)).collect();
                         let used = label.width();
-                        let spans = vec![Span::styled(label, tint.fg(muted).add_modifier(Modifier::ITALIC))];
+                        let spans = vec![Span::styled(
+                            label,
+                            tint.fg(muted).add_modifier(Modifier::ITALIC),
+                        )];
                         out.push_line(row(spans, used));
                     }
                     for pieces in crate::text::highlight_code(code, &lang, theme) {
@@ -498,7 +534,10 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                                 .map(|(_, ch)| ch)
                                 .collect();
                             used += piece.width();
-                            spans.push(Span::styled(piece, style.bg(tint.bg.unwrap_or(Color::Reset))));
+                            spans.push(Span::styled(
+                                piece,
+                                style.bg(tint.bg.unwrap_or(Color::Reset)),
+                            ));
                         }
                         out.push_line(row(spans, used - 1));
                     }
@@ -535,9 +574,12 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                         } else {
                             out.base.as_ref().map(|b| b.join(&url)).filter(|p| p.is_file())
                         };
-                        let picture =
-                            local.filter(|p| crate::media::kind(p) == Some(crate::media::Kind::Image)).and_then(|p| {
-                                let cols = (out.width.saturating_sub(out.prefix_width() + 1) as u16).min(IMAGE_COLS);
+                        let picture = local
+                            .filter(|p| crate::media::kind(p) == Some(crate::media::Kind::Image))
+                            .and_then(|p| {
+                                let cols = (out.width.saturating_sub(out.prefix_width() + 1)
+                                    as u16)
+                                    .min(IMAGE_COLS);
                                 crate::media::image_rows(&p, theme, cols, IMAGE_ROWS).ok()
                             });
                         match picture {
@@ -554,7 +596,11 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                                 }
                             }
                             None => {
-                                let shown = if alt.is_empty() { url.clone() } else { format!("{alt} ({url})") };
+                                let shown = if alt.is_empty() {
+                                    url.clone()
+                                } else {
+                                    format!("{alt} ({url})")
+                                };
                                 out.words.push((format!("🖼 {shown}"), Style::new().fg(muted)));
                             }
                         }
@@ -600,7 +646,10 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                         );
                         out.push_line(vec![rule.clone()]);
                         for l in meta.trim_end().lines() {
-                            out.push_line(vec![Span::styled(l.to_string(), Style::new().fg(muted))]);
+                            out.push_line(vec![Span::styled(
+                                l.to_string(),
+                                Style::new().fg(muted),
+                            )]);
                         }
                         out.push_line(vec![rule]);
                         out.lines.push(Line::default());
@@ -623,13 +672,15 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                 if let Some((_, alt)) = out.image.as_mut() {
                     alt.push_str(&t);
                 } else {
-                    let style = Style::new().fg(Color::from(c.syntax.string)).bg(Color::from(c.selection));
+                    let style =
+                        Style::new().fg(Color::from(c.syntax.string)).bg(Color::from(c.selection));
                     out.words.push((format!("{t}"), style));
                 }
             }
-            Event::InlineMath(t) => {
-                out.words.push((t.to_string(), Style::new().fg(Color::from(c.info)).add_modifier(Modifier::ITALIC)))
-            }
+            Event::InlineMath(t) => out.words.push((
+                t.to_string(),
+                Style::new().fg(Color::from(c.info)).add_modifier(Modifier::ITALIC),
+            )),
             Event::DisplayMath(t) => {
                 out.flush();
                 for l in t.trim().lines() {
@@ -664,7 +715,8 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                 out.lines.push(Line::default());
             }
             Event::TaskListMarker(done) => {
-                out.bullet = Some(Span::styled(if done { "☑ " } else { "☐ " }, Style::new().fg(accent)));
+                out.bullet =
+                    Some(Span::styled(if done { "☑ " } else { "☐ " }, Style::new().fg(accent)));
             }
         }
     }
@@ -695,11 +747,14 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
     };
     // The extent of what is inside each open link.
     let mut links: Vec<Option<std::ops::Range<usize>>> = Vec::new();
-    for (event, r) in
-        Parser::new_ext(text, Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS)
-            .into_offset_iter()
+    for (event, r) in Parser::new_ext(
+        text,
+        Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS,
+    )
+    .into_offset_iter()
     {
-        let is_link_edge = matches!(event, Event::Start(Tag::Link { .. }) | Event::End(TagEnd::Link));
+        let is_link_edge =
+            matches!(event, Event::Start(Tag::Link { .. }) | Event::End(TagEnd::Link));
         if !is_link_edge && let Some(slot) = links.last_mut() {
             match slot {
                 Some(inner) => {
@@ -717,7 +772,9 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
                 let line_end = head.find('\n').map_or(r.end, |n| r.start + n);
                 hide(r.start..r.start + hashes + spaces, &(r.start..line_end), None);
             }
-            Event::End(TagEnd::Strong) | Event::End(TagEnd::Emphasis) | Event::End(TagEnd::Strikethrough) => {
+            Event::End(TagEnd::Strong)
+            | Event::End(TagEnd::Emphasis)
+            | Event::End(TagEnd::Strikethrough) => {
                 let n = match event {
                     Event::End(TagEnd::Strong) => 2,
                     Event::End(TagEnd::Strikethrough) if head.starts_with("~~") => 2,
@@ -746,7 +803,9 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
                     hide(inner.end..r.end, &r, None);
                 }
             }
-            Event::Start(Tag::Item) if head.starts_with(['-', '*', '+']) && head[1..].starts_with(' ') => {
+            Event::Start(Tag::Item)
+                if head.starts_with(['-', '*', '+']) && head[1..].starts_with(' ') =>
+            {
                 let line_end = head.find('\n').map_or(r.end, |n| r.start + n);
                 hide(r.start..r.start + 1, &(r.start..line_end), Some("•"));
             }

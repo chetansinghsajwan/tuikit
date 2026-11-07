@@ -93,12 +93,16 @@ impl Backend for Fake {
         };
         let (security, known) = (s.networks[i].security, s.networks[i].known);
         match security {
-            Security::Enterprise => return Err(Error("802.1X networks are not supported yet".into())),
+            Security::Enterprise => {
+                return Err(Error("802.1X networks are not supported yet".into()));
+            }
             Security::Open => {}
             _ if known => {}
             _ => match password {
                 None => return Err(Error("a password is needed".into())),
-                Some(p) if p.len() < 8 => return Err(Error("Secrets were required, but not provided".into())),
+                Some(p) if p.len() < 8 => {
+                    return Err(Error("Secrets were required, but not provided".into()));
+                }
                 Some(_) => {}
             },
         }
@@ -184,7 +188,11 @@ impl Default for FakeBluetooth {
 impl Bluetooth for FakeBluetooth {
     fn status(&self) -> Result<BtStatus> {
         let s = self.state.lock().expect("fake state");
-        Ok(BtStatus { adapter: Some("hci0".into()), powered: s.powered, discovering: s.discovering })
+        Ok(BtStatus {
+            adapter: Some("hci0".into()),
+            powered: s.powered,
+            discovering: s.discovering,
+        })
     }
 
     fn devices(&self) -> Result<Vec<Device>> {
@@ -192,8 +200,12 @@ impl Bluetooth for FakeBluetooth {
         if !s.powered {
             return Ok(Vec::new());
         }
-        let mut v: Vec<Device> =
-            s.devices.iter().filter(|d| d.paired || d.connected || d.rssi.is_some()).cloned().collect();
+        let mut v: Vec<Device> = s
+            .devices
+            .iter()
+            .filter(|d| d.paired || d.connected || d.rssi.is_some())
+            .cloned()
+            .collect();
         crate::bluetooth::sort(&mut v);
         Ok(v)
     }
@@ -261,7 +273,11 @@ impl Bluetooth for FakeBluetooth {
         s.log.push(format!("remove {address}"));
         let before = s.devices.len();
         s.devices.retain(|d| d.address != address);
-        if s.devices.len() == before { Err(Error(format!("{address} is not known"))) } else { Ok(()) }
+        if s.devices.len() == before {
+            Err(Error(format!("{address} is not known")))
+        } else {
+            Ok(())
+        }
     }
 }
 

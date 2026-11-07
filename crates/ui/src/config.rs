@@ -55,7 +55,9 @@ fn base() -> Option<PathBuf> {
 
 /// The two files read for `tool`, the shared one first.
 pub fn paths(tool: &str) -> Vec<PathBuf> {
-    let shared = std::env::var_os("UI_CONFIG").map(PathBuf::from).or_else(|| base().map(|b| b.join("ui/config.toml")));
+    let shared = std::env::var_os("UI_CONFIG")
+        .map(PathBuf::from)
+        .or_else(|| base().map(|b| b.join("ui/config.toml")));
     let own = std::env::var_os("UI_TOOL_CONFIG")
         .map(PathBuf::from)
         .or_else(|| base().map(|b| b.join(tool).join("config.toml")));
@@ -83,7 +85,9 @@ impl Config {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(format!("{}: {e}", path.display())),
         };
-        toml::from_str::<File>(&text).map(Some).map_err(|e| format!("{}: {}", path.display(), e.message()))
+        toml::from_str::<File>(&text)
+            .map(Some)
+            .map_err(|e| format!("{}: {}", path.display(), e.message()))
     }
 
     fn merge(&mut self, f: File) {

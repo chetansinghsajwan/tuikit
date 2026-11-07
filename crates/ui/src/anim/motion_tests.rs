@@ -10,7 +10,12 @@ fn frame(names: &[&str], rows: usize) -> Buffer {
     let mut buf = Buffer::empty(area);
     for (y, name) in names.iter().enumerate() {
         let fg = Color::Rgb(200, 200, 200);
-        buf.set_string(0, y as u16, name, ratatui::style::Style::new().fg(fg).bg(theme().colors.bg.into()));
+        buf.set_string(
+            0,
+            y as u16,
+            name,
+            ratatui::style::Style::new().fg(fg).bg(theme().colors.bg.into()),
+        );
         note_row((0, 0), y as u16, hash_of(name), 0, Rect::new(0, y as u16, 8, 1));
     }
     buf
@@ -18,7 +23,13 @@ fn frame(names: &[&str], rows: usize) -> Buffer {
 
 fn names(buf: &Buffer) -> Vec<String> {
     (0..buf.area.height)
-        .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim().to_string())
+        .map(|y| {
+            (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+                .trim()
+                .to_string()
+        })
         .collect()
 }
 
@@ -60,7 +71,12 @@ fn a_changed_row_flashes() {
     let mut b = Buffer::empty(area);
     for (y, c) in [(0u16, 0u64), (1, 1)] {
         let name = ["a", "b"][y as usize];
-        b.set_string(0, y, name, ratatui::style::Style::new().fg(Color::Rgb(200, 200, 200)).bg(t.colors.bg.into()));
+        b.set_string(
+            0,
+            y,
+            name,
+            ratatui::style::Style::new().fg(Color::Rgb(200, 200, 200)).bg(t.colors.bg.into()),
+        );
         note_row((0, 0), y, hash_of(&name), c, Rect::new(0, y, 8, 1));
     }
     finish(&mut b, &t);

@@ -258,7 +258,9 @@ fn window(widths: &[usize], active: usize, room: usize) -> (usize, usize) {
     let marker = |k: usize| if k == 0 { 0 } else { format!("‹{k} ").width() };
     let marker_r = |k: usize| if k == 0 { 0 } else { format!(" {k}›").width() };
     let (mut lo, mut hi) = (active, active);
-    let used = |lo: usize, hi: usize| widths[lo..=hi].iter().sum::<usize>() + marker(lo) + marker_r(n - 1 - hi);
+    let used = |lo: usize, hi: usize| {
+        widths[lo..=hi].iter().sum::<usize>() + marker(lo) + marker_r(n - 1 - hi)
+    };
     loop {
         // Grow to the right first, then to the left, while everything still fits.
         if hi + 1 < n && used(lo, hi + 1) <= room {
@@ -273,17 +275,28 @@ fn window(widths: &[usize], active: usize, room: usize) -> (usize, usize) {
 }
 
 /// Draw the strip in the row `area` (only its first row is used).
-pub fn render(area: Rect, buf: &mut Buffer, theme: &Theme, labels: &[Label], active: usize, numbers: bool) {
+pub fn render(
+    area: Rect,
+    buf: &mut Buffer,
+    theme: &Theme,
+    labels: &[Label],
+    active: usize,
+    numbers: bool,
+) {
     if labels.is_empty() || area.width < 4 || area.height == 0 {
         return;
     }
     let c = &theme.colors;
     let room = usize::from(area.width);
-    let all: Vec<Vec<(String, Part)>> = labels.iter().enumerate().map(|(i, l)| parts(i, l, numbers)).collect();
+    let all: Vec<Vec<(String, Part)>> =
+        labels.iter().enumerate().map(|(i, l)| parts(i, l, numbers)).collect();
     let widths: Vec<usize> = all.iter().map(|p| width(p)).collect();
     let active = active.min(labels.len() - 1);
-    let (lo, hi) =
-        if widths.iter().sum::<usize>() <= room { (0, labels.len() - 1) } else { window(&widths, active, room) };
+    let (lo, hi) = if widths.iter().sum::<usize>() <= room {
+        (0, labels.len() - 1)
+    } else {
+        window(&widths, active, room)
+    };
 
     let mut line: Vec<Span<'static>> = Vec::new();
     let muted = Style::new().fg(c.muted.into());

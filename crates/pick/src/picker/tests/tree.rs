@@ -11,7 +11,10 @@ fn files(paths: &[&str]) -> Picker {
         query: String::new(),
     };
     let mut p = Picker::new(opts, Arc::new(|| {}));
-    crate::source::push_candidates(&p.injector(), paths.iter().map(|s| Candidate::plain(*s)).collect());
+    crate::source::push_candidates(
+        &p.injector(),
+        paths.iter().map(|s| Candidate::plain(*s)).collect(),
+    );
     p.set_cursor(0);
     p.set_tree(true);
     p
@@ -26,7 +29,13 @@ fn lines(p: &mut Picker) -> Vec<String> {
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default());
     (0..14)
-        .map(|y| (0..60).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+        .map(|y| {
+            (0..60)
+                .map(|x| b[(x, y)].symbol().to_string())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
         .collect()
 }
 
@@ -60,7 +69,8 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
 fn list_is_a_hierarchy_with_leaf_names_only() {
     let mut p = files(&SET);
     let l = lines(&mut p);
-    let find = |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
+    let find =
+        |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
     // docs/guide merged into one header; folders first, items after, README last.
     assert!(find(" docs/guide") < find("x.md") && find("x.md") < find(" src"));
     assert!(
@@ -71,7 +81,9 @@ fn list_is_a_hierarchy_with_leaf_names_only() {
     );
     // The folders are headers, so file rows do not repeat them.
     assert!(
-        !l.iter().any(|r| r.contains("src/ui/c.rs") || r.contains("src/a.rs") || r.contains("docs/guide/x.md")),
+        !l.iter().any(|r| r.contains("src/ui/c.rs")
+            || r.contains("src/a.rs")
+            || r.contains("docs/guide/x.md")),
         "{l:#?}"
     );
     // Indentation: c.rs sits deeper than a.rs.
@@ -111,7 +123,10 @@ fn filtering_keeps_only_matches_and_their_folders_and_starts_on_the_best_match()
         p.nucleo.tick(10);
     }
     let l = lines(&mut p);
-    assert!(l.iter().any(|r| r.contains("docs/guide")) && l.iter().any(|r| r.contains("x.md")), "{l:#?}");
+    assert!(
+        l.iter().any(|r| r.contains("docs/guide")) && l.iter().any(|r| r.contains("x.md")),
+        "{l:#?}"
+    );
     assert!(!l.iter().any(|r| r.contains("README") || r.contains("c.rs")), "{l:#?}");
     assert_eq!(accept(&mut p), vec!["docs/guide/x.md".to_string()]);
 
@@ -136,7 +151,10 @@ fn stays_flat_when_disabled_when_too_big_or_when_candidates_are_not_plain_paths(
     let mut p = files(&SET);
     p.tree_limit = 3; // four results: over the limit
     let l = lines(&mut p);
-    assert!(l.iter().any(|r| r.contains("src/ui/c.rs")) && !l.iter().any(|r| r.contains("▾")), "{l:#?}");
+    assert!(
+        l.iter().any(|r| r.contains("src/ui/c.rs")) && !l.iter().any(|r| r.contains("▾")),
+        "{l:#?}"
+    );
 
     // A folder candidate (trailing slash) has no place in the hierarchy.
     let mut p = files(&["a/", "a/b.rs"]);
@@ -151,8 +169,14 @@ fn grep_results_are_grouped_under_their_file() {
     std::fs::create_dir_all(d.join("src")).unwrap();
     std::fs::write(d.join("src/one.rs"), "needle a\nfiller\nneedle b\n").unwrap();
     std::fs::write(d.join("top.txt"), "needle c\n").unwrap();
-    let opts =
-        PickerOptions { mode: Mode::Grep, paths: true, root: d, preview: false, git: false, query: "needle".into() };
+    let opts = PickerOptions {
+        mode: Mode::Grep,
+        paths: true,
+        root: d,
+        preview: false,
+        git: false,
+        query: "needle".into(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     p.set_tree(true);
     for _ in 0..300 {
@@ -163,7 +187,8 @@ fn grep_results_are_grouped_under_their_file() {
         }
     }
     let l = lines(&mut p);
-    let pos = |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
+    let pos =
+        |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
     // `src/one.rs` is a header (merged chain), its two matches are rows beneath it.
     assert!(
         pos(" src/one.rs") < pos("1: needle a")

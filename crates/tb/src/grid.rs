@@ -85,7 +85,8 @@ impl Grid {
     }
 
     pub fn open(path: &std::path::Path, leader: &str) -> Result<Grid, String> {
-        let delim = table::delimiter(path).ok_or_else(|| format!("{}: not a csv, tsv or psv file", path.display()))?;
+        let delim = table::delimiter(path)
+            .ok_or_else(|| format!("{}: not a csv, tsv or psv file", path.display()))?;
         let text = match std::fs::read_to_string(path) {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -205,7 +206,9 @@ impl Grid {
                 self.say(m, true);
                 Action::None
             }
-            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
+                Action::None
+            }
         }
     }
 
@@ -243,7 +246,9 @@ impl Grid {
             "nav.bottom" => self.cur.0 = self.rows() - 1,
             "nav.first_col" => self.cur.1 = 0,
             "nav.last_col" => self.cur.1 = self.cols() - 1,
-            "cell.edit" => self.mode = Mode::Edit(Input::new(self.table.value(self.cur.0, self.cur.1))),
+            "cell.edit" => {
+                self.mode = Mode::Edit(Input::new(self.table.value(self.cur.0, self.cur.1)))
+            }
             "cell.clear" => {
                 self.change();
                 self.table.set(self.cur.0, self.cur.1, "");
@@ -394,7 +399,8 @@ impl Grid {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "table".into());
         let title = if self.modified() { format!("{name} [+]") } else { name.clone() };
-        let pane = Pane::new(theme).title(&title).icon(ui::icons::file(&name, false)).focused(focused);
+        let pane =
+            Pane::new(theme).title(&title).icon(ui::icons::file(&name, false)).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height < 3 || inner.width < 8 {
@@ -404,8 +410,12 @@ impl Grid {
         let footer = Rect { y: inner.bottom() - 1, height: 1, ..inner };
         inner.height -= 1;
         let (line, cursor, label) = match &self.mode {
-            Mode::Edit(i) => (ui::prompt::line(theme, "edit: ", i.value()), Some(i.visual_cursor()), "edit: "),
-            Mode::Find(i) => (ui::prompt::line(theme, "find: ", i.value()), Some(i.visual_cursor()), "find: "),
+            Mode::Edit(i) => {
+                (ui::prompt::line(theme, "edit: ", i.value()), Some(i.visual_cursor()), "edit: ")
+            }
+            Mode::Find(i) => {
+                (ui::prompt::line(theme, "find: ", i.value()), Some(i.visual_cursor()), "find: ")
+            }
             Mode::Confirm(w) => {
                 let q = match w {
                     Confirm::DeleteRow => format!("Delete row {}? d again", self.cur.0 + 1),
@@ -416,7 +426,10 @@ impl Grid {
             }
             Mode::Normal => match &self.message {
                 Some((m, err)) => (
-                    Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into()))),
+                    Line::from(Span::styled(
+                        m.clone(),
+                        Style::new().fg(if *err { c.error } else { c.muted }.into()),
+                    )),
                     None,
                     "",
                 ),
@@ -459,7 +472,9 @@ impl Grid {
             self.left = self.cur.1;
         }
         // Move `left` right until the cursor column fits.
-        while self.left < self.cur.1 && widths[self.left..=self.cur.1].iter().map(|w| w + 3).sum::<usize>() > avail {
+        while self.left < self.cur.1
+            && widths[self.left..=self.cur.1].iter().map(|w| w + 3).sum::<usize>() > avail
+        {
             self.left += 1;
         }
 
@@ -474,7 +489,11 @@ impl Grid {
             let bar = Rect {
                 y,
                 height: 1,
-                ..Rect { x: inner.x.saturating_sub(1).max(area.x + 1), width: inner.width + 1, ..inner }
+                ..Rect {
+                    x: inner.x.saturating_sub(1).max(area.x + 1),
+                    width: inner.width + 1,
+                    ..inner
+                }
             };
             buf.set_style(bar, bar_style);
             buf.set_string(inner.x, y, format!("{:>w$} ", r + 1, w = digits), muted);
@@ -511,7 +530,9 @@ impl Grid {
             draw_row(0, y, buf);
             y += 1;
         }
-        for r in (self.top + head_rows)..self.table.row_count().max(head_rows).min(self.top + head_rows + self.page) {
+        for r in (self.top + head_rows)
+            ..self.table.row_count().max(head_rows).min(self.top + head_rows + self.page)
+        {
             if y >= inner.bottom() {
                 break;
             }

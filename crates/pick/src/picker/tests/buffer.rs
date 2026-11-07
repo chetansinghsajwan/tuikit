@@ -5,12 +5,25 @@ use ratatui::crossterm::event::KeyEvent;
 fn buf(value: &str, flags: &str, path: Option<&str>, focus: Option<u32>, text: &str) -> Candidate {
     Candidate::buffer(
         path.unwrap_or("[scratch]"),
-        BufferInfo { value: value.into(), path: path.map(Into::into), flags: flags.into(), focus, text: text.into() },
+        BufferInfo {
+            value: value.into(),
+            path: path.map(Into::into),
+            flags: flags.into(),
+            focus,
+            text: text.into(),
+        },
     )
 }
 
 fn picker(root: std::path::PathBuf, items: Vec<Candidate>) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root, preview: true, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: true,
+        root,
+        preview: true,
+        git: false,
+        query: String::new(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     let inj = p.injector();
     for c in items {
@@ -29,7 +42,9 @@ fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 14);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default());
-    (0..14).map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect()
+    (0..14)
+        .map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect()
 }
 
 #[test]

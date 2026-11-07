@@ -9,7 +9,8 @@ impl App {
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         let [left, right] = ui::layout::main_preview(&theme, body);
         // The focused pane takes the room; the other shows a few rows.
-        let constraints = ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
+        let constraints =
+            ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
         let panes = Layout::vertical(constraints).split(left);
         self.render_wifi(panes[0], buf, &theme);
         self.render_bluetooth(panes[1], buf, &theme);
@@ -114,7 +115,10 @@ impl App {
                     Style::new().fg(c.fg.into())
                 };
                 let left = Line::from(vec![
-                    Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))),
+                    Span::styled(
+                        format!("{} ", bars(n.strength)),
+                        Style::new().fg(strength_color(theme, n.strength)),
+                    ),
                     Span::styled(n.ssid.clone(), name_style),
                 ]);
                 let mut tags = String::new();
@@ -158,7 +162,10 @@ impl App {
                 let signal = d.rssi.map(rssi_percent);
                 let left = Line::from(vec![
                     match signal {
-                        Some(s) => Span::styled(format!("{} ", bars(s)), Style::new().fg(strength_color(theme, s))),
+                        Some(s) => Span::styled(
+                            format!("{} ", bars(s)),
+                            Style::new().fg(strength_color(theme, s)),
+                        ),
                         None => Span::styled("     ", Style::new()),
                     },
                     Span::styled(d.name.clone(), name_style),
@@ -180,8 +187,9 @@ impl App {
 
     pub(super) fn details_wifi(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
-        let pane =
-            Pane::new(theme).title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details")).icon(ui::icons::WIFI);
+        let pane = Pane::new(theme)
+            .title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details"))
+            .icon(ui::icons::WIFI);
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(n) = self.network() else { return };
@@ -197,7 +205,10 @@ impl App {
         let lines = vec![
             Line::from(vec![
                 label("Signal"),
-                Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))),
+                Span::styled(
+                    format!("{} ", bars(n.strength)),
+                    Style::new().fg(strength_color(theme, n.strength)),
+                ),
                 val(format!("{}%", n.strength)),
             ]),
             Line::from(vec![label("Security"), val(n.security.label().to_string())]),
@@ -224,11 +235,17 @@ impl App {
                 let s = rssi_percent(r);
                 Line::from(vec![
                     label("Signal"),
-                    Span::styled(format!("{} ", bars(s)), Style::new().fg(strength_color(theme, s))),
+                    Span::styled(
+                        format!("{} ", bars(s)),
+                        Style::new().fg(strength_color(theme, s)),
+                    ),
                     val(format!("{r} dBm")),
                 ])
             }
-            None => Line::from(vec![label("Signal"), Span::styled("not in range", Style::new().fg(c.muted.into()))]),
+            None => Line::from(vec![
+                label("Signal"),
+                Span::styled("not in range", Style::new().fg(c.muted.into())),
+            ]),
         };
         let lines = vec![
             Line::from(vec![label("Type"), val(d.kind.label().to_string())]),
@@ -249,24 +266,28 @@ impl App {
                 ui::prompt::cursor(buf, area, &label, input.visual_cursor());
                 ui::prompt::line(theme, &label, &"•".repeat(input.value().chars().count()))
             }
-            Mode::ForgetWifi(ssid) => {
-                Line::from(Span::styled(format!("Forget {ssid}? (d again or y)"), Style::new().fg(c.warning.into())))
-            }
-            Mode::ForgetDevice(_, name) => {
-                Line::from(Span::styled(format!("Forget {name}? (d again or y)"), Style::new().fg(c.warning.into())))
-            }
+            Mode::ForgetWifi(ssid) => Line::from(Span::styled(
+                format!("Forget {ssid}? (d again or y)"),
+                Style::new().fg(c.warning.into()),
+            )),
+            Mode::ForgetDevice(_, name) => Line::from(Span::styled(
+                format!("Forget {name}? (d again or y)"),
+                Style::new().fg(c.warning.into()),
+            )),
             Mode::Normal if self.job.is_some() => Line::from(Span::styled(
                 format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")),
                 Style::new().fg(c.accent.into()),
             )),
             Mode::Normal => match &self.message {
-                Some((m, err)) => {
-                    Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into())))
-                }
+                Some((m, err)) => Line::from(Span::styled(
+                    m.clone(),
+                    Style::new().fg(if *err { c.error } else { c.accent }.into()),
+                )),
                 None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
             },
         };
-        Paragraph::new(line).render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
+        Paragraph::new(line)
+            .render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
     }
 
     pub(super) fn hints(&self) -> &'static str {
@@ -293,7 +314,11 @@ pub(super) fn bars(strength: u8) -> String {
         45..=69 => 3,
         _ => 4,
     };
-    ["▂", "▄", "▆", "█"].iter().enumerate().map(|(i, b)| if i < filled { *b } else { " " }).collect()
+    ["▂", "▄", "▆", "█"]
+        .iter()
+        .enumerate()
+        .map(|(i, b)| if i < filled { *b } else { " " })
+        .collect()
 }
 
 pub(super) fn strength_color(theme: &Theme, strength: u8) -> ratatui::style::Color {

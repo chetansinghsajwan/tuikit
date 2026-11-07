@@ -10,7 +10,9 @@ mod words;
 mod worktree;
 
 pub use graph::{GraphRow, graph, simplify, topo_order};
-pub use history::{CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo};
+pub use history::{
+    CommitInfo, FileChange, FilePatch, Hunk, PatchKind, PatchLine, RefInfo, RefKind, StashInfo,
+};
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
 /// The hunks (3 lines of context) of the difference between two versions of a file.
@@ -61,7 +63,11 @@ impl Repo {
 
     /// Repo-relative path for `path`, if it lies inside the work tree.
     pub fn relative(&self, path: &Path) -> Option<PathBuf> {
-        let abs = if path.is_absolute() { path.to_path_buf() } else { std::env::current_dir().ok()?.join(path) };
+        let abs = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().ok()?.join(path)
+        };
         // Canonicalize the parent so a missing (deleted) file still resolves.
         let canon = match abs.canonicalize() {
             Ok(p) => p,

@@ -42,7 +42,11 @@ pub fn spawn_lines(inj: Injector<Candidate>, reader: impl BufRead + Send + 'stat
 }
 
 /// Like `spawn_lines`, with a field shown instead of the whole line.
-pub fn spawn_lines_with(inj: Injector<Candidate>, reader: impl BufRead + Send + 'static, fmt: LineFormat) {
+pub fn spawn_lines_with(
+    inj: Injector<Candidate>,
+    reader: impl BufRead + Send + 'static,
+    fmt: LineFormat,
+) {
     thread::spawn(move || {
         for line in reader.lines().map_while(Result::ok) {
             if !line.is_empty() {
@@ -63,7 +67,13 @@ pub fn spawn_dirs(inj: Injector<Candidate>, root: PathBuf) {
     walk(inj, root, false, true, None);
 }
 
-fn walk(inj: Injector<Candidate>, root: PathBuf, files: bool, dirs: bool, max_depth: Option<usize>) {
+fn walk(
+    inj: Injector<Candidate>,
+    root: PathBuf,
+    files: bool,
+    dirs: bool,
+    max_depth: Option<usize>,
+) {
     thread::spawn(move || {
         for entry in ignore::WalkBuilder::new(&root)
             .hidden(false)

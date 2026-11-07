@@ -2,7 +2,8 @@ use super::*;
 
 #[test]
 fn ages_are_rounded_down_to_the_biggest_unit() {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        as i64;
     assert_eq!(ago(now), "now");
     assert_eq!(ago(now - 125), "2m ago");
     assert_eq!(ago(now - 3 * 3600 - 5), "3h ago");

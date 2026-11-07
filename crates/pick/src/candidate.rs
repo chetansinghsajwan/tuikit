@@ -100,11 +100,25 @@ impl Candidate {
 
     /// Show `display` but keep the whole `line` for output and previews.
     pub fn with_raw(display: impl Into<String>, line: impl Into<String>) -> Self {
-        Candidate { display: display.into(), loc: None, git: None, buffer: None, raw: Some(line.into()), time: None }
+        Candidate {
+            display: display.into(),
+            loc: None,
+            git: None,
+            buffer: None,
+            raw: Some(line.into()),
+            time: None,
+        }
     }
 
     pub fn buffer(display: impl Into<String>, buffer: Buffer) -> Self {
-        Candidate { display: display.into(), loc: None, git: None, buffer: Some(buffer), raw: None, time: None }
+        Candidate {
+            display: display.into(),
+            loc: None,
+            git: None,
+            buffer: Some(buffer),
+            raw: None,
+            time: None,
+        }
     }
 
     /// The path the preview and git state refer to (file candidates only).

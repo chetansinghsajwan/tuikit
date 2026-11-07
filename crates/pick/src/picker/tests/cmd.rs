@@ -11,7 +11,10 @@ fn picker(lines: &[&str]) -> Picker {
         query: String::new(),
     };
     let mut p = Picker::new(opts, Arc::new(|| {}));
-    crate::source::push_candidates(&p.injector(), lines.iter().map(|l| Candidate::plain(*l)).collect());
+    crate::source::push_candidates(
+        &p.injector(),
+        lines.iter().map(|l| Candidate::plain(*l)).collect(),
+    );
     p.set_cursor(0);
     p
 }
@@ -20,7 +23,9 @@ fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 12);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default());
-    (0..12).map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect()
+    (0..12)
+        .map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect()
 }
 
 #[test]
@@ -50,7 +55,12 @@ fn command_output_keeps_colors_and_scrolls() {
         draw(&mut p);
     }
     let scrolled = draw(&mut p);
-    assert!(scrolled.contains("row 40") && !scrolled.contains("row 1\n") && !scrolled.contains("row 5 "), "{scrolled}");
+    assert!(
+        scrolled.contains("row 40")
+            && !scrolled.contains("row 1\n")
+            && !scrolled.contains("row 5 "),
+        "{scrolled}"
+    );
 }
 
 #[test]
@@ -84,7 +94,8 @@ fn dirs_only_source_lists_just_folders() {
             break;
         }
     }
-    let mut names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
+    let mut names: Vec<String> =
+        p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
     names.sort();
     assert_eq!(names, vec!["a/".to_string(), "a/b/".to_string()]);
 }

@@ -97,7 +97,11 @@ impl Chord {
             KeyCode::PageDown => "pagedown".into(),
             other => format!("{other:?}").to_lowercase(),
         };
-        format!("{}{}{base}", if self.ctrl { "ctrl-" } else { "" }, if self.alt { "alt-" } else { "" })
+        format!(
+            "{}{}{base}",
+            if self.ctrl { "ctrl-" } else { "" },
+            if self.alt { "alt-" } else { "" }
+        )
     }
 }
 
@@ -117,12 +121,22 @@ pub struct Action {
 }
 
 /// An action that shows in the command palette.
-pub const fn action(id: &'static str, name: &'static str, desc: &'static str, keys: &'static [&'static str]) -> Action {
+pub const fn action(
+    id: &'static str,
+    name: &'static str,
+    desc: &'static str,
+    keys: &'static [&'static str],
+) -> Action {
     Action { id, name, desc, basic: false, keys }
 }
 
 /// A basic action (movement and keys everyone knows): left out of the palette, kept in `?`.
-pub const fn basic(id: &'static str, name: &'static str, desc: &'static str, keys: &'static [&'static str]) -> Action {
+pub const fn basic(
+    id: &'static str,
+    name: &'static str,
+    desc: &'static str,
+    keys: &'static [&'static str],
+) -> Action {
     Action { id, name, desc, basic: true, keys }
 }
 
@@ -223,7 +237,9 @@ impl Keymap {
     }
 
     fn sequence(&self, s: &str) -> Option<Vec<Chord>> {
-        s.split_whitespace().map(|w| if w == "leader" { Some(self.leader) } else { Chord::parse(w) }).collect()
+        s.split_whitespace()
+            .map(|w| if w == "leader" { Some(self.leader) } else { Chord::parse(w) })
+            .collect()
     }
 
     /// Replace the bindings of `id` (user configuration). Unknown ids and unparsable keys are ignored.
@@ -237,7 +253,9 @@ impl Keymap {
             if let Some(seq) = self.sequence(k) {
                 self.bindings.retain(|(s, i)| !(*s == seq && *i != id));
             }
-            if let (Some(seq), Some(a)) = (self.sequence(k), self.actions.iter().find(|a| a.id == id)) {
+            if let (Some(seq), Some(a)) =
+                (self.sequence(k), self.actions.iter().find(|a| a.id == id))
+            {
                 self.bindings.push((seq, a.id));
             }
         }
@@ -284,7 +302,8 @@ impl Keymap {
             return Feed::Run(id);
         }
         let n = self.pending.len();
-        let longer = self.bindings.iter().any(|(seq, _)| seq.len() > n && seq[..n] == self.pending[..]);
+        let longer =
+            self.bindings.iter().any(|(seq, _)| seq.len() > n && seq[..n] == self.pending[..]);
         if longer {
             return Feed::Pending;
         }
@@ -319,14 +338,24 @@ impl Keymap {
             } else {
                 let mut prefix = self.pending.clone();
                 prefix.push(next);
-                let name = self.groups.iter().find(|(p, _)| *p == prefix).map(|(_, name)| *name).unwrap_or("more");
+                let name = self
+                    .groups
+                    .iter()
+                    .find(|(p, _)| *p == prefix)
+                    .map(|(_, name)| *name)
+                    .unwrap_or("more");
                 entries.push(MenuEntry { key: next.label(), name: name.to_string(), group: true });
             }
         }
-        entries.sort_by(|a, b| a.key.to_lowercase().cmp(&b.key.to_lowercase()).then(a.key.cmp(&b.key)));
+        entries.sort_by(|a, b| {
+            a.key.to_lowercase().cmp(&b.key.to_lowercase()).then(a.key.cmp(&b.key))
+        });
         let deeper: Vec<String> = self.pending.iter().skip(1).map(Chord::label).collect();
-        let title =
-            if deeper.is_empty() { MENU_TITLE.to_string() } else { format!("{MENU_TITLE} · {}", deeper.join(" ")) };
+        let title = if deeper.is_empty() {
+            MENU_TITLE.to_string()
+        } else {
+            format!("{MENU_TITLE} · {}", deeper.join(" "))
+        };
         Some(Menu { title, entries })
     }
 }
@@ -367,13 +396,19 @@ pub fn choose(tool: &str, rows: &[Row], title: &str) -> Option<&'static str> {
     use std::io::Write;
     use std::process::{Command, Stdio};
     // The commands run last come first (like VS Code and Zed), the rest in the tool's order.
-    let rows: Vec<&Row> =
-        crate::recent::order(rows.iter().filter(|r| !r.basic).collect(), &crate::recent::load(tool), |r| r.id);
-    let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0).max("Command".len());
-    let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24).max("Keys".len());
+    let rows: Vec<&Row> = crate::recent::order(
+        rows.iter().filter(|r| !r.basic).collect(),
+        &crate::recent::load(tool),
+        |r| r.id,
+    );
+    let name_w =
+        rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0).max("Command".len());
+    let keys_w =
+        rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24).max("Keys".len());
     let mut input = format!("{:<name_w$}  {:<keys_w$}  Description\n", "Command", "Keys");
     for r in &rows {
-        input.push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
+        input
+            .push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
     }
     let mut child = Command::new("pick")
         .args([
@@ -427,7 +462,9 @@ impl Help {
                 KeyCode::Backspace => {
                     self.query.pop();
                 }
-                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => self.query.push(c),
+                KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.query.push(c)
+                }
                 KeyCode::Down => self.scroll += 1,
                 KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
                 _ => {}
@@ -466,7 +503,14 @@ impl Help {
             .collect()
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, title: &str, rows: &[Row]) {
+    pub fn render(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        theme: &Theme,
+        title: &str,
+        rows: &[Row],
+    ) {
         let rect = crate::layout::popup(theme, area);
         if rect.width < 20 || rect.height < 6 {
             return;
@@ -493,7 +537,12 @@ impl Help {
         };
         Paragraph::new(line).render(Rect { height: 1, ..inner }, buf);
         if self.searching {
-            crate::prompt::cursor(buf, Rect { height: 1, ..inner }, "/ ", self.query.chars().count());
+            crate::prompt::cursor(
+                buf,
+                Rect { height: 1, ..inner },
+                "/ ",
+                self.query.chars().count(),
+            );
         }
         buf.set_string(
             rect.x,
@@ -507,7 +556,12 @@ impl Help {
             buf.set_string(list.x, list.y, "no match", Style::new().fg(c.muted.into()));
             return;
         }
-        let keys_w = shown.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(inner.width as usize / 2);
+        let keys_w = shown
+            .iter()
+            .map(|r| r.keys.chars().count())
+            .max()
+            .unwrap_or(0)
+            .min(inner.width as usize / 2);
         let page = usize::from(list.height).max(1);
         self.scroll = self.scroll.min(shown.len().saturating_sub(page));
         for (i, r) in shown.iter().skip(self.scroll).take(page).enumerate() {
@@ -546,21 +600,33 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
     // A fixed size, so the popup does not jump between levels (smaller only on a small screen).
     let width = MENU_WIDTH.min(area.width);
     let height = menu_height(area.height);
-    let rect = Rect { x: area.x + (area.width - width) / 2, y: area.y + (area.height - height) / 2, width, height };
+    let rect = Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
+    };
     Clear.render(rect, buf);
     let pane = crate::Pane::new(theme).title(&menu.title).focused(true);
     let inner = pane.inner(rect);
     pane.render(rect, buf);
     for (i, e) in menu.entries.iter().take(usize::from(inner.height)).enumerate() {
         let mut spans = vec![
-            Span::styled(format!("{:<key_w$}", e.key), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("{:<key_w$}", e.key),
+                Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD),
+            ),
             Span::styled("  ", Style::new()),
-            Span::styled(e.name.clone(), Style::new().fg(if e.group { c.accent } else { c.fg }.into())),
+            Span::styled(
+                e.name.clone(),
+                Style::new().fg(if e.group { c.accent } else { c.fg }.into()),
+            ),
         ];
         if e.group {
             spans.push(Span::styled(" ▸", Style::new().fg(c.muted.into())));
         }
-        Paragraph::new(Line::from(spans)).render(Rect { y: inner.y + i as u16, height: 1, ..inner }, buf);
+        Paragraph::new(Line::from(spans))
+            .render(Rect { y: inner.y + i as u16, height: 1, ..inner }, buf);
     }
 }
 

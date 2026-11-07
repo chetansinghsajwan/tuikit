@@ -93,7 +93,11 @@ fn it_draws_the_header_the_cursor_and_the_footer() {
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
     g.render(area, &mut buf, &theme, true);
-    let text: String =
-        (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-    assert!(text.contains("name") && text.contains("plum") && text.contains("3 rows × 2 cols"), "{text}");
+    let text: String = (0..8)
+        .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
+    assert!(
+        text.contains("name") && text.contains("plum") && text.contains("3 rows × 2 cols"),
+        "{text}"
+    );
 }

@@ -65,7 +65,8 @@ impl Panel {
         let root = root.into();
         let root = root.canonicalize().unwrap_or(root);
         let opts_bookmarks = opts.bookmarks.clone();
-        let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(opts.actions.iter().cloned()).collect();
+        let all: Vec<ui::keys::Action> =
+            keys::ACTIONS.iter().cloned().chain(opts.actions.iter().cloned()).collect();
         let keymap = ui::keys::Keymap::new(&opts.leader, &all, keys::GROUPS);
         let mut p = Panel {
             root,
@@ -106,8 +107,11 @@ impl Panel {
 
     /// Reread the directories and the git status.
     fn rebuild(&mut self) {
-        self.git =
-            if self.opts.git { Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s))) } else { None };
+        self.git = if self.opts.git {
+            Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s)))
+        } else {
+            None
+        };
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         self.rows.clear();
         self.ignored_hidden = 0;
@@ -145,7 +149,9 @@ impl Panel {
                 depth: 0,
             })
             .collect();
-        out.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+        out.sort_by(|a, b| {
+            b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
         out
     }
 
@@ -157,7 +163,8 @@ impl Panel {
                     d.flatten()
                         .filter(|e| {
                             e.file_name() != ".git"
-                                && (self.opts.hidden || !e.file_name().to_string_lossy().starts_with('.'))
+                                && (self.opts.hidden
+                                    || !e.file_name().to_string_lossy().starts_with('.'))
                         })
                         .count()
                 })
@@ -375,7 +382,9 @@ impl Panel {
                 self.say(format!("{seq} is not bound"), true);
                 Action::None
             }
-            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
+                Action::None
+            }
         }
     }
 
@@ -431,10 +440,15 @@ impl Panel {
                     self.move_by(1);
                 }
             }
-            "item.new" => self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default()),
+            "item.new" => {
+                self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default())
+            }
             "item.rename" => {
                 if let Some(row) = self.rows.get(self.cursor) {
-                    self.mode = Mode::Prompt(PromptKind::Rename(row.path.clone()), Input::new(row.name.clone()));
+                    self.mode = Mode::Prompt(
+                        PromptKind::Rename(row.path.clone()),
+                        Input::new(row.name.clone()),
+                    );
                 }
             }
             "item.delete" | "item.delete_forever" => {
@@ -453,7 +467,11 @@ impl Panel {
                     self.clip = Some(Clip { paths, cut });
                     self.marked.clear();
                     self.say(
-                        format!("{} {n} item{}", if cut { "cut" } else { "yanked" }, if n == 1 { "" } else { "s" }),
+                        format!(
+                            "{} {n} item{}",
+                            if cut { "cut" } else { "yanked" },
+                            if n == 1 { "" } else { "s" }
+                        ),
                         false,
                     );
                 }
@@ -461,7 +479,8 @@ impl Panel {
             "item.paste" => return self.paste(),
             "item.open_with" => {
                 if let Some(row) = self.rows.get(self.cursor) {
-                    self.mode = Mode::Prompt(PromptKind::OpenWith(row.path.clone()), Input::default());
+                    self.mode =
+                        Mode::Prompt(PromptKind::OpenWith(row.path.clone()), Input::default());
                 }
             }
             "item.bulk_rename" => {
@@ -483,7 +502,10 @@ impl Panel {
             }
             "view.raw" => {
                 pv::set_raw_tables(!pv::raw_tables());
-                self.say(if pv::raw_tables() { "tables show as text" } else { "tables show as tables" }, false);
+                self.say(
+                    if pv::raw_tables() { "tables show as text" } else { "tables show as tables" },
+                    false,
+                );
             }
             "view.columns" => {
                 self.opts.linemode = self.opts.linemode.next();
@@ -529,7 +551,13 @@ impl Panel {
         Action::None
     }
 
-    fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event, key: &KeyEvent) -> Action {
+    fn prompt_key(
+        &mut self,
+        kind: PromptKind,
+        mut input: Input,
+        ev: &Event,
+        key: &KeyEvent,
+    ) -> Action {
         match key.code {
             KeyCode::Esc => Action::None,
             KeyCode::Enter => {
@@ -613,7 +641,8 @@ impl Panel {
 
     /// Keep folders open across a rename or move.
     fn remap_expanded(&mut self, from: &Path, to: &Path) {
-        let moved: Vec<PathBuf> = self.expanded.iter().filter(|p| p.starts_with(from)).cloned().collect();
+        let moved: Vec<PathBuf> =
+            self.expanded.iter().filter(|p| p.starts_with(from)).cloned().collect();
         for old in moved {
             self.expanded.remove(&old);
             if let Ok(rest) = old.strip_prefix(from) {
@@ -625,7 +654,9 @@ impl Panel {
     fn delete(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>) -> Action {
         let result = match kind {
             ConfirmKind::Trash => ops::trash(&targets),
-            ConfirmKind::Delete => targets.iter().try_for_each(|p| ops::remove(p)).map_err(|e| e.to_string()),
+            ConfirmKind::Delete => {
+                targets.iter().try_for_each(|p| ops::remove(p)).map_err(|e| e.to_string())
+            }
         };
         match result {
             Ok(()) => {

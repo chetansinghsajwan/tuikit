@@ -3,7 +3,13 @@
 use super::super::*;
 
 impl App {
-    pub(in crate::app) fn render_preview(&mut self, which: Focus, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(in crate::app) fn render_preview(
+        &mut self,
+        which: Focus,
+        area: Rect,
+        buf: &mut Buffer,
+        theme: &Theme,
+    ) {
         let rev = self.current_rev(which);
         let short = |s: &str| s.chars().take(8).collect::<String>();
         let whole = rev.clone().unwrap_or_default();
@@ -39,7 +45,8 @@ impl App {
                 pv::diff_reset_folds();
                 self.fold_rev = Some(rev.clone());
             }
-            let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
+            let opts =
+                pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let result = match rev.split_once('\u{1}') {
                 _ if rev.ends_with('\u{3}') => {
                     let base = rev.trim_end_matches('\u{3}');
@@ -47,9 +54,14 @@ impl App {
                         .ok_or_else(|| "not a repository".to_string())
                         .and_then(|r| r.worktree_snapshot().map_err(|e| e.to_string()))
                     {
-                        Ok(snap) => {
-                            pv::preview_range_marked(&self.root, Some(base), &snap, Some("work tree"), theme, &opts)
-                        }
+                        Ok(snap) => pv::preview_range_marked(
+                            &self.root,
+                            Some(base),
+                            &snap,
+                            Some("work tree"),
+                            theme,
+                            &opts,
+                        ),
                         Err(e) => Err(pv::Error::Unsupported(e)),
                     }
                 }
@@ -57,13 +69,18 @@ impl App {
                     let (base, oid) = rev.split_once('\u{2}').unwrap_or_default();
                     pv::preview_range_marked(&self.root, Some(base), oid, None, theme, &opts)
                 }
-                Some((oid, path)) => pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts),
+                Some((oid, path)) => {
+                    pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts)
+                }
                 None => pv::preview_commit_marked(&self.root, &rev, theme, &opts),
             };
             let (lines, anchors) = match result {
                 Ok(r) => r,
                 Err(e) => (
-                    vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
+                    vec![Line::from(Span::styled(
+                        e.to_string(),
+                        Style::new().fg(theme.colors.muted.into()),
+                    ))],
                     Default::default(),
                 ),
             };
@@ -75,8 +92,13 @@ impl App {
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
             self.pscroll = self.pscroll.min(p.lines.len().saturating_sub(1));
-            let shown: Vec<Line<'static>> =
-                p.lines.iter().skip(self.pscroll).take(usize::from(inner.height)).cloned().collect();
+            let shown: Vec<Line<'static>> = p
+                .lines
+                .iter()
+                .skip(self.pscroll)
+                .take(usize::from(inner.height))
+                .cloned()
+                .collect();
             Paragraph::new(shown).render(inner, buf);
         }
     }

@@ -8,13 +8,28 @@ use ui::keys::{Action, Group, action, basic};
 pub const GLOBAL: &[Action] = &[
     basic("tab.next", "next tab", "go to the next tab (Status, Commits, Refs)", &["]"]),
     basic("tab.prev", "previous tab", "go to the previous tab", &["["]),
-    basic("focus.next", "next pane", "focus the next pane of the tab (Refs: branches and stashes)", &["tab"]),
+    basic(
+        "focus.next",
+        "next pane",
+        "focus the next pane of the tab (Refs: branches and stashes)",
+        &["tab"],
+    ),
     basic("focus.prev", "previous pane", "focus the previous pane", &["backtab"]),
     basic("focus.files", "status tab", "show the Status tab (changed files)", &["1"]),
-    basic("focus.branches", "refs: branches", "show the Refs tab on the branches, tags and remotes", &["3"]),
+    basic(
+        "focus.branches",
+        "refs: branches",
+        "show the Refs tab on the branches, tags and remotes",
+        &["3"],
+    ),
     basic("focus.commits", "commits tab", "show the Commits tab (the full graph)", &["2"]),
     basic("focus.stashes", "refs: stashes", "show the Refs tab on the stashes", &["4"]),
-    action("remote.fetch", "fetch", "fetch every remote and prune what is gone there", &["leader r f"]),
+    action(
+        "remote.fetch",
+        "fetch",
+        "fetch every remote and prune what is gone there",
+        &["leader r f"],
+    ),
     action("remote.pull", "pull", "pull the upstream into the checked-out branch", &["leader r p"]),
     action(
         "remote.push",
@@ -22,7 +37,12 @@ pub const GLOBAL: &[Action] = &[
         "push the checked-out branch (the first push sets its upstream on origin)",
         &["leader r P"],
     ),
-    action("remote.force_push", "force push", "push with --force-with-lease (asks first)", &["leader r F"]),
+    action(
+        "remote.force_push",
+        "force push",
+        "push with --force-with-lease (asks first)",
+        &["leader r F"],
+    ),
     action(
         "switch.to",
         "switch to",
@@ -35,7 +55,12 @@ pub const GLOBAL: &[Action] = &[
         "continue the stopped merge, rebase, cherry-pick or revert once conflicts are resolved and staged",
         &["leader o c"],
     ),
-    action("op.abort", "abort", "give up the stopped merge, rebase, cherry-pick or revert", &["leader o a"]),
+    action(
+        "op.abort",
+        "abort",
+        "give up the stopped merge, rebase, cherry-pick or revert",
+        &["leader o a"],
+    ),
 ];
 
 /// Names for the menus behind `leader r` and `leader o` (and `leader z` in Commits).
@@ -68,7 +93,12 @@ const COMMON: &[Action] = &[
         "fold or unfold the file at the top of the diff (lockfiles and huge files start folded)",
         &["z"],
     ),
-    action("preview.whitespace", "ignore whitespace", "show changes in whitespace only as unchanged lines", &["w"]),
+    action(
+        "preview.whitespace",
+        "ignore whitespace",
+        "show changes in whitespace only as unchanged lines",
+        &["w"],
+    ),
     basic("back", "back to files", "focus the files pane", &["esc"]),
     basic("palette", "commands", "search every action by name and run it", &["leader space"]),
     basic("help", "keys", "list every action with its keys", &["?"]),
@@ -82,15 +112,30 @@ const BRANCHES: &[Action] = &[
         "switch to the branch (a remote branch becomes a tracking branch, a tag detaches HEAD)",
         &["enter", "leader k"],
     ),
-    action("branch.new", "new branch", "create a branch at HEAD and switch to it", &["n", "leader n"]),
-    action("branch.delete", "delete", "delete the local branch, tag or remote branch (asks first)", &["d", "leader d"]),
+    action(
+        "branch.new",
+        "new branch",
+        "create a branch at HEAD and switch to it",
+        &["n", "leader n"],
+    ),
+    action(
+        "branch.delete",
+        "delete",
+        "delete the local branch, tag or remote branch (asks first)",
+        &["d", "leader d"],
+    ),
     action(
         "branch.force_delete",
         "force-delete branch",
         "delete the local branch even if it is not merged (asks first)",
         &["D"],
     ),
-    action("branch.merge", "merge", "merge the branch into the checked-out one (asks first)", &["M", "leader m"]),
+    action(
+        "branch.merge",
+        "merge",
+        "merge the branch into the checked-out one (asks first)",
+        &["M", "leader m"],
+    ),
     action(
         "branch.rebase",
         "rebase onto",
@@ -112,8 +157,18 @@ const COMMITS: &[Action] = &[
         "explore the files of the commit as a tree, with the diff of each (h or esc goes back)",
         &["l", "right", "leader l"],
     ),
-    action("commit.copy_hash", "copy hash", "copy the full hash of the commit to the clipboard", &["y", "leader y"]),
-    action("commit.checkout", "check out", "check out the commit (detached HEAD)", &["enter", "leader k"]),
+    action(
+        "commit.copy_hash",
+        "copy hash",
+        "copy the full hash of the commit to the clipboard",
+        &["y", "leader y"],
+    ),
+    action(
+        "commit.checkout",
+        "check out",
+        "check out the commit (detached HEAD)",
+        &["enter", "leader k"],
+    ),
     action(
         "search.start",
         "search",
@@ -121,7 +176,12 @@ const COMMITS: &[Action] = &[
         &["/", "leader s"],
     ),
     basic("search.next", "next match", "go to the next commit that matches the search", &["n"]),
-    basic("search.prev", "previous match", "go to the previous commit that matches the search", &["N"]),
+    basic(
+        "search.prev",
+        "previous match",
+        "go to the previous commit that matches the search",
+        &["N"],
+    ),
     action(
         "filter.open",
         "filter",
@@ -132,12 +192,27 @@ const COMMITS: &[Action] = &[
     action("view.graph", "graph", "show or hide the commit graph (lanes, merges)", &["v g"]),
     action("view.hash", "hash", "show or hide the hash column", &["v h"]),
     action("view.author", "author", "show or hide the author column", &["v a"]),
-    action("view.author_name", "author name", "show the authors as initials or as full names", &["v n"]),
+    action(
+        "view.author_name",
+        "author name",
+        "show the authors as initials or as full names",
+        &["v n"],
+    ),
     action("view.refs", "refs", "show or hide the branch and tag pills", &["v r"]),
     action("view.subject", "message", "show or hide the first line of the message", &["v m"]),
-    action("view.rel_time", "relative time", "show or hide how long ago the commit was made (3d)", &["v t"]),
+    action(
+        "view.rel_time",
+        "relative time",
+        "show or hide how long ago the commit was made (3d)",
+        &["v t"],
+    ),
     action("view.abs_time", "date", "show or hide the date and time of the commit", &["v d"]),
-    action("view.all", "all branches", "show the commits of every branch, not only the checked-out one", &["v b"]),
+    action(
+        "view.all",
+        "all branches",
+        "show the commits of every branch, not only the checked-out one",
+        &["v b"],
+    ),
     action("view.detail", "diff", "show or hide the diff beside the list", &["v p", "p"]),
     action(
         "commit.compare_work",
@@ -151,8 +226,18 @@ const COMMITS: &[Action] = &[
         "mark this commit, then move to another to see the diff between the two (again to clear)",
         &["m"],
     ),
-    action("commit.cherry_pick", "cherry-pick", "apply the commit on top of HEAD", &["C", "leader c"]),
-    action("commit.revert", "revert", "add a commit that undoes this one (asks first)", &["R", "leader v"]),
+    action(
+        "commit.cherry_pick",
+        "cherry-pick",
+        "apply the commit on top of HEAD",
+        &["C", "leader c"],
+    ),
+    action(
+        "commit.revert",
+        "revert",
+        "add a commit that undoes this one (asks first)",
+        &["R", "leader v"],
+    ),
     action(
         "commit.amend",
         "amend",
@@ -165,7 +250,12 @@ const COMMITS: &[Action] = &[
         "change only the message of a commit (later commits are rebuilt; files untouched)",
         &["r", "leader w"],
     ),
-    action("commit.branch", "new branch here", "create a branch at the commit and switch to it", &["b", "leader n"]),
+    action(
+        "commit.branch",
+        "new branch here",
+        "create a branch at the commit and switch to it",
+        &["b", "leader n"],
+    ),
     action("commit.tag", "tag", "create a tag at the commit", &["t", "leader t"]),
     action(
         "commit.reset_soft",
@@ -173,7 +263,12 @@ const COMMITS: &[Action] = &[
         "move the branch here, keep the index and the work tree",
         &["leader z s"],
     ),
-    action("commit.reset_mixed", "reset mixed", "move the branch here, keep the work tree", &["leader z m"]),
+    action(
+        "commit.reset_mixed",
+        "reset mixed",
+        "move the branch here, keep the work tree",
+        &["leader z m"],
+    ),
     action(
         "commit.reset_hard",
         "reset hard",
@@ -184,7 +279,12 @@ const COMMITS: &[Action] = &[
 
 const STASHES: &[Action] = &[
     action("stash.new", "new stash", "stash the changes with a message", &["n", "leader n"]),
-    action("stash.apply", "apply stash", "apply the stash and keep it", &["a", "enter", "leader a"]),
+    action(
+        "stash.apply",
+        "apply stash",
+        "apply the stash and keep it",
+        &["a", "enter", "leader a"],
+    ),
     action("stash.pop", "pop stash", "apply the stash and drop it", &["p", "leader p"]),
     action("stash.drop", "drop stash", "drop the stash (asks first)", &["d", "leader d"]),
 ];

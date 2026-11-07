@@ -98,8 +98,9 @@ fn run(cli: Cli) -> io::Result<u8> {
                 Quit::Yes => return Ok(()),
                 Quit::Edit(path) => {
                     leave(&mut term)?;
-                    let editor =
-                        std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".into());
+                    let editor = std::env::var("VISUAL")
+                        .or_else(|_| std::env::var("EDITOR"))
+                        .unwrap_or_else(|_| "vi".into());
                     let status = std::process::Command::new("sh")
                         .arg("-c")
                         .arg(format!("{editor} {}", ui::popup::quote(&path.to_string_lossy())))

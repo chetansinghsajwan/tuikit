@@ -72,7 +72,8 @@ fn all_labels_show_numbered_when_they_fit() {
     assert!(buf[(active, 0)].modifier.contains(Modifier::BOLD));
     let other = (0..60).find(|&x| buf[(x, 0)].symbol() == "R").unwrap();
     assert!(
-        !buf[(other, 0)].modifier.contains(Modifier::BOLD) && !buf[(active, 0)].modifier.contains(Modifier::UNDERLINED)
+        !buf[(other, 0)].modifier.contains(Modifier::BOLD)
+            && !buf[(active, 0)].modifier.contains(Modifier::UNDERLINED)
     );
     // Without numbers the labels are plain.
     let mut buf = Buffer::empty(area);
@@ -96,10 +97,20 @@ fn a_crowded_strip_shows_a_window_around_the_active_tab_with_counts() {
     let mut buf = Buffer::empty(area);
     render(area, &mut buf, &Theme::default(), &ls, 0, true);
     let text = row(&buf, 40);
-    assert!(text.contains("1 file0.rs") && !text.starts_with('‹') && text.ends_with('›'), "{text:?}");
+    assert!(
+        text.contains("1 file0.rs") && !text.starts_with('‹') && text.ends_with('›'),
+        "{text:?}"
+    );
     // One tab wider than the strip is cut with an ellipsis.
     let mut buf = Buffer::empty(Rect::new(0, 0, 12, 1));
-    render(Rect::new(0, 0, 12, 1), &mut buf, &Theme::default(), &labels(&["a-very-long-file-name.rs"]), 0, true);
+    render(
+        Rect::new(0, 0, 12, 1),
+        &mut buf,
+        &Theme::default(),
+        &labels(&["a-very-long-file-name.rs"]),
+        0,
+        true,
+    );
     let text = row(&buf, 12);
     assert!(text.contains('…') && text.chars().count() <= 12, "{text:?}");
 }
@@ -108,9 +119,15 @@ fn a_crowded_strip_shows_a_window_around_the_active_tab_with_counts() {
 fn equal_names_get_just_enough_parent_folders() {
     use std::path::Path;
     let t = |ps: &[&str]| short_titles(&ps.iter().map(|p| Path::new(*p)).collect::<Vec<_>>());
-    assert_eq!(t(&["/a/src/lib.rs", "/a/ui/lib.rs", "/a/main.rs"]), vec!["src/lib.rs", "ui/lib.rs", "main.rs"]);
+    assert_eq!(
+        t(&["/a/src/lib.rs", "/a/ui/lib.rs", "/a/main.rs"]),
+        vec!["src/lib.rs", "ui/lib.rs", "main.rs"]
+    );
     // Deeper clashes need more levels, and only for the paths that clash.
-    assert_eq!(t(&["/x/a/b/lib.rs", "/x/c/b/lib.rs", "/x/other.rs"]), vec!["a/b/lib.rs", "c/b/lib.rs", "other.rs"]);
+    assert_eq!(
+        t(&["/x/a/b/lib.rs", "/x/c/b/lib.rs", "/x/other.rs"]),
+        vec!["a/b/lib.rs", "c/b/lib.rs", "other.rs"]
+    );
     // Identical paths cannot be told apart: the whole path is shown for both.
     assert_eq!(t(&["/p/q.rs", "/p/q.rs"]), vec!["p/q.rs", "p/q.rs"]);
     assert_eq!(t(&["/"]), vec!["/"]);

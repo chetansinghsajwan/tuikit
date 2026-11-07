@@ -22,8 +22,12 @@ fn simplify_keeps_the_graph_connected_around_dropped_commits() {
     // a - b - c - d, keeping a, c, d: a's parent becomes c.
     let list = vec![c("a", &["b"]), c("b", &["c"]), c("c", &["d"]), c("d", &[])];
     let kept = simplify(list, |k| k.oid != "b");
-    let parents: Vec<(String, Vec<String>)> = kept.iter().map(|k| (k.oid.clone(), k.parents.clone())).collect();
-    assert_eq!(parents, vec![("a".into(), vec!["c".into()]), ("c".into(), vec!["d".into()]), ("d".into(), vec![])]);
+    let parents: Vec<(String, Vec<String>)> =
+        kept.iter().map(|k| (k.oid.clone(), k.parents.clone())).collect();
+    assert_eq!(
+        parents,
+        vec![("a".into(), vec!["c".into()]), ("c".into(), vec!["d".into()]), ("d".into(), vec![])]
+    );
     // A merge whose two sides are both dropped keeps one link per kept ancestor, once.
     let list = vec![c("m", &["x", "y"]), c("x", &["r"]), c("y", &["r"]), c("r", &[])];
     let kept = simplify(list, |k| k.oid == "m" || k.oid == "r");

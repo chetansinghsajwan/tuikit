@@ -1,7 +1,15 @@
 use super::*;
 
 fn dev(name: &str, paired: bool, connected: bool, rssi: Option<i16>) -> Device {
-    Device { address: name.into(), name: name.into(), kind: Kind::Other, paired, trusted: paired, connected, rssi }
+    Device {
+        address: name.into(),
+        name: name.into(),
+        kind: Kind::Other,
+        paired,
+        trusted: paired,
+        connected,
+        rssi,
+    }
 }
 
 #[test]
@@ -24,7 +32,10 @@ fn sort_puts_connected_then_paired_then_strongest_first() {
         dev("alpha", false, false, None),
     ];
     sort(&mut v);
-    assert_eq!(v.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), vec!["live", "known", "near", "far", "alpha"]);
+    assert_eq!(
+        v.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(),
+        vec!["live", "known", "near", "far", "alpha"]
+    );
 }
 
 #[test]

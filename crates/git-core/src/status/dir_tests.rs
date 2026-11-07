@@ -15,7 +15,10 @@ fn a_folder_lists_every_state_beneath_it_in_a_fixed_order() {
         ] {
             s.files.insert(PathBuf::from(name), st);
         }
-        assert_eq!(s.dir_kinds(Path::new("d")), [Kind::Deleted, Kind::Modified, Kind::Added, Kind::Untracked]);
+        assert_eq!(
+            s.dir_kinds(Path::new("d")),
+            [Kind::Deleted, Kind::Modified, Kind::Added, Kind::Untracked]
+        );
         assert_eq!(s.dir(Path::new("d")), Some(Kind::Deleted));
         assert_eq!(s.dir(Path::new("other")), Some(Kind::Conflict));
         assert_eq!(s.dir(Path::new("clean")), None);

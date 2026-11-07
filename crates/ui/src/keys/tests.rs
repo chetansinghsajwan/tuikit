@@ -6,10 +6,28 @@ fn k(c: char) -> KeyEvent {
 
 const ACTIONS: [Action; 5] = [
     Action { id: "nav.down", name: "down", desc: "move down", basic: false, keys: &["j", "down"] },
-    Action { id: "view.columns", name: "columns", desc: "cycle the columns", basic: false, keys: &["leader v c"] },
-    Action { id: "view.hidden", name: "hidden", desc: "toggle hidden files", basic: false, keys: &[".", "leader v h"] },
+    Action {
+        id: "view.columns",
+        name: "columns",
+        desc: "cycle the columns",
+        basic: false,
+        keys: &["leader v c"],
+    },
+    Action {
+        id: "view.hidden",
+        name: "hidden",
+        desc: "toggle hidden files",
+        basic: false,
+        keys: &[".", "leader v h"],
+    },
     Action { id: "find", name: "find", desc: "find files", basic: false, keys: &["/", "leader f"] },
-    Action { id: "page.down", name: "page down", desc: "half a page", basic: false, keys: &["ctrl-d"] },
+    Action {
+        id: "page.down",
+        name: "page down",
+        desc: "half a page",
+        basic: false,
+        keys: &["ctrl-d"],
+    },
 ];
 const GROUPS: [Group; 1] = [Group { prefix: "leader v", name: "view" }];
 
@@ -23,7 +41,10 @@ fn single_keys_and_aliases_run_and_unbound_keys_are_the_callers() {
     assert_eq!(m.feed(&k('j')), Feed::Run("nav.down"));
     assert_eq!(m.feed(&KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)), Feed::Run("nav.down"));
     assert_eq!(m.feed(&k('.')), Feed::Run("view.hidden"));
-    assert_eq!(m.feed(&KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)), Feed::Run("page.down"));
+    assert_eq!(
+        m.feed(&KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL)),
+        Feed::Run("page.down")
+    );
     assert_eq!(m.feed(&k('z')), Feed::Unbound);
     assert!(!m.is_pending());
 }
@@ -120,9 +141,13 @@ fn rows_and_help_list_every_action_with_its_keys() {
     let mut buf = Buffer::empty(area);
     let mut help = Help::default();
     help.render(area, &mut buf, &Theme::default(), "Keys", &rows);
-    let text: String =
-        (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-    assert!(text.contains("Keys") && text.contains("space v c") && text.contains("toggle hidden files"), "{text}");
+    let text: String = (0..24)
+        .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
+    assert!(
+        text.contains("Keys") && text.contains("space v c") && text.contains("toggle hidden files"),
+        "{text}"
+    );
     let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     assert!(help.key(&k('j')) && !help.key(&esc));
 }
@@ -134,10 +159,14 @@ fn the_popup_draws_the_title_and_the_entries() {
     let area = Rect::new(0, 0, 40, 10);
     let mut buf = Buffer::empty(area);
     render_menu(area, &mut buf, &Theme::default(), &m.menu().unwrap());
-    let text: String =
-        (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String = (0..10)
+        .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(
-        text.contains("Quick Keys") && text.contains("find") && text.contains("view") && text.contains('▸'),
+        text.contains("Quick Keys")
+            && text.contains("find")
+            && text.contains("view")
+            && text.contains('▸'),
         "{text}"
     );
 }
@@ -161,7 +190,10 @@ fn help_search_filters_rows_and_esc_clears_before_closing() {
         help.key(&k(c));
     }
     let t = text(&mut help);
-    assert!(t.contains("/ hidden") && t.contains("toggle hidden files") && !t.contains("half a page"), "{t}");
+    assert!(
+        t.contains("/ hidden") && t.contains("toggle hidden files") && !t.contains("half a page"),
+        "{t}"
+    );
     // Enter keeps the filter, Esc clears it, a second Esc closes.
     help.key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(text(&mut help).contains("/ hidden"));

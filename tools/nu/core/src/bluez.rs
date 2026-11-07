@@ -45,7 +45,8 @@ pub fn device_of(props: &Props) -> Option<Device> {
 impl BlueZ {
     /// Connect to the system bus, where BlueZ lives.
     pub fn system() -> Result<BlueZ> {
-        let conn = Connection::system().map_err(|e| Error(format!("cannot reach the system D-Bus: {e}")))?;
+        let conn = Connection::system()
+            .map_err(|e| Error(format!("cannot reach the system D-Bus: {e}")))?;
         Ok(BlueZ { conn, dest: DEST.to_string() })
     }
 
@@ -81,7 +82,9 @@ impl BlueZ {
     fn device_path(&self, address: &str) -> Result<(OwnedObjectPath, Device)> {
         self.managed()?
             .into_iter()
-            .filter_map(|(p, mut ifaces)| ifaces.remove(IF_DEVICE).and_then(|props| device_of(&props)).map(|d| (p, d)))
+            .filter_map(|(p, mut ifaces)| {
+                ifaces.remove(IF_DEVICE).and_then(|props| device_of(&props)).map(|d| (p, d))
+            })
             .find(|(_, d)| d.address.eq_ignore_ascii_case(address))
             .ok_or_else(|| Error(format!("{address} is not known")))
     }

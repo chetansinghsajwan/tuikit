@@ -235,8 +235,11 @@ impl CommitFiles {
             rows: &mut Vec<FileRow>,
         ) {
             for (name, child) in &node.dirs {
-                let (mut label, mut child, mut path) =
-                    (name.clone(), child, if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") });
+                let (mut label, mut child, mut path) = (
+                    name.clone(),
+                    child,
+                    if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") },
+                );
                 // A folder with nothing but one folder in it joins it: `src/lib`.
                 while child.files.is_empty() && child.dirs.len() == 1 {
                     let (n, c) = child.dirs.iter().next().expect("one folder");
@@ -325,9 +328,11 @@ impl Filter {
 
     pub(super) fn keeps(&self, c: &CommitInfo) -> bool {
         (self.text.is_empty() || c.message.to_lowercase().contains(&self.text.to_lowercase()))
-            && (self.authors.is_empty() || self.authors.iter().any(|a| a.eq_ignore_ascii_case(&c.author)))
+            && (self.authors.is_empty()
+                || self.authors.iter().any(|a| a.eq_ignore_ascii_case(&c.author)))
             && (self.categories.is_empty()
-                || ui::subject::category_word(&c.subject).is_some_and(|w| self.categories.contains(&w)))
+                || ui::subject::category_word(&c.subject)
+                    .is_some_and(|w| self.categories.contains(&w)))
             && self.since.as_ref().is_none_or(|(_, t)| c.time >= *t)
     }
 }
@@ -335,7 +340,8 @@ impl Filter {
 /// Seconds since the epoch for `7d`, `2w`, `3m` (30 days), `1y` or `2026-10-01`; `now` is the current time.
 pub(super) fn parse_since(text: &str, now: i64) -> Option<i64> {
     let text = text.trim();
-    let (digits, unit) = text.split_at(text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len()));
+    let (digits, unit) =
+        text.split_at(text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len()));
     if let (Ok(n), Some(secs)) = (
         digits.parse::<i64>(),
         match unit {
@@ -350,7 +356,9 @@ pub(super) fn parse_since(text: &str, now: i64) -> Option<i64> {
     }
     // A date: days since 1970-01-01 by the civil-calendar formula.
     let mut it = text.split('-').map(|p| p.parse::<i64>());
-    let (Some(Ok(y)), Some(Ok(m)), Some(Ok(d)), None) = (it.next(), it.next(), it.next(), it.next()) else {
+    let (Some(Ok(y)), Some(Ok(m)), Some(Ok(d)), None) =
+        (it.next(), it.next(), it.next(), it.next())
+    else {
         return None;
     };
     if !(1..=12).contains(&m) || !(1..=31).contains(&d) {

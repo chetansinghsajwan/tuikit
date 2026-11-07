@@ -195,7 +195,11 @@ impl Panel {
                 } else {
                     (st.staged, st.unstaged)
                 };
-                (staged.is_some() || unstaged.is_some()).then(|| Change { rela: path.to_path_buf(), staged, unstaged })
+                (staged.is_some() || unstaged.is_some()).then(|| Change {
+                    rela: path.to_path_buf(),
+                    staged,
+                    unstaged,
+                })
             })
             .collect();
         self.all.sort_by(|a, b| a.rela.cmp(&b.rela));
@@ -207,7 +211,10 @@ impl Panel {
                 let mut node = &mut root;
                 if let Some(dir) = change.rela.parent() {
                     for part in dir.components() {
-                        node = node.dirs.entry(part.as_os_str().to_string_lossy().into_owned()).or_default();
+                        node = node
+                            .dirs
+                            .entry(part.as_os_str().to_string_lossy().into_owned())
+                            .or_default();
                     }
                 }
                 node.files.push(change.clone());
@@ -222,7 +229,8 @@ impl Panel {
         // Stay on the same row.
         self.cursor = keep
             .and_then(|(p, folder)| {
-                (0..self.items.len()).find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder))
+                (0..self.items.len())
+                    .find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder))
             })
             .unwrap_or(self.cursor)
             .min(self.items.len().saturating_sub(1));
@@ -242,7 +250,13 @@ impl Panel {
             }
             let folded = self.folded.contains(&path);
             self.items.push(self.rows.len());
-            self.rows.push(Row::Folder { path: path.clone(), label, depth, count: child.count(), folded });
+            self.rows.push(Row::Folder {
+                path: path.clone(),
+                label,
+                depth,
+                count: child.count(),
+                folded,
+            });
             if !folded {
                 self.push_node(child, &path, depth + 1);
             }
@@ -336,7 +350,9 @@ impl Panel {
                 self.say(format!("{seq} is not bound"), true);
                 Action::None
             }
-            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
+                Action::None
+            }
         }
     }
 
@@ -353,8 +369,11 @@ impl Panel {
     /// Scroll the diff to the next or previous hunk.
     fn jump_hunk(&mut self, forward: bool) {
         let Some(p) = &self.preview else { return };
-        let target =
-            if forward { pv::Anchors::next(&p.hunks, self.pscroll) } else { pv::Anchors::prev(&p.hunks, self.pscroll) };
+        let target = if forward {
+            pv::Anchors::next(&p.hunks, self.pscroll)
+        } else {
+            pv::Anchors::prev(&p.hunks, self.pscroll)
+        };
         if let Some(t) = target {
             self.pscroll = t;
         }
@@ -400,7 +419,8 @@ impl Panel {
                     return Action::None;
                 }
                 if targets.iter().any(Change::open) {
-                    let paths: Vec<PathBuf> = targets.iter().filter(|c| c.open()).map(|c| c.rela.clone()).collect();
+                    let paths: Vec<PathBuf> =
+                        targets.iter().filter(|c| c.open()).map(|c| c.rela.clone()).collect();
                     let r = self.repo.stage(&paths);
                     return self.finish("staged", r);
                 }
@@ -416,7 +436,12 @@ impl Panel {
                         .filter(|c| c.staged.is_some())
                         .map(|c| c.rela.clone())
                         .collect(),
-                    None => self.current().filter(|c| c.staged.is_some()).map(|c| c.rela.clone()).into_iter().collect(),
+                    None => self
+                        .current()
+                        .filter(|c| c.staged.is_some())
+                        .map(|c| c.rela.clone())
+                        .into_iter()
+                        .collect(),
                 };
                 if !targets.is_empty() {
                     let r = self.repo.unstage(&targets);
@@ -510,7 +535,10 @@ impl Panel {
     fn footer(&self, theme: &Theme) -> Vec<Line<'static>> {
         let c = &theme.colors;
         let message = self.message.as_ref().map(|(m, err)| {
-            Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into())))
+            Line::from(Span::styled(
+                m.clone(),
+                Style::new().fg(if *err { c.error } else { c.muted }.into()),
+            ))
         });
         match &self.mode {
             Mode::Commit(input) => {

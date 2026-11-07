@@ -20,7 +20,11 @@ pub struct LineChange {
     pub end: u32,
 }
 
-pub(crate) fn compute(repo: &gix::Repository, root: &Path, rela: &Path) -> Result<Vec<LineChange>, Error> {
+pub(crate) fn compute(
+    repo: &gix::Repository,
+    root: &Path,
+    rela: &Path,
+) -> Result<Vec<LineChange>, Error> {
     let after = match std::fs::read(root.join(rela)) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
@@ -36,7 +40,11 @@ pub(crate) fn compute(repo: &gix::Repository, root: &Path, rela: &Path) -> Resul
     for h in diff.hunks() {
         let (removed, added) = (h.before.len() as u32, h.after.len() as u32);
         if added == 0 {
-            out.push(LineChange { kind: LineKind::Deleted, start: h.after.start, end: h.after.start });
+            out.push(LineChange {
+                kind: LineKind::Deleted,
+                start: h.after.start,
+                end: h.after.start,
+            });
         } else {
             let kind = if removed == 0 { LineKind::Added } else { LineKind::Modified };
             out.push(LineChange { kind, start: h.after.start + 1, end: h.after.end });

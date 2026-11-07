@@ -132,7 +132,9 @@ impl App {
                 self.wifi_error = Some(e.to_string());
             }
         }
-        if let Some(i) = keep_wifi.and_then(|ssid| self.networks.iter().position(|n| n.ssid == ssid)) {
+        if let Some(i) =
+            keep_wifi.and_then(|ssid| self.networks.iter().position(|n| n.ssid == ssid))
+        {
             self.lists[0].cursor = i;
         }
         let keep_bt = self.devices.get(self.lists[1].cursor).map(|d| d.address.clone());
@@ -182,7 +184,10 @@ impl App {
             self.refresh();
             return true;
         }
-        if self.job.is_none() && matches!(self.mode, Mode::Normal) && self.refreshed.elapsed() >= REFRESH {
+        if self.job.is_none()
+            && matches!(self.mode, Mode::Normal)
+            && self.refreshed.elapsed() >= REFRESH
+        {
             self.refresh();
             return true;
         }

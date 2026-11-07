@@ -114,10 +114,14 @@ fn refs_commits_and_changes() {
     let r = Repo::discover(&d).unwrap();
 
     let refs = r.refs().unwrap();
-    let names: Vec<(&str, RefKind, bool)> = refs.iter().map(|x| (x.name.as_str(), x.kind, x.is_head)).collect();
+    let names: Vec<(&str, RefKind, bool)> =
+        refs.iter().map(|x| (x.name.as_str(), x.kind, x.is_head)).collect();
     assert_eq!(names[0], ("feature", RefKind::Branch, true), "{names:?}");
     assert!(names.contains(&("main", RefKind::Branch, false)));
-    assert!(names.contains(&("v1", RefKind::Tag, false)) && names.contains(&("v1-annotated", RefKind::Tag, false)));
+    assert!(
+        names.contains(&("v1", RefKind::Tag, false))
+            && names.contains(&("v1-annotated", RefKind::Tag, false))
+    );
     // Annotated tags peel to the commit.
     let init = r.commit("main").unwrap();
     assert_eq!(refs.iter().find(|x| x.name == "v1-annotated").unwrap().oid, init.oid);
@@ -133,7 +137,10 @@ fn refs_commits_and_changes() {
 
     let ch = r.changes("HEAD").unwrap();
     let get = |p: &str| ch.iter().find(|c| c.path == p).unwrap_or_else(|| panic!("{p} in {ch:?}"));
-    assert_eq!((get("a.txt").kind, get("a.txt").added, get("a.txt").removed), (Kind::Modified, 2, 1));
+    assert_eq!(
+        (get("a.txt").kind, get("a.txt").added, get("a.txt").removed),
+        (Kind::Modified, 2, 1)
+    );
     assert_eq!((get("new.txt").kind, get("new.txt").added), (Kind::Added, 2));
     assert_eq!(get("b.txt").kind, Kind::Deleted);
     // The root commit is diffed against the empty tree.
@@ -192,7 +199,12 @@ fn patch_has_hunks_with_context() {
     let new = file("new.txt");
     assert_eq!(new.hunks.len(), 1);
     assert_eq!(
-        (new.hunks[0].old_start, new.hunks[0].old_len, new.hunks[0].new_start, new.hunks[0].new_len),
+        (
+            new.hunks[0].old_start,
+            new.hunks[0].old_len,
+            new.hunks[0].new_start,
+            new.hunks[0].new_len
+        ),
         (0, 0, 1, 2)
     );
     assert!(new.hunks[0].lines.iter().all(|l| l.kind == PatchKind::Added));
@@ -217,7 +229,8 @@ fn nearby_changes_merge_into_one_hunk_and_binary_has_none() {
     fs::write(d.join("bin.dat"), [0u8, 1, 2]).unwrap();
     git(&d, &["add", "."]);
     git(&d, &["commit", "-q", "-m", "base"]);
-    let changed: String = (1..=12).map(|n| if n == 3 || n == 8 { "Z\n".into() } else { format!("{n}\n") }).collect();
+    let changed: String =
+        (1..=12).map(|n| if n == 3 || n == 8 { "Z\n".into() } else { format!("{n}\n") }).collect();
     fs::write(d.join("m.txt"), changed).unwrap();
     fs::write(d.join("bin.dat"), [0u8, 9, 9, 9]).unwrap();
     git(&d, &["commit", "-qam", "edit"]);
@@ -239,13 +252,21 @@ fn diff_file_shows_staged_and_unstaged_sides() {
 
     let staged = r.diff_file(Path::new("a.txt"), Side::Staged).unwrap();
     assert_eq!(staged.kind, Kind::Modified);
-    let adds: Vec<&str> =
-        staged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
+    let adds: Vec<&str> = staged.hunks[0]
+        .lines
+        .iter()
+        .filter(|l| l.kind == PatchKind::Added)
+        .map(|l| l.text.as_str())
+        .collect();
     assert_eq!(adds, vec!["THREE"]);
 
     let unstaged = r.diff_file(Path::new("a.txt"), Side::Unstaged).unwrap();
-    let adds: Vec<&str> =
-        unstaged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
+    let adds: Vec<&str> = unstaged.hunks[0]
+        .lines
+        .iter()
+        .filter(|l| l.kind == PatchKind::Added)
+        .map(|l| l.text.as_str())
+        .collect();
     assert_eq!(adds, vec!["six"]);
 
     let untracked = r.diff_file(Path::new("new.txt"), Side::Unstaged).unwrap();
@@ -330,7 +351,11 @@ fn stashes_and_unborn_head() {
     fs::create_dir_all(&e).unwrap();
     git(&e, &["init", "-q", "-b", "main"]);
     let r = Repo::discover(&e).unwrap();
-    assert!(r.commits(5).unwrap().is_empty() && r.refs().unwrap().is_empty() && r.stashes().unwrap().is_empty());
+    assert!(
+        r.commits(5).unwrap().is_empty()
+            && r.refs().unwrap().is_empty()
+            && r.stashes().unwrap().is_empty()
+    );
 }
 
 #[test]
@@ -350,7 +375,10 @@ fn untracked_file_is_all_added_and_clean_file_has_none() {
     let d = repo("untracked");
     fs::write(d.join("n.txt"), "x\ny\n").unwrap();
     let r = Repo::discover(&d).unwrap();
-    assert_eq!(r.line_changes(&d.join("n.txt")).unwrap(), vec![LineChange { kind: LineKind::Added, start: 1, end: 2 }]);
+    assert_eq!(
+        r.line_changes(&d.join("n.txt")).unwrap(),
+        vec![LineChange { kind: LineKind::Added, start: 1, end: 2 }]
+    );
     assert!(r.line_changes(&d.join("b.txt")).unwrap().is_empty());
 }
 
@@ -546,25 +574,33 @@ fn fetch_pull_and_push_against_a_local_remote() {
     let r = Repo::discover(&d).unwrap();
     r.rename_remote_branch("origin/old-name", "new-name").unwrap();
     r.fetch().unwrap();
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(
-        names.contains(&"origin/new-name".to_string()) && !names.contains(&"origin/old-name".to_string()),
+        names.contains(&"origin/new-name".to_string())
+            && !names.contains(&"origin/old-name".to_string()),
         "{names:?}"
     );
     git(&d, &["tag", "t1"]);
     r.rename_tag("t1", "t2").unwrap();
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"t2".to_string()) && !names.contains(&"t1".to_string()));
     assert!(r.rename_tag("t2", "t2").is_err() && r.rename_tag("nope", "t3").is_err());
     assert!(r.rename_tag("t2", "-f").is_err() && r.rename_tag("t2", "a b").is_err());
     // An annotated tag keeps its message under the new name; a failed rename leaves the old tag alone.
     git(&d, &["tag", "-a", "ann", "-m", "release notes"]);
     r.rename_tag("ann", "ann2").unwrap();
-    let body = std::process::Command::new("git").args(["tag", "-n9", "-l", "ann2"]).current_dir(&d).output().unwrap();
+    let body = std::process::Command::new("git")
+        .args(["tag", "-n9", "-l", "ann2"])
+        .current_dir(&d)
+        .output()
+        .unwrap();
     assert!(String::from_utf8_lossy(&body.stdout).contains("release notes"));
     assert!(!Repo::discover(&d).unwrap().refs().unwrap().iter().any(|x| x.name == "ann"));
     // Remote branches: not onto themselves (that would delete them), not HEAD, not an invalid name.
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"origin/new-name".to_string()), "{names:?}");
     assert!(r.rename_remote_branch("origin/new-name", "new-name").is_err());
     assert!(
@@ -578,10 +614,18 @@ fn fetch_pull_and_push_against_a_local_remote() {
     git(&d, &["branch", "taken"]);
     let r = Repo::discover(&d).unwrap();
     let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
-    assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "taken")]).is_err());
-    assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "same"), pair("grp/b", "same")]).is_err());
-    assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "bad name")]).is_err());
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    assert!(
+        r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "taken")]).is_err()
+    );
+    assert!(
+        r.rename_many(RefKind::Branch, &[pair("grp/a", "same"), pair("grp/b", "same")]).is_err()
+    );
+    assert!(
+        r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "bad name")])
+            .is_err()
+    );
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(
         names.contains(&"grp/a".to_string())
             && names.contains(&"grp/b".to_string())
@@ -589,13 +633,15 @@ fn fetch_pull_and_push_against_a_local_remote() {
         "{names:?}"
     );
     r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "new/b")]).unwrap();
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(
         names.contains(&"new/a".to_string())
             && names.contains(&"new/b".to_string())
             && !names.contains(&"grp/a".to_string())
     );
     r.rename_remote("origin", "upstream").unwrap();
-    let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
+    let names: Vec<String> =
+        Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"upstream/main".to_string()), "{names:?}");
 }

@@ -47,10 +47,15 @@ impl PreviewCmd {
             let spec = &after[..end];
             let replacement = if spec.is_empty() {
                 Some(quote(line))
-            } else if let Some(n) = spec.strip_suffix("..").and_then(|n| n.parse::<usize>().ok()).filter(|&n| n >= 1) {
+            } else if let Some(n) =
+                spec.strip_suffix("..").and_then(|n| n.parse::<usize>().ok()).filter(|&n| n >= 1)
+            {
                 Some(quote(&parts.get(n - 1..).map(|p| p.join(glue)).unwrap_or_default()))
             } else {
-                spec.parse::<usize>().ok().filter(|&n| n >= 1).map(|n| quote(parts.get(n - 1).copied().unwrap_or("")))
+                spec.parse::<usize>()
+                    .ok()
+                    .filter(|&n| n >= 1)
+                    .map(|n| quote(parts.get(n - 1).copied().unwrap_or("")))
             };
             match replacement {
                 Some(r) => out.push_str(&r),

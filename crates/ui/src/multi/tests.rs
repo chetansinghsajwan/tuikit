@@ -9,7 +9,12 @@ fn popup() -> Multi {
         "Filter",
         vec![
             Section::new("Message", Kind::Text, Vec::new(), Vec::new()),
-            Section::new("Author", Kind::Many, vec!["Ada".into(), "Bob".into(), "Cy".into()], Vec::new()),
+            Section::new(
+                "Author",
+                Kind::Many,
+                vec!["Ada".into(), "Bob".into(), "Cy".into()],
+                Vec::new(),
+            ),
             Section::new("Since", Kind::One, vec!["1d".into(), "7d".into()], Vec::new()),
         ],
     )
@@ -60,8 +65,9 @@ fn it_draws_the_sections_the_list_and_what_is_chosen() {
     let area = Rect::new(0, 0, 80, 24);
     let mut buf = Buffer::empty(area);
     m.render(area, &mut buf, &Theme::default());
-    let text: String =
-        (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String = (0..24)
+        .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(
         text.contains("Author (1)")
             && text.contains("[x] Ada")

@@ -10,7 +10,8 @@ use std::path::Path;
 use std::str::FromStr;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{
-    Color as SColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem, ThemeSettings,
+    Color as SColor, FontStyle, ScopeSelectors, StyleModifier, Theme as SynTheme, ThemeItem,
+    ThemeSettings,
 };
 use syntect::parsing::SyntaxSet;
 use ui::Theme;
@@ -43,17 +44,33 @@ pub(crate) fn syntax_theme(t: &Theme) -> SynTheme {
         ("entity.name.function, support.function, meta.function-call", s.function, plain),
         ("string", s.string, plain),
         ("constant.numeric", s.number, plain),
-        ("entity.name.type, entity.name.class, support.type, support.class, storage.type", s.type_, plain),
+        (
+            "entity.name.type, entity.name.class, support.type, support.class, storage.type",
+            s.type_,
+            plain,
+        ),
         ("constant, support.constant", s.constant, plain),
         ("variable", s.variable, plain),
         ("keyword.operator", s.operator, plain),
         // Markdown: headings, emphasis, code, links, lists and quotes.
-        ("markup.heading, entity.name.section, punctuation.definition.heading", s.function, FontStyle::BOLD),
+        (
+            "markup.heading, entity.name.section, punctuation.definition.heading",
+            s.function,
+            FontStyle::BOLD,
+        ),
         ("markup.bold", s.constant, FontStyle::BOLD),
         ("markup.italic", s.variable, FontStyle::ITALIC),
         ("markup.raw, markup.inline.raw, markup.fenced_code, markup.raw.block", s.string, plain),
-        ("markup.underline.link, string.other.link, meta.link, markup.underline", s.type_, FontStyle::UNDERLINE),
-        ("punctuation.definition.list_item, punctuation.definition.list, markup.list punctuation", s.keyword, plain),
+        (
+            "markup.underline.link, string.other.link, meta.link, markup.underline",
+            s.type_,
+            FontStyle::UNDERLINE,
+        ),
+        (
+            "punctuation.definition.list_item, punctuation.definition.list, markup.list punctuation",
+            s.keyword,
+            plain,
+        ),
         ("markup.quote, punctuation.definition.blockquote", s.comment, plain),
     ];
     let scopes = rules
@@ -92,7 +109,11 @@ fn line_marks(path: &Path, total: usize) -> Vec<Option<(LineKind, char)>> {
                 if total == 0 {
                     continue;
                 }
-                let (row, ch) = if (c.start as usize) < total { (c.start as usize, '▔') } else { (total - 1, '▁') };
+                let (row, ch) = if (c.start as usize) < total {
+                    (c.start as usize, '▔')
+                } else {
+                    (total - 1, '▁')
+                };
                 marks[row].get_or_insert((LineKind::Deleted, ch));
             }
             kind => {
@@ -131,8 +152,11 @@ pub fn render_bytes(
 
     let syntaxes: &SyntaxSet = syntax_set();
     // `flake.lock` is JSON whatever its extension says.
-    let by_name =
-        if path.file_name().is_some_and(|n| n == "flake.lock") { syntaxes.find_syntax_by_name("JSON") } else { None };
+    let by_name = if path.file_name().is_some_and(|n| n == "flake.lock") {
+        syntaxes.find_syntax_by_name("JSON")
+    } else {
+        None
+    };
     let syntax = by_name
         .or_else(|| syntaxes.find_syntax_for_file(path).ok().flatten())
         .or_else(|| text.lines().next().and_then(|l| syntaxes.find_syntax_by_first_line(l)))
@@ -161,7 +185,8 @@ pub fn render_bytes(
             break;
         }
         // Lines before the window still feed the highlighter's state.
-        let regions = hl.highlight_line(raw, syntaxes).map_err(|e| Error::Unsupported(e.to_string()))?;
+        let regions =
+            hl.highlight_line(raw, syntaxes).map_err(|e| Error::Unsupported(e.to_string()))?;
         if i < start {
             continue;
         }
@@ -170,7 +195,9 @@ pub fn render_bytes(
         if opts.git {
             // Sign column: a bar in the change color, blank otherwise.
             spans.push(match mark {
-                Some((kind, ch)) => Span::styled(ch.to_string(), Style::new().fg(git::line_color(theme, kind))),
+                Some((kind, ch)) => {
+                    Span::styled(ch.to_string(), Style::new().fg(git::line_color(theme, kind)))
+                }
                 None => Span::raw(" "),
             });
         }
@@ -226,7 +253,8 @@ pub fn render_bytes(
 pub(crate) fn highlight_code(code: &str, lang: &str, theme: &Theme) -> Vec<Vec<(Style, String)>> {
     use syntect::util::LinesWithEndings;
     let syntaxes = syntax_set();
-    let syntax = syntaxes.find_syntax_by_token(lang).unwrap_or_else(|| syntaxes.find_syntax_plain_text());
+    let syntax =
+        syntaxes.find_syntax_by_token(lang).unwrap_or_else(|| syntaxes.find_syntax_plain_text());
     let syn_theme = syntax_theme(theme);
     let mut hl = HighlightLines::new(syntax, &syn_theme);
     LinesWithEndings::from(code)
@@ -235,7 +263,11 @@ pub(crate) fn highlight_code(code: &str, lang: &str, theme: &Theme) -> Vec<Vec<(
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(st, piece)| {
-                    let mut style = Style::new().fg(Color::Rgb(st.foreground.r, st.foreground.g, st.foreground.b));
+                    let mut style = Style::new().fg(Color::Rgb(
+                        st.foreground.r,
+                        st.foreground.g,
+                        st.foreground.b,
+                    ));
                     if st.font_style.contains(FontStyle::BOLD) {
                         style = style.add_modifier(Modifier::BOLD);
                     }
@@ -268,6 +300,7 @@ fn indent_depths(text: &str) -> (Vec<usize>, usize) {
             }
         })
         .collect();
-    let unit = own.iter().take(400).flatten().copied().filter(|n| *n >= 2).min().unwrap_or(4).clamp(2, 8);
+    let unit =
+        own.iter().take(400).flatten().copied().filter(|n| *n >= 2).min().unwrap_or(4).clamp(2, 8);
     (ui::tree::indent_levels(&own), unit)
 }

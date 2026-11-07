@@ -31,8 +31,12 @@ fn an_image_is_drawn_in_half_blocks_that_fit() {
         *p = if x < 20 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) };
     }
     img.save(&f).unwrap();
-    let lines =
-        image(&f, &Theme::default(), &Options { width: Some(21), height: Some(8), git: false, focus: None }).unwrap();
+    let lines = image(
+        &f,
+        &Theme::default(),
+        &Options { width: Some(21), height: Some(8), git: false, focus: None },
+    )
+    .unwrap();
     assert!(flat(&lines[0]).contains("40×20"));
     assert!(lines.len() <= 8, "{}", lines.len());
     let row = lines.last().unwrap();
@@ -47,5 +51,8 @@ fn a_broken_audio_file_is_unsupported_not_a_panic() {
     std::fs::create_dir_all(&d).unwrap();
     let f = d.join("x.mp3");
     std::fs::write(&f, b"not audio").unwrap();
-    assert!(matches!(render(&f, Kind::Audio, &Theme::default(), &Options::default()), Err(Error::Unsupported(_))));
+    assert!(matches!(
+        render(&f, Kind::Audio, &Theme::default(), &Options::default()),
+        Err(Error::Unsupported(_))
+    ));
 }

@@ -147,7 +147,13 @@ thread_local! {
 
 /// Highlight lines `from..upto` of `text`: the lines before are only parsed from `LEAD_IN` lines back, and come
 /// out empty. Highlighting is by far the slowest part of a diff, so it covers what a hunk shows and no more.
-fn highlight_window(text: &str, path: &str, theme: &Theme, from: usize, upto: usize) -> Highlighted {
+fn highlight_window(
+    text: &str,
+    path: &str,
+    theme: &Theme,
+    from: usize,
+    upto: usize,
+) -> Highlighted {
     let start = from.saturating_sub(LEAD_IN);
     let syntaxes = syntax_set();
     let name = std::path::Path::new(path);
@@ -160,7 +166,9 @@ fn highlight_window(text: &str, path: &str, theme: &Theme, from: usize, upto: us
     let theme = syntax_theme(theme);
     let mut hl = HighlightLines::new(syntax, &theme);
     let mut out: Vec<Vec<(Style, String)>> = vec![Vec::new(); start];
-    for (n, line) in LinesWithEndings::from(text).enumerate().skip(start).take(upto.saturating_sub(start)) {
+    for (n, line) in
+        LinesWithEndings::from(text).enumerate().skip(start).take(upto.saturating_sub(start))
+    {
         let spent = BUDGET.with(|b| {
             let left = b.get();
             b.set(left.saturating_sub(1));
@@ -179,7 +187,11 @@ fn highlight_window(text: &str, path: &str, theme: &Theme, from: usize, upto: us
             pieces
                 .into_iter()
                 .map(|(st, piece)| {
-                    let mut style = Style::new().fg(Color::Rgb(st.foreground.r, st.foreground.g, st.foreground.b));
+                    let mut style = Style::new().fg(Color::Rgb(
+                        st.foreground.r,
+                        st.foreground.g,
+                        st.foreground.b,
+                    ));
                     if st.font_style.contains(FontStyle::BOLD) {
                         style = style.add_modifier(Modifier::BOLD);
                     }
@@ -240,7 +252,10 @@ fn context_of(lines: &[&str], from: usize) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        let top = line.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$' || c == '#');
+        let top = line
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_' || c == '$' || c == '#');
         if top || KEYWORDS.iter().any(|k| trimmed.starts_with(k)) {
             let mut s: String = trimmed.trim_end().chars().take(60).collect();
             if trimmed.chars().count() > 60 {
@@ -357,7 +372,8 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
     // Where the hunk's lines sit in the highlighted sides (or in the per-hunk highlight when the file is not kept whole).
     let whole = !file.before.is_empty() || !file.after.is_empty();
     let (old_hl, new_hl) = if whole {
-        let (os, ns) = (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize);
+        let (os, ns) =
+            (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize);
         (
             highlight_window(&file.before, &file.path, theme, os, os + h.old_len as usize),
             highlight_window(&file.after, &file.path, theme, ns, ns + h.new_len as usize),
@@ -371,8 +387,11 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
         let (o, n) = hunk_sides(h);
         (highlight(&o, &file.path, theme, usize::MAX), highlight(&n, &file.path, theme, usize::MAX))
     };
-    let (mut old_idx, mut new_idx) =
-        if whole { (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize) } else { (0, 0) };
+    let (mut old_idx, mut new_idx) = if whole {
+        (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize)
+    } else {
+        (0, 0)
+    };
     let (mut old_no, mut new_no) = (h.old_start, h.new_start);
 
     // Word-level marks for each run of removed lines followed by added lines, paired in order.
@@ -416,7 +435,15 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
         let conflict = is_conflict_marker(&l.text);
         let (kind, o_no, n_no, pieces, bg, strong, strong_bg) = match l.kind {
             PatchKind::Context => {
-                let r = (PatchKind::Context, Some(old_no), Some(new_no), new_side(new_idx), None, &[][..], del_bg);
+                let r = (
+                    PatchKind::Context,
+                    Some(old_no),
+                    Some(new_no),
+                    new_side(new_idx),
+                    None,
+                    &[][..],
+                    del_bg,
+                );
                 old_no += 1;
                 new_no += 1;
                 old_idx += 1;
@@ -465,7 +492,14 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
         };
         let base = if ws { Style::new().fg(c.muted.into()) } else { base };
         let mut cells = if conflict {
-            cells_of(&l.text, None, &[], bg, strong_bg, Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD))
+            cells_of(
+                &l.text,
+                None,
+                &[],
+                bg,
+                strong_bg,
+                Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD),
+            )
         } else {
             cells_of(&l.text, pieces.map(Vec::as_slice), strong, bg, strong_bg, base)
         };
@@ -486,7 +520,12 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
 }
 
 /// The drawn patch of `files`: lines (at most `limit`) and where the files and hunks start.
-pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) -> (Vec<Line<'static>>, Anchors) {
+pub fn render(
+    files: &[FilePatch],
+    theme: &Theme,
+    opts: &Options,
+    limit: usize,
+) -> (Vec<Line<'static>>, Anchors) {
     BUDGET.with(|b| b.set(HIGHLIGHT_BUDGET));
     let c = &theme.colors;
     let mut out: Vec<Line<'static>> = Vec::new();
@@ -538,11 +577,15 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
                 context_of(&before_lines, h.old_start.saturating_sub(1) as usize)
             };
             // Where the change is, by name when there is one: the numbers are in the gutter below.
-            let mut header =
-                vec![Span::styled(format!("  ⋯ line {}", h.new_start.max(1)), Style::new().fg(c.info.into()))];
+            let mut header = vec![Span::styled(
+                format!("  ⋯ line {}", h.new_start.max(1)),
+                Style::new().fg(c.info.into()),
+            )];
             if let Some(ctx) = context {
-                header
-                    .push(Span::styled(format!("  {ctx}"), Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD)));
+                header.push(Span::styled(
+                    format!("  {ctx}"),
+                    Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD),
+                ));
             }
             out.push(Line::from(header));
             let rows = hunk_rows(h, f, theme);
@@ -629,7 +672,10 @@ fn unified_row(r: &Row, digits: usize, width: Option<usize>, theme: &Theme) -> L
         PatchKind::Removed => ('-', c.git.deleted),
     };
     let mut spans = vec![
-        Span::styled(format!("{} {} ", num(r.old_no), num(r.new_no)), Style::new().fg(c.muted.into())),
+        Span::styled(
+            format!("{} {} ", num(r.old_no), num(r.new_no)),
+            Style::new().fg(c.muted.into()),
+        ),
         Span::styled(format!("{sign} "), Style::new().fg(color.into())),
     ];
     let prefix = 2 * digits + 2 + 2;
@@ -644,7 +690,14 @@ fn unified_row(r: &Row, digits: usize, width: Option<usize>, theme: &Theme) -> L
 }
 
 /// A hunk side by side: removed lines on the left, added on the right, context on both, rows of a change paired in order.
-fn side_rows(rows: &[Row], digits: usize, width: usize, theme: &Theme, out: &mut Vec<Line<'static>>, limit: usize) {
+fn side_rows(
+    rows: &[Row],
+    digits: usize,
+    width: usize,
+    theme: &Theme,
+    out: &mut Vec<Line<'static>>,
+    limit: usize,
+) {
     let c = &theme.colors;
     let half = width.saturating_sub(1) / 2;
     let code_w = half.saturating_sub(digits + 3);

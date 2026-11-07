@@ -35,7 +35,13 @@ fn closed_docks_take_no_room_and_big_ones_are_limited() {
     assert!(w.editor.width >= 20);
     // The pieces never overlap or leave the area.
     for r in [w.left, w.right, w.bottom, w.editor, w.ribbon] {
-        assert!(r.x >= main.x && r.right() <= main.right() && r.y >= main.y && r.bottom() <= main.bottom(), "{r:?}");
+        assert!(
+            r.x >= main.x
+                && r.right() <= main.right()
+                && r.y >= main.y
+                && r.bottom() <= main.bottom(),
+            "{r:?}"
+        );
     }
     assert!(
         w.left.right() <= w.editor.x

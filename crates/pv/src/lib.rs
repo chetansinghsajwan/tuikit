@@ -22,7 +22,11 @@ use ui::Theme;
 pub use ansi::to_ansi;
 
 /// One line of `code` highlighted as the language `lang` (a name or an extension), as styled pieces.
-pub fn highlight_line(code: &str, lang: &str, theme: &Theme) -> Vec<(ratatui::style::Style, String)> {
+pub fn highlight_line(
+    code: &str,
+    lang: &str,
+    theme: &Theme,
+) -> Vec<(ratatui::style::Style, String)> {
     text::highlight_code(code, lang, theme).into_iter().next().unwrap_or_default()
 }
 pub use commit::render as preview_commit;
@@ -84,7 +88,12 @@ impl std::fmt::Display for Error {
 }
 
 /// Markdown files show rendered (no markup) unless a line is to be focused, which needs the source.
-fn rendered_markdown(name: &Path, text: &[u8], theme: &Theme, opts: &Options) -> Option<Vec<Line<'static>>> {
+fn rendered_markdown(
+    name: &Path,
+    text: &[u8],
+    theme: &Theme,
+    opts: &Options,
+) -> Option<Vec<Line<'static>>> {
     if !markdown::is_markdown(name) || opts.focus.is_some() {
         return None;
     }
@@ -98,7 +107,12 @@ fn rendered_markdown(name: &Path, text: &[u8], theme: &Theme, opts: &Options) ->
 
 /// Preview text that is not (as shown) on disk, e.g. an editor buffer with
 /// unsaved changes. `name` only picks the syntax; there are no git marks.
-pub fn preview_text(name: &Path, text: &[u8], theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn preview_text(
+    name: &Path,
+    text: &[u8],
+    theme: &Theme,
+    opts: &Options,
+) -> Result<Vec<Line<'static>>, Error> {
     if let Some(lines) = rendered_markdown(name, text, theme, opts) {
         return Ok(lines);
     }
@@ -122,7 +136,10 @@ pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'s
         }
         if markdown::is_markdown(path) && opts.focus.is_none() {
             let mut buf = Vec::new();
-            std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path)?, 1 << 20), &mut buf)?;
+            std::io::Read::read_to_end(
+                &mut std::io::Read::take(std::fs::File::open(path)?, 1 << 20),
+                &mut buf,
+            )?;
             if let Some(lines) = rendered_markdown(path, &buf, theme, opts) {
                 return Ok(lines);
             }

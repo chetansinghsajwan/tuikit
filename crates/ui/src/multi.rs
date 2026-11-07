@@ -63,11 +63,17 @@ impl Multi {
     /// The items of the current section that match what was typed.
     fn visible(&self) -> Vec<&str> {
         let q = self.query.to_lowercase();
-        self.sections[self.current].items.iter().map(String::as_str).filter(|i| i.to_lowercase().contains(&q)).collect()
+        self.sections[self.current]
+            .items
+            .iter()
+            .map(String::as_str)
+            .filter(|i| i.to_lowercase().contains(&q))
+            .collect()
     }
 
     fn switch(&mut self, d: isize) {
-        self.current = (self.current as isize + d).rem_euclid(self.sections.len() as isize) as usize;
+        self.current =
+            (self.current as isize + d).rem_euclid(self.sections.len() as isize) as usize;
         self.cursor = 0;
         self.query.clear();
     }
@@ -80,9 +86,13 @@ impl Multi {
             KeyCode::Enter => return Outcome::Apply,
             KeyCode::Tab | KeyCode::Right => self.switch(1),
             KeyCode::BackTab | KeyCode::Left => self.switch(-1),
-            KeyCode::Down => self.cursor = (self.cursor + 1).min(self.visible().len().saturating_sub(1)),
+            KeyCode::Down => {
+                self.cursor = (self.cursor + 1).min(self.visible().len().saturating_sub(1))
+            }
             KeyCode::Up => self.cursor = self.cursor.saturating_sub(1),
-            KeyCode::Char('n') if ctrl => self.cursor = (self.cursor + 1).min(self.visible().len().saturating_sub(1)),
+            KeyCode::Char('n') if ctrl => {
+                self.cursor = (self.cursor + 1).min(self.visible().len().saturating_sub(1))
+            }
             KeyCode::Char('p') if ctrl => self.cursor = self.cursor.saturating_sub(1),
             KeyCode::Char('x') if ctrl => {
                 self.sections[self.current].chosen.clear();
@@ -137,7 +147,11 @@ impl Multi {
 
     /// The chosen items of the section called `title`.
     pub fn chosen(&self, title: &str) -> &[String] {
-        self.sections.iter().find(|s| s.title == title).map(|s| s.chosen.as_slice()).unwrap_or_default()
+        self.sections
+            .iter()
+            .find(|s| s.title == title)
+            .map(|s| s.chosen.as_slice())
+            .unwrap_or_default()
     }
 
     /// Draw the popup over `area`, dimming what is behind it.
@@ -148,18 +162,30 @@ impl Multi {
         crate::dim::dim(buf, area, theme);
         let c = &theme.colors;
         let (width, height) = (area.width.min(68), area.height.saturating_sub(2).min(24));
-        let rect = Rect { x: area.x + (area.width - width) / 2, y: area.y + (area.height - height) / 2, width, height };
+        let rect = Rect {
+            x: area.x + (area.width - width) / 2,
+            y: area.y + (area.height - height) / 2,
+            width,
+            height,
+        };
         Clear.render(rect, buf);
         let pane = crate::Pane::new(theme).title(&self.title).focused(true);
         let inner = pane.inner(rect);
         pane.render(rect, buf);
-        let (fg, muted, accent) =
-            (Style::new().fg(c.fg.into()), Style::new().fg(c.muted.into()), Style::new().fg(c.accent.into()));
+        let (fg, muted, accent) = (
+            Style::new().fg(c.fg.into()),
+            Style::new().fg(c.muted.into()),
+            Style::new().fg(c.accent.into()),
+        );
         let row = |n: u16| Rect { y: inner.y + n, height: 1, ..inner };
         // The sections as tabs, with how many things each has chosen.
         let mut tabs = Vec::new();
         for (i, s) in self.sections.iter().enumerate() {
-            let label = if s.chosen.is_empty() { s.title.clone() } else { format!("{} ({})", s.title, s.chosen.len()) };
+            let label = if s.chosen.is_empty() {
+                s.title.clone()
+            } else {
+                format!("{} ({})", s.title, s.chosen.len())
+            };
             let style = if i == self.current {
                 accent.add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
             } else if s.chosen.is_empty() {
@@ -190,7 +216,10 @@ impl Multi {
             };
             Paragraph::new(Line::from(vec![Span::styled("> ", accent), query])).render(row(2), buf);
             let items = self.visible();
-            let first = self.cursor.saturating_sub(list_h.saturating_sub(1)).min(items.len().saturating_sub(list_h));
+            let first = self
+                .cursor
+                .saturating_sub(list_h.saturating_sub(1))
+                .min(items.len().saturating_sub(list_h));
             for (n, item) in items.iter().skip(first).take(list_h).enumerate() {
                 let on = s.chosen.iter().any(|c| c == item);
                 let at = first + n == self.cursor;
@@ -211,7 +240,8 @@ impl Multi {
                 Paragraph::new(line).render(r, buf);
             }
             if items.is_empty() {
-                Paragraph::new(Line::from(Span::styled("nothing matches", muted))).render(row(3), buf);
+                Paragraph::new(Line::from(Span::styled("nothing matches", muted)))
+                    .render(row(3), buf);
             }
         }
         // What is chosen so far, everywhere, and the keys.
@@ -221,7 +251,8 @@ impl Multi {
             .filter(|s| !s.chosen.is_empty())
             .map(|s| format!("{}: {}", s.title.to_lowercase(), s.chosen.join(", ")))
             .collect();
-        let summary = if all.is_empty() { "nothing chosen".to_string() } else { all.join("  ·  ") };
+        let summary =
+            if all.is_empty() { "nothing chosen".to_string() } else { all.join("  ·  ") };
         Paragraph::new(Line::from(vec![
             Span::styled("chosen  ", muted),
             Span::styled(summary, Style::new().fg(c.warning.into())),

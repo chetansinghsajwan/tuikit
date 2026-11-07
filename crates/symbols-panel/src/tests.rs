@@ -36,7 +36,9 @@ fn draw(p: &mut Panel, focused: bool) -> String {
     let area = Rect::new(0, 0, 40, 10);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default(), focused);
-    (0..10).map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect()
+    (0..10)
+        .map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect()
 }
 
 #[test]
@@ -64,7 +66,10 @@ fn filtering_keeps_matches_and_their_parents_and_esc_clears() {
     press(&mut p, "siz");
     let text = draw(&mut p, true);
     assert!(
-        text.contains("Config") && text.contains("size") && !text.contains("load") && !text.contains("name"),
+        text.contains("Config")
+            && text.contains("size")
+            && !text.contains("load")
+            && !text.contains("name"),
         "{text}"
     );
     p.handle_event(&key(KeyCode::Enter));

@@ -30,7 +30,13 @@ impl Panel {
         self.render_preview(preview_area, buf, theme);
     }
 
-    pub(super) fn render_list(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+    pub(super) fn render_list(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        theme: &Theme,
+        focused: bool,
+    ) {
         let c = &theme.colors;
         let title = self.title.clone().unwrap_or_else(|| format!("git: {}", self.branch));
         let pane = Pane::new(theme).title(&title).icon(ui::icons::GIT).focused(focused);
@@ -43,8 +49,14 @@ impl Panel {
         if !footer.is_empty() {
             let rows = (footer.len() as u16).min(inner.height);
             let top = inner.bottom() - rows;
-            for (i, line) in
-                footer.into_iter().rev().take(usize::from(rows)).collect::<Vec<_>>().into_iter().rev().enumerate()
+            for (i, line) in footer
+                .into_iter()
+                .rev()
+                .take(usize::from(rows))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .enumerate()
             {
                 Paragraph::new(line).render(Rect { y: top + i as u16, height: 1, ..inner }, buf);
             }
@@ -63,7 +75,12 @@ impl Panel {
             }
         }
         if self.rows.is_empty() {
-            buf.set_string(inner.x + 1, inner.y, "clean: nothing to commit", Style::new().fg(c.muted.into()));
+            buf.set_string(
+                inner.x + 1,
+                inner.y,
+                "clean: nothing to commit",
+                Style::new().fg(c.muted.into()),
+            );
             return;
         }
 
@@ -108,16 +125,23 @@ impl Panel {
                 }
                 Row::File { change, depth } => {
                     let name = if self.tree {
-                        change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+                        change
+                            .rela
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
                     } else {
                         change.rela.display().to_string()
                     };
                     // Two marks like `git status -s`: what is staged (always in the staged color, green, so a staged file
                     // is told apart at a glance), then what is not (in the color of its change).
-                    let staged =
-                        |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), c.success.into()));
+                    let staged = |kind: Option<Kind>| {
+                        kind.map_or((' ', c.fg.into()), |k| (kind_char(k), c.success.into()))
+                    };
                     let unstaged = |kind: Option<Kind>| {
-                        kind.map_or((' ', c.fg.into()), |k| (kind_char(k), pv::kind_color(theme, k)))
+                        kind.map_or((' ', c.fg.into()), |k| {
+                            (kind_char(k), pv::kind_color(theme, k))
+                        })
                     };
                     ui::tree::file_row(
                         theme,
@@ -156,23 +180,33 @@ impl Panel {
         }
         let key = (rela.clone(), staged, inner.width, inner.height, self.version);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
-            let opts = pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
+            let opts =
+                pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let side = if staged { Side::Staged } else { Side::Unstaged };
-            let (lines, hunks) = match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
-                Ok((l, a)) => (l, a.hunks),
-                Err(e) => (
-                    vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
-                    Vec::new(),
-                ),
-            };
+            let (lines, hunks) =
+                match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
+                    Ok((l, a)) => (l, a.hunks),
+                    Err(e) => (
+                        vec![Line::from(Span::styled(
+                            e.to_string(),
+                            Style::new().fg(theme.colors.muted.into()),
+                        ))],
+                        Vec::new(),
+                    ),
+                };
             self.preview = Some(Preview { key, lines, hunks });
             self.pscroll = 0;
         }
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
             self.pscroll = self.pscroll.min(p.lines.len().saturating_sub(1));
-            let shown: Vec<Line<'static>> =
-                p.lines.iter().skip(self.pscroll).take(usize::from(inner.height)).cloned().collect();
+            let shown: Vec<Line<'static>> = p
+                .lines
+                .iter()
+                .skip(self.pscroll)
+                .take(usize::from(inner.height))
+                .cloned()
+                .collect();
             Paragraph::new(shown).render(inner, buf);
         }
     }

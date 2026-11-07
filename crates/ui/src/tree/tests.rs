@@ -45,7 +45,11 @@ fn a_long_name_shrinks_and_the_rest_of_the_row_keeps_its_place() {
     assert!(t.contains("main.rs") && !t.contains("column"), "{t}");
     // Wide characters are counted by cells, so the sign stays in the last cell.
     let t = row_text(
-        &FileRow { name: "日本語日本語日本語日本語", signs: vec![('M', Color::Red)], ..Default::default() },
+        &FileRow {
+            name: "日本語日本語日本語日本語",
+            signs: vec![('M', Color::Red)],
+            ..Default::default()
+        },
         16,
     );
     assert!(t.trim_end().ends_with('M') && t.contains('…'), "{t}");
@@ -55,8 +59,16 @@ fn a_long_name_shrinks_and_the_rest_of_the_row_keeps_its_place() {
 fn the_scope_is_the_folder_under_the_cursor_or_the_one_holding_it() {
     // a / a/b / a/b/x / a/y / z
     let depths = [0, 1, 2, 1, 0];
-    assert_eq!(active_scope(&depths, 1), Some(Scope { from: 1, to: 3, col: 1 }), "an open folder: its contents");
-    assert_eq!(active_scope(&depths, 2), Some(Scope { from: 1, to: 3, col: 1 }), "a file: the folder that holds it");
+    assert_eq!(
+        active_scope(&depths, 1),
+        Some(Scope { from: 1, to: 3, col: 1 }),
+        "an open folder: its contents"
+    );
+    assert_eq!(
+        active_scope(&depths, 2),
+        Some(Scope { from: 1, to: 3, col: 1 }),
+        "a file: the folder that holds it"
+    );
     assert_eq!(active_scope(&depths, 3), Some(Scope { from: 0, to: 4, col: 0 }));
     assert_eq!(active_scope(&depths, 4), None, "a top-level file has no scope");
     assert_eq!(active_scope(&depths, 0).and_then(|s| s.col_at(2)), Some(0));
@@ -73,7 +85,10 @@ fn indent_guides_replace_the_leading_spaces_at_each_unit() {
     assert_eq!(text(&mark_indent(&theme, vec![Span::raw("      a  b")], 4, 2)), "│ │   a  b");
     assert_eq!(text(&mark_indent(&theme, vec![Span::raw("    ")], 0, 4)), "    ");
     // The spaces of one span split across highlight pieces still count as one column run.
-    assert_eq!(text(&mark_indent(&theme, vec![Span::raw("  "), Span::raw("  "), Span::raw("x")], 4, 2)), "│ │ x");
+    assert_eq!(
+        text(&mark_indent(&theme, vec![Span::raw("  "), Span::raw("  "), Span::raw("x")], 4, 2)),
+        "│ │ x"
+    );
 }
 
 #[test]
@@ -97,7 +112,11 @@ fn the_active_guide_is_drawn_in_the_accent() {
     assert_eq!(text(&marked), guides(&theme, 3).content);
     let accent: Color = theme.colors.accent.into();
     assert_eq!(
-        marked.iter().filter(|s| s.style.fg == Some(accent)).map(|s| s.content.as_ref()).collect::<String>(),
+        marked
+            .iter()
+            .filter(|s| s.style.fg == Some(accent))
+            .map(|s| s.content.as_ref())
+            .collect::<String>(),
         "│ "
     );
     // A column that is not among the guides marks nothing.

@@ -5,7 +5,9 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
@@ -159,7 +161,9 @@ fn run(cli: Cli) -> io::Result<u8> {
     // Path lists read better as a hierarchy; folder listings and plain text stay flat.
     picker.set_tree(
         !cli.flat
-            && ((cli.files.is_some() && !cli.dirs && !cli.only_dirs) || cli.paths.is_some() || cli.grep.is_some()),
+            && ((cli.files.is_some() && !cli.dirs && !cli.only_dirs)
+                || cli.paths.is_some()
+                || cli.grep.is_some()),
     );
     if cli.git.is_some() {
         picker.set_icon(ui::icons::GIT);

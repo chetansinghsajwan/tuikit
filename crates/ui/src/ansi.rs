@@ -53,7 +53,9 @@ fn apply(style: Style, params: &[u32]) -> Style {
                 let color = match params.get(i + 1) {
                     Some(5) => params.get(i + 2).map(|&n| (Color::Indexed(n as u8), 2)),
                     Some(2) => match (params.get(i + 2), params.get(i + 3), params.get(i + 4)) {
-                        (Some(&r), Some(&g), Some(&b)) => Some((Color::Rgb(r as u8, g as u8, b as u8), 4)),
+                        (Some(&r), Some(&g), Some(&b)) => {
+                            Some((Color::Rgb(r as u8, g as u8, b as u8), 4))
+                        }
                         _ => None,
                     },
                     _ => None,

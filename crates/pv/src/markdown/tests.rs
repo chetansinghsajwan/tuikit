@@ -6,7 +6,8 @@ fn text(lines: &[Line]) -> Vec<String> {
 
 #[test]
 fn conceal_finds_the_syntax_to_hide() {
-    let src = "# Title\n\nsome **bold** and *it* and `code` and [a link](http://x.y) end\n\n- item\n";
+    let src =
+        "# Title\n\nsome **bold** and *it* and `code` and [a link](http://x.y) end\n\n- item\n";
     let hidden = |c: &Conceal| src[c.range.clone()].to_string();
     let all = conceal(src);
     let marks: Vec<String> = all.iter().map(hidden).collect();
@@ -62,31 +63,49 @@ fn alerts_footnotes_front_matter_math_and_headings() {
 
 #[test]
 fn code_blocks_are_highlighted_and_images_fall_back_to_their_alt_text() {
-    let lines = render("```rust\nfn main() {}\n```\n\n![a cat](missing.png)\n", &Theme::default(), 50);
+    let lines =
+        render("```rust\nfn main() {}\n```\n\n![a cat](missing.png)\n", &Theme::default(), 50);
     let code = lines.iter().find(|l| l.spans.iter().any(|s| s.content.contains("fn"))).unwrap();
-    let colors: std::collections::HashSet<_> = code.spans.iter().filter_map(|s| s.style.fg).collect();
+    let colors: std::collections::HashSet<_> =
+        code.spans.iter().filter_map(|s| s.style.fg).collect();
     assert!(colors.len() > 1, "the keyword and the rest differ in color");
     assert!(text(&lines).join("\n").contains("🖼 a cat (missing.png)"));
     // A real image next to the file is drawn.
     let d = std::env::temp_dir().join(format!("pv-md-img-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
-    image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 0, 0, 255])).save(d.join("p.png")).unwrap();
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 0, 0, 255]))
+        .save(d.join("p.png"))
+        .unwrap();
     let r = render_in("![red](p.png)\n", &Theme::default(), 50, Some(&d));
-    assert!(r.lines.iter().any(|l| l.spans.iter().any(|s| s.content == "▀")), "{:?}", text(&r.lines));
+    assert!(
+        r.lines.iter().any(|l| l.spans.iter().any(|s| s.content == "▀")),
+        "{:?}",
+        text(&r.lines)
+    );
 }
 
 #[test]
 fn code_blocks_are_rounded_boxes_with_the_language_inside() {
-    let lines = text(&render("```rust\nfn main() {}\nlet a_long_line = 1;\n```\n", &Theme::default(), 40));
+    let lines =
+        text(&render("```rust\nfn main() {}\nlet a_long_line = 1;\n```\n", &Theme::default(), 40));
     assert!(lines[0].starts_with('╭') && lines[0].ends_with('╮'), "{lines:#?}");
-    assert!(lines[1].starts_with("│ rust") && lines[1].ends_with('│'), "the language is inside: {lines:#?}");
+    assert!(
+        lines[1].starts_with("│ rust") && lines[1].ends_with('│'),
+        "the language is inside: {lines:#?}"
+    );
     assert!(lines[2].contains("fn main") && lines[3].contains("let a_long_line"));
     assert!(lines[4].starts_with('╰') && lines[4].ends_with('╯'));
-    assert!(lines[..5].iter().all(|l| l.width() == lines[0].width()), "every row is as wide as the top: {lines:#?}");
+    assert!(
+        lines[..5].iter().all(|l| l.width() == lines[0].width()),
+        "every row is as wide as the top: {lines:#?}"
+    );
     // The frame is on the same tint as the inside: the corners are part of the block.
     let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
     let bg = |row: usize, col: usize| styled[row].spans[col].style.bg;
-    assert!(bg(0, 0).is_some() && bg(0, 0) == bg(2, 1), "the top left corner shares the tint of the code");
+    assert!(
+        bg(0, 0).is_some() && bg(0, 0) == bg(2, 1),
+        "the top left corner shares the tint of the code"
+    );
 }
 
 #[test]

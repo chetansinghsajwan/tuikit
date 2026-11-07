@@ -50,7 +50,8 @@ fn tokens(s: &str) -> Vec<(usize, &str)> {
 /// The word-level difference between `old` and `new`.
 pub fn intraline(old: &str, new: &str) -> Intraline {
     let (a, b) = (tokens(old), tokens(new));
-    let (at, bt): (Vec<&str>, Vec<&str>) = (a.iter().map(|t| t.1).collect(), b.iter().map(|t| t.1).collect());
+    let (at, bt): (Vec<&str>, Vec<&str>) =
+        (a.iter().map(|t| t.1).collect(), b.iter().map(|t| t.1).collect());
     let mut input: InternedInput<&str> = InternedInput::default();
     input.update_before(at.iter().copied());
     input.update_after(bt.iter().copied());

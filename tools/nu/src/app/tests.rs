@@ -22,7 +22,9 @@ fn screen(app: &mut App) -> String {
     let area = Rect::new(0, 0, 110, 26);
     let mut buf = Buffer::empty(area);
     app.render(area, &mut buf);
-    (0..26).map(|y| (0..110).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect()
+    (0..26)
+        .map(|y| (0..110).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect()
 }
 
 fn wait(app: &mut App) {
@@ -130,7 +132,11 @@ fn bluetooth_connect_pairs_new_devices_toggles_disconnect_trust_forget_scan_and_
     app.lists[1].cursor = at(&app, "Old mouse");
     app.handle_event(&key(KeyCode::Enter));
     wait(&mut app);
-    assert!(app.message.as_ref().is_some_and(|(m, e)| *e && m.contains("not in range")), "{:?}", app.message);
+    assert!(
+        app.message.as_ref().is_some_and(|(m, e)| *e && m.contains("not in range")),
+        "{:?}",
+        app.message
+    );
     // Forget asks first.
     press(&mut app, "d");
     assert!(matches!(app.mode, Mode::ForgetDevice(..)));
@@ -158,11 +164,19 @@ fn a_missing_backend_shows_why_in_its_pane() {
         Arc::new(FakeBluetooth::new()),
     );
     assert!(
-        s.contains("unavailable: NetworkManager is not") && s.contains("running") && s.contains("Headphones"),
+        s.contains("unavailable: NetworkManager is not")
+            && s.contains("running")
+            && s.contains("Headphones"),
         "{s}"
     );
-    let s = app_with(Arc::new(Fake::new()), Arc::new(nu_core::Unavailable("BlueZ is not running".into())));
-    assert!(s.contains("unavailable: BlueZ is not") && s.contains("running") && s.contains("home"), "{s}");
+    let s = app_with(
+        Arc::new(Fake::new()),
+        Arc::new(nu_core::Unavailable("BlueZ is not running".into())),
+    );
+    assert!(
+        s.contains("unavailable: BlueZ is not") && s.contains("running") && s.contains("home"),
+        "{s}"
+    );
 }
 
 #[test]

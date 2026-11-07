@@ -18,16 +18,22 @@ fn main() -> ExitCode {
     let mut s = Settings::load();
     let mut args = std::env::args_os().skip(1);
     while let Some(a) = args.next() {
-        let value = |args: &mut std::iter::Skip<std::env::ArgsOs>| args.next().and_then(|v| v.into_string().ok());
+        let value = |args: &mut std::iter::Skip<std::env::ArgsOs>| {
+            args.next().and_then(|v| v.into_string().ok())
+        };
         match a.to_str() {
             Some("-o" | "--output") => output = args.next().map(PathBuf::from),
             Some("--typst") => typst = true,
             Some("--base") => base_dir = args.next().map(PathBuf::from),
             Some("--paper") => s.paper = value(&mut args).unwrap_or(s.paper),
-            Some("--margin") => s.margin_cm = value(&mut args).and_then(|v| v.parse().ok()).unwrap_or(s.margin_cm),
+            Some("--margin") => {
+                s.margin_cm = value(&mut args).and_then(|v| v.parse().ok()).unwrap_or(s.margin_cm)
+            }
             Some("--font") => s.font = value(&mut args).unwrap_or(s.font),
             Some("--mono") => s.mono = value(&mut args).unwrap_or(s.mono),
-            Some("--size") => s.size_pt = value(&mut args).and_then(|v| v.parse().ok()).unwrap_or(s.size_pt),
+            Some("--size") => {
+                s.size_pt = value(&mut args).and_then(|v| v.parse().ok()).unwrap_or(s.size_pt)
+            }
             Some("--no-justify") => s.justify = false,
             Some("--no-numbers") => s.page_numbers = false,
             Some("--fonts") => {
@@ -52,7 +58,11 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     let stdin = input.as_os_str() == "-";
-    let read = if stdin { std::io::read_to_string(std::io::stdin()) } else { std::fs::read_to_string(&input) };
+    let read = if stdin {
+        std::io::read_to_string(std::io::stdin())
+    } else {
+        std::fs::read_to_string(&input)
+    };
     let text = match read {
         Ok(t) => t,
         Err(e) => {
@@ -61,13 +71,17 @@ fn main() -> ExitCode {
         }
     };
     let base = base_dir.or_else(|| {
-        input.parent().map(|p| if p.as_os_str().is_empty() { PathBuf::from(".") } else { p.to_path_buf() })
+        input
+            .parent()
+            .map(|p| if p.as_os_str().is_empty() { PathBuf::from(".") } else { p.to_path_buf() })
     });
     if typst {
         print!("{}", mdexport::typst_source_with(&text, base.as_deref(), &s));
         return ExitCode::SUCCESS;
     }
-    let out = output.unwrap_or_else(|| if stdin { PathBuf::from("out.pdf") } else { input.with_extension("pdf") });
+    let out = output.unwrap_or_else(|| {
+        if stdin { PathBuf::from("out.pdf") } else { input.with_extension("pdf") }
+    });
     match mdexport::to_pdf(&text, &Export { base, settings: s })
         .and_then(|pdf| std::fs::write(&out, pdf).map_err(|e| e.to_string()))
     {

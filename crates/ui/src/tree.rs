@@ -48,7 +48,10 @@ pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
         depths[..cursor].iter().rposition(|d| *d + 1 == cur)?
     };
     let depth = depths[folder];
-    let to = depths[folder + 1..].iter().position(|d| *d <= depth).map_or(depths.len(), |n| folder + 1 + n);
+    let to = depths[folder + 1..]
+        .iter()
+        .position(|d| *d <= depth)
+        .map_or(depths.len(), |n| folder + 1 + n);
     Some(Scope { from: folder, to, col: depth })
 }
 
@@ -106,7 +109,10 @@ pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'sta
     vec![
         guides(theme, depth),
         Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
-        Span::styled(name.to_string(), Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            name.to_string(),
+            Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD),
+        ),
     ]
 }
 
@@ -146,7 +152,12 @@ pub fn count(theme: &Theme, n: usize) -> Span<'static> {
 /// `unit`-th column left of `indent`, the line's own (or, for a blank line, its neighbors') indentation. Only
 /// leading spaces change; the rest of the line is untouched. A tool passes the content and the indentation; the
 /// drawing is the toolkit's, so the guides of every code view look alike.
-pub fn mark_indent(theme: &Theme, spans: Vec<Span<'static>>, indent: usize, unit: usize) -> Vec<Span<'static>> {
+pub fn mark_indent(
+    theme: &Theme,
+    spans: Vec<Span<'static>>,
+    indent: usize,
+    unit: usize,
+) -> Vec<Span<'static>> {
     let guide = Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::DIM);
     let mut out: Vec<Span<'static>> = Vec::new();
     let mut col = 0;
@@ -220,7 +231,11 @@ impl CountWidths {
 
 /// One row's line counts in the columns of `widths`: `+12` right-aligned, `−3` left-aligned, in the git
 /// colors; `None` (a binary file) reads `binary`, muted. Always `widths.width()` cells.
-pub fn line_counts(theme: &Theme, change: Option<(u32, u32)>, widths: CountWidths) -> Vec<Span<'static>> {
+pub fn line_counts(
+    theme: &Theme,
+    change: Option<(u32, u32)>,
+    widths: CountWidths,
+) -> Vec<Span<'static>> {
     let c = &theme.colors;
     let total = widths.width();
     match change {
@@ -228,7 +243,10 @@ pub fn line_counts(theme: &Theme, change: Option<(u32, u32)>, widths: CountWidth
             let used = widths.added + 1 + widths.removed;
             vec![
                 Span::raw(" ".repeat(total - used)),
-                Span::styled(format!("{:>w$}", format!("+{a}"), w = widths.added), Style::new().fg(c.git.added.into())),
+                Span::styled(
+                    format!("{:>w$}", format!("+{a}"), w = widths.added),
+                    Style::new().fg(c.git.added.into()),
+                ),
                 Span::raw(" "),
                 Span::styled(
                     format!("{:<w$}", format!("−{r}"), w = widths.removed),
@@ -236,7 +254,9 @@ pub fn line_counts(theme: &Theme, change: Option<(u32, u32)>, widths: CountWidth
                 ),
             ]
         }
-        None => vec![Span::styled(format!("{:>total$}", "binary"), Style::new().fg(c.muted.into()))],
+        None => {
+            vec![Span::styled(format!("{:>total$}", "binary"), Style::new().fg(c.muted.into()))]
+        }
     }
 }
 
@@ -294,7 +314,8 @@ pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row:
 fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     let c = &theme.colors;
 
-    let mut name_style = Style::new().fg(row.tint.unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() }));
+    let mut name_style =
+        Style::new().fg(row.tint.unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() }));
     if row.is_dir {
         name_style = name_style.add_modifier(Modifier::BOLD);
     }
@@ -305,8 +326,11 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         name_style = name_style.add_modifier(Modifier::DIM);
     }
     let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-    let icon =
-        if row.is_dir { crate::icons::dir(base_name, row.open) } else { crate::icons::file(base_name, row.executable) };
+    let icon = if row.is_dir {
+        crate::icons::dir(base_name, row.open)
+    } else {
+        crate::icons::file(base_name, row.executable)
+    };
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
     spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
     let name_at = spans.len();
@@ -322,7 +346,8 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     // the signs. The name shrinks (`…`) to fit; trailing text that would leave it under `MIN_NAME` cells
     // is dropped, so a narrow pane keeps the name. The rest (bar, columns, signs, motion) is `list::ListRow`.
     let signs = if row.signs.is_empty() { 1 } else { row.signs.len() * 2 };
-    let count_w = row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
+    let count_w =
+        row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
     let budget = |trailing: usize| {
         width
             .saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0)))
@@ -330,8 +355,10 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     };
     let trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
     let show_trailing = trailing > 0 && budget(trailing) >= MIN_NAME;
-    spans[name_at] =
-        Span::styled(crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })), name_style);
+    spans[name_at] = Span::styled(
+        crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })),
+        name_style,
+    );
     list::ListRow {
         id: crate::anim::hash_of(&(row.depth, row.name)),
         // What the row shows apart from the cursor.

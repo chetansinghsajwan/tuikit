@@ -7,7 +7,9 @@ mod world;
 
 pub use settings::Settings;
 
-use pulldown_cmark::{Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    Alignment, BlockQuoteKind, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -32,7 +34,8 @@ pub fn to_pdf(markdown: &str, export: &Export) -> Result<Vec<u8>, String> {
     // The machine's fonts are only read when a font that is not embedded is asked for.
     let have = world::families(&fonts);
     if !have.contains(&settings.font) || !have.contains(&settings.mono) {
-        let (system, aliases) = world::system_fonts(Some(&[settings.font.as_str(), settings.mono.as_str()]));
+        let (system, aliases) =
+            world::system_fonts(Some(&[settings.font.as_str(), settings.mono.as_str()]));
         fonts.extend(system);
         for name in [&mut settings.font, &mut settings.mono] {
             if let Some(real) = aliases.get(name.as_str()) {
@@ -111,7 +114,8 @@ struct Typst<'a> {
 fn escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
-        if matches!(c, '\\' | '#' | '$' | '*' | '_' | '`' | '<' | '>' | '@' | '[' | ']' | '~' | '/') {
+        if matches!(c, '\\' | '#' | '$' | '*' | '_' | '`' | '<' | '>' | '@' | '[' | ']' | '~' | '/')
+        {
             out.push('\\');
         }
         out.push(c);
@@ -169,7 +173,9 @@ impl Typst<'_> {
         // The footnotes go where they are named.
         let notes = std::mem::take(&mut self.notes);
         for (name, body) in notes {
-            self.out = self.out.replace(&format!("\u{1}{name}\u{1}"), &format!("#footnote[{}]", body.trim()));
+            self.out = self
+                .out
+                .replace(&format!("\u{1}{name}\u{1}"), &format!("#footnote[{}]", body.trim()));
         }
         self.out = self.out.replace('\u{1}', "");
     }
@@ -219,7 +225,9 @@ impl Typst<'_> {
                 }
                 Tag::CodeBlock(kind) => {
                     let lang = match kind {
-                        CodeBlockKind::Fenced(l) => l.split([' ', ',', '{']).next().unwrap_or("").to_string(),
+                        CodeBlockKind::Fenced(l) => {
+                            l.split([' ', ',', '{']).next().unwrap_or("").to_string()
+                        }
                         CodeBlockKind::Indented => String::new(),
                     };
                     self.out.push_str(&format!(
@@ -247,7 +255,9 @@ impl Typst<'_> {
                 Tag::Emphasis => self.out.push_str("#emph["),
                 Tag::Strong => self.out.push_str("#strong["),
                 Tag::Strikethrough => self.out.push_str("#strike["),
-                Tag::Link { dest_url, .. } => self.out.push_str(&format!("#link({})[", string(&dest_url))),
+                Tag::Link { dest_url, .. } => {
+                    self.out.push_str(&format!("#link({})[", string(&dest_url)))
+                }
                 Tag::Image { dest_url, .. } => {
                     self.image_alt = Some(String::new());
                     self.image_src = dest_url.to_string();
@@ -296,15 +306,20 @@ impl Typst<'_> {
                         self.out.push('\n');
                     }
                 }
-                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => self.out.push(']'),
+                TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough | TagEnd::Link => {
+                    self.out.push(']')
+                }
                 TagEnd::Image => {
                     let alt = self.image_alt.take().unwrap_or_default();
                     let src = std::mem::take(&mut self.image_src);
                     match self.image_path(&src) {
-                        Some(path) => self.out.push_str(&format!("#box(image({}, width: 80%))", string(&path))),
-                        None => {
-                            self.out.push_str(&escape(&format!("[image: {}]", if alt.is_empty() { src } else { alt })))
-                        }
+                        Some(path) => self
+                            .out
+                            .push_str(&format!("#box(image({}, width: 80%))", string(&path))),
+                        None => self.out.push_str(&escape(&format!(
+                            "[image: {}]",
+                            if alt.is_empty() { src } else { alt }
+                        ))),
                     }
                 }
                 TagEnd::Table => self.out.push_str(")\n\n"),
@@ -325,7 +340,8 @@ impl Typst<'_> {
                 } else if self.out.rfind('\u{2}').is_some() && self.in_code() {
                     self.out.push_str(&t);
                 } else {
-                    let at_line_start = self.out.is_empty() || self.out.ends_with('\n') || self.out.ends_with("- ");
+                    let at_line_start =
+                        self.out.is_empty() || self.out.ends_with('\n') || self.out.ends_with("- ");
                     let mut text = escape(&t);
                     if at_line_start && text.starts_with(['=', '-', '+']) {
                         text.insert(0, '\\');
@@ -348,7 +364,9 @@ impl Typst<'_> {
             Event::Html(_) | Event::InlineHtml(_) => {}
             Event::SoftBreak => self.out.push(' '),
             Event::HardBreak => self.out.push_str("\\\n"),
-            Event::Rule => self.out.push_str("\n#line(length: 100%, stroke: 0.5pt + luma(180))\n\n"),
+            Event::Rule => {
+                self.out.push_str("\n#line(length: 100%, stroke: 0.5pt + luma(180))\n\n")
+            }
             Event::TaskListMarker(done) => self.out.push_str(if done { "☑ " } else { "☐ " }),
         }
     }

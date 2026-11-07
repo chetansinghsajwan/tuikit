@@ -3,14 +3,16 @@ use super::*;
 #[test]
 fn quoting_round_trips_through_sh() {
     for s in ["plain", "with space", "it's", "a\"b$c`d", "new\nline", "", "--flag=1"] {
-        let out = Command::new("sh").arg("-c").arg(format!("printf %s {}", quote(s))).output().unwrap();
+        let out =
+            Command::new("sh").arg("-c").arg(format!("printf %s {}", quote(s))).output().unwrap();
         assert_eq!(String::from_utf8_lossy(&out.stdout), s, "{s:?}");
     }
 }
 
 #[test]
 fn the_pane_command_is_a_centered_floating_blocking_pane() {
-    let args: Vec<OsString> = vec!["--files".into(), "my dir".into(), "--title".into(), "it's".into()];
+    let args: Vec<OsString> =
+        vec!["--files".into(), "my dir".into(), "--title".into(), "it's".into()];
     let z = zellij_args(
         Path::new("/bin/pick"),
         &args,
@@ -53,7 +55,9 @@ fn the_pane_command_is_a_centered_floating_blocking_pane() {
         None,
         &[],
     );
-    assert!(!z.last().unwrap().contains(" < ") && z.windows(2).any(|w| w[0] == "--x" && w[1] == "20%"));
+    assert!(
+        !z.last().unwrap().contains(" < ") && z.windows(2).any(|w| w[0] == "--x" && w[1] == "20%")
+    );
 }
 
 #[test]
@@ -71,7 +75,10 @@ fn the_vertical_offset_leaves_about_equal_room_above_and_below() {
             let height = (i32::from(rows) * i32::from(p) + 99) / 100;
             let top = (i32::from(rows) * i32::from(y) / 100 - 1).max(0);
             let bottom = i32::from(rows) - top - height;
-            assert!((top - bottom).abs() <= 2, "rows {rows} p {p}: y {y} top {top} bottom {bottom}");
+            assert!(
+                (top - bottom).abs() <= 2,
+                "rows {rows} p {p}: y {y} top {top} bottom {bottom}"
+            );
         }
     }
     // Full height needs no offset.

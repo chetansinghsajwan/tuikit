@@ -230,7 +230,11 @@ impl Picker {
         };
         if let Some(loc) = &c.loc {
             // A grep match: the file is the folder, its matches the items.
-            return Some(crate::tree::Entry { idx, dirs: split(&loc.path), sort: format!("{:010}", loc.line) });
+            return Some(crate::tree::Entry {
+                idx,
+                dirs: split(&loc.path),
+                sort: format!("{:010}", loc.line),
+            });
         }
         if c.display.ends_with('/') {
             return None;
@@ -298,7 +302,13 @@ impl Picker {
         match self.opts.mode {
             Mode::Fuzzy => {
                 let append = q.starts_with(&self.last_query) && !self.last_query.is_empty();
-                self.nucleo.pattern.reparse(0, &q, CaseMatching::Smart, Normalization::Smart, append);
+                self.nucleo.pattern.reparse(
+                    0,
+                    &q,
+                    CaseMatching::Smart,
+                    Normalization::Smart,
+                    append,
+                );
             }
             Mode::Grep => {
                 self.restart_grep();
@@ -337,15 +347,19 @@ impl Picker {
         let alt = modifiers.contains(KeyModifiers::ALT);
         if alt {
             match code {
-                KeyCode::Char('c') => self.grep_opts.case_sensitive = !self.grep_opts.case_sensitive,
+                KeyCode::Char('c') => {
+                    self.grep_opts.case_sensitive = !self.grep_opts.case_sensitive
+                }
                 KeyCode::Char('w') => self.grep_opts.whole_word = !self.grep_opts.whole_word,
                 KeyCode::Char('r') => self.grep_opts.regex = !self.grep_opts.regex,
                 KeyCode::Char('i') => {
-                    self.field = if self.field == Field::Include { Field::Query } else { Field::Include };
+                    self.field =
+                        if self.field == Field::Include { Field::Query } else { Field::Include };
                     return true;
                 }
                 KeyCode::Char('e') => {
-                    self.field = if self.field == Field::Exclude { Field::Query } else { Field::Exclude };
+                    self.field =
+                        if self.field == Field::Exclude { Field::Query } else { Field::Exclude };
                     return true;
                 }
                 _ => return false,
@@ -353,7 +367,9 @@ impl Picker {
             self.restart_grep();
             return true;
         }
-        if modifiers.contains(KeyModifiers::CONTROL) && matches!(code, KeyCode::Char('c') | KeyCode::Char('g')) {
+        if modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(code, KeyCode::Char('c') | KeyCode::Char('g'))
+        {
             return false;
         }
         let input = match self.field {
@@ -363,7 +379,9 @@ impl Picker {
         };
         match code {
             // Back to the query; the filter stays.
-            KeyCode::Esc | KeyCode::Enter | KeyCode::Tab | KeyCode::Down | KeyCode::Up => self.field = Field::Query,
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Tab | KeyCode::Down | KeyCode::Up => {
+                self.field = Field::Query
+            }
             _ => {
                 if input.handle_event(ev).is_some() {
                     self.restart_grep();
@@ -417,8 +435,10 @@ impl Picker {
         }
         let ctrl = modifiers.contains(KeyModifiers::CONTROL);
         // `--expect` keys accept and report which key was used.
-        if let Some((name, _)) =
-            self.expect.iter().find(|(_, want)| crate::keys::matches(&KeyEvent::new(*code, *modifiers), want))
+        if let Some((name, _)) = self
+            .expect
+            .iter()
+            .find(|(_, want)| crate::keys::matches(&KeyEvent::new(*code, *modifiers), want))
         {
             let name = name.clone();
             let picked: Vec<String> = if self.marked.is_empty() {
@@ -449,7 +469,9 @@ impl Picker {
             KeyCode::Char('k') if ctrl => self.move_by(-5),
             KeyCode::Char('j') if ctrl => self.move_by(5),
             KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
-            KeyCode::Char('u') if ctrl => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            KeyCode::Char('u') if ctrl => {
+                self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1))
+            }
             // Tables (CSV, spreadsheets) show as text and back.
             KeyCode::Char('t') if ctrl => {
                 pv::set_raw_tables(!pv::raw_tables());

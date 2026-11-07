@@ -28,7 +28,12 @@ pub const ACTIONS: &[Action] = &[
     action("col.delete", "delete column", "delete the column (asks)", &["leader c d"]),
     action("col.left", "move column left", "move the column one left", &["H", "leader c h"]),
     action("col.right", "move column right", "move the column one right", &["L", "leader c l"]),
-    action("sort.asc", "sort ascending", "sort the rows by this column (numbers as numbers)", &["s"]),
+    action(
+        "sort.asc",
+        "sort ascending",
+        "sort the rows by this column (numbers as numbers)",
+        &["s"],
+    ),
     action("sort.desc", "sort descending", "sort the rows by this column, largest first", &["S"]),
     action(
         "view.header",
@@ -44,7 +49,12 @@ pub const ACTIONS: &[Action] = &[
     action("file.save", "save", "write the table to its file", &["ctrl-s", "leader w"]),
     basic("palette", "commands", "search every action by name and run it", &["leader space"]),
     basic("help", "keys", "list every action with its keys", &["?"]),
-    basic("quit", "quit", "close the editor (asks when there are unsaved changes)", &["q", "ctrl-c"]),
+    basic(
+        "quit",
+        "quit",
+        "close the editor (asks when there are unsaved changes)",
+        &["q", "ctrl-c"],
+    ),
 ];
 
 pub const GROUPS: &[Group] =

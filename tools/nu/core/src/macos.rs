@@ -78,7 +78,9 @@ impl MacWifi {
         let ssid = unsafe { n.ssid() }.map(|s| s.to_string()).unwrap_or_default();
         let rssi = unsafe { n.rssiValue() } as i16;
         let (frequency_mhz, bssid) = (
-            unsafe { n.wlanChannel() }.map(|c| channel_mhz(unsafe { c.channelNumber() } as u32)).unwrap_or(0),
+            unsafe { n.wlanChannel() }
+                .map(|c| channel_mhz(unsafe { c.channelNumber() } as u32))
+                .unwrap_or(0),
             unsafe { n.bssid() }.map(|b| b.to_string()).unwrap_or_default(),
         );
         Network {
@@ -148,7 +150,8 @@ impl Backend for MacWifi {
             .find(|n| unsafe { n.ssid() }.is_some_and(|s| s.to_string() == ssid))
             .ok_or_else(|| Error(format!("{ssid} is not in range")))?;
         let password = password.map(NSString::from_str);
-        unsafe { iface.associateToNetwork_password_error(&target, password.as_deref()) }.map_err(ns_error)
+        unsafe { iface.associateToNetwork_password_error(&target, password.as_deref()) }
+            .map_err(ns_error)
     }
 
     fn disconnect(&self) -> Result<()> {
@@ -173,14 +176,19 @@ impl MacBluetooth {
 
     fn paired(&self) -> Vec<Retained<IOBluetoothDevice>> {
         let Some(list) = (unsafe { IOBluetoothDevice::pairedDevices() }) else { return Vec::new() };
-        list.to_vec().into_iter().filter_map(|o: Retained<AnyObject>| o.downcast::<IOBluetoothDevice>().ok()).collect()
+        list.to_vec()
+            .into_iter()
+            .filter_map(|o: Retained<AnyObject>| o.downcast::<IOBluetoothDevice>().ok())
+            .collect()
     }
 
     fn find(&self, address: &str) -> Result<Retained<IOBluetoothDevice>> {
         let wanted = normalize(address);
         self.paired()
             .into_iter()
-            .find(|d| unsafe { d.addressString() }.is_some_and(|a| normalize(&a.to_string()) == wanted))
+            .find(|d| {
+                unsafe { d.addressString() }.is_some_and(|a| normalize(&a.to_string()) == wanted)
+            })
             .ok_or_else(|| Error(format!("{address} is not paired")))
     }
 }
@@ -236,9 +244,14 @@ impl Bluetooth for MacBluetooth {
                 let rssi = unsafe { d.rawRSSI() };
                 let connected = unsafe { d.isConnected() };
                 Device {
-                    address: unsafe { d.addressString() }.map(|a| a.to_string()).unwrap_or_default(),
+                    address: unsafe { d.addressString() }
+                        .map(|a| a.to_string())
+                        .unwrap_or_default(),
                     name: unsafe { d.nameOrAddress() }.map(|n| n.to_string()).unwrap_or_default(),
-                    kind: kind_of(unsafe { d.deviceClassMajor() } as u32, unsafe { d.deviceClassMinor() } as u32),
+                    kind: kind_of(unsafe { d.deviceClassMajor() } as u32, unsafe {
+                        d.deviceClassMinor()
+                    }
+                        as u32),
                     paired: true,
                     trusted: unsafe { d.isFavorite() },
                     connected,
@@ -258,7 +271,10 @@ impl Bluetooth for MacBluetooth {
     }
 
     fn set_powered(&self, _on: bool) -> Result<()> {
-        Err(Error("the Bluetooth power switch is not available to apps on macOS: use Control Centre".into()))
+        Err(Error(
+            "the Bluetooth power switch is not available to apps on macOS: use Control Centre"
+                .into(),
+        ))
     }
 
     fn connect(&self, address: &str) -> Result<()> {
@@ -279,8 +295,13 @@ impl Bluetooth for MacBluetooth {
 
     fn set_trusted(&self, address: &str, on: bool) -> Result<()> {
         let device = self.find(address)?;
-        let code = unsafe { if on { device.addToFavorites() } else { device.removeFromFavorites() } };
-        if code == 0 { Ok(()) } else { Err(Error(format!("changing the favorite flag failed (IOReturn {code:#x})"))) }
+        let code =
+            unsafe { if on { device.addToFavorites() } else { device.removeFromFavorites() } };
+        if code == 0 {
+            Ok(())
+        } else {
+            Err(Error(format!("changing the favorite flag failed (IOReturn {code:#x})")))
+        }
     }
 
     fn remove(&self, _address: &str) -> Result<()> {

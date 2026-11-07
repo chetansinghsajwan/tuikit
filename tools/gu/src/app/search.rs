@@ -56,7 +56,14 @@ impl App {
         let Some(q) = self.search.as_deref().filter(|q| !q.is_empty()) else { return false };
         let q = q.to_lowercase();
         let Some(k) = self.commits.get(i) else { return false };
-        let refs = self.labels.get(&k.oid).into_iter().flatten().map(|r| r.name.as_str()).collect::<Vec<_>>().join(" ");
+        let refs = self
+            .labels
+            .get(&k.oid)
+            .into_iter()
+            .flatten()
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         [k.oid.as_str(), k.subject.as_str(), k.author.as_str(), refs.as_str()]
             .iter()
             .any(|s| s.to_lowercase().contains(&q))
@@ -81,7 +88,10 @@ impl App {
                 let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
                 self.say(format!("match {nth} of {total}"), false);
             }
-            None => self.say(format!("no commit matches \"{}\"", self.search.clone().unwrap_or_default()), true),
+            None => self.say(
+                format!("no commit matches \"{}\"", self.search.clone().unwrap_or_default()),
+                true,
+            ),
         }
     }
 }

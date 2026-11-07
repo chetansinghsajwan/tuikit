@@ -55,8 +55,12 @@ impl Suggest {
     /// The options containing what is typed (case-insensitive), the ones that start with it first.
     pub fn matches(&self) -> Vec<&str> {
         let q = self.typed.to_lowercase();
-        let mut hits: Vec<&str> =
-            self.items.iter().map(String::as_str).filter(|i| i.to_lowercase().contains(&q)).collect();
+        let mut hits: Vec<&str> = self
+            .items
+            .iter()
+            .map(String::as_str)
+            .filter(|i| i.to_lowercase().contains(&q))
+            .collect();
         hits.sort_by_key(|i| !i.to_lowercase().starts_with(&q));
         hits
     }

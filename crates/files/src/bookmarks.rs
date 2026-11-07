@@ -59,7 +59,8 @@ impl Bookmarks {
         if let Some(dir) = file.parent() {
             fs::create_dir_all(dir)?;
         }
-        let text: String = self.map.iter().map(|(k, p)| format!("{k}\t{}\n", p.display())).collect();
+        let text: String =
+            self.map.iter().map(|(k, p)| format!("{k}\t{}\n", p.display())).collect();
         fs::write(file, text)
     }
 }

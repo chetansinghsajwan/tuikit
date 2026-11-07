@@ -147,7 +147,9 @@ pub fn hash_of(v: &impl Hash) -> u64 {
 /// it shows apart from the cursor. `finish` then glides a scrolled list, reveals rows a fold opened and flashes
 /// rows whose content changed.
 pub fn note_row(pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
-    STATE.with(|s| s.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar }));
+    STATE.with(|s| {
+        s.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar })
+    });
 }
 
 /// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it fades in over it.
@@ -173,7 +175,11 @@ const OVERLAY: Duration = Duration::from_millis(100);
 const TAB: Duration = Duration::from_millis(160);
 
 fn progress(began: Instant, now: Instant, over: Duration) -> f32 {
-    if now < began { 0.0 } else { (now.duration_since(began).as_secs_f32() / over.as_secs_f32()).min(1.0) }
+    if now < began {
+        0.0
+    } else {
+        (now.duration_since(began).as_secs_f32() / over.as_secs_f32()).min(1.0)
+    }
 }
 
 fn rgb(c: Color, fallback: Color) -> Color {
@@ -239,10 +245,16 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
             let mut started = false;
             if steady && !prev.is_empty() {
                 if let Some(d) = scrolled(&prev, &cur) {
-                    pane.scroll = frame.clone().map(|from| Scroll { from, d, began: now, rect: bounds(&cur) });
+                    pane.scroll = frame.clone().map(|from| Scroll {
+                        from,
+                        d,
+                        began: now,
+                        rect: bounds(&cur),
+                    });
                     started = true;
                 } else if pane.scroll.is_none() {
-                    let old: HashMap<u64, usize> = prev.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
+                    let old: HashMap<u64, usize> =
+                        prev.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
                     let mut run = 0;
                     for (i, r) in cur.iter().enumerate() {
                         match old.get(&r.id) {
@@ -275,7 +287,8 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                 } else {
                     gliding = true;
                     moving = true;
-                    let shift = (sc.d.abs() as f32 * (1.0 - ease_out(t))).round() as i32 * sc.d.signum();
+                    let shift =
+                        (sc.d.abs() as f32 * (1.0 - ease_out(t))).round() as i32 * sc.d.signum();
                     let r = sc.rect;
                     for y in r.top()..r.bottom() {
                         let v = i32::from(y) - shift;
@@ -284,7 +297,8 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                                 Some(&truth[(x, v as u16)])
                             } else {
                                 let o = v + sc.d;
-                                (o >= i32::from(r.top()) && o < i32::from(r.bottom())).then(|| &sc.from[(x, o as u16)])
+                                (o >= i32::from(r.top()) && o < i32::from(r.bottom()))
+                                    .then(|| &sc.from[(x, o as u16)])
                             };
                             buf[(x, y)] = src.cloned().unwrap_or_default();
                         }
@@ -312,7 +326,11 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                             cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
                         }
                         if let Some(e) = flash {
-                            cell.set_bg(mix(theme.colors.accent.into(), cbg, (24.0 * (1.0 - e)) as u8));
+                            cell.set_bg(mix(
+                                theme.colors.accent.into(),
+                                cbg,
+                                (24.0 * (1.0 - e)) as u8,
+                            ));
                         }
                     }
                 }
@@ -362,7 +380,11 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                     for x in r.left()..r.right() {
                         let cell = &mut buf[(x, y)];
                         if let Color::Rgb(..) = cell.fg {
-                            cell.set_fg(mix(cell.fg, rgb(cell.bg, bg), (ease_out(p) * 100.0) as u8));
+                            cell.set_fg(mix(
+                                cell.fg,
+                                rgb(cell.bg, bg),
+                                (ease_out(p) * 100.0) as u8,
+                            ));
                         }
                     }
                 }

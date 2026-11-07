@@ -48,7 +48,8 @@ pub(crate) fn sniff(text: &str) -> u8 {
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).take(10).collect();
     let mut best = (0usize, b',');
     for d in *b",;\t|" {
-        let counts: Vec<usize> = lines.iter().map(|l| l.bytes().filter(|&b| b == d).count()).collect();
+        let counts: Vec<usize> =
+            lines.iter().map(|l| l.bytes().filter(|&b| b == d).count()).collect();
         let first = counts.first().copied().unwrap_or(0);
         if first > 0 && counts.iter().all(|&c| c == first) && first > best.0 {
             best = (first, d);
@@ -69,14 +70,23 @@ fn commas(n: usize) -> String {
     out
 }
 
-pub fn render(path: &Path, kind: Kind, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn render(
+    path: &Path,
+    kind: Kind,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<Vec<Line<'static>>, Error> {
     let muted = Style::new().fg(theme.colors.muted.into());
     let (name, head, rows, total, more_than, extra) = match kind {
         Kind::Delimited(delim) => delimited(path, delim)?,
         Kind::Sheet => sheet(path)?,
     };
     let room = usize::from(opts.width.unwrap_or(100));
-    let cap = opts.height.map(|h| usize::from(h).saturating_sub(4).max(3)).unwrap_or(ROW_CAP).min(ROW_CAP);
+    let cap = opts
+        .height
+        .map(|h| usize::from(h).saturating_sub(4).max(3))
+        .unwrap_or(ROW_CAP)
+        .min(ROW_CAP);
     let shown_rows: Vec<Vec<String>> = rows.iter().take(cap).cloned().collect();
     let (table, hidden_cols) = crate::markdown::grid_lines(&head, &shown_rows, theme, room);
     let mut facts = format!(
@@ -91,7 +101,10 @@ pub fn render(path: &Path, kind: Kind, theme: &Theme, opts: &Options) -> Result<
         if more_than { "+" } else { "" }
     ));
     if hidden_cols > 0 {
-        facts.push_str(&format!(" · {hidden_cols} column{} not shown", if hidden_cols == 1 { "" } else { "s" }));
+        facts.push_str(&format!(
+            " · {hidden_cols} column{} not shown",
+            if hidden_cols == 1 { "" } else { "s" }
+        ));
     }
     let mut out = vec![Line::from(Span::styled(facts, muted)), Line::default()];
     out.extend(table.into_iter().map(Line::from));
@@ -121,8 +134,11 @@ fn delimited(path: &Path, delim: Option<u8>) -> Result<Parsed, Error> {
     }
     let text = String::from_utf8_lossy(&buf);
     let d = delim.unwrap_or_else(|| sniff(&text));
-    let mut reader =
-        csv::ReaderBuilder::new().delimiter(d).has_headers(false).flexible(true).from_reader(text.as_bytes());
+    let mut reader = csv::ReaderBuilder::new()
+        .delimiter(d)
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(text.as_bytes());
     let mut head: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut total = 0usize;
@@ -152,10 +168,16 @@ fn delimited(path: &Path, delim: Option<u8>) -> Result<Parsed, Error> {
 
 fn sheet(path: &Path) -> Result<Parsed, Error> {
     use calamine::{Reader, open_workbook_auto};
-    let mut book = open_workbook_auto(path).map_err(|e| Error::Unsupported(format!("spreadsheet: {e}")))?;
+    let mut book =
+        open_workbook_auto(path).map_err(|e| Error::Unsupported(format!("spreadsheet: {e}")))?;
     let names = book.sheet_names();
-    let first = names.first().cloned().ok_or_else(|| Error::Unsupported("spreadsheet without sheets".into()))?;
-    let range = book.worksheet_range(&first).map_err(|e| Error::Unsupported(format!("spreadsheet: {e}")))?;
+    let first = names
+        .first()
+        .cloned()
+        .ok_or_else(|| Error::Unsupported("spreadsheet without sheets".into()))?;
+    let range = book
+        .worksheet_range(&first)
+        .map_err(|e| Error::Unsupported(format!("spreadsheet: {e}")))?;
     let cell = |c: &calamine::Data| match c {
         calamine::Data::Empty => String::new(),
         other => other.to_string(),

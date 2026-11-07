@@ -2,8 +2,10 @@
 
 /// How long ago `time` (seconds since the epoch) was: `now`, `5m ago`, `3h ago`, `2d ago`, `4mo ago`, `1y ago`.
 pub fn ago(time: i64) -> String {
-    let now =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(time);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(time);
     match (now - time).max(0) {
         0..60 => "now".into(),
         s @ 60..3600 => format!("{}m ago", s / 60),

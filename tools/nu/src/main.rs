@@ -56,7 +56,9 @@ fn main() -> ExitCode {
 fn real_backends() -> (Arc<dyn Backend>, Arc<dyn Bluetooth>) {
     let wifi: Arc<dyn Backend> = match nu_core::nm::Nm::system() {
         Ok(nm) => Arc::new(nm),
-        Err(e) => Arc::new(nu_core::Unavailable(format!("{e} (try `nu --fake` to see the screen)"))),
+        Err(e) => {
+            Arc::new(nu_core::Unavailable(format!("{e} (try `nu --fake` to see the screen)")))
+        }
     };
     let bt: Arc<dyn Bluetooth> = match nu_core::bluez::BlueZ::system() {
         Ok(b) => Arc::new(b),

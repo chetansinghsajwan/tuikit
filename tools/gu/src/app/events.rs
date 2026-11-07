@@ -67,7 +67,10 @@ impl App {
                 Screen::Refs => Screen::Commits,
             }),
             "search.start" => {
-                self.mode = Mode::Prompt(PromptKind::Search, Input::new(self.search.clone().unwrap_or_default()))
+                self.mode = Mode::Prompt(
+                    PromptKind::Search,
+                    Input::new(self.search.clone().unwrap_or_default()),
+                )
             }
             "search.next" => self.search_step(1),
             "search.prev" => self.search_step(-1),
@@ -123,7 +126,10 @@ impl App {
             "view.all" => {
                 self.all_branches = !self.all_branches;
                 self.reload_history();
-                self.say(if self.all_branches { "every branch" } else { "the checked-out branch" }, false);
+                self.say(
+                    if self.all_branches { "every branch" } else { "the checked-out branch" },
+                    false,
+                );
             }
             "preview.down" => self.pscroll += (self.pheight / 2).max(1),
             "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
@@ -136,10 +142,13 @@ impl App {
                 let on = !pv::diff_ignoring_whitespace();
                 pv::diff_ignore_whitespace(on);
                 self.preview = None;
-                self.say(if on { "ignoring whitespace changes" } else { "showing whitespace changes" }, false);
+                self.say(
+                    if on { "ignoring whitespace changes" } else { "showing whitespace changes" },
+                    false,
+                );
             }
-            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top"
-            | "nav.bottom" => {
+            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down"
+            | "nav.top" | "nav.bottom" => {
                 if let Some(li) = li {
                     let st = &mut self.lists[li];
                     st.cursor = match id {
@@ -277,7 +286,9 @@ impl App {
             Focus::Branches => {
                 // Renaming a folder renames everything under it (a remote folder renames the remote itself).
                 if id == "branch.rename" {
-                    if let Some(RefRow::Folder { key, depth, .. }) = self.ref_rows.get(self.lists[0].cursor).cloned() {
+                    if let Some(RefRow::Folder { key, depth, .. }) =
+                        self.ref_rows.get(self.lists[0].cursor).cloned()
+                    {
                         let (section, path) = key.split_once('/').unwrap_or(("", &key));
                         match section {
                             "b" => {
@@ -303,7 +314,10 @@ impl App {
                         }
                         return;
                     }
-                    if matches!(self.ref_rows.get(self.lists[0].cursor), Some(RefRow::Section { .. })) {
+                    if matches!(
+                        self.ref_rows.get(self.lists[0].cursor),
+                        Some(RefRow::Section { .. })
+                    ) {
                         self.say("pick a ref or a folder to rename", true);
                         return;
                     }
@@ -333,14 +347,20 @@ impl App {
                             self.say(format!("already on {}", b.name), false);
                         } else {
                             let (name, kind) = (b.name.clone(), b.kind);
-                            self.run(format!("switched to {}", b.name), move |r| r.checkout_ref(&name, kind));
+                            self.run(format!("switched to {}", b.name), move |r| {
+                                r.checkout_ref(&name, kind)
+                            });
                         }
                     }
-                    "branch.new" => self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default()),
+                    "branch.new" => {
+                        self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default())
+                    }
                     "branch.delete" | "branch.force_delete" => match b.kind {
                         RefKind::Tag => self.mode = Mode::Confirm(Confirm::DeleteTag(b.name)),
                         RefKind::Remote => self.mode = Mode::Confirm(Confirm::DeleteRemote(b.name)),
-                        RefKind::Branch if b.is_head => self.say("the checked-out branch cannot be deleted", true),
+                        RefKind::Branch if b.is_head => {
+                            self.say("the checked-out branch cannot be deleted", true)
+                        }
                         RefKind::Branch => {
                             self.mode = Mode::Confirm(Confirm::DeleteBranch {
                                 name: b.name,
@@ -408,35 +428,53 @@ impl App {
                         } else {
                             self.compare = Some(k.oid.clone());
                             self.detail = true;
-                            self.say(format!("comparing with {}: move to another commit (m clears)", k.short), false);
+                            self.say(
+                                format!(
+                                    "comparing with {}: move to another commit (m clears)",
+                                    k.short
+                                ),
+                                false,
+                            );
                         }
                     }
                     "commit.checkout" => {
                         let oid = k.oid.clone();
-                        self.run(format!("checked out {}", k.short), move |r| r.checkout_commit(&oid));
+                        self.run(format!("checked out {}", k.short), move |r| {
+                            r.checkout_commit(&oid)
+                        });
                     }
                     "commit.cherry_pick" => {
                         let oid = k.oid.clone();
-                        self.run(format!("cherry-picked {}", k.short), move |r| r.cherry_pick(&oid));
+                        self.run(format!("cherry-picked {}", k.short), move |r| {
+                            r.cherry_pick(&oid)
+                        });
                     }
                     "commit.revert" => self.mode = Mode::Confirm(Confirm::Revert(k.oid)),
                     "commit.reword" => {
                         self.mode = Mode::Prompt(PromptKind::Reword(k.oid), Input::new(k.subject));
                     }
                     "commit.amend" => {
-                        let head = self.commits.first().map(|c| c.subject.clone()).unwrap_or_default();
+                        let head =
+                            self.commits.first().map(|c| c.subject.clone()).unwrap_or_default();
                         self.mode = Mode::Prompt(PromptKind::Amend(head.clone()), Input::new(head));
                     }
-                    "commit.branch" => self.mode = Mode::Prompt(PromptKind::BranchAt(k.oid), Input::default()),
-                    "commit.tag" => self.mode = Mode::Prompt(PromptKind::TagAt(k.oid), Input::default()),
-                    "commit.reset_soft" => {
-                        self.run(format!("reset (soft) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Soft))
+                    "commit.branch" => {
+                        self.mode = Mode::Prompt(PromptKind::BranchAt(k.oid), Input::default())
                     }
-                    "commit.reset_mixed" => {
-                        self.run(format!("reset (mixed) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Mixed))
+                    "commit.tag" => {
+                        self.mode = Mode::Prompt(PromptKind::TagAt(k.oid), Input::default())
                     }
+                    "commit.reset_soft" => self
+                        .run(format!("reset (soft) to {}", k.short), move |r| {
+                            r.reset(&k.oid, ResetMode::Soft)
+                        }),
+                    "commit.reset_mixed" => self
+                        .run(format!("reset (mixed) to {}", k.short), move |r| {
+                            r.reset(&k.oid, ResetMode::Mixed)
+                        }),
                     "commit.reset_hard" => {
-                        self.mode = Mode::Confirm(Confirm::Reset { oid: k.oid, mode: ResetMode::Hard })
+                        self.mode =
+                            Mode::Confirm(Confirm::Reset { oid: k.oid, mode: ResetMode::Hard })
                     }
                     _ => {}
                 }
@@ -444,9 +482,15 @@ impl App {
             Focus::Stashes => {
                 let cur = self.stashes.get(self.lists[2].cursor).map(|s| s.index);
                 match (id, cur) {
-                    ("stash.new", _) => self.mode = Mode::Prompt(PromptKind::NewStash, Input::default()),
-                    ("stash.apply", Some(i)) => self.run(format!("applied stash@{{{i}}}"), move |r| r.stash_apply(i)),
-                    ("stash.pop", Some(i)) => self.run(format!("popped stash@{{{i}}}"), move |r| r.stash_pop(i)),
+                    ("stash.new", _) => {
+                        self.mode = Mode::Prompt(PromptKind::NewStash, Input::default())
+                    }
+                    ("stash.apply", Some(i)) => {
+                        self.run(format!("applied stash@{{{i}}}"), move |r| r.stash_apply(i))
+                    }
+                    ("stash.pop", Some(i)) => {
+                        self.run(format!("popped stash@{{{i}}}"), move |r| r.stash_pop(i))
+                    }
                     ("stash.drop", Some(i)) => self.mode = Mode::Confirm(Confirm::DropStash(i)),
                     _ => {}
                 }
@@ -461,7 +505,10 @@ impl App {
         // The authors and categories of the history, the most frequent first.
         type Counts = Vec<(usize, String)>;
         let (mut authors, mut cats): (Counts, Counts) = (Vec::new(), Vec::new());
-        let bump = |list: &mut Vec<(usize, String)>, name: String| match list.iter_mut().find(|(_, n)| *n == name) {
+        let bump = |list: &mut Vec<(usize, String)>, name: String| match list
+            .iter_mut()
+            .find(|(_, n)| *n == name)
+        {
             Some((n, _)) => *n += 1,
             None => list.push((1, name)),
         };
@@ -514,14 +561,22 @@ impl App {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_secs() as i64)
                     .unwrap_or(0);
-                self.filter.since =
-                    popup.chosen("Since").first().and_then(|s| parse_since(s, now).map(|t| (s.clone(), t)));
+                self.filter.since = popup
+                    .chosen("Since")
+                    .first()
+                    .and_then(|s| parse_since(s, now).map(|t| (s.clone(), t)));
                 self.refilter("filtered");
             }
         }
     }
 
-    pub(super) fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event, key: &KeyEvent) {
+    pub(super) fn prompt_key(
+        &mut self,
+        kind: PromptKind,
+        mut input: Input,
+        ev: &Event,
+        key: &KeyEvent,
+    ) {
         // Filter prompts offer options: up and down choose, tab fills the line in.
         if matches!(kind, PromptKind::SwitchTo) {
             let ctrl = key.modifiers.contains(ratatui::crossterm::event::KeyModifiers::CONTROL);
@@ -556,7 +611,9 @@ impl App {
                             // The commit under the cursor counts if it matches.
                             let at = self.lists[1].cursor;
                             if self.commit_matches(at) {
-                                let total = (0..self.commits.len()).filter(|&i| self.commit_matches(i)).count();
+                                let total = (0..self.commits.len())
+                                    .filter(|&i| self.commit_matches(i))
+                                    .count();
                                 let nth = (0..=at).filter(|&j| self.commit_matches(j)).count();
                                 self.say(format!("match {nth} of {total}"), false);
                             } else {
@@ -574,20 +631,28 @@ impl App {
                     }
                     PromptKind::RenameBranch(old) => {
                         let v = value.clone();
-                        self.run(format!("renamed {old} to {value}"), move |r| r.rename_branch(&old, &v));
+                        self.run(format!("renamed {old} to {value}"), move |r| {
+                            r.rename_branch(&old, &v)
+                        });
                     }
                     PromptKind::RenameTag(old) => {
                         let v = value.clone();
-                        self.run(format!("renamed {old} to {value}"), move |r| r.rename_tag(&old, &v));
+                        self.run(format!("renamed {old} to {value}"), move |r| {
+                            r.rename_tag(&old, &v)
+                        });
                     }
                     PromptKind::RenameRemote(old) => {
                         let v = value.clone();
-                        self.run(format!("renamed remote {old} to {value}"), move |r| r.rename_remote(&old, &v));
+                        self.run(format!("renamed remote {old} to {value}"), move |r| {
+                            r.rename_remote(&old, &v)
+                        });
                     }
                     PromptKind::RenameRemoteBranch(old) => {
                         let v = value.clone();
                         let done = format!("renamed {old} to {value} on the remote");
-                        self.remote("renaming on the remote", &done, move |r| r.rename_remote_branch(&old, &v));
+                        self.remote("renaming on the remote", &done, move |r| {
+                            r.rename_remote_branch(&old, &v)
+                        });
                     }
                     PromptKind::RenameFolder { kind, prefix } => {
                         let value = value.trim_end_matches('/').to_string();
@@ -595,7 +660,9 @@ impl App {
                             .branches
                             .iter()
                             .filter(|r| r.kind == kind && r.name.starts_with(&format!("{prefix}/")))
-                            .map(|r| (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..])))
+                            .map(|r| {
+                                (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..]))
+                            })
                             .collect();
                         let n = pairs.len();
                         // The names are checked and the renames are all or none (`Repo::rename_many`).
@@ -603,7 +670,10 @@ impl App {
                             self.say("the folder name is empty or has an empty part", true);
                         } else {
                             self.run(
-                                format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }),
+                                format!(
+                                    "renamed {n} ref{} to {value}/",
+                                    if n == 1 { "" } else { "s" }
+                                ),
                                 move |r| r.rename_many(kind, &pairs),
                             );
                         }
@@ -640,12 +710,18 @@ impl App {
     /// Check out what was typed: a ref by its name, the option chosen from the list, or a commit.
     pub(super) fn switch_to(&mut self, typed: String) {
         let typed = typed.trim().to_string();
-        let by =
-            |name: &str| self.branches.iter().find(|b| b.name == name).map(|b| (b.name.clone(), b.kind, b.is_head));
+        let by = |name: &str| {
+            self.branches
+                .iter()
+                .find(|b| b.name == name)
+                .map(|b| (b.name.clone(), b.kind, b.is_head))
+        };
         let pick = by(&typed).or_else(|| self.suggest.current().and_then(|s| by(&s)));
         match pick {
             Some((name, _, true)) => self.say(format!("already on {name}"), false),
-            Some((name, kind, false)) => self.run(format!("switched to {name}"), move |r| r.checkout_ref(&name, kind)),
+            Some((name, kind, false)) => {
+                self.run(format!("switched to {name}"), move |r| r.checkout_ref(&name, kind))
+            }
             None if typed.is_empty() => {}
             None => match self.repo.commit(&typed) {
                 Ok(k) => {
@@ -660,7 +736,10 @@ impl App {
     pub(super) fn confirm_key(&mut self, c: Confirm, key: &KeyEvent) {
         let again = matches!(
             c,
-            Confirm::DeleteBranch { .. } | Confirm::DeleteTag(_) | Confirm::DeleteRemote(_) | Confirm::DropStash(_)
+            Confirm::DeleteBranch { .. }
+                | Confirm::DeleteTag(_)
+                | Confirm::DeleteRemote(_)
+                | Confirm::DropStash(_)
         );
         if !(matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter)
             || (again && matches!(key.code, KeyCode::Char('d' | 'D'))))
@@ -676,13 +755,17 @@ impl App {
                 let n = name.clone();
                 self.run(format!("merged {name}"), move |r| r.merge(&n));
             }
-            Confirm::DropStash(i) => self.run(format!("dropped stash@{{{i}}}"), move |r| r.stash_drop(i)),
+            Confirm::DropStash(i) => {
+                self.run(format!("dropped stash@{{{i}}}"), move |r| r.stash_drop(i))
+            }
             Confirm::Rebase(name) => {
                 let n = name.clone();
                 self.run(format!("rebased onto {name}"), move |r| r.rebase(&n));
             }
             Confirm::Revert(oid) => self.run("reverted".to_string(), move |r| r.revert(&oid)),
-            Confirm::Reset { oid, mode } => self.run("reset (hard)".to_string(), move |r| r.reset(&oid, mode)),
+            Confirm::Reset { oid, mode } => {
+                self.run("reset (hard)".to_string(), move |r| r.reset(&oid, mode))
+            }
             Confirm::ForcePush => self.remote("force-pushing", "force-pushed", |r| r.push(true)),
             Confirm::DeleteTag(name) => {
                 let n = name.clone();

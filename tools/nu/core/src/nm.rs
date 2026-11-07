@@ -51,7 +51,8 @@ pub fn ssid_text(bytes: &[u8]) -> String {
 impl Nm {
     /// Connect to the system bus, where NetworkManager lives.
     pub fn system() -> Result<Nm> {
-        let conn = Connection::system().map_err(|e| Error(format!("cannot reach the system D-Bus: {e}")))?;
+        let conn = Connection::system()
+            .map_err(|e| Error(format!("cannot reach the system D-Bus: {e}")))?;
         Ok(Nm { conn, dest: DEST.to_string() })
     }
 
@@ -90,9 +91,15 @@ impl Nm {
         let mut out = Vec::new();
         for path in paths {
             let conn = self.proxy(path.as_str(), IF_CONNECTION)?;
-            let Ok(all): std::result::Result<SavedSettings, _> = conn.call("GetSettings", &()) else { continue };
+            let Ok(all): std::result::Result<SavedSettings, _> = conn.call("GetSettings", &())
+            else {
+                continue;
+            };
             let Some(wireless) = all.get("802-11-wireless") else { continue };
-            let Some(ssid) = wireless.get("ssid").and_then(|v| Vec::<u8>::try_from(v.clone()).ok()) else { continue };
+            let Some(ssid) = wireless.get("ssid").and_then(|v| Vec::<u8>::try_from(v.clone()).ok())
+            else {
+                continue;
+            };
             out.push((ssid_text(&ssid), path));
         }
         Ok(out)
@@ -144,7 +151,8 @@ impl Backend for Nm {
         let Some((device, name)) = self.wifi_device()? else {
             return Ok(Status { device: None, enabled, active: None });
         };
-        let active = self.access_points(&device)?.into_iter().find(|(_, n)| n.active).map(|(_, n)| n.ssid);
+        let active =
+            self.access_points(&device)?.into_iter().find(|(_, n)| n.active).map(|(_, n)| n.ssid);
         Ok(Status { device: Some(name), enabled, active })
     }
 
@@ -187,20 +195,33 @@ impl Backend for Nm {
         }
         // A new one is created and activated in one step; NetworkManager keeps it for next time.
         let mut connection: Settings<'_> = HashMap::new();
-        connection
-            .insert("connection", HashMap::from([("type", Value::from("802-11-wireless")), ("id", Value::from(ssid))]));
+        connection.insert(
+            "connection",
+            HashMap::from([("type", Value::from("802-11-wireless")), ("id", Value::from(ssid))]),
+        );
         connection.insert(
             "802-11-wireless",
-            HashMap::from([("ssid", Value::from(ssid.as_bytes().to_vec())), ("mode", Value::from("infrastructure"))]),
+            HashMap::from([
+                ("ssid", Value::from(ssid.as_bytes().to_vec())),
+                ("mode", Value::from("infrastructure")),
+            ]),
         );
         if !network.security.is_open() {
-            let password = password.filter(|p| !p.is_empty()).ok_or_else(|| Error("a password is needed".into()))?;
+            let password = password
+                .filter(|p| !p.is_empty())
+                .ok_or_else(|| Error("a password is needed".into()))?;
             let key_mgmt = if network.security == Security::Wep { "none" } else { "wpa-psk" };
             let mut security = HashMap::from([("key-mgmt", Value::from(key_mgmt))]);
-            security.insert(if network.security == Security::Wep { "wep-key0" } else { "psk" }, Value::from(password));
+            security.insert(
+                if network.security == Security::Wep { "wep-key0" } else { "psk" },
+                Value::from(password),
+            );
             connection.insert("802-11-wireless-security", security);
         }
-        root.call::<_, _, (OwnedObjectPath, OwnedObjectPath)>("AddAndActivateConnection", &(connection, device, ap))?;
+        root.call::<_, _, (OwnedObjectPath, OwnedObjectPath)>(
+            "AddAndActivateConnection",
+            &(connection, device, ap),
+        )?;
         Ok(())
     }
 

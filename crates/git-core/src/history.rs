@@ -152,7 +152,11 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
     if tips.is_empty() {
         return Ok(Vec::new());
     }
-    let walk = repo.rev_walk(tips).sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst)).all().map_err(err)?;
+    let walk = repo
+        .rev_walk(tips)
+        .sorting(Sorting::ByCommitTime(CommitTimeOrder::NewestFirst))
+        .all()
+        .map_err(err)?;
     let mut out = Vec::new();
     for info in walk.take(limit) {
         let info = info.map_err(err)?;
@@ -162,7 +166,11 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
     Ok(crate::graph::topo_order(out))
 }
 
-pub(crate) fn commits_from(repo: &gix::Repository, rev: &str, limit: usize) -> Result<Vec<CommitInfo>, Error> {
+pub(crate) fn commits_from(
+    repo: &gix::Repository,
+    rev: &str,
+    limit: usize,
+) -> Result<Vec<CommitInfo>, Error> {
     let id = repo.rev_parse_single(rev).map_err(err)?;
     let start = repo.find_commit(id).map_err(err)?;
     let walk = start.ancestors().all().map_err(err)?;
@@ -175,7 +183,9 @@ pub(crate) fn commits_from(repo: &gix::Repository, rev: &str, limit: usize) -> R
 }
 
 pub(crate) fn stashes(repo: &gix::Repository) -> Result<Vec<StashInfo>, Error> {
-    let Some(stash) = repo.try_find_reference("refs/stash").map_err(err)? else { return Ok(Vec::new()) };
+    let Some(stash) = repo.try_find_reference("refs/stash").map_err(err)? else {
+        return Ok(Vec::new());
+    };
     let mut log = stash.log_iter();
     let Some(iter) = log.rev().map_err(err)? else { return Ok(Vec::new()) };
     let mut out = Vec::new();
@@ -238,16 +248,32 @@ fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Si
     for change in list {
         let mode = |m: gix::object::tree::EntryMode| format!("{:o}", m.value());
         let (path, old_path, modes, kind, before, after) = match change {
-            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => {
-                (location.to_str_lossy().into_owned(), None, None, Kind::Added, Vec::new(), blob(repo, id))
-            }
-            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => {
-                (location.to_str_lossy().into_owned(), None, None, Kind::Deleted, blob(repo, id), Vec::new())
-            }
-            Change::Modification { location, previous_id, id, entry_mode, previous_entry_mode, .. }
-                if entry_mode.is_blob() =>
-            {
-                let modes = (previous_entry_mode != entry_mode).then(|| (mode(previous_entry_mode), mode(entry_mode)));
+            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => (
+                location.to_str_lossy().into_owned(),
+                None,
+                None,
+                Kind::Added,
+                Vec::new(),
+                blob(repo, id),
+            ),
+            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => (
+                location.to_str_lossy().into_owned(),
+                None,
+                None,
+                Kind::Deleted,
+                blob(repo, id),
+                Vec::new(),
+            ),
+            Change::Modification {
+                location,
+                previous_id,
+                id,
+                entry_mode,
+                previous_entry_mode,
+                ..
+            } if entry_mode.is_blob() => {
+                let modes = (previous_entry_mode != entry_mode)
+                    .then(|| (mode(previous_entry_mode), mode(entry_mode)));
                 (
                     location.to_str_lossy().into_owned(),
                     None,
@@ -257,8 +283,17 @@ fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Si
                     blob(repo, id),
                 )
             }
-            Change::Rewrite { location, source_location, source_id, id, entry_mode, source_entry_mode, .. } => {
-                let modes = (source_entry_mode != entry_mode).then(|| (mode(source_entry_mode), mode(entry_mode)));
+            Change::Rewrite {
+                location,
+                source_location,
+                source_id,
+                id,
+                entry_mode,
+                source_entry_mode,
+                ..
+            } => {
+                let modes = (source_entry_mode != entry_mode)
+                    .then(|| (mode(source_entry_mode), mode(entry_mode)));
                 (
                     location.to_str_lossy().into_owned(),
                     Some(source_location.to_str_lossy().into_owned()),
@@ -276,7 +311,11 @@ fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Si
     Ok(out)
 }
 
-pub(crate) fn changes(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<FileChange>, Error> {
+pub(crate) fn changes(
+    repo: &gix::Repository,
+    base: Option<&str>,
+    rev: &str,
+) -> Result<Vec<FileChange>, Error> {
     Ok(sides(repo, base, rev)?
         .into_iter()
         .map(|s| {
@@ -356,7 +395,8 @@ pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
         // Merge changes whose context would touch or overlap.
         let mut j = i;
         while j + 1 < raw.len()
-            && (raw[j + 1].before.start as usize).saturating_sub(raw[j].before.end as usize) <= 2 * CONTEXT
+            && (raw[j + 1].before.start as usize).saturating_sub(raw[j].before.end as usize)
+                <= 2 * CONTEXT
         {
             j += 1;
         }
@@ -402,7 +442,11 @@ pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     out
 }
 
-pub(crate) fn patch(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<FilePatch>, Error> {
+pub(crate) fn patch(
+    repo: &gix::Repository,
+    base: Option<&str>,
+    rev: &str,
+) -> Result<Vec<FilePatch>, Error> {
     Ok(sides(repo, base, rev)?
         .into_iter()
         .map(|s| {

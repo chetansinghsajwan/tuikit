@@ -52,9 +52,12 @@ impl Kind {
     fn color(self, theme: &Theme) -> Color {
         let s = &theme.colors.syntax;
         match self {
-            Kind::Module | Kind::Class | Kind::Struct | Kind::Interface | Kind::Enum | Kind::TypeParameter => {
-                s.type_.into()
-            }
+            Kind::Module
+            | Kind::Class
+            | Kind::Struct
+            | Kind::Interface
+            | Kind::Enum
+            | Kind::TypeParameter => s.type_.into(),
             Kind::Function | Kind::Method | Kind::Constructor => s.function.into(),
             Kind::Field | Kind::Variable => s.variable.into(),
             Kind::Constant => s.constant.into(),
@@ -204,7 +207,8 @@ impl Panel {
                     end_line: s.end_line,
                     folded: (!s.children.is_empty()).then_some(!fold),
                 });
-                let inner = if fold { walk(&s.children, path, depth + 1, folded, q, rows) } else { false };
+                let inner =
+                    if fold { walk(&s.children, path, depth + 1, folded, q, rows) } else { false };
                 // With a filter a symbol stays when its name or a member matches.
                 if hit || inner {
                     any = true;
@@ -295,7 +299,9 @@ impl Panel {
                 self.message = Some(format!("{} is not bound", self.keymap.rejected()));
                 Action::None
             }
-            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => Action::None,
+            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
+                Action::None
+            }
         }
     }
 
@@ -362,17 +368,20 @@ impl Panel {
         }
         // The filter prompt or a message takes the last row.
         let footer = match &self.mode {
-            Mode::Filter(input) => {
-                Some((ui::prompt::line(theme, "filter: ", input.value()), Some(input.visual_cursor())))
-            }
+            Mode::Filter(input) => Some((
+                ui::prompt::line(theme, "filter: ", input.value()),
+                Some(input.visual_cursor()),
+            )),
             Mode::Normal if !self.filter.is_empty() => Some((
-                Line::from(Span::styled(format!("filter: {}", self.filter), Style::new().fg(c.warning.into()))),
+                Line::from(Span::styled(
+                    format!("filter: {}", self.filter),
+                    Style::new().fg(c.warning.into()),
+                )),
                 None,
             )),
-            Mode::Normal => self
-                .message
-                .as_ref()
-                .map(|m| (Line::from(Span::styled(m.clone(), Style::new().fg(c.error.into()))), None)),
+            Mode::Normal => self.message.as_ref().map(|m| {
+                (Line::from(Span::styled(m.clone(), Style::new().fg(c.error.into()))), None)
+            }),
         };
         if let Some((line, cursor)) = footer {
             let row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
@@ -386,7 +395,11 @@ impl Panel {
             }
         }
         if self.rows.is_empty() {
-            let why = if self.filter.is_empty() { "no symbols (no language server?)" } else { "nothing matches" };
+            let why = if self.filter.is_empty() {
+                "no symbols (no language server?)"
+            } else {
+                "nothing matches"
+            };
             buf.set_string(inner.x + 1, inner.y, why, Style::new().fg(c.muted.into()));
             return;
         }
@@ -410,7 +423,10 @@ impl Panel {
             let mut spans = vec![
                 ui::tree::guides(theme, row.depth),
                 ui::tree::fold_mark(theme, row.folded),
-                Span::styled(format!("{} ", row.kind.glyph()), Style::new().fg(row.kind.color(theme))),
+                Span::styled(
+                    format!("{} ", row.kind.glyph()),
+                    Style::new().fg(row.kind.color(theme)),
+                ),
                 Span::styled(
                     row.name.clone(),
                     Style::new().fg(c.fg.into()).add_modifier(if row.folded.is_some() {
@@ -421,7 +437,10 @@ impl Panel {
                 ),
             ];
             if !row.detail.is_empty() {
-                spans.push(Span::styled(format!(" {}", row.detail), Style::new().fg(c.muted.into())));
+                spans.push(Span::styled(
+                    format!(" {}", row.detail),
+                    Style::new().fg(c.muted.into()),
+                ));
             }
             ui::list::ListRow {
                 id: ui::anim::hash_of(&(row.depth, &row.name, row.kind.glyph())),

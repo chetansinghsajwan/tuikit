@@ -58,7 +58,14 @@ fn grep_toggles_and_file_filters_narrow_the_search() {
 }
 
 fn picker(items: &[&str], paths: bool, root: PathBuf) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths, root, preview: paths, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths,
+        root,
+        preview: paths,
+        git: false,
+        query: String::new(),
+    };
     let p = Picker::new(opts, Arc::new(|| {}));
     let inj = p.injector();
     for i in items {
@@ -119,7 +126,9 @@ fn a_live_source_is_asked_again_for_every_query_and_its_results_are_not_refilter
     p.set_live(Box::new(|q, inj, _cancel| {
         if !q.is_empty() {
             for suffix in ["one", "two"] {
-                inj.push(Candidate::plain(format!("{q}-{suffix}")), |c, cols| cols[0] = c.display.as_str().into());
+                inj.push(Candidate::plain(format!("{q}-{suffix}")), |c, cols| {
+                    cols[0] = c.display.as_str().into()
+                });
             }
         }
     }));
@@ -130,7 +139,8 @@ fn a_live_source_is_asked_again_for_every_query_and_its_results_are_not_refilter
             break;
         }
     }
-    let names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
+    let names: Vec<String> =
+        p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
     assert_eq!(names.len(), 2, "{names:?}");
     assert!(names.iter().all(|n| n.starts_with("ab-")), "{names:?}");
     // Another character: the old answers are gone, the new ones are in.
@@ -138,7 +148,8 @@ fn a_live_source_is_asked_again_for_every_query_and_its_results_are_not_refilter
     for _ in 0..50 {
         p.nucleo.tick(10);
     }
-    let names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
+    let names: Vec<String> =
+        p.nucleo.snapshot().matched_items(..).map(|i| i.data.display.clone()).collect();
     assert!(names.iter().all(|n| n.starts_with("abc-")) && names.len() == 2, "{names:?}");
 }
 
@@ -161,8 +172,9 @@ fn renders_list_and_preview() {
     let area = Rect::new(0, 0, 80, 10);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default());
-    let text: String =
-        (0..10).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String = (0..10)
+        .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+        .collect();
     assert!(text.contains("hello.txt") && text.contains("other.txt"), "{text}");
     assert!(text.contains("needle in a haystack"), "{text}");
     assert!(text.contains("2/2"), "{text}");

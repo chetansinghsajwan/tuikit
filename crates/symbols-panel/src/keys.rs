@@ -25,10 +25,20 @@ pub const ACTIONS: &[Action] = &[
     b!("nav.bottom", "bottom", "go to the last row", ["G", "end"]),
     b!("tree.out", "collapse", "collapse the symbol, or go to its parent", ["h", "left"]),
     b!("tree.in", "expand", "expand the symbol", ["l", "right"]),
-    b!("item.open", "go to", "jump to the symbol in the editor (on one with members: also expand it)", ["enter"]),
+    b!(
+        "item.open",
+        "go to",
+        "jump to the symbol in the editor (on one with members: also expand it)",
+        ["enter"]
+    ),
     a!("tree.fold_all", "fold all", "collapse every symbol with members", ["leader z c"]),
     a!("tree.unfold_all", "unfold all", "expand every symbol", ["leader z o"]),
-    a!("filter.start", "filter", "show only the symbols whose name contains the text", ["/", "leader f"]),
+    a!(
+        "filter.start",
+        "filter",
+        "show only the symbols whose name contains the text",
+        ["/", "leader f"]
+    ),
     b!("palette", "commands", "search every action by name and run it", ["leader space"]),
     b!("help", "keys", "list every action with its keys", ["?"]),
     b!("quit", "back", "give the keyboard back to the editor", ["q", "esc", "ctrl-c"]),

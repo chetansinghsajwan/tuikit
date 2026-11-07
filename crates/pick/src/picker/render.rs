@@ -33,12 +33,17 @@ impl Picker {
         // Row numbers and, for input that carries times, how long ago each was.
         if self.row_style.numbers {
             let width = self.nucleo.snapshot().matched_item_count().max(1).to_string().len();
-            spans
-                .push(Span::styled(format!("{:>width$} ", snap_index + 1), Style::new().fg(theme.colors.muted.into())));
+            spans.push(Span::styled(
+                format!("{:>width$} ", snap_index + 1),
+                Style::new().fg(theme.colors.muted.into()),
+            ));
         }
         if self.timestamps {
             let age = cand.time.map(ui::time::ago).unwrap_or_default();
-            spans.push(Span::styled(format!("{age:>8}  "), Style::new().fg(theme.colors.muted.into())));
+            spans.push(Span::styled(
+                format!("{age:>8}  "),
+                Style::new().fg(theme.colors.muted.into()),
+            ));
         }
         // Path rows get a file icon; a grep match under its file header (the hierarchy view) does not.
         if self.opts.paths && !(leaf && cand.loc.is_some()) {
@@ -67,9 +72,13 @@ impl Picker {
             let mut spans = Vec::new();
             if !leaf {
                 spans.push(Span::styled(loc.path.clone(), Style::new().fg(name_fg)));
-                spans.push(Span::styled(format!(":{}: ", loc.line), Style::new().fg(c.muted.into())));
+                spans.push(Span::styled(
+                    format!(":{}: ", loc.line),
+                    Style::new().fg(c.muted.into()),
+                ));
             } else {
-                spans.push(Span::styled(format!("{}: ", loc.line), Style::new().fg(c.muted.into())));
+                spans
+                    .push(Span::styled(format!("{}: ", loc.line), Style::new().fg(c.muted.into())));
             }
             let (a, b) = (loc.hit.start, loc.hit.end);
             if a < b && b <= loc.text.len() {
@@ -100,22 +109,29 @@ impl Picker {
         };
         let mut spans = Vec::new();
         if let Some(g) = &cand.git {
-            spans.push(Span::styled(if g.is_head { "* " } else { "  " }, Style::new().fg(c.accent.into())));
+            spans.push(Span::styled(
+                if g.is_head { "* " } else { "  " },
+                Style::new().fg(c.accent.into()),
+            ));
         }
         if let Some(b) = &cand.buffer {
             spans.push(Span::styled(format!("{:<2} ", b.flags), Style::new().fg(c.warning.into())));
         }
         // In the hierarchy only the file name is drawn; match positions still refer to the full path.
-        let skip =
-            if leaf { cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0) } else { 0 };
-        // Code colors for the whole text, when the rows are code.
-        let colored: Vec<Style> = match (&self.row_style.syntax, cand.git.is_none() && cand.loc.is_none()) {
-            (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme)
-                .into_iter()
-                .flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>())
-                .collect(),
-            _ => Vec::new(),
+        let skip = if leaf {
+            cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0)
+        } else {
+            0
         };
+        // Code colors for the whole text, when the rows are code.
+        let colored: Vec<Style> =
+            match (&self.row_style.syntax, cand.git.is_none() && cand.loc.is_none()) {
+                (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme)
+                    .into_iter()
+                    .flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>())
+                    .collect(),
+                _ => Vec::new(),
+            };
         for (i, ch) in cand.display.chars().enumerate() {
             let is_hit = hits.peek() == Some(&(i as u32));
             if is_hit {
@@ -171,8 +187,11 @@ impl Picker {
                 Paragraph::new(Line::from(spans)).render(row, buf);
                 continue;
             }
-            let (label, input) =
-                if field == Field::Include { ("include ", &self.include) } else { ("exclude ", &self.exclude) };
+            let (label, input) = if field == Field::Include {
+                ("include ", &self.include)
+            } else {
+                ("exclude ", &self.exclude)
+            };
             let focused = self.field == field;
             let line = Line::from(vec![
                 Span::styled(label, if focused { Style::new().fg(c.accent.into()) } else { muted }),
@@ -197,7 +216,11 @@ impl Picker {
         } else {
             format!("{snap_matched}/{snap_total}")
         };
-        let title = self.title.as_deref().unwrap_or(if self.opts.mode == Mode::Grep { "grep" } else { "pick" });
+        let title = self.title.as_deref().unwrap_or(if self.opts.mode == Mode::Grep {
+            "grep"
+        } else {
+            "pick"
+        });
         let mut pane = Pane::new(theme).title(title).focused(true);
         // An explicit icon, else one that fits the title (`Files`, `History`, `Branches`, ...).
         if let Some(icon) = self.icon.or_else(|| ui::icons::for_title(title)) {
@@ -213,8 +236,11 @@ impl Picker {
         let cw = count.len() as u16;
         let show_count = inner.width > cw + 4;
         // The query stops one cell short of the count.
-        let prompt_area =
-            Rect { height: 1, width: if show_count { inner.width - cw - 1 } else { inner.width }, ..inner };
+        let prompt_area = Rect {
+            height: 1,
+            width: if show_count { inner.width - cw - 1 } else { inner.width },
+            ..inner
+        };
         let prompt = ui::prompt::line(theme, "> ", self.input.value());
         Paragraph::new(prompt).render(prompt_area, buf);
         if show_count {
@@ -231,12 +257,20 @@ impl Picker {
             buf.set_string(area.x, y, rule, Style::new().fg(c.border_focused.into()));
         }
         // In grep mode the toggles and the file filters take the row under the rule.
-        let filter_row =
-            if self.opts.mode == Mode::Grep && inner.height >= 6 { self.grep_filter_rows().len() as u16 } else { 0 };
+        let filter_row = if self.opts.mode == Mode::Grep && inner.height >= 6 {
+            self.grep_filter_rows().len() as u16
+        } else {
+            0
+        };
         if filter_row > 0 {
-            self.render_grep_filters(Rect { y: inner.y + 1 + sep, height: filter_row, ..inner }, buf, theme);
+            self.render_grep_filters(
+                Rect { y: inner.y + 1 + sep, height: filter_row, ..inner },
+                buf,
+                theme,
+            );
         }
-        let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep + filter_row));
+        let header_rows =
+            (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep + filter_row));
         for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
             buf.set_stringn(
                 inner.x + 2,
@@ -267,12 +301,18 @@ impl Picker {
 
         let end = (self.offset + self.page).min(snap_matched);
         for (row, idx) in (self.offset..end).enumerate() {
-            let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|i| i.data.clone()) else { break };
+            let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|i| i.data.clone())
+            else {
+                break;
+            };
             let y = list.y + row as u16;
             let selected = idx == self.cursor;
             let git = self.git_state(cand.path());
             let marked = self.marked.contains(&cand.output());
-            let mut spans = vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
+            let mut spans = vec![Span::styled(
+                if marked { "● " } else { "  " },
+                Style::new().fg(c.accent.into()),
+            )];
             let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
             spans.extend(self.row_spans(&cand, name_fg, theme, idx, false));
             ui::list::ListRow {
@@ -291,15 +331,22 @@ impl Picker {
 
     /// The list as a directory hierarchy: folder header rows with the items
     /// indented beneath them. `offset` counts rows here, not results.
-    pub(super) fn render_tree_rows(&mut self, list: Rect, rows_geo: ui::list::Rows, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_tree_rows(
+        &mut self,
+        list: Rect,
+        rows_geo: ui::list::Rows,
+        buf: &mut Buffer,
+        theme: &Theme,
+    ) {
         let c = &theme.colors;
         let (rows, scope): (Vec<(usize, crate::tree::Row)>, Option<ui::tree::Scope>) = {
             let Some(tree) = self.tree.as_ref() else { return };
             // The folders above the top row stay pinned at the top, so scrolling never loses the
             // path; they take lines from the window, which the scrolling below accounts for.
             let room = |off: u32| {
-                (self.page as usize).saturating_sub(crate::tree::ancestors(&tree.rows, off as usize).len()).max(1)
-                    as u32
+                (self.page as usize)
+                    .saturating_sub(crate::tree::ancestors(&tree.rows, off as usize).len())
+                    .max(1) as u32
             };
             let crow = tree.row_of.get(&self.cursor).copied().unwrap_or(0) as u32;
             if crow < self.offset {
@@ -309,10 +356,11 @@ impl Picker {
                     self.offset += 1;
                 }
             }
-            let mut pinned: Vec<(usize, crate::tree::Row)> = crate::tree::ancestors(&tree.rows, self.offset as usize)
-                .into_iter()
-                .map(|i| (i, tree.rows[i].clone()))
-                .collect();
+            let mut pinned: Vec<(usize, crate::tree::Row)> =
+                crate::tree::ancestors(&tree.rows, self.offset as usize)
+                    .into_iter()
+                    .map(|i| (i, tree.rows[i].clone()))
+                    .collect();
             // In a tiny pane keep at least one scrolling row: drop the outermost pins first.
             let keep = (self.page as usize).saturating_sub(1);
             if pinned.len() > keep {
@@ -320,16 +368,22 @@ impl Picker {
             }
             let take = (self.page as usize).saturating_sub(pinned.len());
             // The guide of the scope the cursor is in is highlighted, as in the files panel.
-            let depths: Vec<usize> = tree
+            let depths: Vec<usize> =
+                tree.rows
+                    .iter()
+                    .map(|r| match r {
+                        crate::tree::Row::Dir { depth, .. }
+                        | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
+                    })
+                    .collect();
+            let scope = ui::tree::active_scope(&depths, crow as usize);
+            let window = tree
                 .rows
                 .iter()
-                .map(|r| match r {
-                    crate::tree::Row::Dir { depth, .. } | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
-                })
-                .collect();
-            let scope = ui::tree::active_scope(&depths, crow as usize);
-            let window =
-                tree.rows.iter().enumerate().skip(self.offset as usize).take(take).map(|(i, r)| (i, r.clone()));
+                .enumerate()
+                .skip(self.offset as usize)
+                .take(take)
+                .map(|(i, r)| (i, r.clone()));
             (pinned.into_iter().chain(window).collect(), scope)
         };
 
@@ -347,7 +401,10 @@ impl Picker {
                     };
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+                    spans.push(Span::styled(
+                        format!("{} ", icon.glyph),
+                        Style::new().fg(icon.color),
+                    ));
                     spans.push(Span::styled(
                         label.clone(),
                         Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
@@ -361,21 +418,29 @@ impl Picker {
                     .draw(theme, buf, &rows_geo, y);
                 }
                 crate::tree::Row::Item { idx, depth } => {
-                    let Some(cand) = self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone()) else {
+                    let Some(cand) =
+                        self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone())
+                    else {
                         continue;
                     };
                     let selected = *idx == self.cursor;
                     let git = self.git_state(cand.path());
                     let marked = self.marked.contains(&cand.output());
-                    let mut spans =
-                        vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
+                    let mut spans = vec![Span::styled(
+                        if marked { "● " } else { "  " },
+                        Style::new().fg(c.accent.into()),
+                    )];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
+                    let name_fg =
+                        git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&cand.output()),
                         left: spans,
-                        signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
+                        signs: git
+                            .map(|(ch, k)| (ch, Self::git_color(theme, k)))
+                            .into_iter()
+                            .collect(),
                         sign_cell: true,
                         tint: git.map(|(_, k)| Self::git_color(theme, k)),
                         selected,
@@ -417,19 +482,29 @@ impl Picker {
             return;
         }
         let line = cand.loc.as_ref().map(|l| l.line).unwrap_or(0);
-        let id = cand.git.as_ref().map(|g| g.oid.clone()).unwrap_or_else(|| cand.path().to_string());
+        let id =
+            cand.git.as_ref().map(|g| g.oid.clone()).unwrap_or_else(|| cand.path().to_string());
         let key = (id, line, inner.width, inner.height);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options {
                 width: Some(inner.width),
                 height: if cand.git.is_some() { None } else { Some(inner.height) },
                 git: self.opts.git,
-                focus: cand.loc.as_ref().map(|l| l.line).or(cand.buffer.as_ref().and_then(|b| b.focus)),
+                focus: cand
+                    .loc
+                    .as_ref()
+                    .map(|l| l.line)
+                    .or(cand.buffer.as_ref().and_then(|b| b.focus)),
             };
             let rendered = match (&cand.git, &cand.buffer) {
                 (Some(g), _) => pv::preview_commit(&self.opts.root, &g.oid, theme, &opts),
                 // An open buffer: its text as shown in the editor, unsaved changes included.
-                (None, Some(b)) => pv::preview_text(std::path::Path::new(cand.path()), b.text.as_bytes(), theme, &opts),
+                (None, Some(b)) => pv::preview_text(
+                    std::path::Path::new(cand.path()),
+                    b.text.as_bytes(),
+                    theme,
+                    &opts,
+                ),
                 // Plain text with an external preview command: its output, colors kept.
                 (None, None) if self.preview_cmd.is_some() && cand.loc.is_none() => {
                     let line = cand.raw.as_deref().unwrap_or(&cand.display);
@@ -440,7 +515,10 @@ impl Picker {
             };
             let lines = match rendered {
                 Ok(l) => l,
-                Err(e) => vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
+                Err(e) => vec![Line::from(Span::styled(
+                    e.to_string(),
+                    Style::new().fg(theme.colors.muted.into()),
+                ))],
             };
             self.preview = Some(Preview { key, lines });
             self.pscroll = 0;
@@ -448,8 +526,8 @@ impl Picker {
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
             // Commit and command previews scroll; the rest are already windowed to the pane.
-            let scrolls =
-                cand.git.is_some() || (self.preview_cmd.is_some() && cand.loc.is_none() && cand.buffer.is_none());
+            let scrolls = cand.git.is_some()
+                || (self.preview_cmd.is_some() && cand.loc.is_none() && cand.buffer.is_none());
             let skip = if scrolls { self.pscroll.min(p.lines.len().saturating_sub(1)) } else { 0 };
             if scrolls {
                 self.pscroll = skip;

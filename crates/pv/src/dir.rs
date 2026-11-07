@@ -45,7 +45,9 @@ fn entries(dir: &Path) -> Vec<Entry> {
             })
         })
         .collect();
-    v.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    v.sort_by(|a, b| {
+        b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     v
 }
 
@@ -105,10 +107,14 @@ fn row(
     let (mut trailing, mut signs) = (Vec::new(), Vec::new());
     if opts.width.is_some() {
         trailing = perm_spans(e.mode, theme);
-        trailing.push(Span::styled(format!("  {:>8}", relative(e.mtime)), Style::new().fg(c.muted.into())));
+        trailing.push(Span::styled(
+            format!("  {:>8}", relative(e.mtime)),
+            Style::new().fg(c.muted.into()),
+        ));
         if opts.git {
             trailing.push(Span::raw(" "));
-            signs = state.map(|(ch, kind)| (ch, git::kind_color(theme, kind))).into_iter().collect();
+            signs =
+                state.map(|(ch, kind)| (ch, git::kind_color(theme, kind))).into_iter().collect();
         }
     }
     let row = ui::tree::FileRow {
@@ -171,8 +177,10 @@ fn load(dir: &Path, levels: usize, budget: &mut usize) -> (Vec<Node>, bool) {
                 let (mut kids, mut cut) = load(&e.path, levels - 1, budget);
                 // A folder holding only one folder reads as one row: `a/b/c`.
                 for _ in 0..CHAIN_CAP {
-                    let only_dir =
-                        kids.len() == 1 && kids[0].run == 0 && kids[0].e.as_ref().is_some_and(|k| k.is_dir) && !cut;
+                    let only_dir = kids.len() == 1
+                        && kids[0].run == 0
+                        && kids[0].e.as_ref().is_some_and(|k| k.is_dir)
+                        && !cut;
                     if !only_dir {
                         break;
                     }
@@ -237,7 +245,10 @@ fn flatten(
     let more = hidden > 0 || unread;
     // Remarks (`… 3 more`) start under the names, after the guides and the icon column.
     let remark = |text: String, style: Style| {
-        Line::from(vec![ui::tree::guides(cx.theme, level - 1), Span::styled(format!("  {text}"), style)])
+        Line::from(vec![
+            ui::tree::guides(cx.theme, level - 1),
+            Span::styled(format!("  {text}"), style),
+        ])
     };
     for n in shown {
         if n.run > 0 {
@@ -301,5 +312,9 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
 fn state_of(e: &Entry, ctx: &Option<(Repo, Status)>) -> Option<(char, Kind)> {
     let (repo, status) = ctx.as_ref()?;
     let rela = repo.relative(&e.path)?;
-    if e.is_dir { status.dir(&rela).map(|k| (k.letter(), k)) } else { git::sign(status.get(&rela)?) }
+    if e.is_dir {
+        status.dir(&rela).map(|k| (k.letter(), k))
+    } else {
+        git::sign(status.get(&rela)?)
+    }
 }

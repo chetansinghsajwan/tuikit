@@ -91,7 +91,8 @@ impl App {
         let root = repo.root().to_path_buf();
         let watch = ui::watch::Watch::new(&root, || {});
 
-        let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
+        let mut files =
+            Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
         files.set_title("Files");
         let mut app = App {
             root,
@@ -109,7 +110,8 @@ impl App {
             pscroll: 0,
             fold_rev: None,
             pheight: 10,
-            maps: [0, 1, 2].map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
+            maps: [0, 1, 2]
+                .map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
             job: None,
             graph: true,
@@ -135,8 +137,10 @@ impl App {
         };
         app.reload_all();
         // The Refs pane starts on the checked-out branch.
-        if let Some(i) =
-            app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head))
+        if let Some(i) = app
+            .ref_rows
+            .iter()
+            .position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head))
         {
             app.lists[0].cursor = i;
         }

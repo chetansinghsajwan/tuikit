@@ -6,7 +6,11 @@ impl Panel {
     pub(super) fn git_state(&self, row: &Row) -> Option<(char, Kind)> {
         let (repo, status) = self.git.as_ref()?;
         let rela = repo.relative(&row.path)?;
-        if row.is_dir { status.dir(&rela).map(|k| (k.letter(), k)) } else { status.get(&rela)?.sign() }
+        if row.is_dir {
+            status.dir(&rela).map(|k| (k.letter(), k))
+        } else {
+            status.get(&rela)?.sign()
+        }
     }
 
     /// Every state beneath a folder, most serious first (a file has one sign, see `git_state`).
@@ -24,8 +28,13 @@ impl Panel {
             return;
         }
         let mut running = self.dir_sizes.values().filter(|d| !d.state().1).count();
-        let visible: Vec<PathBuf> =
-            self.visible().into_iter().map(|i| &self.rows[i]).filter(|r| r.is_dir).map(|r| r.path.clone()).collect();
+        let visible: Vec<PathBuf> = self
+            .visible()
+            .into_iter()
+            .map(|i| &self.rows[i])
+            .filter(|r| r.is_dir)
+            .map(|r| r.path.clone())
+            .collect();
         for p in visible {
             if running >= 3 {
                 break;
@@ -51,7 +60,9 @@ impl Panel {
     pub fn tick(&mut self) -> bool {
         self.poll_job();
         self.count_visible_dirs();
-        std::mem::take(&mut self.redraw) || self.job.is_some() || self.size_signature() != self.sizes_shown
+        std::mem::take(&mut self.redraw)
+            || self.job.is_some()
+            || self.size_signature() != self.sizes_shown
     }
 
     pub(super) fn prompt_label(kind: &PromptKind) -> &'static str {
@@ -66,10 +77,15 @@ impl Panel {
     pub(super) fn footer(&self, theme: &Theme) -> Option<Line<'static>> {
         let c = &theme.colors;
         match &self.mode {
-            Mode::Prompt(kind, input) => Some(ui::prompt::line(theme, Self::prompt_label(kind), input.value())),
+            Mode::Prompt(kind, input) => {
+                Some(ui::prompt::line(theme, Self::prompt_label(kind), input.value()))
+            }
             Mode::Confirm(kind, targets) => {
                 let what = if targets.len() == 1 {
-                    targets[0].file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+                    targets[0]
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default()
                 } else {
                     format!("{} items", targets.len())
                 };
@@ -85,7 +101,8 @@ impl Panel {
                     BookmarkOp::Jump => "go to",
                     BookmarkOp::Delete => "remove",
                 };
-                let mut spans = vec![Span::styled(format!("{verb}: "), Style::new().fg(c.accent.into()))];
+                let mut spans =
+                    vec![Span::styled(format!("{verb}: "), Style::new().fg(c.accent.into()))];
                 for (k, p) in self.bookmarks.iter() {
                     let name = p
                         .file_name()
@@ -98,7 +115,10 @@ impl Panel {
             }
             Mode::Normal if self.job.is_some() => self.job_line(theme),
             Mode::Normal => self.message.as_ref().map(|(m, err)| {
-                Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into())))
+                Line::from(Span::styled(
+                    m.clone(),
+                    Style::new().fg(if *err { c.error } else { c.muted }.into()),
+                ))
             }),
         }
     }
@@ -107,7 +127,11 @@ impl Panel {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         self.poll_job();
         let c = &theme.colors;
-        let title = self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
+        let title = self
+            .root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "/".into());
         let icon = ui::icons::dir(&title, true);
         let shown = if self.ignored_hidden > 0 {
             format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden)
@@ -126,7 +150,12 @@ impl Panel {
             let footer_area = Rect { y, height: 1, ..inner };
             Paragraph::new(line).render(footer_area, buf);
             if let Mode::Prompt(kind, input) = &self.mode {
-                ui::prompt::cursor(buf, footer_area, Self::prompt_label(kind), input.visual_cursor());
+                ui::prompt::cursor(
+                    buf,
+                    footer_area,
+                    Self::prompt_label(kind),
+                    input.visual_cursor(),
+                );
             }
             inner.height -= 1;
             if inner.height == 0 {

@@ -75,7 +75,9 @@ fn on(p: &mut Panel, name: &str) {
     let i = p
         .items
         .iter()
-        .position(|&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name)))
+        .position(
+            |&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name)),
+        )
         .unwrap_or_else(|| panic!("{name} listed"));
     p.cursor = i;
 }
@@ -90,7 +92,10 @@ fn one_tree_with_two_marks_per_file_and_icons() {
     );
     let pos = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in\n{text}"));
     // Sorted by name; the marks sit at the right edge: the first is staged, the second not staged (`?` for a new file).
-    assert!(pos("main") < pos("a.txt") && pos("a.txt") < pos("b.txt") && pos("b.txt") < pos("new.txt"), "{text}");
+    assert!(
+        pos("main") < pos("a.txt") && pos("a.txt") < pos("b.txt") && pos("b.txt") < pos("new.txt"),
+        "{text}"
+    );
     assert!(text.contains(" M ") && text.contains("M  ") && text.contains(" ? "), "{text}");
     // A file that is partly staged is one row with both marks (`M M`).
     fs::write(p.root.join("b.txt"), "b1\nmore\n").unwrap();
@@ -109,11 +114,15 @@ fn staged_marks_are_drawn_in_the_staged_color() {
     let success: ratatui::style::Color = theme.colors.success.into();
     let row = |name: &str| {
         (0..16)
-            .find(|&y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().contains(name))
+            .find(|&y| {
+                (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().contains(name)
+            })
             .unwrap_or_else(|| panic!("{name} listed"))
     };
     // b.txt is staged, a.txt is changed but not staged: the mark of the staged one is green, the other is not.
-    let green_mark = |y: u16| (0..100).any(|x| b[(x, y)].symbol() == "M" && b[(x, y)].style().fg == Some(success));
+    let green_mark = |y: u16| {
+        (0..100).any(|x| b[(x, y)].symbol() == "M" && b[(x, y)].style().fg == Some(success))
+    };
     assert!(green_mark(row("b.txt")), "staged mark");
     assert!(!green_mark(row("a.txt")), "unstaged mark");
 }
@@ -124,7 +133,10 @@ fn s_toggles_stage_and_unstage_and_the_cursor_stays_on_the_file() {
     let mut p = Panel::new(&d).unwrap();
     on(&mut p, "new.txt");
     assert_eq!(press(&mut p, "s"), Action::Changed);
-    assert_eq!(p.current().map(|c| (c.rela.clone(), c.staged)), Some((PathBuf::from("new.txt"), Some(Kind::Added))));
+    assert_eq!(
+        p.current().map(|c| (c.rela.clone(), c.staged)),
+        Some((PathBuf::from("new.txt"), Some(Kind::Added)))
+    );
     assert_eq!(press(&mut p, "s"), Action::Changed); // all staged: back out
     assert_eq!(p.current().map(|c| c.unstaged), Some(Some(Kind::Untracked)));
     // `u` only unstages.
@@ -168,7 +180,11 @@ fn the_tree_groups_by_folder_stages_a_folder_folds_and_toggles_to_a_list() {
     assert!(text.contains("src 2") && !text.contains("one.rs"), "{text}");
     // s on the folder stages everything below it, s again unstages it.
     assert_eq!(press(&mut p, "s"), Action::Changed);
-    assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()), "{:?}", p.message);
+    assert!(
+        p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()),
+        "{:?}",
+        p.message
+    );
     assert_eq!(press(&mut p, "s"), Action::Changed);
     assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| c.staged.is_none()));
     // t switches to the flat list with the full paths.
@@ -223,7 +239,10 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     assert_eq!(log[0].subject, "fix b");
     // What was staged is gone from the list; the other files remain.
     let text = draw(&mut p).join("\n");
-    assert!(!text.contains("b.txt") && text.contains("a.txt") && text.contains("committed "), "{text}");
+    assert!(
+        !text.contains("b.txt") && text.contains("a.txt") && text.contains("committed "),
+        "{text}"
+    );
     // Esc cancels the prompt.
     press(&mut p, "c"); // nothing staged now
     assert!(p.message.as_ref().is_some_and(|(m, e)| *e && m.contains("nothing staged")));
@@ -235,7 +254,10 @@ fn enter_opens_the_file_and_the_preview_shows_the_right_side_of_the_diff() {
     let mut p = Panel::new(&d).unwrap();
     on(&mut p, "a.txt");
     let text = draw(&mut p).join("\n");
-    assert!(text.contains("A2 changed") && !text.contains("B2 staged"), "unstaged diff of a.txt:\n{text}");
+    assert!(
+        text.contains("A2 changed") && !text.contains("B2 staged"),
+        "unstaged diff of a.txt:\n{text}"
+    );
     on(&mut p, "b.txt");
     let text = draw(&mut p).join("\n");
     assert!(text.contains("B2 staged"), "staged diff of b.txt:\n{text}");
@@ -268,7 +290,13 @@ fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the
     // Space then Space is the palette; `?` is the help; the host's own actions come back as commands.
     assert_eq!(press(&mut p, " "), Action::Palette);
     assert_eq!(press(&mut p, "?"), Action::Help);
-    let extra = vec![ui::keys::Action { id: "pane.next", name: "next pane", desc: "x", basic: true, keys: &["tab"] }];
+    let extra = vec![ui::keys::Action {
+        id: "pane.next",
+        name: "next pane",
+        desc: "x",
+        basic: true,
+        keys: &["tab"],
+    }];
     let mut p = Panel::with_actions(&d, "space", extra, &[]).unwrap();
     assert_eq!(
         p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))),

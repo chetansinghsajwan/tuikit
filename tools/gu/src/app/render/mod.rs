@@ -10,7 +10,11 @@ impl App {
     /// Draw the tab strip and the screen of the active tab.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
-        let labels = [ui::tabs::Label::new("Status"), ui::tabs::Label::new("Commits"), ui::tabs::Label::new("Refs")];
+        let labels = [
+            ui::tabs::Label::new("Status"),
+            ui::tabs::Label::new("Commits"),
+            ui::tabs::Label::new("Refs"),
+        ];
         let active = match self.screen {
             Screen::Status => 0,
             Screen::Commits => 1,
@@ -57,7 +61,12 @@ impl App {
             return;
         }
         if cf.rows.is_empty() {
-            buf.set_string(inner.x + 1, inner.y, "no files changed", Style::new().fg(c.muted.into()));
+            buf.set_string(
+                inner.x + 1,
+                inner.y,
+                "no files changed",
+                Style::new().fg(c.muted.into()),
+            );
             return;
         }
         let page = usize::from(inner.height);
@@ -67,7 +76,9 @@ impl App {
             cf.offset = cf.cursor + 1 - page;
         }
         let geo = ui::list::Rows::new(area, inner);
-        let counts = ui::tree::CountWidths::of(cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))));
+        let counts = ui::tree::CountWidths::of(
+            cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))),
+        );
         let depths: Vec<usize> = cf
             .rows
             .iter()
@@ -146,7 +157,8 @@ impl App {
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         let [left, right] = ui::layout::main_preview(&theme, body);
         // The focused pane takes the room, the other shows a few rows.
-        let constraints = REFS_PANES.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
+        let constraints = REFS_PANES
+            .map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
         let panes = Layout::vertical(constraints).split(left);
         for (pane, f) in panes.iter().zip(REFS_PANES) {
             self.render_list(f, *pane, buf, &theme);

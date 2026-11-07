@@ -48,7 +48,10 @@ pub fn build(entries: Vec<Entry>, ranked: bool) -> Tree {
         let mut node = &mut root;
         node.best = node.best.min(e.idx);
         for d in e.dirs {
-            node = node.dirs.entry((d.to_lowercase(), d)).or_insert_with(|| Node { best: u32::MAX, ..Node::default() });
+            node = node
+                .dirs
+                .entry((d.to_lowercase(), d))
+                .or_insert_with(|| Node { best: u32::MAX, ..Node::default() });
             node.best = node.best.min(e.idx);
         }
         node.items.push((e.sort, e.idx));
