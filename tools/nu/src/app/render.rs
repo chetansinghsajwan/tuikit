@@ -36,6 +36,7 @@ impl App {
     }
 
     /// A pane with the list `rows` drawn in it: each entry is `(left, right, highlighted tint)`.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_list(&mut self, focus: Focus, title: &str, area: Rect, buf: &mut Buffer, theme: &Theme, note: Option<(String, bool)>, rows: Vec<(Line<'static>, String, bool)>) {
         let c = &theme.colors;
         let focused = self.focus == focus;

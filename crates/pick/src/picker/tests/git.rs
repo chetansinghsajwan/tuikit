@@ -30,10 +30,10 @@ fn repo(name: &str) -> PathBuf {
     d.canonicalize().unwrap()
 }
 
-fn picker(root: &PathBuf, what: GitSource, query: &str) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: false, root: root.clone(), preview: true, git: false, query: query.into() };
+fn picker(root: &std::path::Path, what: GitSource, query: &str) -> Picker {
+    let opts = PickerOptions { mode: Mode::Fuzzy, paths: false, root: root.to_path_buf(), preview: true, git: false, query: query.into() };
     let mut p = Picker::new(opts, Arc::new(|| {}));
-    spawn_git(p.injector(), root.clone(), what);
+    spawn_git(p.injector(), root.to_path_buf(), what);
     for _ in 0..300 {
         std::thread::sleep(std::time::Duration::from_millis(10));
         p.nucleo.tick(10);

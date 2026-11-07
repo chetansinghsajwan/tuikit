@@ -454,6 +454,7 @@ impl Grid {
             buf.set_style(bar, bar_style);
             buf.set_string(inner.x, y, format!("{:>w$} ", r + 1, w = digits), muted);
             let mut x = inner.x + gutter as u16;
+            #[allow(clippy::needless_range_loop)] // `col` also indexes the table
             for col in self.left..self.cols() {
                 if x >= inner.right() {
                     break;

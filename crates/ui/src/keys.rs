@@ -389,7 +389,6 @@ impl Help {
                 KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
                 _ => {}
             }
-            self.scroll = 0.max(self.scroll);
             return true;
         }
         match key.code {

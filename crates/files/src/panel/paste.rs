@@ -135,7 +135,7 @@ impl Panel {
     pub(super) fn job_line(&self, theme: &Theme) -> Option<Line<'static>> {
         let j = self.job.as_ref()?;
         let p = &j.progress;
-        let pct = if p.total == 0 { 0 } else { (p.done.load(Ordering::Relaxed) * 100 / p.total).min(100) };
+        let pct = (p.done.load(Ordering::Relaxed) * 100).checked_div(p.total).unwrap_or(0).min(100);
         let text = format!("pasting {pct}% ({}/{}) - Esc cancels", p.items_done.load(Ordering::Relaxed).min(p.items), p.items);
         Some(Line::from(Span::styled(text, Style::new().fg(theme.colors.accent.into()))))
     }

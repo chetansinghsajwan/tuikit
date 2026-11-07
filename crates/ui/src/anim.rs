@@ -303,11 +303,10 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                     for x in r.bar.left()..r.bar.right() {
                         let cell = &mut buf[(x, r.y)];
                         let cbg = rgb(cell.bg, bg);
-                        if let Some(p) = reveal {
-                            if let Color::Rgb(..) = cell.fg {
+                        if let Some(p) = reveal
+                            && let Color::Rgb(..) = cell.fg {
                                 cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
                             }
-                        }
                         if let Some(e) = flash {
                             cell.set_bg(mix(theme.colors.accent.into(), cbg, (24.0 * (1.0 - e)) as u8));
                         }

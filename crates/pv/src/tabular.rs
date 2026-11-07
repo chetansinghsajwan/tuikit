@@ -47,7 +47,7 @@ pub fn kind(path: &Path) -> Option<Kind> {
 pub(crate) fn sniff(text: &str) -> u8 {
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).take(10).collect();
     let mut best = (0usize, b',');
-    for d in [b',', b';', b'\t', b'|'] {
+    for d in *b",;\t|" {
         let counts: Vec<usize> = lines.iter().map(|l| l.bytes().filter(|&b| b == d).count()).collect();
         let first = counts.first().copied().unwrap_or(0);
         if first > 0 && counts.iter().all(|&c| c == first) && first > best.0 {
@@ -61,7 +61,7 @@ fn commas(n: usize) -> String {
     let s = n.to_string();
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(c);

@@ -59,7 +59,7 @@ pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
 pub fn simplify(commits: Vec<CommitInfo>, keep: impl Fn(&CommitInfo) -> bool) -> Vec<CommitInfo> {
     use std::collections::{HashMap, HashSet};
     let index: HashMap<&str, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid.as_str(), i)).collect();
-    let kept: Vec<bool> = commits.iter().map(|c| keep(c)).collect();
+    let kept: Vec<bool> = commits.iter().map(keep).collect();
     // For every commit, the kept commits reached first going down through its parents.
     // Parents come later in the list, so walking it backwards has them done already.
     let mut below: Vec<Vec<String>> = vec![Vec::new(); commits.len()];
@@ -154,6 +154,7 @@ pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
         // A horizontal line from the commit to each join, crossing the lanes between.
         for &(j, _) in &joins {
             let (lo, hi) = (col.min(j), col.max(j));
+            #[allow(clippy::needless_range_loop)] // the parity of `k` picks the glyph
             for k in (2 * lo + 1)..(2 * hi) {
                 let lane = j;
                 if k % 2 == 1 {

@@ -293,12 +293,11 @@ impl Panel {
                 }
             }
             "tree.in" => {
-                if let Some(r) = self.rows.get(self.cursor) {
-                    if r.folded == Some(true) {
+                if let Some(r) = self.rows.get(self.cursor)
+                    && r.folded == Some(true) {
                         let p = r.path.clone();
                         self.set_fold(p, false);
                     }
-                }
             }
             "item.open" => {
                 if let Some(r) = self.rows.get(self.cursor) {
@@ -353,11 +352,10 @@ impl Panel {
             return;
         }
         // Without the focus the cursor stays on the symbol the editor's cursor is in.
-        if !focused && !self.is_typing() {
-            if let Some(i) = self.following.and_then(|l| self.row_at_line(l)) {
+        if !focused && !self.is_typing()
+            && let Some(i) = self.following.and_then(|l| self.row_at_line(l)) {
                 self.cursor = i;
             }
-        }
         self.page = usize::from(inner.height).max(1);
         if self.cursor < self.offset {
             self.offset = self.cursor;

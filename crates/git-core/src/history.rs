@@ -134,13 +134,11 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
     }
     for r in repo.references().map_err(err)?.all().map_err(err)?.flatten() {
         let mut r = r;
-        if r.name().category().is_some_and(|c| matches!(c, gix::reference::Category::LocalBranch | gix::reference::Category::RemoteBranch | gix::reference::Category::Tag)) {
-            if let Ok(id) = r.peel_to_id() {
-                if repo.find_commit(id.detach()).is_ok() {
+        if r.name().category().is_some_and(|c| matches!(c, gix::reference::Category::LocalBranch | gix::reference::Category::RemoteBranch | gix::reference::Category::Tag))
+            && let Ok(id) = r.peel_to_id()
+                && repo.find_commit(id.detach()).is_ok() {
                     tips.push(id.detach());
                 }
-            }
-        }
     }
     tips.sort();
     tips.dedup();

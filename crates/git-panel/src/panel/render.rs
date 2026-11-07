@@ -49,11 +49,10 @@ impl Panel {
             if let Mode::Commit(input) = &self.mode {
                 // The prompt is the last footer row.
                 let (x, y) = (inner.x + 8 + input.visual_cursor() as u16, inner.bottom() - 1);
-                if x < inner.right() {
-                    if let Some(cell) = buf.cell_mut((x, y)) {
+                if x < inner.right()
+                    && let Some(cell) = buf.cell_mut((x, y)) {
                         cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
                     }
-                }
             }
             inner.height -= rows;
             if inner.height == 0 {

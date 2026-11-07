@@ -153,7 +153,7 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
             break;
         }
         // Lines before the window still feed the highlighter's state.
-        let regions = hl.highlight_line(raw, &syntaxes).map_err(|e| Error::Unsupported(e.to_string()))?;
+        let regions = hl.highlight_line(raw, syntaxes).map_err(|e| Error::Unsupported(e.to_string()))?;
         if i < start {
             continue;
         }

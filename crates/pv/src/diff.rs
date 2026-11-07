@@ -289,11 +289,10 @@ fn spans_of(cells: &[Cell], width: Option<usize>, fill: Option<Color>) -> Vec<Sp
         out.push(Span::styled("…", s));
         return out;
     }
-    if let (Some(max), Some(bg)) = (width, fill) {
-        if used < max {
+    if let (Some(max), Some(bg)) = (width, fill)
+        && used < max {
             out.push(Span::styled(" ".repeat(max - used), Style::new().bg(bg)));
         }
-    }
     out
 }
 
@@ -327,7 +326,8 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
     let (mut old_no, mut new_no) = (h.old_start, h.new_start);
 
     // Word-level marks for each run of removed lines followed by added lines, paired in order.
-    let mut marks: Vec<(Vec<Range<usize>>, Vec<Range<usize>>)> = vec![Default::default(); h.lines.len()];
+    type Marks = (Vec<Range<usize>>, Vec<Range<usize>>);
+    let mut marks: Vec<Marks> = vec![Default::default(); h.lines.len()];
     // Pairs that differ only in whitespace: dimmed, and folded into context when whitespace is ignored.
     let mut ws_only = vec![false; h.lines.len()];
     let mut i = 0;

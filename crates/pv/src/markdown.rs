@@ -652,8 +652,8 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
     let mut links: Vec<Option<std::ops::Range<usize>>> = Vec::new();
     for (event, r) in Parser::new_ext(text, Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS).into_offset_iter() {
         let is_link_edge = matches!(event, Event::Start(Tag::Link { .. }) | Event::End(TagEnd::Link));
-        if !is_link_edge {
-            if let Some(slot) = links.last_mut() {
+        if !is_link_edge
+            && let Some(slot) = links.last_mut() {
                 match slot {
                     Some(inner) => {
                         inner.start = inner.start.min(r.start);
@@ -662,7 +662,6 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
                     None => *slot = Some(r.clone()),
                 }
             }
-        }
         let head = &text[r.start..r.end.min(text.len())];
         match event {
             Event::Start(Tag::Heading { .. }) if head.starts_with('#') => {
@@ -691,19 +690,17 @@ pub fn conceal(text: &str) -> Vec<Conceal> {
             }
             Event::Start(Tag::Link { .. }) => links.push(None),
             Event::End(TagEnd::Link) => {
-                if let Some(Some(inner)) = links.pop() {
-                    if head.starts_with('[') && inner.start > r.start && inner.end < r.end {
+                if let Some(Some(inner)) = links.pop()
+                    && head.starts_with('[') && inner.start > r.start && inner.end < r.end {
                         hide(r.start..inner.start, &r, None);
                         hide(inner.end..r.end, &r, None);
                     }
-                }
             }
-            Event::Start(Tag::Item) => {
-                if head.starts_with(['-', '*', '+']) && head[1..].starts_with(' ') {
+            Event::Start(Tag::Item)
+                if head.starts_with(['-', '*', '+']) && head[1..].starts_with(' ') => {
                     let line_end = head.find('\n').map_or(r.end, |n| r.start + n);
                     hide(r.start..r.start + 1, &(r.start..line_end), Some("•"));
                 }
-            }
             _ => {}
         }
     }

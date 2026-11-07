@@ -18,11 +18,10 @@ pub fn line(theme: &Theme, label: &str, value: &str) -> Line<'static> {
 /// row `area` (nothing if it falls outside).
 pub fn cursor(buf: &mut Buffer, area: Rect, label: &str, cursor: usize) {
     let x = area.x + label.width() as u16 + cursor as u16;
-    if x < area.right() {
-        if let Some(cell) = buf.cell_mut((x, area.y)) {
+    if x < area.right()
+        && let Some(cell) = buf.cell_mut((x, area.y)) {
             cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
         }
-    }
 }
 
 /// The suggestions for a prompt: the options, the ones matching what is typed, and the selected one.

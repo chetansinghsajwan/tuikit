@@ -149,16 +149,12 @@ impl App {
             }
             return Ok(None);
         }
-        if !self.panel().is_busy() && self.panel().menu().is_none() && !modifiers.contains(KeyModifiers::CONTROL) {
-            match code {
-                KeyCode::Char(c @ '1'..='9') => {
-                    let i = *c as usize - '1' as usize;
-                    self.tabs.goto(i);
-                    return Ok(None);
-                }
-                _ => {}
+        if !self.panel().is_busy() && self.panel().menu().is_none() && !modifiers.contains(KeyModifiers::CONTROL)
+            && let KeyCode::Char(c @ '1'..='9') = code {
+                let i = *c as usize - '1' as usize;
+                self.tabs.goto(i);
+                return Ok(None);
             }
-        }
         let action = self.panel().handle_event(ev);
         self.act(action, term)
     }

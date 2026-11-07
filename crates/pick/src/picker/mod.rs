@@ -271,11 +271,10 @@ impl Picker {
             self.offset = 0;
             // With nothing typed the list starts at its top: the cursor takes the first row
             // as drawn (folders first), not the first match in path order.
-            if self.input.value().is_empty() {
-                if let Some(&first) = self.tree.as_ref().and_then(|t| t.order.first()) {
+            if self.input.value().is_empty()
+                && let Some(&first) = self.tree.as_ref().and_then(|t| t.order.first()) {
                     self.cursor = first;
                 }
-            }
         }
     }
 
@@ -385,14 +384,13 @@ impl Picker {
     fn move_by(&mut self, delta: i64) {
         self.refresh_tree();
         // In the hierarchy, Up/Down walk the items in the order they are drawn.
-        if let Some(tree) = &self.tree {
-            if let Some(&pos) = tree.pos_of.get(&self.cursor) {
+        if let Some(tree) = &self.tree
+            && let Some(&pos) = tree.pos_of.get(&self.cursor) {
                 let last = tree.order.len() as i64 - 1;
                 let to = (pos as i64 + delta).clamp(0, last) as usize;
                 self.cursor = tree.order[to];
                 return;
             }
-        }
         let n = i64::from(self.matched());
         if n == 0 {
             return;

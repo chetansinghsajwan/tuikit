@@ -180,10 +180,7 @@ impl Typst<'_> {
 
     fn event(&mut self, event: Event) {
         if self.skip > 0 {
-            match event {
-                Event::End(TagEnd::MetadataBlock(_)) => self.skip -= 1,
-                _ => {}
-            }
+            if let Event::End(TagEnd::MetadataBlock(_)) = event { self.skip -= 1 }
             return;
         }
         match event {
@@ -211,7 +208,7 @@ impl Typst<'_> {
                         CodeBlockKind::Indented => String::new(),
                     };
                     self.out.push_str(&format!("#raw(block: true, lang: {}, ", if lang.is_empty() { "none".to_string() } else { string(&lang) }));
-                    self.out.push_str("\u{2}");
+                    self.out.push('\u{2}');
                 }
                 Tag::List(start) => self.lists.push(start),
                 Tag::Item => {

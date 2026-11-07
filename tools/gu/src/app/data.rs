@@ -35,7 +35,7 @@ impl App {
                     }
                 }
             }
-            all.sort_by(|a, b| b.time.cmp(&a.time));
+            all.sort_by_key(|a| std::cmp::Reverse(a.time));
             all.truncate(limit);
             Ok(git_core::topo_order(all))
         } else if self.all_branches {

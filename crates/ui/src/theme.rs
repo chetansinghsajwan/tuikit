@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct Theme {
     pub colors: Colors,
     pub chrome: Chrome,
@@ -112,15 +113,6 @@ fn rgb(r: u8, g: u8, b: u8) -> Hex {
     Hex(Color::Rgb(r, g, b))
 }
 
-impl Default for Theme {
-    fn default() -> Self {
-        Theme {
-            colors: Colors::default(),
-            chrome: Chrome::default(),
-            layout: Layout::default(),
-        }
-    }
-}
 
 impl Default for Colors {
     fn default() -> Self {

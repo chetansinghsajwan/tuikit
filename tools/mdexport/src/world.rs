@@ -76,15 +76,14 @@ pub fn system_fonts(wanted: Option<&[&str]>) -> (Vec<Font>, std::collections::Ha
             fontdb::Source::File(p) | fontdb::Source::SharedFile(p, _) => p.clone(),
             _ => continue,
         };
-        if let Ok(data) = std::fs::read(&path) {
-            if let Some(font) = Font::new(Bytes::new(data), face.index) {
+        if let Ok(data) = std::fs::read(&path)
+            && let Some(font) = Font::new(Bytes::new(data), face.index) {
                 // The name asked for may be another name of the family than the one Typst reads.
                 if let Some(w) = wanted.and_then(|w| w.iter().find(|w| hit(w))) {
                     aliases.insert((*w).to_string(), font.info().family.clone());
                 }
                 out.push(font);
             }
-        }
     }
     (out, aliases)
 }

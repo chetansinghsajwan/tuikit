@@ -32,10 +32,9 @@ impl App {
             return;
         }
         let key = (which, rev.clone(), inner.width);
-        let mut same_rev = false;
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             // A different commit starts with the files folded the way they fold by themselves.
-            same_rev = self.fold_rev.as_deref() == Some(rev.as_str());
+            let same_rev = self.fold_rev.as_deref() == Some(rev.as_str());
             if !same_rev {
                 pv::diff_reset_folds();
                 self.fold_rev = Some(rev.clone());

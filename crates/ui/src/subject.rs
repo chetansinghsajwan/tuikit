@@ -18,7 +18,7 @@ pub fn category_len(subject: &str) -> Option<usize> {
     // After the word only an optional `(scope)` and an optional `!` may come.
     let rest = &head[word_end..];
     let rest = match rest.strip_prefix('(') {
-        Some(r) => r.split_once(')').map(|(scope, r)| (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r)).flatten()?,
+        Some(r) => r.split_once(')').and_then(|(scope, r)| (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r))?,
         None => rest,
     };
     (rest.is_empty() || rest == "!").then_some(colon + 1)

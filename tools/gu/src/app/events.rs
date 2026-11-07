@@ -285,8 +285,8 @@ impl App {
                     }
                 }
                 // On a section or folder the Enter key folds or unfolds it.
-                if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) = self.ref_rows.get(self.lists[0].cursor) {
-                    if id == "branch.checkout" {
+                if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) = self.ref_rows.get(self.lists[0].cursor)
+                    && id == "branch.checkout" {
                         let key = key.clone();
                         if !self.folded.remove(&key) {
                             self.folded.insert(key);
@@ -295,7 +295,6 @@ impl App {
                         self.build_ref_rows(keep);
                         return;
                     }
-                }
                 let Some(b) = self.current_ref().cloned() else {
                     if id == "branch.new" {
                         self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default());
@@ -412,7 +411,8 @@ impl App {
     pub(super) fn open_filter(&mut self) {
         use ui::multi::{Kind, Multi, Section};
         // The authors and categories of the history, the most frequent first.
-        let (mut authors, mut cats): (Vec<(usize, String)>, Vec<(usize, String)>) = (Vec::new(), Vec::new());
+        type Counts = Vec<(usize, String)>;
+        let (mut authors, mut cats): (Counts, Counts) = (Vec::new(), Vec::new());
         let bump = |list: &mut Vec<(usize, String)>, name: String| match list.iter_mut().find(|(_, n)| *n == name) {
             Some((n, _)) => *n += 1,
             None => list.push((1, name)),

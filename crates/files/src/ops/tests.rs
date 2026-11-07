@@ -84,7 +84,7 @@ fn trash_removes_the_file_from_its_place() {
     let f = d.join("gone.txt");
     fs::write(&f, "x").unwrap();
     // Trash needs a writable trash directory; skip quietly where there is none.
-    match trash(&[f.clone()]) {
+    match trash(std::slice::from_ref(&f)) {
         Ok(()) => assert!(!f.exists()),
         Err(e) => eprintln!("trash unavailable here: {e}"),
     }

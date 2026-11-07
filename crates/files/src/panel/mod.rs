@@ -112,11 +112,10 @@ impl Panel {
         self.ignored_hidden = 0;
         let root = self.root.clone();
         self.build(&root, 0);
-        if let Some(path) = keep {
-            if let Some(i) = self.rows.iter().position(|r| r.path == path) {
+        if let Some(path) = keep
+            && let Some(i) = self.rows.iter().position(|r| r.path == path) {
                 self.cursor = i;
             }
-        }
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
     }
 
@@ -280,11 +279,10 @@ impl Panel {
         let Some(row) = self.rows.get(self.cursor) else { return };
         if row.is_dir && self.expanded.contains(&row.path) {
             self.toggle(Some(false));
-        } else if let Some(parent) = row.path.parent() {
-            if let Some(i) = self.rows.iter().position(|r| r.path == parent) {
+        } else if let Some(parent) = row.path.parent()
+            && let Some(i) = self.rows.iter().position(|r| r.path == parent) {
                 self.cursor = i;
             }
-        }
     }
 
     /// Where `a` and `p` put things: the folder under the cursor, else its parent.
@@ -467,12 +465,11 @@ impl Panel {
             }
             "root.focus" => {
                 // The folder the cursor row sits in becomes the root: its siblings only, no other branches.
-                if let Some(path) = self.current().map(Path::to_path_buf) {
-                    if let Some(dir) = path.parent().map(Path::to_path_buf) {
+                if let Some(path) = self.current().map(Path::to_path_buf)
+                    && let Some(dir) = path.parent().map(Path::to_path_buf) {
                         self.set_root(dir);
                         self.reveal(&path);
                     }
-                }
             }
             "root.up" => {
                 if let Some(parent) = self.root.parent().map(Path::to_path_buf) {
