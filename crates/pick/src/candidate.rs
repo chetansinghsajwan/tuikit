@@ -76,12 +76,26 @@ impl Candidate {
     }
 
     pub fn grep(loc: Loc) -> Self {
-        Candidate { display: format!("{}:{}: {}", loc.path, loc.line, loc.text), loc: Some(loc), git: None, buffer: None, raw: None, time: None }
+        Candidate {
+            display: format!("{}:{}: {}", loc.path, loc.line, loc.text),
+            loc: Some(loc),
+            git: None,
+            buffer: None,
+            raw: None,
+            time: None,
+        }
     }
 
     /// Matched against the query as `name subject`, so either finds it.
     pub fn git_item(item: GitItem) -> Self {
-        Candidate { display: format!("{} {}", item.name, item.subject), loc: None, git: Some(item), buffer: None, raw: None, time: None }
+        Candidate {
+            display: format!("{} {}", item.name, item.subject),
+            loc: None,
+            git: Some(item),
+            buffer: None,
+            raw: None,
+            time: None,
+        }
     }
 
     /// Show `display` but keep the whole `line` for output and previews.

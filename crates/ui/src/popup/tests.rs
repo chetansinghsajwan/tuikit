@@ -23,16 +23,36 @@ fn the_pane_command_is_a_centered_floating_blocking_pane() {
         &[("PATH".into(), "/a:/b".into())],
     );
     let has = |a: &str, b: &str| z.windows(2).any(|w| w[0] == a && w[1] == b);
-    assert!(z.contains(&"--floating".to_string()) && z.contains(&"--blocking".to_string()) && z.contains(&"--close-on-exit".to_string()));
+    assert!(
+        z.contains(&"--floating".to_string())
+            && z.contains(&"--blocking".to_string())
+            && z.contains(&"--close-on-exit".to_string())
+    );
     assert!(has("--borderless", "true"));
-    assert!(has("--width", "80%") && has("--height", "80%") && has("--x", "10%") && has("--y", "10%") && has("--cwd", "/work"));
+    assert!(
+        has("--width", "80%")
+            && has("--height", "80%")
+            && has("--x", "10%")
+            && has("--y", "10%")
+            && has("--cwd", "/work")
+    );
     let script = z.last().unwrap();
     assert_eq!(
         script,
         "PATH='/a:/b' '/bin/pick' '--files' 'my dir' '--title' 'it'\\''s' --no-popup < '/t/in' > '/t/out'; echo $? > '/t/code'"
     );
     // No piped input: no redirect from `in`. Other sizes are centered too.
-    let z = zellij_args(Path::new("/bin/pick"), &[], Path::new("/w"), None, Path::new("/o"), Path::new("/c"), 60, None, &[]);
+    let z = zellij_args(
+        Path::new("/bin/pick"),
+        &[],
+        Path::new("/w"),
+        None,
+        Path::new("/o"),
+        Path::new("/c"),
+        60,
+        None,
+        &[],
+    );
     assert!(!z.last().unwrap().contains(" < ") && z.windows(2).any(|w| w[0] == "--x" && w[1] == "20%"));
 }
 

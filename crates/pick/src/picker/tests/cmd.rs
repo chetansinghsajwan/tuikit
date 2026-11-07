@@ -2,7 +2,14 @@ use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
 fn picker(lines: &[&str]) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: false, root: std::env::temp_dir(), preview: false, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: false,
+        root: std::env::temp_dir(),
+        preview: false,
+        git: false,
+        query: String::new(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     crate::source::push_candidates(&p.injector(), lines.iter().map(|l| Candidate::plain(*l)).collect());
     p.set_cursor(0);
@@ -32,7 +39,10 @@ fn plain_lists_have_no_preview_until_a_command_is_set() {
 #[test]
 fn command_output_keeps_colors_and_scrolls() {
     let mut p = picker(&["x"]);
-    p.set_preview_command("i=1; while [ $i -le 40 ]; do printf '\\033[31mrow %s\\033[0m\\n' $i; i=$((i+1)); done", None);
+    p.set_preview_command(
+        "i=1; while [ $i -le 40 ]; do printf '\\033[31mrow %s\\033[0m\\n' $i; i=$((i+1)); done",
+        None,
+    );
     let first = draw(&mut p);
     assert!(first.contains("row 1") && !first.contains("row 30"), "{first}");
     for _ in 0..6 {
@@ -57,7 +67,14 @@ fn dirs_only_source_lists_just_folders() {
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(d.join("a/b")).unwrap();
     std::fs::write(d.join("a/file.txt"), "x").unwrap();
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root: d.clone(), preview: false, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: true,
+        root: d.clone(),
+        preview: false,
+        git: false,
+        query: String::new(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     crate::source::spawn_dirs(p.injector(), d);
     for _ in 0..200 {

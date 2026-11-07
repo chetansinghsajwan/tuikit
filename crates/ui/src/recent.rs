@@ -14,12 +14,19 @@ pub fn path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("UI_RECENT_FILE") {
         return Some(PathBuf::from(p));
     }
-    let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
+    let state = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
     Some(state.join("ui/recent"))
 }
 
 fn read(path: &Path) -> Vec<(String, String)> {
-    fs::read_to_string(path).unwrap_or_default().lines().filter_map(|l| l.split_once('\t')).map(|(t, i)| (t.to_string(), i.to_string())).collect()
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(t, i)| (t.to_string(), i.to_string()))
+        .collect()
 }
 
 /// The ids last run in `tool`, newest first.

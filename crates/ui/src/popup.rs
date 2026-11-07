@@ -42,7 +42,17 @@ pub fn vertical_offset(p: u16, rows: u16) -> u16 {
 /// that runs `exe args...` with input from `input` (if any) and output to
 /// `out`, then records the exit code in `code`.
 #[allow(clippy::too_many_arguments)]
-pub fn zellij_args(exe: &Path, args: &[OsString], cwd: &Path, input: Option<&Path>, out: &Path, code: &Path, percent: u16, rows: Option<u16>, env: &[(String, String)]) -> Vec<String> {
+pub fn zellij_args(
+    exe: &Path,
+    args: &[OsString],
+    cwd: &Path,
+    input: Option<&Path>,
+    out: &Path,
+    code: &Path,
+    percent: u16,
+    rows: Option<u16>,
+    env: &[(String, String)],
+) -> Vec<String> {
     let p = percent.clamp(10, 100);
     let offset = rows.map_or((100 - p) / 2, |r| vertical_offset(p, r));
     let side = (100 - p) / 2;
@@ -63,7 +73,8 @@ pub fn zellij_args(exe: &Path, args: &[OsString], cwd: &Path, input: Option<&Pat
     }
     script.push_str(&format!(" > {}; echo $? > {}", q(out.as_os_str()), q(code.as_os_str())));
 
-    let mut v: Vec<String> = ["run", "--floating", "--close-on-exit", "--blocking", "--name", "pick"].map(String::from).to_vec();
+    let mut v: Vec<String> =
+        ["run", "--floating", "--close-on-exit", "--blocking", "--name", "pick"].map(String::from).to_vec();
     // pick draws its own (design-token) border, so the pane has none of its own.
     v.extend(["--borderless".into(), "true".into()]);
     v.extend(["--cwd".into(), cwd.to_string_lossy().into_owned()]);
@@ -97,7 +108,8 @@ fn run_in(dir: &Path, args: Vec<OsString>, percent: u16) -> io::Result<i32> {
 
     let exe = std::env::current_exe()?;
     let cwd = std::env::current_dir()?;
-    let env: Vec<(String, String)> = FORWARD_ENV.iter().filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v))).collect();
+    let env: Vec<(String, String)> =
+        FORWARD_ENV.iter().filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v))).collect();
     // About as many rows as the pane the tool runs in has: used to center the popup vertically.
     let rows = ratatui::crossterm::terminal::size().ok().map(|(_, r)| r);
     let zargs = zellij_args(&exe, &args, &cwd, has_input.then_some(input.as_path()), &out, &code, percent, rows, &env);

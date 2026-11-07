@@ -3,7 +3,14 @@ use crate::source::LineFormat;
 use ratatui::crossterm::event::KeyEvent;
 
 fn picker_from(lines: &[&str], fmt: LineFormat) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: false, root: std::env::temp_dir(), preview: false, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: false,
+        root: std::env::temp_dir(),
+        preview: false,
+        git: false,
+        query: String::new(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     let items: Vec<Candidate> = lines
         .iter()
@@ -32,9 +39,15 @@ fn draw(p: &mut Picker) -> String {
 fn expect_keys_accept_and_report_the_key() {
     let mut p = picker_from(&["alpha", "beta"], LineFormat::default());
     p.set_expect(&["ctrl-e".to_string(), "f2".to_string()]).unwrap();
-    assert_eq!(p.handle_event(&key(KeyCode::Char('e'), KeyModifiers::CONTROL)), Action::AcceptWith("ctrl-e".into(), vec!["alpha".into()]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::Char('e'), KeyModifiers::CONTROL)),
+        Action::AcceptWith("ctrl-e".into(), vec!["alpha".into()])
+    );
     p.handle_event(&key(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(p.handle_event(&key(KeyCode::F(2), KeyModifiers::NONE)), Action::AcceptWith("f2".into(), vec!["beta".into()]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::F(2), KeyModifiers::NONE)),
+        Action::AcceptWith("f2".into(), vec!["beta".into()])
+    );
     // Enter still accepts normally, and a plain `e` still types.
     assert_eq!(p.handle_event(&key(KeyCode::Enter, KeyModifiers::NONE)), Action::Accept(vec!["beta".into()]));
     assert!(p.set_expect(&["bogus-key".to_string()]).is_err());
@@ -54,10 +67,16 @@ fn header_lines_sit_under_the_prompt_and_are_not_candidates() {
 
 #[test]
 fn with_nth_shows_one_field_but_prints_and_previews_the_whole_line() {
-    let mut p = picker_from(&["nginx\t/nix/store/aaa-nginx", "curl\t/nix/store/bbb-curl"], LineFormat { with_nth: Some(1), delimiter: None, timestamps: false });
+    let mut p = picker_from(
+        &["nginx\t/nix/store/aaa-nginx", "curl\t/nix/store/bbb-curl"],
+        LineFormat { with_nth: Some(1), delimiter: None, timestamps: false },
+    );
     p.set_preview_command("printf 'PATH=%s' {2}", None);
     let text = draw(&mut p);
-    assert!(text.contains("nginx") && !text.contains("aaa-nginx\n") , "{text}");
+    assert!(text.contains("nginx") && !text.contains("aaa-nginx\n"), "{text}");
     assert!(text.contains("PATH=/nix/store/aaa-nginx"), "{text}");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter, KeyModifiers::NONE)), Action::Accept(vec!["nginx\t/nix/store/aaa-nginx".into()]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::Enter, KeyModifiers::NONE)),
+        Action::Accept(vec!["nginx\t/nix/store/aaa-nginx".into()])
+    );
 }

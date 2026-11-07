@@ -32,7 +32,9 @@ pub fn parse(spec: &str) -> Option<KeyEvent> {
         "right" => KeyCode::Right,
         "pgup" | "page-up" => KeyCode::PageUp,
         "pgdn" | "page-down" => KeyCode::PageDown,
-        f if f.len() >= 2 && f.starts_with('f') && f[1..].chars().all(|c| c.is_ascii_digit()) => KeyCode::F(f[1..].parse().ok().filter(|n| (1..=12).contains(n))?),
+        f if f.len() >= 2 && f.starts_with('f') && f[1..].chars().all(|c| c.is_ascii_digit()) => {
+            KeyCode::F(f[1..].parse().ok().filter(|n| (1..=12).contains(n))?)
+        }
         _ => {
             let mut chars = rest.chars();
             match (chars.next(), chars.next()) {

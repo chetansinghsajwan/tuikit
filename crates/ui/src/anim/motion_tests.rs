@@ -17,7 +17,9 @@ fn frame(names: &[&str], rows: usize) -> Buffer {
 }
 
 fn names(buf: &Buffer) -> Vec<String> {
-    (0..buf.area.height).map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim().to_string()).collect()
+    (0..buf.area.height)
+        .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim().to_string())
+        .collect()
 }
 
 #[test]
@@ -29,7 +31,11 @@ fn a_big_scroll_glides_from_the_old_rows() {
     finish(&mut b, &t);
     let mut b = frame(&win(3), 6);
     finish(&mut b, &t);
-    assert_eq!(names(&b), ["r00", "r01", "r02", "r03", "r04", "r05"].map(String::from), "the first glide frame is still the old rows");
+    assert_eq!(
+        names(&b),
+        ["r00", "r01", "r02", "r03", "r04", "r05"].map(String::from),
+        "the first glide frame is still the old rows"
+    );
     assert_eq!(poll_timeout(Duration::from_secs(1)), FRAME);
 }
 

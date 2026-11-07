@@ -15,10 +15,7 @@ pub fn rows(theme: &Theme, area: Rect, constraints: &[Constraint]) -> Vec<Rect> 
 }
 
 fn split(theme: &Theme, area: Rect, dir: Direction, constraints: &[Constraint]) -> Vec<Rect> {
-    Layout::new(dir, constraints)
-        .spacing(theme.layout.gap)
-        .split(area)
-        .to_vec()
+    Layout::new(dir, constraints).spacing(theme.layout.gap).split(area).to_vec()
 }
 
 /// A popup centered in `area`, `popup_percent` of its width and height.
@@ -35,26 +32,15 @@ pub fn sidebar_main_preview(theme: &Theme, area: Rect) -> [Rect; 3] {
     let p = l.preview_percent.min(100);
     let rest = area.width.saturating_sub(l.sidebar_width + 2 * l.gap);
     let preview = rest * p / 100;
-    let v = columns(
-        theme,
-        area,
-        &[
-            Constraint::Length(l.sidebar_width),
-            Constraint::Min(0),
-            Constraint::Length(preview),
-        ],
-    );
+    let v =
+        columns(theme, area, &[Constraint::Length(l.sidebar_width), Constraint::Min(0), Constraint::Length(preview)]);
     [v[0], v[1], v[2]]
 }
 
 /// `[main | preview]` using the theme's preview share.
 pub fn main_preview(theme: &Theme, area: Rect) -> [Rect; 2] {
     let p = theme.layout.preview_percent.min(100);
-    let v = columns(
-        theme,
-        area,
-        &[Constraint::Percentage(100 - p), Constraint::Percentage(p)],
-    );
+    let v = columns(theme, area, &[Constraint::Percentage(100 - p), Constraint::Percentage(p)]);
     [v[0], v[1]]
 }
 
@@ -103,8 +89,18 @@ pub fn workbench(main: Rect, left: u16, right: u16, bottom: u16) -> Workbench {
     let mid_w = body.width - left - right;
     Workbench {
         left: Rect { x: body.x, y: body.y, width: left, height: if left == 0 { 0 } else { body.height } },
-        right: Rect { x: body.right() - right, y: body.y, width: right, height: if right == 0 { 0 } else { body.height } },
-        bottom: Rect { x: mid_x, y: body.bottom() - bottom, width: if bottom == 0 { 0 } else { mid_w }, height: bottom },
+        right: Rect {
+            x: body.right() - right,
+            y: body.y,
+            width: right,
+            height: if right == 0 { 0 } else { body.height },
+        },
+        bottom: Rect {
+            x: mid_x,
+            y: body.bottom() - bottom,
+            width: if bottom == 0 { 0 } else { mid_w },
+            height: bottom,
+        },
         editor: Rect { x: mid_x, y: body.y, width: mid_w, height: body.height - bottom },
         ribbon: Rect { x: main.x, y: body.bottom(), width: main.width, height: ribbon_h },
     }

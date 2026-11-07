@@ -7,7 +7,14 @@ use std::sync::Once;
 fn identity() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        for (k, v) in [("GIT_AUTHOR_NAME", "t"), ("GIT_AUTHOR_EMAIL", "t@t"), ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@t"), ("GIT_CONFIG_GLOBAL", "/dev/null"), ("GIT_CONFIG_SYSTEM", "/dev/null")] {
+        for (k, v) in [
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@t"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@t"),
+            ("GIT_CONFIG_GLOBAL", "/dev/null"),
+            ("GIT_CONFIG_SYSTEM", "/dev/null"),
+        ] {
             // SAFETY: set once, before any test starts git, to constants.
             unsafe { std::env::set_var(k, v) };
         }
@@ -33,7 +40,10 @@ fn repo(name: &str) -> PathBuf {
 
 /// The row of the Refs tree that shows the ref called `name`.
 fn ref_row(app: &App, name: &str) -> usize {
-    app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].name == name)).unwrap_or_else(|| panic!("no ref {name}"))
+    app.ref_rows
+        .iter()
+        .position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].name == name))
+        .unwrap_or_else(|| panic!("no ref {name}"))
 }
 
 fn key(code: KeyCode) -> Event {
@@ -50,7 +60,9 @@ fn screen(app: &mut App) -> Vec<String> {
     let area = Rect::new(0, 0, 120, 36);
     let mut buf = Buffer::empty(area);
     app.render(area, &mut buf);
-    (0..36).map(|y| (0..120).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string()).collect()
+    (0..36)
+        .map(|y| (0..120).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+        .collect()
 }
 
 fn head(d: &Path) -> String {
@@ -143,10 +155,14 @@ fn l_on_a_commit_shows_its_files_as_a_tree_with_the_diff_of_each() {
     press(&mut app, "2");
     press(&mut app, "l");
     let text = screen(&mut app).join("\n");
-    assert!(text.contains("add files") && text.contains("src/") && text.contains("top.txt") && text.contains("+1"), "{text}");
+    assert!(
+        text.contains("add files") && text.contains("src/") && text.contains("top.txt") && text.contains("+1"),
+        "{text}"
+    );
     // The diff of the file under the cursor shows beside the tree.
     let cf = app.commit_files.as_ref().unwrap();
-    let at = cf.rows.iter().position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs")).unwrap();
+    let at =
+        cf.rows.iter().position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs")).unwrap();
     app.commit_files.as_mut().unwrap().cursor = at;
     let text = screen(&mut app).join("\n");
     assert!(text.contains("fn a()"), "{text}");
@@ -271,7 +287,11 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     let mut app = App::new(&d).unwrap();
     press(&mut app, "3");
     // `Feature/` and `feature/` are two folders, each once.
-    let folders: Vec<String> = app.ref_rows.iter().filter_map(|r| if let RefRow::Folder { name, .. } = r { Some(name.clone()) } else { None }).collect();
+    let folders: Vec<String> = app
+        .ref_rows
+        .iter()
+        .filter_map(|r| if let RefRow::Folder { name, .. } = r { Some(name.clone()) } else { None })
+        .collect();
     assert_eq!(folders, vec!["Feature".to_string(), "feature".to_string()]);
     // A new branch sorts before the one under the cursor: the cursor stays on its ref.
     app.lists[0].cursor = ref_row(&app, "other");
@@ -281,15 +301,21 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     // A folder rename that cannot be done as a whole does nothing at all.
     git(&d, &["branch", "taken-a"]);
     app.reload_all();
-    app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature")).unwrap();
+    app.lists[0].cursor =
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature")).unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut app, "x");
-    assert!(app.branches.iter().any(|b| b.name == "x/a") && app.branches.iter().any(|b| b.name == "x/c"), "{:?}", app.message);
+    assert!(
+        app.branches.iter().any(|b| b.name == "x/a") && app.branches.iter().any(|b| b.name == "x/c"),
+        "{:?}",
+        app.message
+    );
     let before: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
-    app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x")).unwrap();
+    app.lists[0].cursor =
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x")).unwrap();
     press(&mut app, "r");
     for _ in 0..1 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -299,7 +325,8 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     assert_ne!(before, after);
     // A name that is not valid says so and changes nothing.
     let snapshot = after.clone();
-    app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor =
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -324,16 +351,27 @@ fn tags_and_folders_of_refs_can_be_renamed() {
         app.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut app, "v2");
-    assert!(app.branches.iter().any(|b| b.name == "v2") && app.branches.iter().all(|b| b.name != "v1"), "{:?}", app.message);
+    assert!(
+        app.branches.iter().any(|b| b.name == "v2") && app.branches.iter().all(|b| b.name != "v1"),
+        "{:?}",
+        app.message
+    );
     // A folder: everything under `feature/` moves to `feat/`.
-    app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor =
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut app, "feat");
     let names: Vec<&str> = app.branches.iter().map(|b| b.name.as_str()).collect();
-    assert!(names.contains(&"feat/login") && names.contains(&"feat/signup") && !names.iter().any(|n| n.starts_with("feature/")), "{names:?} {:?}", app.message);
+    assert!(
+        names.contains(&"feat/login")
+            && names.contains(&"feat/signup")
+            && !names.iter().any(|n| n.starts_with("feature/")),
+        "{names:?} {:?}",
+        app.message
+    );
     // A section cannot be renamed.
     app.lists[0].cursor = 0;
     press(&mut app, "r");
@@ -357,10 +395,14 @@ fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
             })
             .collect()
     };
-    assert_eq!(shape(&app), vec!["Branches", " feature/", "  login", "  signup/", "   form", " main", " other", "Tags", " v1"]);
+    assert_eq!(
+        shape(&app),
+        vec!["Branches", " feature/", "  login", "  signup/", "   form", " main", " other", "Tags", " v1"]
+    );
     // Enter on a folder folds it; the cursor stays on the folder.
     press(&mut app, "3");
-    app.lists[0].cursor = app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
+    app.lists[0].cursor =
+        app.ref_rows.iter().position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature")).unwrap();
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(shape(&app), vec!["Branches", " feature/", " main", " other", "Tags", " v1"]);
     assert!(matches!(app.ref_rows[app.lists[0].cursor], RefRow::Folder { .. }));
@@ -427,10 +469,29 @@ fn stash_new_apply_pop_and_drop() {
 
 #[test]
 fn a_branch_and_its_remote_branch_share_a_pill() {
-    let r = |name: &str, kind| RefInfo { name: name.into(), kind, oid: "x".into(), is_head: false, subject: String::new(), time: 0 };
-    let refs = [r("main", RefKind::Branch), r("origin/main", RefKind::Remote), r("origin/other", RefKind::Remote), r("v1", RefKind::Tag)];
+    let r = |name: &str, kind| RefInfo {
+        name: name.into(),
+        kind,
+        oid: "x".into(),
+        is_head: false,
+        subject: String::new(),
+        time: 0,
+    };
+    let refs = [
+        r("main", RefKind::Branch),
+        r("origin/main", RefKind::Remote),
+        r("origin/other", RefKind::Remote),
+        r("v1", RefKind::Tag),
+    ];
     let got: Vec<(String, Vec<String>)> = pills(&refs).into_iter().map(|(r, o)| (r.name, o)).collect();
-    assert_eq!(got, vec![("main".to_string(), vec!["origin".to_string()]), ("v1".to_string(), vec![]), ("origin/other".to_string(), vec![])]);
+    assert_eq!(
+        got,
+        vec![
+            ("main".to_string(), vec!["origin".to_string()]),
+            ("v1".to_string(), vec![]),
+            ("origin/other".to_string(), vec![])
+        ]
+    );
     assert_eq!(pill_text(&refs[0], &["origin".to_string()]), "main · origin");
 }
 
@@ -472,7 +533,10 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     // Branches pane: the leader menu lists the branch actions, a leader key runs one.
     press(&mut app, "3");
     press_raw(&mut app, ' ');
-    let menu = match app.focus { Focus::Branches => app.maps[0].menu().unwrap(), _ => panic!() };
+    let menu = match app.focus {
+        Focus::Branches => app.maps[0].menu().unwrap(),
+        _ => panic!(),
+    };
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
     assert!(names.contains(&"new branch") && names.contains(&"merge") && names.contains(&"commands"), "{names:?}");
     press_raw(&mut app, 'n');
@@ -480,7 +544,9 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     app.handle_event(&key(KeyCode::Esc));
     // The palette rows of a pane hold the basic keys too (they are filtered when shown).
     let rows = app.keys_rows();
-    assert!(rows.iter().any(|r| r.id == "nav.down" && r.basic) && rows.iter().any(|r| r.id == "branch.merge" && !r.basic));
+    assert!(
+        rows.iter().any(|r| r.id == "nav.down" && r.basic) && rows.iter().any(|r| r.id == "branch.merge" && !r.basic)
+    );
     // The palette's pick runs in the pane; `?` opens the help, any other key closes it with Esc.
     assert_eq!(app.run_palette("branch.new"), Quit::No);
     assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));

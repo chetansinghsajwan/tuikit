@@ -168,7 +168,12 @@ impl Drop for Daemon {
 }
 
 fn bus() -> Option<(Daemon, String)> {
-    let mut child = Command::new("dbus-daemon").args(["--session", "--nofork", "--print-address=1"]).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    let mut child = Command::new("dbus-daemon")
+        .args(["--session", "--nofork", "--print-address=1"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
     let mut address = String::new();
     BufReader::new(child.stdout.take()?).read_line(&mut address).ok()?;
     Some((Daemon(child), address.trim().to_string()))
@@ -180,16 +185,39 @@ fn the_backend_speaks_bluezs_dbus_api() {
         eprintln!("no dbus-daemon: skipped");
         return;
     };
-    let dev = |address, name, icon, paired, connected, rssi| Dev { address, name, icon, paired, trusted: paired, connected, rssi };
+    let dev = |address, name, icon, paired, connected, rssi| Dev {
+        address,
+        name,
+        icon,
+        paired,
+        trusted: paired,
+        connected,
+        rssi,
+    };
     let devices = vec![
         dev("AA:00:00:00:00:01", "Headphones", "audio-headphones", true, false, -58),
         dev("AA:00:00:00:00:02", "Keyboard", "input-keyboard", true, true, -47),
         dev("AA:00:00:00:00:03", "Phone", "phone", false, false, -72),
     ];
-    let state: Shared = Arc::new(Mutex::new(State { powered: true, discovering: false, devices: devices.clone(), calls: Vec::new(), removed: Vec::new() }));
-    let mut builder = Builder::address(address.as_str()).unwrap().name(NAME).unwrap().serve_at("/", zbus::fdo::ObjectManager).unwrap().serve_at(ADAPTER, Adapter(state.clone())).unwrap();
+    let state: Shared = Arc::new(Mutex::new(State {
+        powered: true,
+        discovering: false,
+        devices: devices.clone(),
+        calls: Vec::new(),
+        removed: Vec::new(),
+    }));
+    let mut builder = Builder::address(address.as_str())
+        .unwrap()
+        .name(NAME)
+        .unwrap()
+        .serve_at("/", zbus::fdo::ObjectManager)
+        .unwrap()
+        .serve_at(ADAPTER, Adapter(state.clone()))
+        .unwrap();
     for (i, d) in devices.iter().enumerate() {
-        builder = builder.serve_at(format!("{ADAPTER}/dev_{}", d.address.replace(':', "_")), Device(state.clone(), i)).unwrap();
+        builder = builder
+            .serve_at(format!("{ADAPTER}/dev_{}", d.address.replace(':', "_")), Device(state.clone(), i))
+            .unwrap();
     }
     let _server = builder.build().unwrap();
     let client = Builder::address(address.as_str()).unwrap().build().unwrap();
@@ -199,8 +227,16 @@ fn the_backend_speaks_bluezs_dbus_api() {
     let status = bt.status().unwrap();
     assert_eq!((status.adapter.as_deref(), status.powered, status.discovering), (Some("hci0"), true, false));
     let list = bt.devices().unwrap();
-    let names: Vec<(&str, Kind, bool, bool)> = list.iter().map(|d| (d.name.as_str(), d.kind, d.paired, d.connected)).collect();
-    assert_eq!(names, vec![("Keyboard", Kind::Keyboard, true, true), ("Headphones", Kind::Audio, true, false), ("Phone", Kind::Phone, false, false)]);
+    let names: Vec<(&str, Kind, bool, bool)> =
+        list.iter().map(|d| (d.name.as_str(), d.kind, d.paired, d.connected)).collect();
+    assert_eq!(
+        names,
+        vec![
+            ("Keyboard", Kind::Keyboard, true, true),
+            ("Headphones", Kind::Audio, true, false),
+            ("Phone", Kind::Phone, false, false)
+        ]
+    );
 
     // A paired device connects directly; an unpaired one is paired and trusted first.
     bt.connect("AA:00:00:00:00:01").unwrap();
@@ -225,6 +261,6 @@ fn the_backend_speaks_bluezs_dbus_api() {
     bt.set_powered(true).unwrap();
     bt.remove("AA:00:00:00:00:03").unwrap();
     assert_eq!(state.lock().unwrap().calls.last().unwrap(), "RemoveDevice dev_AA_00_00_00_00_03");
-            assert_eq!(state.lock().unwrap().removed, vec!["dev_AA_00_00_00_00_03".to_string()]);
+    assert_eq!(state.lock().unwrap().removed, vec!["dev_AA_00_00_00_00_03".to_string()]);
     assert!(bt.connect("FF:FF:FF:FF:FF:FF").unwrap_err().0.contains("not known"));
 }

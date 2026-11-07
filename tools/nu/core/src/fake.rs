@@ -18,11 +18,24 @@ struct State {
 impl Fake {
     /// A radio with `home` (protected, saved), `cafe` (open) and `office` (802.1X) in range.
     pub fn new() -> Fake {
-        let n = |ssid: &str, strength: u8, security: Security, known: bool| Network { ssid: ssid.into(), strength, security, active: false, known, frequency_mhz: 5180, bssid: format!("aa:bb:cc:00:00:{strength:02x}") };
+        let n = |ssid: &str, strength: u8, security: Security, known: bool| Network {
+            ssid: ssid.into(),
+            strength,
+            security,
+            active: false,
+            known,
+            frequency_mhz: 5180,
+            bssid: format!("aa:bb:cc:00:00:{strength:02x}"),
+        };
         Fake {
             state: Mutex::new(State {
                 enabled: true,
-                networks: vec![n("home", 82, Security::Psk, true), n("cafe", 55, Security::Open, false), n("office", 40, Security::Enterprise, false), n("neighbor", 25, Security::Psk, false)],
+                networks: vec![
+                    n("home", 82, Security::Psk, true),
+                    n("cafe", 55, Security::Open, false),
+                    n("office", 40, Security::Enterprise, false),
+                    n("neighbor", 25, Security::Psk, false),
+                ],
                 log: Vec::new(),
             }),
         }
@@ -42,7 +55,11 @@ impl Default for Fake {
 impl Backend for Fake {
     fn status(&self) -> Result<Status> {
         let s = self.state.lock().expect("fake state");
-        Ok(Status { device: Some("wlan0".into()), enabled: s.enabled, active: s.networks.iter().find(|n| n.active).map(|n| n.ssid.clone()) })
+        Ok(Status {
+            device: Some("wlan0".into()),
+            enabled: s.enabled,
+            active: s.networks.iter().find(|n| n.active).map(|n| n.ssid.clone()),
+        })
     }
 
     fn networks(&self) -> Result<Vec<Network>> {
@@ -71,7 +88,9 @@ impl Backend for Fake {
     fn connect(&self, ssid: &str, password: Option<&str>) -> Result<()> {
         let mut s = self.state.lock().expect("fake state");
         s.log.push(format!("connect {ssid}"));
-        let Some(i) = s.networks.iter().position(|n| n.ssid == ssid) else { return Err(Error(format!("{ssid} is not in range"))) };
+        let Some(i) = s.networks.iter().position(|n| n.ssid == ssid) else {
+            return Err(Error(format!("{ssid} is not in range")));
+        };
         let (security, known) = (s.networks[i].security, s.networks[i].known);
         match security {
             Security::Enterprise => return Err(Error("802.1X networks are not supported yet".into())),
@@ -126,12 +145,26 @@ impl FakeBluetooth {
     /// `Headphones` (paired, in range), `Keyboard` (paired, connected), `Phone` and `Speaker`
     /// (in range, not paired) and `Old mouse` (paired, away).
     pub fn new() -> FakeBluetooth {
-        let d = |name: &str, kind: Kind, paired: bool, connected: bool, rssi: Option<i16>| Device { address: format!("00:11:22:33:44:{:02X}", name.len()), name: name.into(), kind, paired, trusted: paired, connected, rssi };
+        let d = |name: &str, kind: Kind, paired: bool, connected: bool, rssi: Option<i16>| Device {
+            address: format!("00:11:22:33:44:{:02X}", name.len()),
+            name: name.into(),
+            kind,
+            paired,
+            trusted: paired,
+            connected,
+            rssi,
+        };
         FakeBluetooth {
             state: Mutex::new(BtState {
                 powered: true,
                 discovering: false,
-                devices: vec![d("Headphones", Kind::Audio, true, false, Some(-58)), d("Keyboard", Kind::Keyboard, true, true, Some(-47)), d("Phone", Kind::Phone, false, false, Some(-72)), d("Speaker", Kind::Audio, false, false, Some(-80)), d("Old mouse", Kind::Mouse, true, false, None)],
+                devices: vec![
+                    d("Headphones", Kind::Audio, true, false, Some(-58)),
+                    d("Keyboard", Kind::Keyboard, true, true, Some(-47)),
+                    d("Phone", Kind::Phone, false, false, Some(-72)),
+                    d("Speaker", Kind::Audio, false, false, Some(-80)),
+                    d("Old mouse", Kind::Mouse, true, false, None),
+                ],
                 log: Vec::new(),
             }),
         }
@@ -159,7 +192,8 @@ impl Bluetooth for FakeBluetooth {
         if !s.powered {
             return Ok(Vec::new());
         }
-        let mut v: Vec<Device> = s.devices.iter().filter(|d| d.paired || d.connected || d.rssi.is_some()).cloned().collect();
+        let mut v: Vec<Device> =
+            s.devices.iter().filter(|d| d.paired || d.connected || d.rssi.is_some()).cloned().collect();
         crate::bluetooth::sort(&mut v);
         Ok(v)
     }
@@ -184,7 +218,11 @@ impl Bluetooth for FakeBluetooth {
     fn connect(&self, address: &str) -> Result<()> {
         let mut s = self.state.lock().expect("fake state");
         s.log.push(format!("connect {address}"));
-        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        let d = s
+            .devices
+            .iter_mut()
+            .find(|d| d.address == address)
+            .ok_or_else(|| Error(format!("{address} is not known")))?;
         if d.rssi.is_none() && !d.connected {
             return Err(Error("the device is not in range".into()));
         }
@@ -197,7 +235,11 @@ impl Bluetooth for FakeBluetooth {
     fn disconnect(&self, address: &str) -> Result<()> {
         let mut s = self.state.lock().expect("fake state");
         s.log.push(format!("disconnect {address}"));
-        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        let d = s
+            .devices
+            .iter_mut()
+            .find(|d| d.address == address)
+            .ok_or_else(|| Error(format!("{address} is not known")))?;
         d.connected = false;
         Ok(())
     }
@@ -205,7 +247,11 @@ impl Bluetooth for FakeBluetooth {
     fn set_trusted(&self, address: &str, on: bool) -> Result<()> {
         let mut s = self.state.lock().expect("fake state");
         s.log.push(format!("trusted {address} {on}"));
-        let d = s.devices.iter_mut().find(|d| d.address == address).ok_or_else(|| Error(format!("{address} is not known")))?;
+        let d = s
+            .devices
+            .iter_mut()
+            .find(|d| d.address == address)
+            .ok_or_else(|| Error(format!("{address} is not known")))?;
         d.trusted = on;
         Ok(())
     }

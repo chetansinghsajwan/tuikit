@@ -23,7 +23,15 @@ pub struct PanelOptions {
 
 impl Default for PanelOptions {
     fn default() -> Self {
-        PanelOptions { hidden: true, git: true, linemode: Linemode::Off, bookmarks: bookmarks::default_path(), background_bytes: Some(8 << 20), leader: "space".into(), actions: Vec::new() }
+        PanelOptions {
+            hidden: true,
+            git: true,
+            linemode: Linemode::Off,
+            bookmarks: bookmarks::default_path(),
+            background_bytes: Some(8 << 20),
+            leader: "space".into(),
+            actions: Vec::new(),
+        }
     }
 }
 

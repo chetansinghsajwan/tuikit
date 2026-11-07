@@ -60,4 +60,3 @@ pub struct RowStyle {
     pub syntax: Option<String>,
     pub numbers: bool,
 }
-

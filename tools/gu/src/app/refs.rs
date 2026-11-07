@@ -23,8 +23,11 @@ impl App {
     /// (`feature/login` under `feature`, `origin/main` under `origin`). Folded sections and folders hide what is in them.
     pub(super) fn build_ref_rows(&mut self, keep: Option<String>) {
         let mut rows = Vec::new();
-        for (kind, label, tag) in [(RefKind::Branch, "Branches", "b"), (RefKind::Remote, "Remotes", "r"), (RefKind::Tag, "Tags", "t")] {
-            let mut items: Vec<(usize, &RefInfo)> = self.branches.iter().enumerate().filter(|(_, r)| r.kind == kind).collect();
+        for (kind, label, tag) in
+            [(RefKind::Branch, "Branches", "b"), (RefKind::Remote, "Remotes", "r"), (RefKind::Tag, "Tags", "t")]
+        {
+            let mut items: Vec<(usize, &RefInfo)> =
+                self.branches.iter().enumerate().filter(|(_, r)| r.kind == kind).collect();
             if items.is_empty() {
                 continue;
             }
@@ -52,7 +55,11 @@ impl App {
                         continue;
                     }
                     let key = format!("{section}/{}", open.join("/"));
-                    let count = self.branches.iter().filter(|b| b.kind == kind && b.name.starts_with(&format!("{}/", open.join("/")))).count();
+                    let count = self
+                        .branches
+                        .iter()
+                        .filter(|b| b.kind == kind && b.name.starts_with(&format!("{}/", open.join("/"))))
+                        .count();
                     rows.push(RefRow::Folder { key: key.clone(), name: (*name).to_string(), depth: d + 1, count });
                     if self.folded.contains(&key) {
                         hidden_under = Some(d + 1);
@@ -65,7 +72,9 @@ impl App {
         }
         // The cursor stays on the same row when it is still there.
         self.ref_rows = rows;
-        let at = keep.and_then(|k| (0..self.ref_rows.len()).find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str()))).unwrap_or(self.lists[0].cursor);
+        let at = keep
+            .and_then(|k| (0..self.ref_rows.len()).find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str())))
+            .unwrap_or(self.lists[0].cursor);
         self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
     }
 
@@ -124,7 +133,10 @@ impl App {
                     }
                     Some(row) if depth_of(row) > 0 => {
                         let want = depth_of(row) - 1;
-                        if let Some(i) = cf.rows[..cf.cursor].iter().rposition(|r| matches!(r, FileRow::Folder { .. }) && depth_of(r) == want) {
+                        if let Some(i) = cf.rows[..cf.cursor]
+                            .iter()
+                            .rposition(|r| matches!(r, FileRow::Folder { .. }) && depth_of(r) == want)
+                        {
                             cf.cursor = i;
                         }
                     }
@@ -148,7 +160,11 @@ impl App {
     /// Fold or unfold the file whose header is at (or above) the top of the diff.
     pub(super) fn fold_file(&mut self) {
         let Some(p) = &self.preview else { return };
-        let at = p.anchors.files.iter().rposition(|&m| m <= self.pscroll).or(if p.anchors.files.is_empty() { None } else { Some(0) });
+        let at = p.anchors.files.iter().rposition(|&m| m <= self.pscroll).or(if p.anchors.files.is_empty() {
+            None
+        } else {
+            Some(0)
+        });
         if let Some(path) = at.and_then(|i| p.anchors.paths.get(i)).cloned() {
             pv::diff_toggle_fold(&path);
             self.preview = None;
@@ -158,7 +174,8 @@ impl App {
     pub(super) fn jump_diff(&mut self, forward: bool, files: bool) {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
-        let target = if forward { pv::Anchors::next(marks, self.pscroll) } else { pv::Anchors::prev(marks, self.pscroll) };
+        let target =
+            if forward { pv::Anchors::next(marks, self.pscroll) } else { pv::Anchors::prev(marks, self.pscroll) };
         if let Some(t) = target {
             self.pscroll = t;
         }

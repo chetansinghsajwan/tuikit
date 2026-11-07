@@ -70,7 +70,11 @@ impl Chord {
     }
 
     pub fn from_event(key: &KeyEvent) -> Chord {
-        Chord { code: key.code, ctrl: key.modifiers.contains(KeyModifiers::CONTROL), alt: key.modifiers.contains(KeyModifiers::ALT) }
+        Chord {
+            code: key.code,
+            ctrl: key.modifiers.contains(KeyModifiers::CONTROL),
+            alt: key.modifiers.contains(KeyModifiers::ALT),
+        }
     }
 
     /// How the key is shown in menus and help: `j`, `space`, `ctrl-d`, `enter`.
@@ -179,8 +183,20 @@ impl Keymap {
     /// A keymap for `actions`, with `leader` (a key name) standing for `leader` in bindings; the
     /// user's configuration (`ui::config`) overrides the leader and the keys.
     pub fn new(leader: &str, actions: &[Action], groups: &[Group]) -> Keymap {
-        let leader = crate::config::get().leader.as_deref().and_then(Chord::parse).or_else(|| Chord::parse(leader)).unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
-        let mut map = Keymap { leader, actions: actions.to_vec(), groups: Vec::new(), bindings: Vec::new(), pending: Vec::new(), rejected: String::new() };
+        let leader = crate::config::get()
+            .leader
+            .as_deref()
+            .and_then(Chord::parse)
+            .or_else(|| Chord::parse(leader))
+            .unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
+        let mut map = Keymap {
+            leader,
+            actions: actions.to_vec(),
+            groups: Vec::new(),
+            bindings: Vec::new(),
+            pending: Vec::new(),
+            rejected: String::new(),
+        };
         for g in groups {
             if let Some(seq) = map.sequence(g.prefix) {
                 map.groups.push((seq, g.name));
@@ -233,7 +249,12 @@ impl Keymap {
 
     /// The keys bound to `id`, as shown (`space v c`, `j / down`).
     pub fn keys_of(&self, id: &str) -> String {
-        let shown: Vec<String> = self.bindings.iter().filter(|(_, i)| *i == id).map(|(seq, _)| seq.iter().map(Chord::label).collect::<Vec<_>>().join(" ")).collect();
+        let shown: Vec<String> = self
+            .bindings
+            .iter()
+            .filter(|(_, i)| *i == id)
+            .map(|(seq, _)| seq.iter().map(Chord::label).collect::<Vec<_>>().join(" "))
+            .collect();
         shown.join(" / ")
     }
 
@@ -304,7 +325,8 @@ impl Keymap {
         }
         entries.sort_by(|a, b| a.key.to_lowercase().cmp(&b.key.to_lowercase()).then(a.key.cmp(&b.key)));
         let deeper: Vec<String> = self.pending.iter().skip(1).map(Chord::label).collect();
-        let title = if deeper.is_empty() { MENU_TITLE.to_string() } else { format!("{MENU_TITLE} · {}", deeper.join(" ")) };
+        let title =
+            if deeper.is_empty() { MENU_TITLE.to_string() } else { format!("{MENU_TITLE} · {}", deeper.join(" ")) };
         Some(Menu { title, entries })
     }
 }
@@ -323,7 +345,16 @@ pub struct Row {
 impl Keymap {
     /// Every action, in the order the tool declared them.
     pub fn rows(&self) -> Vec<Row> {
-        self.actions.iter().map(|a| Row { id: a.id, name: a.name.into(), keys: self.keys_of(a.id), desc: a.desc.into(), basic: a.basic }).collect()
+        self.actions
+            .iter()
+            .map(|a| Row {
+                id: a.id,
+                name: a.name.into(),
+                keys: self.keys_of(a.id),
+                desc: a.desc.into(),
+                basic: a.basic,
+            })
+            .collect()
     }
 }
 
@@ -336,7 +367,8 @@ pub fn choose(tool: &str, rows: &[Row], title: &str) -> Option<&'static str> {
     use std::io::Write;
     use std::process::{Command, Stdio};
     // The commands run last come first (like VS Code and Zed), the rest in the tool's order.
-    let rows: Vec<&Row> = crate::recent::order(rows.iter().filter(|r| !r.basic).collect(), &crate::recent::load(tool), |r| r.id);
+    let rows: Vec<&Row> =
+        crate::recent::order(rows.iter().filter(|r| !r.basic).collect(), &crate::recent::load(tool), |r| r.id);
     let name_w = rows.iter().map(|r| r.name.chars().count()).max().unwrap_or(0).max("Command".len());
     let keys_w = rows.iter().map(|r| r.keys.chars().count()).max().unwrap_or(0).min(24).max("Keys".len());
     let mut input = format!("{:<name_w$}  {:<keys_w$}  Description\n", "Command", "Keys");
@@ -344,7 +376,18 @@ pub fn choose(tool: &str, rows: &[Row], title: &str) -> Option<&'static str> {
         input.push_str(&format!("{:<name_w$}  {:<keys_w$}  {}\t{}\n", r.name, r.keys, r.desc, r.id));
     }
     let mut child = Command::new("pick")
-        .args(["--no-preview", "--flat", "--header-lines", "1", "--title", title, "--delimiter", "\t", "--with-nth", "1"])
+        .args([
+            "--no-preview",
+            "--flat",
+            "--header-lines",
+            "1",
+            "--title",
+            title,
+            "--delimiter",
+            "\t",
+            "--with-nth",
+            "1",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -394,7 +437,9 @@ impl Help {
         match key.code {
             KeyCode::Char('/') => self.searching = true,
             KeyCode::Char('j') if key.modifiers.contains(KeyModifiers::CONTROL) => self.scroll += 5,
-            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => self.scroll = self.scroll.saturating_sub(5),
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.scroll = self.scroll.saturating_sub(5)
+            }
             KeyCode::Down | KeyCode::Char('j') => self.scroll += 1,
             KeyCode::Up | KeyCode::Char('k') => self.scroll = self.scroll.saturating_sub(1),
             KeyCode::PageDown => self.scroll += 10,
@@ -411,7 +456,14 @@ impl Help {
     /// The rows that match the search (all of them with none).
     fn matching<'a>(&self, rows: &'a [Row]) -> Vec<&'a Row> {
         let q = self.query.to_lowercase();
-        rows.iter().filter(|r| q.is_empty() || r.name.to_lowercase().contains(&q) || r.keys.to_lowercase().contains(&q) || r.desc.to_lowercase().contains(&q)).collect()
+        rows.iter()
+            .filter(|r| {
+                q.is_empty()
+                    || r.name.to_lowercase().contains(&q)
+                    || r.keys.to_lowercase().contains(&q)
+                    || r.desc.to_lowercase().contains(&q)
+            })
+            .collect()
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, title: &str, rows: &[Row]) {
@@ -427,13 +479,28 @@ impl Help {
         let inner = pane.inner(rect);
         pane.render(rect, buf);
         // The search line and a rule under it, then the rows.
-        let hint = if self.searching { String::new() } else if self.query.is_empty() { "/ to search".to_string() } else { String::new() };
-        let line = if self.searching || !self.query.is_empty() { crate::prompt::line(theme, "/ ", &self.query) } else { Line::from(Span::styled(hint, Style::new().fg(c.muted.into()))) };
+        let hint = if self.searching {
+            String::new()
+        } else if self.query.is_empty() {
+            "/ to search".to_string()
+        } else {
+            String::new()
+        };
+        let line = if self.searching || !self.query.is_empty() {
+            crate::prompt::line(theme, "/ ", &self.query)
+        } else {
+            Line::from(Span::styled(hint, Style::new().fg(c.muted.into())))
+        };
         Paragraph::new(line).render(Rect { height: 1, ..inner }, buf);
         if self.searching {
             crate::prompt::cursor(buf, Rect { height: 1, ..inner }, "/ ", self.query.chars().count());
         }
-        buf.set_string(rect.x, inner.y + 1, format!("├{}┤", "─".repeat(usize::from(rect.width).saturating_sub(2))), Style::new().fg(c.border_focused.into()));
+        buf.set_string(
+            rect.x,
+            inner.y + 1,
+            format!("├{}┤", "─".repeat(usize::from(rect.width).saturating_sub(2))),
+            Style::new().fg(c.border_focused.into()),
+        );
         let list = Rect { y: inner.y + 2, height: inner.height.saturating_sub(2), ..inner };
         let shown = self.matching(rows);
         if shown.is_empty() {
@@ -445,7 +512,10 @@ impl Help {
         self.scroll = self.scroll.min(shown.len().saturating_sub(page));
         for (i, r) in shown.iter().skip(self.scroll).take(page).enumerate() {
             let line = Line::from(vec![
-                Span::styled(format!("{:<keys_w$}", r.keys), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("{:<keys_w$}", r.keys),
+                    Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("  ", Style::new()),
                 Span::styled(r.name.to_string(), Style::new().fg(c.accent.into())),
                 Span::styled(format!("  {}", r.desc), Style::new().fg(c.muted.into())),

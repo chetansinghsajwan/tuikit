@@ -14,8 +14,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use tui_input::backend::crossterm::EventHandler;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use ui::{Pane, Theme};
 
 mod paste;
@@ -106,21 +106,32 @@ impl Panel {
 
     /// Reread the directories and the git status.
     fn rebuild(&mut self) {
-        self.git = if self.opts.git { Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s))) } else { None };
+        self.git =
+            if self.opts.git { Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s))) } else { None };
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         self.rows.clear();
         self.ignored_hidden = 0;
         let root = self.root.clone();
         self.build(&root, 0);
         if let Some(path) = keep
-            && let Some(i) = self.rows.iter().position(|r| r.path == path) {
-                self.cursor = i;
-            }
+            && let Some(i) = self.rows.iter().position(|r| r.path == path)
+        {
+            self.cursor = i;
+        }
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
     }
 
     fn children(&self, dir: &Path) -> Vec<Row> {
-        let walk = WalkBuilder::new(dir).max_depth(Some(1)).hidden(!self.opts.hidden).git_ignore(!self.show_ignored).git_global(!self.show_ignored).git_exclude(!self.show_ignored).ignore(!self.show_ignored).parents(!self.show_ignored).filter_entry(|e| e.file_name() != ".git").build();
+        let walk = WalkBuilder::new(dir)
+            .max_depth(Some(1))
+            .hidden(!self.opts.hidden)
+            .git_ignore(!self.show_ignored)
+            .git_global(!self.show_ignored)
+            .git_exclude(!self.show_ignored)
+            .ignore(!self.show_ignored)
+            .parents(!self.show_ignored)
+            .filter_entry(|e| e.file_name() != ".git")
+            .build();
         let mut out: Vec<Row> = walk
             .flatten()
             .filter(|e| e.depth() == 1)
@@ -141,7 +152,16 @@ impl Panel {
     fn build(&mut self, dir: &Path, depth: u16) {
         let rows = self.children(dir);
         if !self.show_ignored {
-            let all = std::fs::read_dir(dir).map(|d| d.flatten().filter(|e| e.file_name() != ".git" && (self.opts.hidden || !e.file_name().to_string_lossy().starts_with('.'))).count()).unwrap_or(0);
+            let all = std::fs::read_dir(dir)
+                .map(|d| {
+                    d.flatten()
+                        .filter(|e| {
+                            e.file_name() != ".git"
+                                && (self.opts.hidden || !e.file_name().to_string_lossy().starts_with('.'))
+                        })
+                        .count()
+                })
+                .unwrap_or(0);
             self.ignored_hidden += all.saturating_sub(rows.len());
         }
         for mut row in rows {
@@ -239,7 +259,13 @@ impl Panel {
     /// (guides, icon, name, the git sign) and the pane's own border and padding.
     pub fn wanted_width(&self, theme: &Theme) -> u16 {
         let chrome = 100 - Pane::new(theme).inner(Rect::new(0, 0, 100, 10)).width;
-        let longest = self.visible().into_iter().filter_map(|i| self.rows.get(i)).map(|r| usize::from(r.depth) * 2 + 2 + r.name.chars().count() + 5).max().unwrap_or(0);
+        let longest = self
+            .visible()
+            .into_iter()
+            .filter_map(|i| self.rows.get(i))
+            .map(|r| usize::from(r.depth) * 2 + 2 + r.name.chars().count() + 5)
+            .max()
+            .unwrap_or(0);
         (longest as u16).saturating_add(chrome)
     }
 
@@ -280,9 +306,10 @@ impl Panel {
         if row.is_dir && self.expanded.contains(&row.path) {
             self.toggle(Some(false));
         } else if let Some(parent) = row.path.parent()
-            && let Some(i) = self.rows.iter().position(|r| r.path == parent) {
-                self.cursor = i;
-            }
+            && let Some(i) = self.rows.iter().position(|r| r.path == parent)
+        {
+            self.cursor = i;
+        }
     }
 
     /// Where `a` and `p` put things: the folder under the cursor, else its parent.
@@ -413,7 +440,10 @@ impl Panel {
             "item.delete" | "item.delete_forever" => {
                 let targets = self.targets();
                 if !targets.is_empty() {
-                    self.mode = Mode::Confirm(if id == "item.delete" { ConfirmKind::Trash } else { ConfirmKind::Delete }, targets);
+                    self.mode = Mode::Confirm(
+                        if id == "item.delete" { ConfirmKind::Trash } else { ConfirmKind::Delete },
+                        targets,
+                    );
                 }
             }
             "item.yank" | "item.cut" => {
@@ -422,7 +452,10 @@ impl Panel {
                     let (n, cut) = (paths.len(), id == "item.cut");
                     self.clip = Some(Clip { paths, cut });
                     self.marked.clear();
-                    self.say(format!("{} {n} item{}", if cut { "cut" } else { "yanked" }, if n == 1 { "" } else { "s" }), false);
+                    self.say(
+                        format!("{} {n} item{}", if cut { "cut" } else { "yanked" }, if n == 1 { "" } else { "s" }),
+                        false,
+                    );
                 }
             }
             "item.paste" => return self.paste(),
@@ -466,10 +499,11 @@ impl Panel {
             "root.focus" => {
                 // The folder the cursor row sits in becomes the root: its siblings only, no other branches.
                 if let Some(path) = self.current().map(Path::to_path_buf)
-                    && let Some(dir) = path.parent().map(Path::to_path_buf) {
-                        self.set_root(dir);
-                        self.reveal(&path);
-                    }
+                    && let Some(dir) = path.parent().map(Path::to_path_buf)
+                {
+                    self.set_root(dir);
+                    self.reveal(&path);
+                }
             }
             "root.up" => {
                 if let Some(parent) = self.root.parent().map(Path::to_path_buf) {
@@ -596,7 +630,14 @@ impl Panel {
         match result {
             Ok(()) => {
                 let n = targets.len();
-                self.say(format!("{} {n} item{}", if kind == ConfirmKind::Trash { "trashed" } else { "deleted" }, if n == 1 { "" } else { "s" }), false);
+                self.say(
+                    format!(
+                        "{} {n} item{}",
+                        if kind == ConfirmKind::Trash { "trashed" } else { "deleted" },
+                        if n == 1 { "" } else { "s" }
+                    ),
+                    false,
+                );
                 self.marked.clear();
                 self.refresh();
                 Action::Deleted(targets)
@@ -608,5 +649,4 @@ impl Panel {
             }
         }
     }
-
 }

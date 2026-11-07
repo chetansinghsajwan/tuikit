@@ -27,7 +27,8 @@ pub fn utc(secs: i64) -> String {
 }
 
 fn age(secs: i64) -> String {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(secs);
+    let now =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(secs);
     match (now - secs).max(0) {
         0..=59 => "now".into(),
         s @ 60..=3599 => format!("{}m ago", s / 60),
@@ -54,13 +55,25 @@ pub fn render(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<V
 }
 
 /// `render`, with where the files and hunks of the patch start.
-pub fn render_marked(root: &Path, rev: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+pub fn render_marked(
+    root: &Path,
+    rev: &str,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     render_range_marked(root, None, rev, None, theme, opts)
 }
 
 /// The difference between two commits: `base` against `rev` (with `None`, `rev` against its parent). `to_label` names the
 /// `rev` side in the header when it is not a commit of its own (the work tree).
-pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label: Option<&str>, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+pub fn render_range_marked(
+    root: &Path,
+    base: Option<&str>,
+    rev: &str,
+    to_label: Option<&str>,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let info = repo.commit(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
     let changes = match base {
@@ -83,8 +96,15 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
             let spans = match label_text {
                 Some(text) => vec![label(name), Span::styled(text.to_string(), fg.add_modifier(Modifier::BOLD))],
                 None => {
-                    let mut s = vec![label(name), Span::styled(format!("{} ", &i.oid[..i.oid.len().min(8)]), Style::new().fg(c.warning.into()))];
-                    s.extend(ui::subject::spans(theme, i.message.lines().next().unwrap_or(""), fg.add_modifier(Modifier::BOLD)));
+                    let mut s = vec![
+                        label(name),
+                        Span::styled(format!("{} ", &i.oid[..i.oid.len().min(8)]), Style::new().fg(c.warning.into())),
+                    ];
+                    s.extend(ui::subject::spans(
+                        theme,
+                        i.message.lines().next().unwrap_or(""),
+                        fg.add_modifier(Modifier::BOLD),
+                    ));
                     s
                 }
             };
@@ -114,7 +134,8 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
             Span::styled(info.oid[..info.oid.len().min(8)].to_string(), Style::new().fg(c.warning.into())),
         ];
         // Every ref on the commit, whole: the list in `gu` cuts them to fit its column.
-        let names: Vec<String> = repo.refs().unwrap_or_default().into_iter().filter(|r| r.oid == info.oid).map(|r| r.name).collect();
+        let names: Vec<String> =
+            repo.refs().unwrap_or_default().into_iter().filter(|r| r.oid == info.oid).map(|r| r.name).collect();
         if !names.is_empty() {
             meta.push(Span::styled("  ·  ", muted));
             meta.push(Span::styled(names.join(", "), Style::new().fg(c.accent.into())));
@@ -129,7 +150,10 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
     const BAR: usize = 8;
     let (added, removed): (u32, u32) = changes.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));
     out.push(Line::from(vec![
-        Span::styled(format!("{} file{}", changes.len(), if changes.len() == 1 { "" } else { "s" }), fg.add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{} file{}", changes.len(), if changes.len() == 1 { "" } else { "s" }),
+            fg.add_modifier(Modifier::BOLD),
+        ),
         Span::styled("   ", muted),
         Span::styled(format!("+{added}"), Style::new().fg(c.git.added.into())),
         Span::raw(" "),
@@ -147,7 +171,12 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
         let left = 3 + dir.width() + name.width();
         let tail = counts_w + 2 + BAR;
         let pad = width.map(|w| w.saturating_sub(left + tail).max(1)).unwrap_or(2);
-        let mut spans = vec![Span::styled(format!(" {} ", sign(f.kind)), Style::new().fg(kind_color)), Span::styled(dir, muted), Span::styled(name, Style::new().fg(kind_color)), Span::raw(" ".repeat(pad))];
+        let mut spans = vec![
+            Span::styled(format!(" {} ", sign(f.kind)), Style::new().fg(kind_color)),
+            Span::styled(dir, muted),
+            Span::styled(name, Style::new().fg(kind_color)),
+            Span::raw(" ".repeat(pad)),
+        ];
         spans.extend(ui::tree::line_counts(theme, (!f.binary).then_some((f.added, f.removed)), counts));
         spans.push(Span::raw("  "));
         // Filled cells in proportion to the biggest change of the commit, green and red by share.
@@ -161,7 +190,10 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
     }
     if changes.len() > MAX_ROWS {
         let rest: u32 = changes.iter().skip(MAX_ROWS).map(|f| f.added + f.removed).sum();
-        out.push(Line::from(Span::styled(format!("   … {} more files, {rest} lines", changes.len() - MAX_ROWS), muted)));
+        out.push(Line::from(Span::styled(
+            format!("   … {} more files, {rest} lines", changes.len() - MAX_ROWS),
+            muted,
+        )));
     }
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
     let mut anchors = Anchors::default();
@@ -181,7 +213,6 @@ pub fn render_range_marked(root: &Path, base: Option<&str>, rev: &str, to_label:
     Ok((out, anchors))
 }
 
-
 /// Most lines drawn when the caller gives no height.
 const MAX_LINES: usize = 4000;
 
@@ -191,12 +222,24 @@ mod tests;
 /// Preview of one file's uncommitted change in the repository at `root`:
 /// `side` picks staged (HEAD against the index) or unstaged (index against the
 /// work tree). `rela` is relative to the work tree.
-pub fn render_file_diff(root: &Path, rela: &Path, side: git_core::Side, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn render_file_diff(
+    root: &Path,
+    rela: &Path,
+    side: git_core::Side,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<Vec<Line<'static>>, Error> {
     render_file_diff_marked(root, rela, side, theme, opts).map(|(lines, _)| lines)
 }
 
 /// `render_file_diff`, with where the hunks start.
-pub fn render_file_diff_marked(root: &Path, rela: &Path, side: git_core::Side, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+pub fn render_file_diff_marked(
+    root: &Path,
+    rela: &Path,
+    side: git_core::Side,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let patch = repo.diff_file(rela, side).map_err(|e| Error::Unsupported(e.to_string()))?;
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
@@ -216,11 +259,18 @@ pub fn render_file_diff_marked(root: &Path, rela: &Path, side: git_core::Side, t
 
 /// The diff of `rev` for the files at `prefix` (one file, or every file below a folder; an empty prefix is the
 /// whole commit's patch without its header), with where the files and hunks start.
-pub fn render_files_marked(root: &Path, rev: &str, prefix: &str, theme: &Theme, opts: &Options) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+pub fn render_files_marked(
+    root: &Path,
+    rev: &str,
+    prefix: &str,
+    theme: &Theme,
+    opts: &Options,
+) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let all = repo.patch(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
     let below = format!("{}/", prefix.trim_end_matches('/'));
-    let files: Vec<git_core::FilePatch> = all.into_iter().filter(|f| prefix.is_empty() || f.path == prefix || f.path.starts_with(&below)).collect();
+    let files: Vec<git_core::FilePatch> =
+        all.into_iter().filter(|f| prefix.is_empty() || f.path == prefix || f.path.starts_with(&below)).collect();
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
     let (mut lines, mut anchors) = diff::render(&files, theme, opts, limit + 1);
     if lines.first().is_some_and(|l| l.spans.is_empty()) {

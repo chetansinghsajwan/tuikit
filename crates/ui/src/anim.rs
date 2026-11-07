@@ -55,7 +55,6 @@ fn mode() -> Mode {
     crate::config::get().animations.as_deref().and_then(Mode::parse).unwrap_or_default()
 }
 
-
 /// A spinner frame for something running; asks for the next frame. A plain `…` when animations are off.
 pub fn spinner() -> &'static str {
     if mode() == Mode::Off {
@@ -154,7 +153,10 @@ pub fn note_row(pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
 /// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it fades in over it.
 pub fn overlay(buf: &Buffer, rect: Rect) {
     let rect = rect.intersection(buf.area);
-    let under = (rect.top()..rect.bottom()).flat_map(|y| (rect.left()..rect.right()).map(move |x| (x, y))).map(|p| buf[p].clone()).collect();
+    let under = (rect.top()..rect.bottom())
+        .flat_map(|y| (rect.left()..rect.right()).map(move |x| (x, y)))
+        .map(|p| buf[p].clone())
+        .collect();
     STATE.with(|s| s.borrow_mut().overlays.push((rect, under)));
 }
 
@@ -246,7 +248,8 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                         match old.get(&r.id) {
                             None => {
                                 // New in the middle of rows that were there: a fold opened. Rows at the edges are scrolling in.
-                                let inside = cur[..i].iter().any(|p| old.contains_key(&p.id)) && cur[i..].iter().any(|n| old.contains_key(&n.id));
+                                let inside = cur[..i].iter().any(|p| old.contains_key(&p.id))
+                                    && cur[i..].iter().any(|n| old.contains_key(&n.id));
                                 if inside {
                                     pane.born.insert(r.id, now + STAGGER * run);
                                     run += 1;
@@ -304,9 +307,10 @@ pub fn finish(buf: &mut Buffer, theme: &Theme) {
                         let cell = &mut buf[(x, r.y)];
                         let cbg = rgb(cell.bg, bg);
                         if let Some(p) = reveal
-                            && let Color::Rgb(..) = cell.fg {
-                                cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
-                            }
+                            && let Color::Rgb(..) = cell.fg
+                        {
+                            cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
+                        }
                         if let Some(e) = flash {
                             cell.set_bg(mix(theme.colors.accent.into(), cbg, (24.0 * (1.0 - e)) as u8));
                         }

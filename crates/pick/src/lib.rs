@@ -6,8 +6,8 @@ pub mod grep;
 mod keys;
 mod picker;
 mod preview_cmd;
-mod tree;
 pub mod source;
+mod tree;
 
 pub use candidate::{Buffer, Candidate, GitItem, GitKind, Loc};
 pub use picker::{Action, LiveSource, Mode, Picker, PickerOptions, RowStyle};

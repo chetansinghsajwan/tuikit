@@ -1,7 +1,16 @@
 use super::*;
 
 fn c(oid: &str, parents: &[&str]) -> CommitInfo {
-    CommitInfo { oid: oid.into(), short: oid.into(), subject: String::new(), message: String::new(), author: String::new(), email: String::new(), time: 0, parents: parents.iter().map(|p| p.to_string()).collect() }
+    CommitInfo {
+        oid: oid.into(),
+        short: oid.into(),
+        subject: String::new(),
+        message: String::new(),
+        author: String::new(),
+        email: String::new(),
+        time: 0,
+        parents: parents.iter().map(|p| p.to_string()).collect(),
+    }
 }
 
 fn drawn(commits: &[CommitInfo]) -> Vec<String> {

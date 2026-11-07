@@ -6,10 +6,10 @@ mod commit;
 mod config;
 mod diff;
 mod dir;
+mod git;
 mod media;
 mod pdf;
 mod tabular;
-mod git;
 pub use git::kind_color;
 pub mod markdown;
 mod text;
@@ -26,14 +26,17 @@ pub fn highlight_line(code: &str, lang: &str, theme: &Theme) -> Vec<(ratatui::st
     text::highlight_code(code, lang, theme).into_iter().next().unwrap_or_default()
 }
 pub use commit::render as preview_commit;
-pub use commit::utc as format_utc;
-pub use commit::render_marked as preview_commit_marked;
-pub use commit::render_range_marked as preview_range_marked;
+pub use commit::render_file_diff as preview_diff;
 pub use commit::render_file_diff_marked as preview_diff_marked;
 pub use commit::render_files_marked as preview_commit_files_marked;
-pub use diff::{Anchors, ignoring_whitespace as diff_ignoring_whitespace, reset_folds as diff_reset_folds, set_ignore_whitespace as diff_ignore_whitespace, toggle_fold as diff_toggle_fold};
-pub use commit::render_file_diff as preview_diff;
+pub use commit::render_marked as preview_commit_marked;
+pub use commit::render_range_marked as preview_range_marked;
+pub use commit::utc as format_utc;
 pub use config::Config;
+pub use diff::{
+    Anchors, ignoring_whitespace as diff_ignoring_whitespace, reset_folds as diff_reset_folds,
+    set_ignore_whitespace as diff_ignore_whitespace, toggle_fold as diff_toggle_fold,
+};
 pub use tabular::{raw as raw_tables, set_raw as set_raw_tables};
 
 #[derive(Debug, Clone)]

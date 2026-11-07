@@ -3,7 +3,16 @@ use git_core::{Kind, PatchLine};
 
 fn patch(old: &str, new: &str) -> FilePatch {
     let hunks = git_core::hunks_of(old.as_bytes(), new.as_bytes());
-    FilePatch { path: "src/lib.rs".into(), old_path: None, modes: None, kind: Kind::Modified, binary: false, hunks, before: old.into(), after: new.into() }
+    FilePatch {
+        path: "src/lib.rs".into(),
+        old_path: None,
+        modes: None,
+        kind: Kind::Modified,
+        binary: false,
+        hunks,
+        before: old.into(),
+        after: new.into(),
+    }
 }
 
 fn text(lines: &[Line]) -> Vec<String> {
@@ -29,7 +38,6 @@ fn rows_carry_both_line_numbers_and_the_function_context() {
     assert!(t.iter().any(|l| l.contains("  2 + ")), "{t:#?}");
     assert_eq!((anchors.files.len(), anchors.hunks.len()), (1, 1));
 }
-
 
 #[test]
 fn big_and_generated_files_fold_by_themselves_and_a_fold_can_be_toggled() {
@@ -58,7 +66,11 @@ fn whitespace_only_changes_are_dimmed_or_shown_as_unchanged() {
     set_ignore_whitespace(false);
     let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
     let t = text(&lines);
-    assert!(t.iter().any(|l| l.contains("- ") && l.contains("  b")) && t.iter().any(|l| l.contains("+ ") && l.contains("b")), "{t:#?}");
+    assert!(
+        t.iter().any(|l| l.contains("- ") && l.contains("  b"))
+            && t.iter().any(|l| l.contains("+ ") && l.contains("b")),
+        "{t:#?}"
+    );
     set_ignore_whitespace(true);
     let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
     let t = text(&lines);
@@ -93,7 +105,8 @@ fn the_changed_word_gets_a_stronger_background_than_the_rest_of_its_row() {
 fn code_is_syntax_highlighted_inside_the_diff() {
     let opts = Options { width: Some(80), ..Options::default() };
     let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
-    let colours: std::collections::HashSet<_> = lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
+    let colours: std::collections::HashSet<_> =
+        lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
     assert!(colours.len() >= 5, "{colours:?}");
 }
 
@@ -101,11 +114,16 @@ fn code_is_syntax_highlighted_inside_the_diff() {
 fn trailing_whitespace_on_an_added_line_and_conflict_markers_are_called_out() {
     let opts = Options { width: Some(80), ..Options::default() };
     let (lines, _) = render(&[patch("a\nb\n", "a\nb  \n<<<<<<< HEAD\n")], &Theme::default(), &opts, 100);
-    let ws = lines.iter().find(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>().contains("+ b  ")).expect("the b row");
+    let ws = lines
+        .iter()
+        .find(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>().contains("+ b  "))
+        .expect("the b row");
     let bgs: std::collections::HashSet<_> = ws.spans.iter().filter_map(|s| s.style.bg).collect();
     assert!(bgs.len() >= 2, "{ws:?}");
     let marker = lines.iter().find(|l| l.spans.iter().any(|s| s.content.contains("<<<<<<<"))).expect("the marker row");
-    assert!(marker.spans.iter().any(|s| s.content.contains("<<<<<<<") && s.style.add_modifier.contains(Modifier::BOLD)));
+    assert!(
+        marker.spans.iter().any(|s| s.content.contains("<<<<<<<") && s.style.add_modifier.contains(Modifier::BOLD))
+    );
 }
 
 #[test]
@@ -124,9 +142,12 @@ fn wide_screens_draw_old_beside_new() {
     let opts = Options { width: Some(160), ..Options::default() };
     let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
     let t = text(&lines);
-    let pair = t.iter().find(|l| l.contains("count + 1") && l.contains("count + step")).expect("old and new on one row");
+    let pair =
+        t.iter().find(|l| l.contains("count + 1") && l.contains("count + step")).expect("old and new on one row");
     assert!(pair.contains('│'), "{pair}");
-    assert!(lines.iter().all(|l| l.spans.iter().map(|s| unicode_width::UnicodeWidthStr::width(s.content.as_ref())).sum::<usize>() <= 160));
+    assert!(lines.iter().all(|l| {
+        l.spans.iter().map(|s| unicode_width::UnicodeWidthStr::width(s.content.as_ref())).sum::<usize>() <= 160
+    }));
 }
 
 #[test]
@@ -136,7 +157,10 @@ fn anchors_find_the_next_and_previous_mark() {
     assert_eq!(Anchors::next(&marks, 20), None);
     assert_eq!(Anchors::prev(&marks, 10), Some(3));
     assert_eq!(Anchors::prev(&marks, 3), None);
-    assert_eq!(Anchors { files: vec![1], hunks: vec![2], ..Default::default() }.shifted(5), Anchors { files: vec![6], hunks: vec![7], ..Default::default() });
+    assert_eq!(
+        Anchors { files: vec![1], hunks: vec![2], ..Default::default() }.shifted(5),
+        Anchors { files: vec![6], hunks: vec![7], ..Default::default() }
+    );
 }
 
 #[test]
@@ -145,7 +169,8 @@ fn a_file_too_big_to_keep_whole_is_still_highlighted_per_hunk() {
     p.before.clear();
     p.after.clear();
     let (lines, _) = render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
-    let colours: std::collections::HashSet<_> = lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
+    let colours: std::collections::HashSet<_> =
+        lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
     assert!(colours.len() >= 5, "{colours:?}");
     let _ = PatchLine { kind: PatchKind::Context, text: String::new() };
 }

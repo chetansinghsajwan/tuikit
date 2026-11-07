@@ -8,7 +8,12 @@ use std::process::Command;
 fn identity() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        for (k, v) in [("GIT_AUTHOR_NAME", "t"), ("GIT_AUTHOR_EMAIL", "t@t"), ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@t")] {
+        for (k, v) in [
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@t"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@t"),
+        ] {
             // SAFETY: set once, before any test spawns git, to constants.
             unsafe { std::env::set_var(k, v) };
         }
@@ -16,15 +21,17 @@ fn identity() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
-        .args(args)
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .status()
-        .unwrap()
-        .success());
+    assert!(
+        Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .status()
+            .unwrap()
+            .success()
+    );
 }
 
 /// A repo with: a.txt modified (unstaged), b.txt modified and staged, new.txt untracked.
@@ -65,7 +72,11 @@ fn draw(p: &mut Panel) -> Vec<String> {
 }
 
 fn on(p: &mut Panel, name: &str) {
-    let i = p.items.iter().position(|&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name))).unwrap_or_else(|| panic!("{name} listed"));
+    let i = p
+        .items
+        .iter()
+        .position(|&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name)))
+        .unwrap_or_else(|| panic!("{name} listed"));
     p.cursor = i;
 }
 
@@ -73,7 +84,10 @@ fn on(p: &mut Panel, name: &str) {
 fn one_tree_with_two_marks_per_file_and_icons() {
     let mut p = Panel::new(&repo("sections")).unwrap();
     let text = draw(&mut p).join("\n");
-    assert!(!text.contains("Staged (") && !text.contains("Unstaged (") && !text.contains("Untracked ("), "no sections: {text}");
+    assert!(
+        !text.contains("Staged (") && !text.contains("Unstaged (") && !text.contains("Untracked ("),
+        "no sections: {text}"
+    );
     let pos = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in\n{text}"));
     // Sorted by name; the marks sit at the right edge: the first is staged, the second not staged (`?` for a new file).
     assert!(pos("main") < pos("a.txt") && pos("a.txt") < pos("b.txt") && pos("b.txt") < pos("new.txt"), "{text}");
@@ -93,7 +107,11 @@ fn staged_marks_are_drawn_in_the_staged_color() {
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &theme);
     let success: ratatui::style::Color = theme.colors.success.into();
-    let row = |name: &str| (0..16).find(|&y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().contains(name)).unwrap_or_else(|| panic!("{name} listed"));
+    let row = |name: &str| {
+        (0..16)
+            .find(|&y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().contains(name))
+            .unwrap_or_else(|| panic!("{name} listed"))
+    };
     // b.txt is staged, a.txt is changed but not staged: the mark of the staged one is green, the other is not.
     let green_mark = |y: u16| (0..100).any(|x| b[(x, y)].symbol() == "M" && b[(x, y)].style().fg == Some(success));
     assert!(green_mark(row("b.txt")), "staged mark");
@@ -139,7 +157,11 @@ fn the_tree_groups_by_folder_stages_a_folder_folds_and_toggles_to_a_list() {
     assert!(text.contains("deep/er 1"), "a chain of single folders is one row: {text}");
     assert!(!text.contains("src/one.rs"), "files show their name only in the tree");
     // Enter on the folder folds it.
-    let at = p.items.iter().position(|&i| matches!(&p.rows[i], Row::Folder { path, .. } if path == Path::new("src"))).unwrap();
+    let at = p
+        .items
+        .iter()
+        .position(|&i| matches!(&p.rows[i], Row::Folder { path, .. } if path == Path::new("src")))
+        .unwrap();
     p.cursor = at;
     p.handle_event(&key(KeyCode::Enter));
     let text = draw(&mut p).join("\n");
@@ -190,7 +212,10 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::None);
     assert!(matches!(p.mode, Mode::Commit(_)) && p.message.as_ref().is_some_and(|(_, e)| *e));
     let shown = draw(&mut p).join("\n");
-    assert!(shown.contains("empty commit message") && shown.contains("commit: "), "the refusal is visible above the prompt:\n{shown}");
+    assert!(
+        shown.contains("empty commit message") && shown.contains("commit: "),
+        "the refusal is visible above the prompt:\n{shown}"
+    );
     press(&mut p, "fix b");
     assert!(draw(&mut p).join("\n").contains("commit: fix b"));
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Changed);
@@ -245,7 +270,13 @@ fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the
     assert_eq!(press(&mut p, "?"), Action::Help);
     let extra = vec![ui::keys::Action { id: "pane.next", name: "next pane", desc: "x", basic: true, keys: &["tab"] }];
     let mut p = Panel::with_actions(&d, "space", extra, &[]).unwrap();
-    assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))), Action::Command("pane.next"));
+    assert_eq!(
+        p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))),
+        Action::Command("pane.next")
+    );
     // The rows for a palette: the basic keys are marked.
-    assert!(p.keys_rows().iter().any(|r| r.id == "nav.down" && r.basic) && p.keys_rows().iter().any(|r| r.id == "commit.new" && !r.basic));
+    assert!(
+        p.keys_rows().iter().any(|r| r.id == "nav.down" && r.basic)
+            && p.keys_rows().iter().any(|r| r.id == "commit.new" && !r.basic)
+    );
 }

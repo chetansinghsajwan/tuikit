@@ -21,12 +21,20 @@ impl Picker {
     ///
     /// With `leaf` (the hierarchy view) the folders above the item are already
     /// drawn as header rows, so only the file name (or `line:` for a match) shows.
-    pub(super) fn row_spans(&mut self, cand: &Candidate, name_fg: Color, theme: &Theme, snap_index: u32, leaf: bool) -> Vec<Span<'static>> {
+    pub(super) fn row_spans(
+        &mut self,
+        cand: &Candidate,
+        name_fg: Color,
+        theme: &Theme,
+        snap_index: u32,
+        leaf: bool,
+    ) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         // Row numbers and, for input that carries times, how long ago each was.
         if self.row_style.numbers {
             let width = self.nucleo.snapshot().matched_item_count().max(1).to_string().len();
-            spans.push(Span::styled(format!("{:>width$} ", snap_index + 1), Style::new().fg(theme.colors.muted.into())));
+            spans
+                .push(Span::styled(format!("{:>width$} ", snap_index + 1), Style::new().fg(theme.colors.muted.into())));
         }
         if self.timestamps {
             let age = cand.time.map(ui::time::ago).unwrap_or_default();
@@ -45,7 +53,14 @@ impl Picker {
         spans
     }
 
-    pub(super) fn row_spans_inner(&mut self, cand: &Candidate, name_fg: Color, theme: &Theme, snap_index: u32, leaf: bool) -> Vec<Span<'static>> {
+    pub(super) fn row_spans_inner(
+        &mut self,
+        cand: &Candidate,
+        name_fg: Color,
+        theme: &Theme,
+        snap_index: u32,
+        leaf: bool,
+    ) -> Vec<Span<'static>> {
         let c = &theme.colors;
         let hit = Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD);
         if let Some(loc) = &cand.loc {
@@ -69,7 +84,11 @@ impl Picker {
         let snap = self.nucleo.snapshot();
         let mut indices = Vec::new();
         if let Some(item) = snap.get_matched_item(snap_index) {
-            snap.pattern().column_pattern(0).indices(item.matcher_columns[0].slice(..), &mut self.matcher, &mut indices);
+            snap.pattern().column_pattern(0).indices(
+                item.matcher_columns[0].slice(..),
+                &mut self.matcher,
+                &mut indices,
+            );
         }
         indices.sort_unstable();
         indices.dedup();
@@ -87,10 +106,14 @@ impl Picker {
             spans.push(Span::styled(format!("{:<2} ", b.flags), Style::new().fg(c.warning.into())));
         }
         // In the hierarchy only the file name is drawn; match positions still refer to the full path.
-        let skip = if leaf { cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0) } else { 0 };
+        let skip =
+            if leaf { cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0) } else { 0 };
         // Code colors for the whole text, when the rows are code.
         let colored: Vec<Style> = match (&self.row_style.syntax, cand.git.is_none() && cand.loc.is_none()) {
-            (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme).into_iter().flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>()).collect(),
+            (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme)
+                .into_iter()
+                .flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>())
+                .collect(),
             _ => Vec::new(),
         };
         for (i, ch) in cand.display.chars().enumerate() {
@@ -122,27 +145,45 @@ impl Picker {
 
     pub(super) fn render_grep_filters(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
-        let on = |b: bool| if b { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { Style::new().fg(c.muted.into()) };
+        let on = |b: bool| {
+            if b {
+                Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            } else {
+                Style::new().fg(c.muted.into())
+            }
+        };
         let muted = Style::new().fg(c.muted.into());
         let o = &self.grep_opts;
         for (i, field) in self.grep_filter_rows().into_iter().enumerate() {
             let row = Rect { y: area.y + i as u16, height: 1, ..area };
             if field == Field::Query {
-                let mut spans = vec![Span::styled("Aa", on(o.case_sensitive)), Span::raw(" "), Span::styled("ab", on(o.whole_word)), Span::raw(" "), Span::styled(".*", on(o.regex))];
-                spans.push(Span::styled("   alt-c w r  ·  alt-i include  alt-e exclude", muted.add_modifier(Modifier::DIM)));
+                let mut spans = vec![
+                    Span::styled("Aa", on(o.case_sensitive)),
+                    Span::raw(" "),
+                    Span::styled("ab", on(o.whole_word)),
+                    Span::raw(" "),
+                    Span::styled(".*", on(o.regex)),
+                ];
+                spans.push(Span::styled(
+                    "   alt-c w r  ·  alt-i include  alt-e exclude",
+                    muted.add_modifier(Modifier::DIM),
+                ));
                 Paragraph::new(Line::from(spans)).render(row, buf);
                 continue;
             }
-            let (label, input) = if field == Field::Include { ("include ", &self.include) } else { ("exclude ", &self.exclude) };
+            let (label, input) =
+                if field == Field::Include { ("include ", &self.include) } else { ("exclude ", &self.exclude) };
             let focused = self.field == field;
-            let line = Line::from(vec![Span::styled(label, if focused { Style::new().fg(c.accent.into()) } else { muted }), Span::styled(input.value().to_string(), Style::new().fg(c.fg.into()))]);
+            let line = Line::from(vec![
+                Span::styled(label, if focused { Style::new().fg(c.accent.into()) } else { muted }),
+                Span::styled(input.value().to_string(), Style::new().fg(c.fg.into())),
+            ]);
             Paragraph::new(line).render(row, buf);
             if focused {
                 ui::prompt::cursor(buf, row, label, input.visual_cursor());
             }
         }
     }
-
 
     pub(super) fn render_list(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
@@ -151,7 +192,11 @@ impl Picker {
             (s.item_count(), s.matched_item_count())
         };
         // In grep mode every item matches, so only the item count is meaningful.
-        let count = if self.opts.mode == Mode::Grep || self.live.is_some() { format!("{snap_total}") } else { format!("{snap_matched}/{snap_total}") };
+        let count = if self.opts.mode == Mode::Grep || self.live.is_some() {
+            format!("{snap_total}")
+        } else {
+            format!("{snap_matched}/{snap_total}")
+        };
         let title = self.title.as_deref().unwrap_or(if self.opts.mode == Mode::Grep { "grep" } else { "pick" });
         let mut pane = Pane::new(theme).title(title).focused(true);
         // An explicit icon, else one that fits the title (`Files`, `History`, `Branches`, ...).
@@ -168,7 +213,8 @@ impl Picker {
         let cw = count.len() as u16;
         let show_count = inner.width > cw + 4;
         // The query stops one cell short of the count.
-        let prompt_area = Rect { height: 1, width: if show_count { inner.width - cw - 1 } else { inner.width }, ..inner };
+        let prompt_area =
+            Rect { height: 1, width: if show_count { inner.width - cw - 1 } else { inner.width }, ..inner };
         let prompt = ui::prompt::line(theme, "> ", self.input.value());
         Paragraph::new(prompt).render(prompt_area, buf);
         if show_count {
@@ -185,15 +231,26 @@ impl Picker {
             buf.set_string(area.x, y, rule, Style::new().fg(c.border_focused.into()));
         }
         // In grep mode the toggles and the file filters take the row under the rule.
-        let filter_row = if self.opts.mode == Mode::Grep && inner.height >= 6 { self.grep_filter_rows().len() as u16 } else { 0 };
+        let filter_row =
+            if self.opts.mode == Mode::Grep && inner.height >= 6 { self.grep_filter_rows().len() as u16 } else { 0 };
         if filter_row > 0 {
             self.render_grep_filters(Rect { y: inner.y + 1 + sep, height: filter_row, ..inner }, buf, theme);
         }
         let header_rows = (self.header.len() as u16).min(inner.height.saturating_sub(2 + sep + filter_row));
         for (i, h) in self.header.iter().take(usize::from(header_rows)).enumerate() {
-            buf.set_stringn(inner.x + 2, inner.y + 1 + sep + filter_row + i as u16, h, usize::from(inner.width.saturating_sub(2)), Style::new().fg(c.muted.into()));
+            buf.set_stringn(
+                inner.x + 2,
+                inner.y + 1 + sep + filter_row + i as u16,
+                h,
+                usize::from(inner.width.saturating_sub(2)),
+                Style::new().fg(c.muted.into()),
+            );
         }
-        let list = Rect { y: inner.y + 1 + sep + filter_row + header_rows, height: inner.height - 1 - sep - filter_row - header_rows, ..inner };
+        let list = Rect {
+            y: inner.y + 1 + sep + filter_row + header_rows,
+            height: inner.height - 1 - sep - filter_row - header_rows,
+            ..inner
+        };
         let rows = ui::list::Rows::new(area, inner);
         self.page = u32::from(list.height).max(1);
         self.refresh_tree();
@@ -215,10 +272,7 @@ impl Picker {
             let selected = idx == self.cursor;
             let git = self.git_state(cand.path());
             let marked = self.marked.contains(&cand.output());
-            let mut spans = vec![Span::styled(
-                if marked { "● " } else { "  " },
-                Style::new().fg(c.accent.into()),
-            )];
+            let mut spans = vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
             let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
             spans.extend(self.row_spans(&cand, name_fg, theme, idx, false));
             ui::list::ListRow {
@@ -243,7 +297,10 @@ impl Picker {
             let Some(tree) = self.tree.as_ref() else { return };
             // The folders above the top row stay pinned at the top, so scrolling never loses the
             // path; they take lines from the window, which the scrolling below accounts for.
-            let room = |off: u32| (self.page as usize).saturating_sub(crate::tree::ancestors(&tree.rows, off as usize).len()).max(1) as u32;
+            let room = |off: u32| {
+                (self.page as usize).saturating_sub(crate::tree::ancestors(&tree.rows, off as usize).len()).max(1)
+                    as u32
+            };
             let crow = tree.row_of.get(&self.cursor).copied().unwrap_or(0) as u32;
             if crow < self.offset {
                 self.offset = crow;
@@ -252,7 +309,10 @@ impl Picker {
                     self.offset += 1;
                 }
             }
-            let mut pinned: Vec<(usize, crate::tree::Row)> = crate::tree::ancestors(&tree.rows, self.offset as usize).into_iter().map(|i| (i, tree.rows[i].clone())).collect();
+            let mut pinned: Vec<(usize, crate::tree::Row)> = crate::tree::ancestors(&tree.rows, self.offset as usize)
+                .into_iter()
+                .map(|i| (i, tree.rows[i].clone()))
+                .collect();
             // In a tiny pane keep at least one scrolling row: drop the outermost pins first.
             let keep = (self.page as usize).saturating_sub(1);
             if pinned.len() > keep {
@@ -260,9 +320,16 @@ impl Picker {
             }
             let take = (self.page as usize).saturating_sub(pinned.len());
             // The guide of the scope the cursor is in is highlighted, as in the files panel.
-            let depths: Vec<usize> = tree.rows.iter().map(|r| match r { crate::tree::Row::Dir { depth, .. } | crate::tree::Row::Item { depth, .. } => usize::from(*depth) }).collect();
+            let depths: Vec<usize> = tree
+                .rows
+                .iter()
+                .map(|r| match r {
+                    crate::tree::Row::Dir { depth, .. } | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
+                })
+                .collect();
             let scope = ui::tree::active_scope(&depths, crow as usize);
-            let window = tree.rows.iter().enumerate().skip(self.offset as usize).take(take).map(|(i, r)| (i, r.clone()));
+            let window =
+                tree.rows.iter().enumerate().skip(self.offset as usize).take(take).map(|(i, r)| (i, r.clone()));
             (pinned.into_iter().chain(window).collect(), scope)
         };
 
@@ -273,19 +340,35 @@ impl Picker {
                 crate::tree::Row::Dir { depth, label } => {
                     // In grep mode the header is a file, otherwise a folder.
                     let last = label.rsplit('/').next().unwrap_or(label);
-                    let icon = if self.opts.mode == Mode::Grep { ui::icons::file(last, false) } else { ui::icons::dir(last, true) };
+                    let icon = if self.opts.mode == Mode::Grep {
+                        ui::icons::file(last, false)
+                    } else {
+                        ui::icons::dir(last, true)
+                    };
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
-                    spans.push(Span::styled(label.clone(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)));
-                    ui::list::ListRow { id: ui::anim::hash_of(&(depth, label)), left: spans, focused: true, ..Default::default() }.draw(theme, buf, &rows_geo, y);
+                    spans.push(Span::styled(
+                        label.clone(),
+                        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+                    ));
+                    ui::list::ListRow {
+                        id: ui::anim::hash_of(&(depth, label)),
+                        left: spans,
+                        focused: true,
+                        ..Default::default()
+                    }
+                    .draw(theme, buf, &rows_geo, y);
                 }
                 crate::tree::Row::Item { idx, depth } => {
-                    let Some(cand) = self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone()) else { continue };
+                    let Some(cand) = self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone()) else {
+                        continue;
+                    };
                     let selected = *idx == self.cursor;
                     let git = self.git_state(cand.path());
                     let marked = self.marked.contains(&cand.output());
-                    let mut spans = vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
+                    let mut spans =
+                        vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
                     spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
@@ -365,12 +448,14 @@ impl Picker {
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
             // Commit and command previews scroll; the rest are already windowed to the pane.
-            let scrolls = cand.git.is_some() || (self.preview_cmd.is_some() && cand.loc.is_none() && cand.buffer.is_none());
+            let scrolls =
+                cand.git.is_some() || (self.preview_cmd.is_some() && cand.loc.is_none() && cand.buffer.is_none());
             let skip = if scrolls { self.pscroll.min(p.lines.len().saturating_sub(1)) } else { 0 };
             if scrolls {
                 self.pscroll = skip;
             }
-            let shown: Vec<Line<'static>> = p.lines.iter().skip(skip).take(usize::from(inner.height)).cloned().collect();
+            let shown: Vec<Line<'static>> =
+                p.lines.iter().skip(skip).take(usize::from(inner.height)).cloned().collect();
             Paragraph::new(shown).render(inner, buf);
         }
     }

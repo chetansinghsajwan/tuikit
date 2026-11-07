@@ -35,7 +35,13 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { case_sensitive: false, whole_word: false, regex: true, include: String::new(), exclude: String::new() }
+        Options {
+            case_sensitive: false,
+            whole_word: false,
+            regex: true,
+            include: String::new(),
+            exclude: String::new(),
+        }
     }
 }
 
@@ -64,8 +70,16 @@ pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidat
         return;
     }
     thread::spawn(move || {
-        let build = |fixed: bool| RegexMatcherBuilder::new().case_smart(!opts.case_sensitive).word(opts.whole_word).fixed_strings(fixed).build(&query);
-        let Ok(matcher) = (if opts.regex { build(false).or_else(|_| build(true)) } else { build(true) }) else { return };
+        let build = |fixed: bool| {
+            RegexMatcherBuilder::new()
+                .case_smart(!opts.case_sensitive)
+                .word(opts.whole_word)
+                .fixed_strings(fixed)
+                .build(&query)
+        };
+        let Ok(matcher) = (if opts.regex { build(false).or_else(|_| build(true)) } else { build(true) }) else {
+            return;
+        };
         let mut searcher = SearcherBuilder::new().binary_detection(BinaryDetection::quit(0)).line_number(true).build();
 
         let mut found = 0usize;
@@ -96,7 +110,8 @@ pub fn spawn(root: PathBuf, query: String, opts: Options, inj: Injector<Candidat
                     // Keep the hit inside the clipped text.
                     let (start, end) = (start.min(text.len()), end.min(text.len()));
                     let col = line[..start.min(line.len())].chars().count() as u32 + 1;
-                    let hit = if text.is_char_boundary(start) && text.is_char_boundary(end) { start..end } else { 0..0 };
+                    let hit =
+                        if text.is_char_boundary(start) && text.is_char_boundary(end) { start..end } else { 0..0 };
                     let c = Candidate::grep(Loc { path: rela.clone(), line: lnum as u32, col, text, hit });
                     inj.push(c, |c, cols| cols[0] = c.display.as_str().into());
                     found += 1;

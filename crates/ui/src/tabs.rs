@@ -143,10 +143,17 @@ impl Label {
 /// the same, as many parent folders as it takes to tell them apart (`src/lib.rs` and
 /// `ui/lib.rs`). A path with no name (`/`) is shown as `/`.
 pub fn short_titles(paths: &[&std::path::Path]) -> Vec<String> {
-    let comps: Vec<Vec<String>> = paths.iter().map(|p| p.components().filter_map(|c| match c {
-        std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
-        _ => None,
-    }).collect()).collect();
+    let comps: Vec<Vec<String>> = paths
+        .iter()
+        .map(|p| {
+            p.components()
+                .filter_map(|c| match c {
+                    std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
     // How many trailing components each path shows; raised for the paths that still clash.
     let mut depth = vec![1usize; paths.len()];
     let title = |i: usize, d: usize| -> String {
@@ -205,7 +212,11 @@ fn width(parts: &[(String, Part)]) -> usize {
 
 fn spans(parts: Vec<(String, Part)>, active: bool, theme: &Theme) -> Vec<Span<'static>> {
     let c = &theme.colors;
-    let base = if active { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD) } else { Style::new().fg(c.muted.into()) };
+    let base = if active {
+        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
+    } else {
+        Style::new().fg(c.muted.into())
+    };
     parts
         .into_iter()
         .map(|(text, part)| {
@@ -271,7 +282,8 @@ pub fn render(area: Rect, buf: &mut Buffer, theme: &Theme, labels: &[Label], act
     let all: Vec<Vec<(String, Part)>> = labels.iter().enumerate().map(|(i, l)| parts(i, l, numbers)).collect();
     let widths: Vec<usize> = all.iter().map(|p| width(p)).collect();
     let active = active.min(labels.len() - 1);
-    let (lo, hi) = if widths.iter().sum::<usize>() <= room { (0, labels.len() - 1) } else { window(&widths, active, room) };
+    let (lo, hi) =
+        if widths.iter().sum::<usize>() <= room { (0, labels.len() - 1) } else { window(&widths, active, room) };
 
     let mut line: Vec<Span<'static>> = Vec::new();
     let muted = Style::new().fg(c.muted.into());
@@ -295,7 +307,11 @@ pub fn render(area: Rect, buf: &mut Buffer, theme: &Theme, labels: &[Label], act
     }
     Paragraph::new(Line::from(line)).render(Rect { height: 1, ..area }, buf);
     let below = area.bottom().min(buf.area.bottom());
-    crate::anim::tab((area.x, area.y), active, Rect { x: area.x, y: below, width: area.width, height: buf.area.bottom() - below });
+    crate::anim::tab(
+        (area.x, area.y),
+        active,
+        Rect { x: area.x, y: below, width: area.width, height: buf.area.bottom() - below },
+    );
 }
 
 #[cfg(test)]

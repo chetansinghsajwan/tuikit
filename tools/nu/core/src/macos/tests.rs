@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn channels_map_to_frequencies() {
-    assert_eq!((channel_mhz(1), channel_mhz(6), channel_mhz(14), channel_mhz(36), channel_mhz(149)), (2412, 2437, 2484, 5180, 5745));
+    assert_eq!(
+        (channel_mhz(1), channel_mhz(6), channel_mhz(14), channel_mhz(36), channel_mhz(149)),
+        (2412, 2437, 2484, 5180, 5745)
+    );
 }
 
 #[test]

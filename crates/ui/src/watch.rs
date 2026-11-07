@@ -28,9 +28,10 @@ impl Watch {
         let (tx, rx) = mpsc::channel::<()>();
         let mut inner = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
             if let Ok(event) = event
-                && event.paths.iter().any(|p| matters(p)) {
-                    let _ = tx.send(());
-                }
+                && event.paths.iter().any(|p| matters(p))
+            {
+                let _ = tx.send(());
+            }
         })
         .ok()?;
         inner.watch(root, RecursiveMode::Recursive).ok()?;

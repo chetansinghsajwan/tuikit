@@ -25,11 +25,7 @@ fn sgr(style: Style) -> String {
     if let Some(Color::Rgb(r, g, b)) = style.bg {
         codes.push(format!("48;2;{r};{g};{b}"));
     }
-    if codes.is_empty() {
-        String::new()
-    } else {
-        format!("\x1b[{}m", codes.join(";"))
-    }
+    if codes.is_empty() { String::new() } else { format!("\x1b[{}m", codes.join(";")) }
 }
 
 /// Serialize lines with truecolor SGR codes, one `\n` per line.

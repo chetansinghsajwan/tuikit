@@ -12,13 +12,17 @@ pub fn category_len(subject: &str) -> Option<usize> {
     let word = &head[..word_end];
     // One word or two (`git panel: one tree`).
     let words: Vec<&str> = word.split(' ').collect();
-    if words.len() > 2 || words.iter().any(|w| w.is_empty() || !w.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')) {
+    if words.len() > 2
+        || words.iter().any(|w| w.is_empty() || !w.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_'))
+    {
         return None;
     }
     // After the word only an optional `(scope)` and an optional `!` may come.
     let rest = &head[word_end..];
     let rest = match rest.strip_prefix('(') {
-        Some(r) => r.split_once(')').and_then(|(scope, r)| (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r))?,
+        Some(r) => {
+            r.split_once(')').and_then(|(scope, r)| (!scope.contains(['(', ' ']) || !scope.is_empty()).then_some(r))?
+        }
         None => rest,
     };
     (rest.is_empty() || rest == "!").then_some(colon + 1)
@@ -33,7 +37,16 @@ pub fn category_word(subject: &str) -> Option<String> {
 /// The color of a category: one per word, the same word always the same color (a hash picks it from the theme's colors).
 pub fn category_color(theme: &Theme, subject: &str) -> Color {
     let c = &theme.colors;
-    let palette: [Color; 8] = [c.accent.into(), c.success.into(), c.warning.into(), c.error.into(), c.info.into(), c.git.modified.into(), c.git.renamed.into(), c.git.untracked.into()];
+    let palette: [Color; 8] = [
+        c.accent.into(),
+        c.success.into(),
+        c.warning.into(),
+        c.error.into(),
+        c.info.into(),
+        c.git.modified.into(),
+        c.git.renamed.into(),
+        c.git.untracked.into(),
+    ];
     let word = category_word(subject).unwrap_or_default();
     let hash = word.bytes().fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3));
     palette[(hash % palette.len() as u64) as usize]
@@ -42,7 +55,13 @@ pub fn category_color(theme: &Theme, subject: &str) -> Color {
 /// The subject as spans: the category in its color (bold), the rest in `base`.
 pub fn spans(theme: &Theme, subject: &str, base: Style) -> Vec<Span<'static>> {
     match category_len(subject) {
-        Some(n) => vec![Span::styled(subject[..n].to_string(), Style::new().fg(category_color(theme, subject)).add_modifier(ratatui::style::Modifier::BOLD)), Span::styled(subject[n..].to_string(), base)],
+        Some(n) => vec![
+            Span::styled(
+                subject[..n].to_string(),
+                Style::new().fg(category_color(theme, subject)).add_modifier(ratatui::style::Modifier::BOLD),
+            ),
+            Span::styled(subject[n..].to_string(), base),
+        ],
         None => vec![Span::styled(subject.to_string(), base)],
     }
 }

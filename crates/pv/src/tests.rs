@@ -13,7 +13,8 @@ fn text_has_gutter_and_respects_height() {
     let d = tmp("text");
     let f = d.join("a.rs");
     fs::write(&f, "fn main() {}\nlet x = 1;\nlet y = 2;\n").unwrap();
-    let lines = preview(&f, &Theme::default(), &Options { width: None, height: Some(2), git: false, focus: None }).unwrap();
+    let lines =
+        preview(&f, &Theme::default(), &Options { width: None, height: Some(2), git: false, focus: None }).unwrap();
     assert_eq!(lines.len(), 2);
     assert!(lines[0].spans[0].content.contains('1'));
 }
@@ -23,7 +24,8 @@ fn code_shows_indent_guides_also_through_blank_lines() {
     let d = tmp("guides");
     let f = d.join("a.rs");
     fs::write(&f, "fn main() {\n    if x {\n        y();\n\n        z();\n    }\n}\n").unwrap();
-    let lines = preview(&f, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
+    let lines =
+        preview(&f, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
     let t: Vec<String> = lines.iter().map(flat).collect();
     assert!(t[2].contains("│   │   y();"), "{t:?}");
     assert!(t[3].contains('│'), "a blank line inside the block keeps the guides: {t:?}");
@@ -46,7 +48,13 @@ fn dir_lists_dirs_first_and_caps_children() {
     for n in ["1", "2", "3", "4"] {
         fs::write(d.join("sub").join(n), "x").unwrap();
     }
-    let text = |h| -> Vec<String> { preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None }).unwrap().iter().map(flat).collect() };
+    let text = |h| -> Vec<String> {
+        preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None })
+            .unwrap()
+            .iter()
+            .map(flat)
+            .collect()
+    };
     // Room for everything: all three files show, no marker.
     let all = text(None);
     assert!(all[0].contains("sub") && all.last().unwrap().contains("z.txt"), "{all:?}");
@@ -67,7 +75,13 @@ fn deeper_levels_show_when_there_is_room_and_fewer_when_not() {
     for f in ["a/b/f1.txt", "a/b/f2.txt", "a/b/f3.txt", "a/b/f4.txt", "a/b/f5.txt", "a/c/g.txt"] {
         fs::write(d.join(f), "x").unwrap();
     }
-    let text = |h| -> Vec<String> { preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None }).unwrap().iter().map(flat).collect() };
+    let text = |h| -> Vec<String> {
+        preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None })
+            .unwrap()
+            .iter()
+            .map(flat)
+            .collect()
+    };
     let all = text(Some(40));
     assert!(all.iter().any(|l| l.contains("f3.txt")) && all.iter().any(|l| l.contains("g.txt")), "{all:?}");
     // Short: two per folder at every level, and it fits.
@@ -90,7 +104,12 @@ fn single_folder_chains_merge_and_empty_folders_collapse() {
         fs::create_dir_all(d.join("pile").join(n)).unwrap();
     }
     fs::write(d.join("file.txt"), "x").unwrap();
-    let text: Vec<String> = preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap().iter().map(flat).collect();
+    let text: Vec<String> =
+        preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None })
+            .unwrap()
+            .iter()
+            .map(flat)
+            .collect();
     // `one/two/three` is one row with its file under it.
     assert!(text.iter().any(|l| l.contains("one/two/three")), "{text:?}");
     // `pile` only holds empty folders: its listing is one line (and it merges into nothing).
@@ -109,7 +128,12 @@ fn a_huge_folder_is_cut_and_says_so() {
     for i in 0..260 {
         fs::write(d.join(format!("f{i:03}")), "x").unwrap();
     }
-    let text: Vec<String> = preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap().iter().map(flat).collect();
+    let text: Vec<String> =
+        preview(&d, &Theme::default(), &Options { width: None, height: None, git: false, focus: None })
+            .unwrap()
+            .iter()
+            .map(flat)
+            .collect();
     assert_eq!(text.len(), 201, "{}", text.len());
     assert!(text.last().unwrap().contains("more not shown"), "{:?}", text.last());
 }
@@ -145,11 +169,21 @@ fn flat(l: &Line) -> String {
 fn text_marks_changed_rows_and_no_git_disables() {
     let d = git_repo("gtext");
     fs::write(d.join("a.txt"), "1\nX\n3\n").unwrap();
-    let on = preview(&d.join("a.txt"), &Theme::default(), &Options { width: Some(20), height: None, git: true, focus: None }).unwrap();
+    let on = preview(
+        &d.join("a.txt"),
+        &Theme::default(),
+        &Options { width: Some(20), height: None, git: true, focus: None },
+    )
+    .unwrap();
     assert!(flat(&on[1]).starts_with('▎'));
     assert!(on[1].spans.iter().skip(1).all(|s| s.style.bg.is_some()), "row tinted");
     assert!(flat(&on[0]).starts_with(' ') && on[0].spans.iter().all(|s| s.style.bg.is_none()));
-    let off = preview(&d.join("a.txt"), &Theme::default(), &Options { width: Some(20), height: None, git: false, focus: None }).unwrap();
+    let off = preview(
+        &d.join("a.txt"),
+        &Theme::default(),
+        &Options { width: Some(20), height: None, git: false, focus: None },
+    )
+    .unwrap();
     assert!(!flat(&off[1]).contains('▎') && off[1].spans.iter().all(|s| s.style.bg.is_none()));
 }
 
@@ -167,7 +201,10 @@ fn dir_shows_dot_files_but_not_ignored_ones_and_a_long_name_shrinks() {
     let text: Vec<String> = preview(&d, &Theme::default(), &opts).unwrap().iter().map(flat).collect();
     let all = text.join("\n");
     assert!(all.contains(".env") && all.contains(".gitignore"), "dot files show: {all}");
-    assert!(!all.contains("build") && !all.contains(".git\n") && !all.contains("out.o"), "ignored and .git stay out: {all}");
+    assert!(
+        !all.contains("build") && !all.contains(".git\n") && !all.contains("out.o"),
+        "ignored and .git stay out: {all}"
+    );
     let row = text.iter().find(|l| l.contains('…')).unwrap_or_else(|| panic!("the long name is cut: {all}"));
     let width = |l: &String| unicode_width::UnicodeWidthStr::width(l.as_str());
     let short = text.iter().find(|l| l.contains(".env")).unwrap();
@@ -179,14 +216,15 @@ fn dir_shows_git_signs() {
     let d = git_repo("gdir");
     fs::write(d.join("a.txt"), "changed\n").unwrap();
     fs::write(d.join("sub/new.txt"), "n\n").unwrap();
-    let on = preview(&d, &Theme::default(), &Options { width: Some(80), height: None, git: true, focus: None }).unwrap();
+    let on =
+        preview(&d, &Theme::default(), &Options { width: Some(80), height: None, git: true, focus: None }).unwrap();
     let text: Vec<String> = on.iter().map(flat).collect();
     assert!(text.iter().any(|l| l.contains("sub") && l.trim_end().ends_with('?')), "{text:?}");
     assert!(text.iter().any(|l| l.contains("a.txt") && l.trim_end().ends_with('M')), "{text:?}");
-    let off = preview(&d, &Theme::default(), &Options { width: Some(80), height: None, git: false, focus: None }).unwrap();
+    let off =
+        preview(&d, &Theme::default(), &Options { width: Some(80), height: None, git: false, focus: None }).unwrap();
     assert!(off.iter().map(flat).all(|l| !l.trim_end().ends_with('M')));
 }
-
 
 #[test]
 fn focus_centers_window_and_highlights_row() {
@@ -212,7 +250,8 @@ fn focus_centers_window_and_highlights_row() {
 #[test]
 fn commit_preview_has_header_message_and_files() {
     let d = git_repo("commit");
-    let lines = preview_commit(&d, "HEAD", &Theme::default(), &Options { width: Some(60), ..Options::default() }).unwrap();
+    let lines =
+        preview_commit(&d, "HEAD", &Theme::default(), &Options { width: Some(60), ..Options::default() }).unwrap();
     let text: Vec<String> = lines.iter().map(flat).collect();
     // The subject first, then author, age and hash on one line.
     assert_eq!(text[0].trim(), "i", "{text:?}");
@@ -244,14 +283,23 @@ fn commit_preview_shows_the_patch() {
 fn preview_text_renders_given_text_not_the_file() {
     let d = git_repo("memtext");
     // The file on disk says "1 2 3"; the buffer in memory differs.
-    let lines = preview_text(&d.join("a.txt"), b"one\nedited line\nthree\n", &Theme::default(), &Options { width: Some(30), focus: Some(2), ..Options::default() }).unwrap();
+    let lines = preview_text(
+        &d.join("a.txt"),
+        b"one\nedited line\nthree\n",
+        &Theme::default(),
+        &Options { width: Some(30), focus: Some(2), ..Options::default() },
+    )
+    .unwrap();
     let text: Vec<String> = lines.iter().map(flat).collect();
     assert!(text.iter().any(|l| l.contains("edited line")), "{text:?}");
     assert!(!text.iter().any(|l| l.trim_end().ends_with(" 1") && l.contains(" 1 1")));
     // The focus row is highlighted; no git marks even though the file differs from HEAD.
     assert!(lines[1].spans.iter().all(|s| s.style.bg.is_some()) && lines[0].spans.iter().all(|s| s.style.bg.is_none()));
     assert!(!flat(&lines[1]).contains('▎'));
-    assert!(matches!(preview_text(Path::new("x"), &[0, 1, 2], &Theme::default(), &Options::default()), Err(Error::Unsupported(_))));
+    assert!(matches!(
+        preview_text(Path::new("x"), &[0, 1, 2], &Theme::default(), &Options::default()),
+        Err(Error::Unsupported(_))
+    ));
 }
 
 #[test]
@@ -259,26 +307,36 @@ fn file_diff_preview_shows_the_chosen_side() {
     let d = git_repo("filediff");
     fs::write(d.join("a.txt"), "1\nSTAGED\n3\n").unwrap();
     let run = |args: &[&str]| {
-        assert!(std::process::Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
-            .args(args)
-            .current_dir(&d)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_SYSTEM", "/dev/null")
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&d)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .status()
+                .unwrap()
+                .success()
+        );
     };
     run(&["add", "a.txt"]);
     fs::write(d.join("a.txt"), "1\nSTAGED\n3\nUNSTAGED\n").unwrap();
     let o = Options { width: Some(40), ..Options::default() };
-    let text = |side| -> Vec<String> { preview_diff(&d, Path::new("a.txt"), side, &Theme::default(), &o).unwrap().iter().map(flat).collect() };
+    let text = |side| -> Vec<String> {
+        preview_diff(&d, Path::new("a.txt"), side, &Theme::default(), &o).unwrap().iter().map(flat).collect()
+    };
 
     let staged = text(git_core::Side::Staged);
     assert!(staged[0].contains("a.txt"), "no blank first line: {staged:?}");
-    assert!(staged.iter().any(|l| l.contains("STAGED")) && !staged.iter().any(|l| l.contains("UNSTAGED")), "{staged:?}");
+    assert!(
+        staged.iter().any(|l| l.contains("STAGED")) && !staged.iter().any(|l| l.contains("UNSTAGED")),
+        "{staged:?}"
+    );
     let unstaged = text(git_core::Side::Unstaged);
-    assert!(unstaged.iter().any(|l| l.contains("+ UNSTAGED")) && !unstaged.iter().any(|l| l.contains("- ")), "{unstaged:?}");
+    assert!(
+        unstaged.iter().any(|l| l.contains("+ UNSTAGED")) && !unstaged.iter().any(|l| l.contains("- ")),
+        "{unstaged:?}"
+    );
     // A file with no change on that side says so.
     let none = preview_diff(&d, Path::new("sub/s.txt"), git_core::Side::Staged, &Theme::default(), &o).unwrap();
     assert!(flat(none.last().unwrap()).contains("no changes"));
@@ -286,7 +344,10 @@ fn file_diff_preview_shows_the_chosen_side() {
 
 #[test]
 fn ansi_resets_after_styled_span() {
-    let lines = vec![Line::from(ratatui::text::Span::styled("x", ratatui::style::Style::new().fg(ratatui::style::Color::Rgb(1, 2, 3))))];
+    let lines = vec![Line::from(ratatui::text::Span::styled(
+        "x",
+        ratatui::style::Style::new().fg(ratatui::style::Color::Rgb(1, 2, 3)),
+    ))];
     assert_eq!(to_ansi(&lines), "\x1b[38;2;1;2;3mx\x1b[0m\n");
 }
 
@@ -295,21 +356,34 @@ fn markdown_is_highlighted_and_flake_lock_is_json() {
     let d = tmp("md");
     let md = d.join("r.md");
     fs::write(&md, "# Title\n\nsome **bold** and `code` text\n\n- item\n").unwrap();
-    let lines = preview(&md, &Theme::default(), &Options { width: None, height: None, git: false, focus: Some(1) }).unwrap();
+    let lines =
+        preview(&md, &Theme::default(), &Options { width: None, height: None, git: false, focus: Some(1) }).unwrap();
     // More than one color among the spans of the file: it is highlighted, not plain.
-    let colors: std::collections::HashSet<_> = lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
+    let colors: std::collections::HashSet<_> =
+        lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
     assert!(colors.len() >= 3, "{colors:?}");
     // A heading is bold.
-    assert!(lines[0].spans.iter().any(|s| s.content.contains("Title") && s.style.add_modifier.contains(ratatui::style::Modifier::BOLD)), "{:?}", lines[0]);
+    assert!(
+        lines[0]
+            .spans
+            .iter()
+            .any(|s| s.content.contains("Title") && s.style.add_modifier.contains(ratatui::style::Modifier::BOLD)),
+        "{:?}",
+        lines[0]
+    );
 
     let lock = d.join("flake.lock");
     fs::write(&lock, "{\n  \"nodes\": { \"root\": { \"inputs\": {} } },\n  \"version\": 7\n}\n").unwrap();
-    let lines = preview(&lock, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
-    let colors: std::collections::HashSet<_> = lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
+    let lines =
+        preview(&lock, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
+    let colors: std::collections::HashSet<_> =
+        lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
     assert!(colors.len() >= 3, "flake.lock should be highlighted as JSON: {colors:?}");
     let plain = d.join("x.lock");
     fs::write(&plain, "{\n  \"nodes\": 1\n}\n").unwrap();
-    let lines = preview(&plain, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
-    let plain_colors: std::collections::HashSet<_> = lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
+    let lines =
+        preview(&plain, &Theme::default(), &Options { width: None, height: None, git: false, focus: None }).unwrap();
+    let plain_colors: std::collections::HashSet<_> =
+        lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
     assert!(plain_colors.len() < colors.len(), "other .lock files stay plain");
 }

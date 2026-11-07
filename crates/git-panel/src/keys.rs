@@ -29,9 +29,19 @@ pub const ACTIONS: &[Action] = &[
     b!("preview.next_hunk", "next hunk", "scroll the diff to the next hunk", ["}"]),
     b!("preview.prev_hunk", "previous hunk", "scroll the diff to the previous hunk", ["{"]),
     b!("item.open", "open", "open the file in your editor (on a folder: fold or unfold it)", ["enter", "l", "right"]),
-    a!("change.stage", "stage or unstage", "stage what is not staged yet in the file or folder under the cursor, or unstage it when it is all staged", ["s", "leader s"]),
+    a!(
+        "change.stage",
+        "stage or unstage",
+        "stage what is not staged yet in the file or folder under the cursor, or unstage it when it is all staged",
+        ["s", "leader s"]
+    ),
     a!("change.unstage", "unstage", "unstage the file or folder under the cursor", ["u", "leader u"]),
-    a!("change.toggle_all", "stage or unstage all", "stage every change, or unstage everything when all of it is staged already", ["a", "leader a"]),
+    a!(
+        "change.toggle_all",
+        "stage or unstage all",
+        "stage every change, or unstage everything when all of it is staged already",
+        ["a", "leader a"]
+    ),
     a!("change.discard", "discard", "throw away the work-tree changes of the file (asks first)", ["d", "leader d"]),
     a!("commit.new", "commit", "commit what is staged", ["c", "leader c"]),
     a!("commit.amend", "amend", "add what is staged to the last commit, keeping its message", ["C", "leader C"]),

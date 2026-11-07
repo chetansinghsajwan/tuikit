@@ -41,13 +41,18 @@ impl Meta {
         let sym = fs::symlink_metadata(path)?;
         let is_link = sym.file_type().is_symlink();
         let meta = fs::metadata(path).unwrap_or_else(|_| sym.clone());
-        let link = is_link.then(|| (fs::read_link(path).map(|t| t.display().to_string()).unwrap_or_default(), fs::metadata(path).is_err()));
+        let link = is_link.then(|| {
+            (fs::read_link(path).map(|t| t.display().to_string()).unwrap_or_default(), fs::metadata(path).is_err())
+        });
         let is_dir = meta.is_dir();
         let mime = if is_dir { "inode/directory".to_string() } else { mime_of(path) };
         let extra = if is_dir { None } else { extra_of(path, &mime) };
         let (perm, owner, links) = unix(&meta);
         Ok(Meta {
-            name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string()),
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string()),
             link,
             perm,
             owner,
@@ -162,7 +167,12 @@ pub struct DirSize {
 
 impl DirSize {
     pub fn spawn(path: PathBuf) -> DirSize {
-        let d = DirSize { path: path.clone(), total: Arc::new(AtomicU64::new(0)), done: Arc::new(AtomicBool::new(false)), cancel: Arc::new(AtomicBool::new(false)) };
+        let d = DirSize {
+            path: path.clone(),
+            total: Arc::new(AtomicU64::new(0)),
+            done: Arc::new(AtomicBool::new(false)),
+            cancel: Arc::new(AtomicBool::new(false)),
+        };
         let (total, done, cancel) = (d.total.clone(), d.done.clone(), d.cancel.clone());
         std::thread::spawn(move || {
             let mut stack = vec![path];
@@ -200,7 +210,8 @@ impl Drop for DirSize {
 /// `rwxr-xr-x` for a Unix mode (dashes where there is none).
 pub fn perm_string(mode: u32) -> String {
     let mut p = String::new();
-    for (i, (r, w, x)) in [(0o400, 0o200, 0o100), (0o040, 0o020, 0o010), (0o004, 0o002, 0o001)].into_iter().enumerate() {
+    for (i, (r, w, x)) in [(0o400, 0o200, 0o100), (0o040, 0o020, 0o010), (0o004, 0o002, 0o001)].into_iter().enumerate()
+    {
         let special = [(0o4000, 's', 'S'), (0o2000, 's', 'S'), (0o1000, 't', 'T')][i];
         p.push(if mode & r != 0 { 'r' } else { '-' });
         p.push(if mode & w != 0 { 'w' } else { '-' });
@@ -255,12 +266,15 @@ pub fn time_relative(t: Option<SystemTime>) -> String {
     t.map(|t| ago(SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0))).unwrap_or_default()
 }
 
-
 /// A modification time for a column, 11 cells: `MM-DD HH:MM` this year, `YY-MM-DD` before.
 pub fn time_short(t: Option<SystemTime>) -> String {
     let Some(t) = t else { return String::new() };
     let local: DateTime<Local> = t.into();
-    if local.format("%Y").to_string() == Local::now().format("%Y").to_string() { local.format("%m-%d %H:%M").to_string() } else { local.format("%y-%m-%d").to_string() }
+    if local.format("%Y").to_string() == Local::now().format("%Y").to_string() {
+        local.format("%m-%d %H:%M").to_string()
+    } else {
+        local.format("%y-%m-%d").to_string()
+    }
 }
 
 pub fn human(n: u64) -> String {
@@ -288,7 +302,11 @@ fn ago(secs: u64) -> String {
 fn time(t: Option<SystemTime>) -> String {
     let Some(t) = t else { return "-".into() };
     let local: DateTime<Local> = t.into();
-    let abs = if local.format("%Y").to_string() == Local::now().format("%Y").to_string() { local.format("%b %d %H:%M") } else { local.format("%b %d  %Y") };
+    let abs = if local.format("%Y").to_string() == Local::now().format("%Y").to_string() {
+        local.format("%b %d %H:%M")
+    } else {
+        local.format("%b %d  %Y")
+    };
     let secs = SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0);
     format!("{abs} ({})", ago(secs))
 }
@@ -343,11 +361,13 @@ fn unix(_: &fs::Metadata) -> (Option<String>, Option<String>, Option<u64>) {
 fn name_for(file: &str, id: u32) -> String {
     fs::read_to_string(file)
         .ok()
-        .and_then(|t| t.lines().find_map(|l| {
-            let mut f = l.split(':');
-            let (name, _, n) = (f.next()?, f.next()?, f.next()?);
-            (n.parse::<u32>().ok()? == id).then(|| name.to_string())
-        }))
+        .and_then(|t| {
+            t.lines().find_map(|l| {
+                let mut f = l.split(':');
+                let (name, _, n) = (f.next()?, f.next()?, f.next()?);
+                (n.parse::<u32>().ok()? == id).then(|| name.to_string())
+            })
+        })
         .unwrap_or_else(|| id.to_string())
 }
 

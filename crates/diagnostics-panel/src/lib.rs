@@ -40,7 +40,11 @@ pub struct Item {
 pub enum Action {
     None,
     /// Go to this place.
-    Open { path: PathBuf, line: u32, col: u32 },
+    Open {
+        path: PathBuf,
+        line: u32,
+        col: u32,
+    },
     /// Give the keyboard back (Esc, `q`).
     Close,
 }
@@ -102,13 +106,24 @@ pub struct Panel {
 impl Panel {
     /// `root`: the workspace; file names are shown relative to it.
     pub fn new(root: impl Into<PathBuf>) -> Panel {
-        Panel { root: root.into(), items: Vec::new(), rows: Vec::new(), selectable: Vec::new(), cursor: 0, offset: 0, page: 10, filter: Filter::All }
+        Panel {
+            root: root.into(),
+            items: Vec::new(),
+            rows: Vec::new(),
+            selectable: Vec::new(),
+            cursor: 0,
+            offset: 0,
+            page: 10,
+            filter: Filter::All,
+        }
     }
 
     /// Replace the list. A list equal to the current one is ignored, so hosts can
     /// call this every frame.
     pub fn set_items(&mut self, mut items: Vec<Item>) {
-        items.sort_by(|a, b| a.path.cmp(&b.path).then(a.line.cmp(&b.line)).then(a.col.cmp(&b.col)).then(a.severity.cmp(&b.severity)));
+        items.sort_by(|a, b| {
+            a.path.cmp(&b.path).then(a.line.cmp(&b.line)).then(a.col.cmp(&b.col)).then(a.severity.cmp(&b.severity))
+        });
         if items == self.items {
             return;
         }
@@ -151,7 +166,9 @@ impl Panel {
         }
         // Stay on the same problem if it is still there.
         self.cursor = keep
-            .and_then(|k| self.selectable.iter().position(|&r| matches!(&self.rows[r], Row::Item(i) if self.items[*i] == k)))
+            .and_then(|k| {
+                self.selectable.iter().position(|&r| matches!(&self.rows[r], Row::Item(i) if self.items[*i] == k))
+            })
             .unwrap_or(self.cursor)
             .min(self.selectable.len().saturating_sub(1));
     }
@@ -214,7 +231,11 @@ impl Panel {
         let c = &theme.colors;
         let (e, w, _) = self.counts();
         let plural = |n: usize, s: &str| format!("{n} {s}{}", if n == 1 { "" } else { "s" });
-        let title = if self.items.is_empty() { "diagnostics".to_string() } else { format!("diagnostics: {}, {}{}", plural(e, "error"), plural(w, "warning"), self.filter.label()) };
+        let title = if self.items.is_empty() {
+            "diagnostics".to_string()
+        } else {
+            format!("diagnostics: {}, {}{}", plural(e, "error"), plural(w, "warning"), self.filter.label())
+        };
         let pane = Pane::new(theme).title(&title).icon(ui::icons::DIAGNOSTICS).focused(focused);
         let inner = pane.inner(area);
         pane.render(area, buf);
@@ -242,7 +263,10 @@ impl Panel {
                 Row::File(path, n) => {
                     let line = Line::from(vec![
                         Span::styled("▾ ", Style::new().fg(c.muted.into())),
-                        Span::styled(self.rel(path).display().to_string(), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            self.rel(path).display().to_string(),
+                            Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+                        ),
                         Span::styled(format!("  {n}"), Style::new().fg(c.muted.into())),
                     ]);
                     Paragraph::new(line).render(line_area, buf);
@@ -278,7 +302,14 @@ impl Panel {
                         Span::styled(msg, Style::new().fg(c.fg.into())),
                         Span::styled(source, Style::new().fg(c.muted.into())),
                     ]);
-                    ui::list::ListRow { id: ui::anim::hash_of(&(it.line, it.col, &it.message)), left: line.spans, selected, focused, ..Default::default() }.draw(theme, buf, &geo, y);
+                    ui::list::ListRow {
+                        id: ui::anim::hash_of(&(it.line, it.col, &it.message)),
+                        left: line.spans,
+                        selected,
+                        focused,
+                        ..Default::default()
+                    }
+                    .draw(theme, buf, &geo, y);
                 }
             }
         }

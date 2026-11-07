@@ -2,10 +2,10 @@
 //! rendering through `ui`, git state from `git-core`, file operations) that
 //! editors embed as a sidebar; a standalone binary can wrap it later.
 
-pub mod ops;
 pub mod bookmarks;
-pub mod meta;
 pub mod keys;
+pub mod meta;
+pub mod ops;
 mod panel;
 
 pub use panel::{Action, Linemode, Panel, PanelOptions, Search};

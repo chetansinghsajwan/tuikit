@@ -24,15 +24,30 @@ fn row_text(row: &FileRow, width: u16) -> String {
 
 #[test]
 fn a_long_name_shrinks_and_the_rest_of_the_row_keeps_its_place() {
-    let long = FileRow { name: "a-very-long-file-name-that-does-not-fit.rs", count: Some(7), trailing: vec![Span::raw("+3 -1 ")], signs: vec![('M', Color::Red)], ..Default::default() };
+    let long = FileRow {
+        name: "a-very-long-file-name-that-does-not-fit.rs",
+        count: Some(7),
+        trailing: vec![Span::raw("+3 -1 ")],
+        signs: vec![('M', Color::Red)],
+        ..Default::default()
+    };
     let t = row_text(&long, 30);
     assert_eq!(t.chars().count(), 30);
     assert!(t.contains('…') && t.trim_end().ends_with("+3 -1 M"), "{t}");
     // A pane too narrow for the trailing text drops it and keeps the name.
-    let t = row_text(&FileRow { trailing: vec![Span::raw("a-very-wide-column")], ..FileRow { name: "main.rs", ..Default::default() } }, 20);
+    let t = row_text(
+        &FileRow {
+            trailing: vec![Span::raw("a-very-wide-column")],
+            ..FileRow { name: "main.rs", ..Default::default() }
+        },
+        20,
+    );
     assert!(t.contains("main.rs") && !t.contains("column"), "{t}");
     // Wide characters are counted by cells, so the sign stays in the last cell.
-    let t = row_text(&FileRow { name: "日本語日本語日本語日本語", signs: vec![('M', Color::Red)], ..Default::default() }, 16);
+    let t = row_text(
+        &FileRow { name: "日本語日本語日本語日本語", signs: vec![('M', Color::Red)], ..Default::default() },
+        16,
+    );
     assert!(t.trim_end().ends_with('M') && t.contains('…'), "{t}");
 }
 
@@ -81,7 +96,10 @@ fn the_active_guide_is_drawn_in_the_accent() {
     let marked = guides_marked(&theme, 3, Some(1));
     assert_eq!(text(&marked), guides(&theme, 3).content);
     let accent: Color = theme.colors.accent.into();
-    assert_eq!(marked.iter().filter(|s| s.style.fg == Some(accent)).map(|s| s.content.as_ref()).collect::<String>(), "│ ");
+    assert_eq!(
+        marked.iter().filter(|s| s.style.fg == Some(accent)).map(|s| s.content.as_ref()).collect::<String>(),
+        "│ "
+    );
     // A column that is not among the guides marks nothing.
     assert_eq!(guides_marked(&theme, 1, Some(1)).len(), 1);
 }

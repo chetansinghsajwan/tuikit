@@ -153,13 +153,20 @@ impl Multi {
         let pane = crate::Pane::new(theme).title(&self.title).focused(true);
         let inner = pane.inner(rect);
         pane.render(rect, buf);
-        let (fg, muted, accent) = (Style::new().fg(c.fg.into()), Style::new().fg(c.muted.into()), Style::new().fg(c.accent.into()));
+        let (fg, muted, accent) =
+            (Style::new().fg(c.fg.into()), Style::new().fg(c.muted.into()), Style::new().fg(c.accent.into()));
         let row = |n: u16| Rect { y: inner.y + n, height: 1, ..inner };
         // The sections as tabs, with how many things each has chosen.
         let mut tabs = Vec::new();
         for (i, s) in self.sections.iter().enumerate() {
             let label = if s.chosen.is_empty() { s.title.clone() } else { format!("{} ({})", s.title, s.chosen.len()) };
-            let style = if i == self.current { accent.add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else if s.chosen.is_empty() { muted } else { fg };
+            let style = if i == self.current {
+                accent.add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            } else if s.chosen.is_empty() {
+                muted
+            } else {
+                fg
+            };
             tabs.push(Span::styled(label, style));
             tabs.push(Span::styled("  ", muted));
         }
@@ -169,9 +176,18 @@ impl Multi {
         let list_h = usize::from(inner.height).saturating_sub(5);
         if s.kind == Kind::Text {
             let text = s.chosen.first().cloned().unwrap_or_default();
-            Paragraph::new(Line::from(vec![Span::styled("contains: ", accent), Span::styled(text, fg), Span::styled("▏", accent)])).render(row(2), buf);
+            Paragraph::new(Line::from(vec![
+                Span::styled("contains: ", accent),
+                Span::styled(text, fg),
+                Span::styled("▏", accent),
+            ]))
+            .render(row(2), buf);
         } else {
-            let query = if self.query.is_empty() { Span::styled("type to narrow the list", muted) } else { Span::styled(self.query.clone(), fg) };
+            let query = if self.query.is_empty() {
+                Span::styled("type to narrow the list", muted)
+            } else {
+                Span::styled(self.query.clone(), fg)
+            };
             Paragraph::new(Line::from(vec![Span::styled("> ", accent), query])).render(row(2), buf);
             let items = self.visible();
             let first = self.cursor.saturating_sub(list_h.saturating_sub(1)).min(items.len().saturating_sub(list_h));
@@ -184,7 +200,10 @@ impl Multi {
                     (_, true) => "[x] ",
                     (_, false) => "[ ] ",
                 };
-                let line = Line::from(vec![Span::styled(mark, if on { Style::new().fg(c.success.into()) } else { muted }), Span::styled(item.to_string(), fg)]);
+                let line = Line::from(vec![
+                    Span::styled(mark, if on { Style::new().fg(c.success.into()) } else { muted }),
+                    Span::styled(item.to_string(), fg),
+                ]);
                 let r = row(3 + n as u16);
                 if at {
                     buf.set_style(r, crate::list::style(theme, true, None));
@@ -196,10 +215,23 @@ impl Multi {
             }
         }
         // What is chosen so far, everywhere, and the keys.
-        let all: Vec<String> = self.sections.iter().filter(|s| !s.chosen.is_empty()).map(|s| format!("{}: {}", s.title.to_lowercase(), s.chosen.join(", "))).collect();
+        let all: Vec<String> = self
+            .sections
+            .iter()
+            .filter(|s| !s.chosen.is_empty())
+            .map(|s| format!("{}: {}", s.title.to_lowercase(), s.chosen.join(", ")))
+            .collect();
         let summary = if all.is_empty() { "nothing chosen".to_string() } else { all.join("  ·  ") };
-        Paragraph::new(Line::from(vec![Span::styled("chosen  ", muted), Span::styled(summary, Style::new().fg(c.warning.into()))])).render(row(inner.height.saturating_sub(2)), buf);
-        Paragraph::new(Line::from(Span::styled("space choose  tab section  enter apply  ctrl-x clear  esc cancel", muted))).render(row(inner.height.saturating_sub(1)), buf);
+        Paragraph::new(Line::from(vec![
+            Span::styled("chosen  ", muted),
+            Span::styled(summary, Style::new().fg(c.warning.into())),
+        ]))
+        .render(row(inner.height.saturating_sub(2)), buf);
+        Paragraph::new(Line::from(Span::styled(
+            "space choose  tab section  enter apply  ctrl-x clear  esc cancel",
+            muted,
+        )))
+        .render(row(inner.height.saturating_sub(1)), buf);
     }
 }
 

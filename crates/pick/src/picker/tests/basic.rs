@@ -14,7 +14,14 @@ fn grep_toggles_and_file_filters_narrow_the_search() {
     std::fs::write(d.join("src/a.rs"), "Needle here\nneedles too\n").unwrap();
     std::fs::write(d.join("tests/b.rs"), "needle in tests\n").unwrap();
     std::fs::write(d.join("src/c.txt"), "needle in text\n").unwrap();
-    let opts = PickerOptions { mode: Mode::Grep, paths: true, root: d.clone(), preview: false, git: false, query: "needle".into() };
+    let opts = PickerOptions {
+        mode: Mode::Grep,
+        paths: true,
+        root: d.clone(),
+        preview: false,
+        git: false,
+        query: "needle".into(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     let alt = |c: char| Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT));
     let key = |c: KeyCode| Event::Key(KeyEvent::new(c, KeyModifiers::NONE));
@@ -154,7 +161,8 @@ fn renders_list_and_preview() {
     let area = Rect::new(0, 0, 80, 10);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default());
-    let text: String = (0..10).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String =
+        (0..10).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
     assert!(text.contains("hello.txt") && text.contains("other.txt"), "{text}");
     assert!(text.contains("needle in a haystack"), "{text}");
     assert!(text.contains("2/2"), "{text}");

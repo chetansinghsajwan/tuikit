@@ -49,15 +49,31 @@ fn buffers_show_flags_preview_unsaved_text_and_print_their_id() {
     assert!(text.contains("+*") && text.contains("a.txt") && text.contains("[scratch]"), "{text}");
     assert!(text.contains("UNSAVED edit") && !text.contains("on disk"), "{text}");
     // Accepting returns the id the host gave, not the display text.
-    assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))), Action::Accept(vec!["7".into()]));
+    assert_eq!(
+        p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))),
+        Action::Accept(vec!["7".into()])
+    );
 }
 
 #[test]
 fn set_cursor_preselects_the_previous_buffer_and_clamps() {
     let d = std::env::temp_dir();
-    let mut p = picker(d.clone(), vec![buf("1", "*", Some("a"), None, "x"), buf("2", "", Some("b"), None, "y"), buf("3", "", Some("c"), None, "z")]);
+    let mut p = picker(
+        d.clone(),
+        vec![
+            buf("1", "*", Some("a"), None, "x"),
+            buf("2", "", Some("b"), None, "y"),
+            buf("3", "", Some("c"), None, "z"),
+        ],
+    );
     p.set_cursor(1);
-    assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))), Action::Accept(vec!["2".into()]));
+    assert_eq!(
+        p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))),
+        Action::Accept(vec!["2".into()])
+    );
     p.set_cursor(99);
-    assert_eq!(p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))), Action::Accept(vec!["3".into()]));
+    assert_eq!(
+        p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))),
+        Action::Accept(vec!["3".into()])
+    );
 }

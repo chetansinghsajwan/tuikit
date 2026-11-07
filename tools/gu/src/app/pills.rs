@@ -91,7 +91,8 @@ pub(super) fn initials(name: &str) -> String {
 /// A stable color per author, from the theme's accents, so one person always looks the same.
 pub(super) fn author_color(theme: &Theme, name: &str) -> ratatui::style::Color {
     let c = &theme.colors;
-    let palette = [c.success, c.warning, c.info, c.accent, c.git.untracked, c.git.renamed, c.git.modified, c.git.conflict];
+    let palette =
+        [c.success, c.warning, c.info, c.accent, c.git.untracked, c.git.renamed, c.git.modified, c.git.conflict];
     let hash = name.bytes().fold(5381u32, |h, b| h.wrapping_mul(33).wrapping_add(u32::from(b)));
     palette[hash as usize % palette.len()].into()
 }

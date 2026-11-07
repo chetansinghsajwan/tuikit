@@ -141,7 +141,9 @@ impl Backend for Nm {
     fn status(&self) -> Result<Status> {
         let root = self.proxy(ROOT, IF_ROOT)?;
         let enabled: bool = root.get_property("WirelessEnabled")?;
-        let Some((device, name)) = self.wifi_device()? else { return Ok(Status { device: None, enabled, active: None }) };
+        let Some((device, name)) = self.wifi_device()? else {
+            return Ok(Status { device: None, enabled, active: None });
+        };
         let active = self.access_points(&device)?.into_iter().find(|(_, n)| n.active).map(|(_, n)| n.ssid);
         Ok(Status { device: Some(name), enabled, active })
     }
@@ -168,7 +170,12 @@ impl Backend for Nm {
     fn connect(&self, ssid: &str, password: Option<&str>) -> Result<()> {
         let device = self.need_wifi_device()?;
         let ap = self.strongest_ap(&device, ssid)?;
-        let network = self.access_points(&device)?.into_iter().find(|(p, _)| *p == ap).map(|(_, n)| n).ok_or_else(|| Error(format!("{ssid} is not in range")))?;
+        let network = self
+            .access_points(&device)?
+            .into_iter()
+            .find(|(p, _)| *p == ap)
+            .map(|(_, n)| n)
+            .ok_or_else(|| Error(format!("{ssid} is not in range")))?;
         let root = self.proxy(ROOT, IF_ROOT)?;
         // A saved connection is activated as it is.
         if let Some((_, saved)) = self.saved()?.into_iter().find(|(s, _)| s == ssid) {
@@ -180,8 +187,12 @@ impl Backend for Nm {
         }
         // A new one is created and activated in one step; NetworkManager keeps it for next time.
         let mut connection: Settings<'_> = HashMap::new();
-        connection.insert("connection", HashMap::from([("type", Value::from("802-11-wireless")), ("id", Value::from(ssid))]));
-        connection.insert("802-11-wireless", HashMap::from([("ssid", Value::from(ssid.as_bytes().to_vec())), ("mode", Value::from("infrastructure"))]));
+        connection
+            .insert("connection", HashMap::from([("type", Value::from("802-11-wireless")), ("id", Value::from(ssid))]));
+        connection.insert(
+            "802-11-wireless",
+            HashMap::from([("ssid", Value::from(ssid.as_bytes().to_vec())), ("mode", Value::from("infrastructure"))]),
+        );
         if !network.security.is_open() {
             let password = password.filter(|p| !p.is_empty()).ok_or_else(|| Error("a password is needed".into()))?;
             let key_mgmt = if network.security == Security::Wep { "none" } else { "wpa-psk" };
@@ -200,7 +211,8 @@ impl Backend for Nm {
     }
 
     fn forget(&self, ssid: &str) -> Result<()> {
-        let paths: Vec<OwnedObjectPath> = self.saved()?.into_iter().filter(|(s, _)| s == ssid).map(|(_, p)| p).collect();
+        let paths: Vec<OwnedObjectPath> =
+            self.saved()?.into_iter().filter(|(s, _)| s == ssid).map(|(_, p)| p).collect();
         if paths.is_empty() {
             return Err(Error(format!("no saved connection for {ssid}")));
         }

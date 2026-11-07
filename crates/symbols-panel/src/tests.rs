@@ -8,7 +8,13 @@ fn sym(name: &str, kind: Kind, line: u32, end: u32, children: Vec<Symbol>) -> Sy
 fn panel() -> Panel {
     let mut p = Panel::default();
     p.set_symbols(vec![
-        sym("Config", Kind::Struct, 0, 9, vec![sym("name", Kind::Field, 1, 1, vec![]), sym("size", Kind::Field, 2, 2, vec![])]),
+        sym(
+            "Config",
+            Kind::Struct,
+            0,
+            9,
+            vec![sym("name", Kind::Field, 1, 1, vec![]), sym("size", Kind::Field, 2, 2, vec![])],
+        ),
         sym("load", Kind::Function, 11, 20, vec![]),
     ]);
     p
@@ -57,7 +63,10 @@ fn filtering_keeps_matches_and_their_parents_and_esc_clears() {
     press(&mut p, "/");
     press(&mut p, "siz");
     let text = draw(&mut p, true);
-    assert!(text.contains("Config") && text.contains("size") && !text.contains("load") && !text.contains("name"), "{text}");
+    assert!(
+        text.contains("Config") && text.contains("size") && !text.contains("load") && !text.contains("name"),
+        "{text}"
+    );
     p.handle_event(&key(KeyCode::Enter));
     assert!(draw(&mut p, true).contains("filter: siz"));
     assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::None, "the first Esc clears the filter");

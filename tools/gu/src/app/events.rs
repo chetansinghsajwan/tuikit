@@ -66,7 +66,9 @@ impl App {
                 Screen::Commits => Screen::Status,
                 Screen::Refs => Screen::Commits,
             }),
-            "search.start" => self.mode = Mode::Prompt(PromptKind::Search, Input::new(self.search.clone().unwrap_or_default())),
+            "search.start" => {
+                self.mode = Mode::Prompt(PromptKind::Search, Input::new(self.search.clone().unwrap_or_default()))
+            }
             "search.next" => self.search_step(1),
             "search.prev" => self.search_step(-1),
             "view.detail" => self.detail = !self.detail,
@@ -136,7 +138,8 @@ impl App {
                 self.preview = None;
                 self.say(if on { "ignoring whitespace changes" } else { "showing whitespace changes" }, false);
             }
-            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top" | "nav.bottom" => {
+            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down" | "nav.top"
+            | "nav.bottom" => {
                 if let Some(li) = li {
                     let st = &mut self.lists[li];
                     st.cursor = match id {
@@ -162,7 +165,12 @@ impl App {
 
     /// Run a git command that talks to a remote on its own thread; the screen shows `label …`
     /// and `tick` finishes it. One at a time.
-    pub(super) fn remote(&mut self, label: &str, done: &str, f: impl FnOnce(&Repo) -> Result<(), git_core::Error> + Send + 'static) {
+    pub(super) fn remote(
+        &mut self,
+        label: &str,
+        done: &str,
+        f: impl FnOnce(&Repo) -> Result<(), git_core::Error> + Send + 'static,
+    ) {
         if self.job.is_some() {
             self.say("busy: wait for the current remote command", true);
             return;
@@ -272,10 +280,26 @@ impl App {
                     if let Some(RefRow::Folder { key, depth, .. }) = self.ref_rows.get(self.lists[0].cursor).cloned() {
                         let (section, path) = key.split_once('/').unwrap_or(("", &key));
                         match section {
-                            "b" => self.mode = Mode::Prompt(PromptKind::RenameFolder { kind: RefKind::Branch, prefix: path.to_string() }, Input::new(path.to_string())),
-                            "t" => self.mode = Mode::Prompt(PromptKind::RenameFolder { kind: RefKind::Tag, prefix: path.to_string() }, Input::new(path.to_string())),
-                            _ if depth == 1 => self.mode = Mode::Prompt(PromptKind::RenameRemote(path.to_string()), Input::new(path.to_string())),
-                            _ => self.say("rename a remote branch itself, a remote folder is only part of its name", true),
+                            "b" => {
+                                self.mode = Mode::Prompt(
+                                    PromptKind::RenameFolder { kind: RefKind::Branch, prefix: path.to_string() },
+                                    Input::new(path.to_string()),
+                                )
+                            }
+                            "t" => {
+                                self.mode = Mode::Prompt(
+                                    PromptKind::RenameFolder { kind: RefKind::Tag, prefix: path.to_string() },
+                                    Input::new(path.to_string()),
+                                )
+                            }
+                            _ if depth == 1 => {
+                                self.mode = Mode::Prompt(
+                                    PromptKind::RenameRemote(path.to_string()),
+                                    Input::new(path.to_string()),
+                                )
+                            }
+                            _ => self
+                                .say("rename a remote branch itself, a remote folder is only part of its name", true),
                         }
                         return;
                     }
@@ -285,16 +309,18 @@ impl App {
                     }
                 }
                 // On a section or folder the Enter key folds or unfolds it.
-                if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) = self.ref_rows.get(self.lists[0].cursor)
-                    && id == "branch.checkout" {
-                        let key = key.clone();
-                        if !self.folded.remove(&key) {
-                            self.folded.insert(key);
-                        }
-                        let keep = self.ref_row_id(self.lists[0].cursor);
-                        self.build_ref_rows(keep);
-                        return;
+                if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) =
+                    self.ref_rows.get(self.lists[0].cursor)
+                    && id == "branch.checkout"
+                {
+                    let key = key.clone();
+                    if !self.folded.remove(&key) {
+                        self.folded.insert(key);
                     }
+                    let keep = self.ref_row_id(self.lists[0].cursor);
+                    self.build_ref_rows(keep);
+                    return;
+                }
                 let Some(b) = self.current_ref().cloned() else {
                     if id == "branch.new" {
                         self.mode = Mode::Prompt(PromptKind::NewBranch, Input::default());
@@ -315,7 +341,12 @@ impl App {
                         RefKind::Tag => self.mode = Mode::Confirm(Confirm::DeleteTag(b.name)),
                         RefKind::Remote => self.mode = Mode::Confirm(Confirm::DeleteRemote(b.name)),
                         RefKind::Branch if b.is_head => self.say("the checked-out branch cannot be deleted", true),
-                        RefKind::Branch => self.mode = Mode::Confirm(Confirm::DeleteBranch { name: b.name, force: id == "branch.force_delete" }),
+                        RefKind::Branch => {
+                            self.mode = Mode::Confirm(Confirm::DeleteBranch {
+                                name: b.name,
+                                force: id == "branch.force_delete",
+                            })
+                        }
                     },
                     "branch.rebase" => {
                         if b.is_head {
@@ -331,7 +362,11 @@ impl App {
                             RefKind::Remote => PromptKind::RenameRemoteBranch(b.name.clone()),
                         };
                         // A remote branch is renamed without its remote (`topic`, not `origin/topic`).
-                        let shown = if b.kind == RefKind::Remote { b.name.split_once('/').map(|(_, n)| n.to_string()).unwrap_or_default() } else { b.name };
+                        let shown = if b.kind == RefKind::Remote {
+                            b.name.split_once('/').map(|(_, n)| n.to_string()).unwrap_or_default()
+                        } else {
+                            b.name
+                        };
                         self.mode = Mode::Prompt(kind, Input::new(shown));
                     }
                     "branch.merge" => {
@@ -356,7 +391,14 @@ impl App {
                         self.work = !self.work;
                         self.compare = None;
                         self.detail = true;
-                        self.say(if self.work { "diff from the commit to the work tree (M or Esc clears)" } else { "compare cleared" }, false);
+                        self.say(
+                            if self.work {
+                                "diff from the commit to the work tree (M or Esc clears)"
+                            } else {
+                                "compare cleared"
+                            },
+                            false,
+                        );
                     }
                     "commit.compare" => {
                         self.work = false;
@@ -387,9 +429,15 @@ impl App {
                     }
                     "commit.branch" => self.mode = Mode::Prompt(PromptKind::BranchAt(k.oid), Input::default()),
                     "commit.tag" => self.mode = Mode::Prompt(PromptKind::TagAt(k.oid), Input::default()),
-                    "commit.reset_soft" => self.run(format!("reset (soft) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Soft)),
-                    "commit.reset_mixed" => self.run(format!("reset (mixed) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Mixed)),
-                    "commit.reset_hard" => self.mode = Mode::Confirm(Confirm::Reset { oid: k.oid, mode: ResetMode::Hard }),
+                    "commit.reset_soft" => {
+                        self.run(format!("reset (soft) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Soft))
+                    }
+                    "commit.reset_mixed" => {
+                        self.run(format!("reset (mixed) to {}", k.short), move |r| r.reset(&k.oid, ResetMode::Mixed))
+                    }
+                    "commit.reset_hard" => {
+                        self.mode = Mode::Confirm(Confirm::Reset { oid: k.oid, mode: ResetMode::Hard })
+                    }
                     _ => {}
                 }
             }
@@ -429,11 +477,26 @@ impl App {
         };
         let f = &self.filter;
         let sections = vec![
-            Section::new("Message", Kind::Text, Vec::new(), if f.text.is_empty() { Vec::new() } else { vec![f.text.clone()] }),
+            Section::new(
+                "Message",
+                Kind::Text,
+                Vec::new(),
+                if f.text.is_empty() { Vec::new() } else { vec![f.text.clone()] },
+            ),
             Section::new("Author", Kind::Many, ranked(authors), f.authors.clone()),
             Section::new("Category", Kind::Many, ranked(cats), f.categories.clone()),
-            Section::new("Branch", Kind::Many, self.branches.iter().map(|b| b.name.clone()).collect(), f.branches.clone()),
-            Section::new("Since", Kind::One, ["1d", "3d", "7d", "2w", "1m", "3m", "6m", "1y"].map(String::from).to_vec(), f.since.iter().map(|(s, _)| s.clone()).collect()),
+            Section::new(
+                "Branch",
+                Kind::Many,
+                self.branches.iter().map(|b| b.name.clone()).collect(),
+                f.branches.clone(),
+            ),
+            Section::new(
+                "Since",
+                Kind::One,
+                ["1d", "3d", "7d", "2w", "1m", "3m", "6m", "1y"].map(String::from).to_vec(),
+                f.since.iter().map(|(s, _)| s.clone()).collect(),
+            ),
         ];
         self.mode = Mode::Popup(Multi::new("Filter commits", sections));
     }
@@ -447,8 +510,12 @@ impl App {
                 self.filter.authors = popup.chosen("Author").to_vec();
                 self.filter.categories = popup.chosen("Category").to_vec();
                 self.filter.branches = popup.chosen("Branch").to_vec();
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-                self.filter.since = popup.chosen("Since").first().and_then(|s| parse_since(s, now).map(|t| (s.clone(), t)));
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                self.filter.since =
+                    popup.chosen("Since").first().and_then(|s| parse_since(s, now).map(|t| (s.clone(), t)));
                 self.refilter("filtered");
             }
         }
@@ -524,13 +591,21 @@ impl App {
                     }
                     PromptKind::RenameFolder { kind, prefix } => {
                         let value = value.trim_end_matches('/').to_string();
-                        let pairs: Vec<(String, String)> = self.branches.iter().filter(|r| r.kind == kind && r.name.starts_with(&format!("{prefix}/"))).map(|r| (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..]))).collect();
+                        let pairs: Vec<(String, String)> = self
+                            .branches
+                            .iter()
+                            .filter(|r| r.kind == kind && r.name.starts_with(&format!("{prefix}/")))
+                            .map(|r| (r.name.clone(), format!("{value}{}", &r.name[prefix.len()..])))
+                            .collect();
                         let n = pairs.len();
                         // The names are checked and the renames are all or none (`Repo::rename_many`).
                         if value.is_empty() || value.starts_with('/') || value.contains("//") {
                             self.say("the folder name is empty or has an empty part", true);
                         } else {
-                            self.run(format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }), move |r| r.rename_many(kind, &pairs));
+                            self.run(
+                                format!("renamed {n} ref{} to {value}/", if n == 1 { "" } else { "s" }),
+                                move |r| r.rename_many(kind, &pairs),
+                            );
                         }
                     }
                     PromptKind::BranchAt(oid) => {
@@ -548,7 +623,9 @@ impl App {
                     PromptKind::SwitchTo => self.switch_to(value),
                     PromptKind::Amend(old) => {
                         let v = value.clone();
-                        self.run("amended the last commit".to_string(), move |r| if v == old { r.amend(None) } else { r.amend(Some(&v)) });
+                        self.run("amended the last commit".to_string(), move |r| {
+                            if v == old { r.amend(None) } else { r.amend(Some(&v)) }
+                        });
                     }
                 }
             }
@@ -563,7 +640,8 @@ impl App {
     /// Check out what was typed: a ref by its name, the option chosen from the list, or a commit.
     pub(super) fn switch_to(&mut self, typed: String) {
         let typed = typed.trim().to_string();
-        let by = |name: &str| self.branches.iter().find(|b| b.name == name).map(|b| (b.name.clone(), b.kind, b.is_head));
+        let by =
+            |name: &str| self.branches.iter().find(|b| b.name == name).map(|b| (b.name.clone(), b.kind, b.is_head));
         let pick = by(&typed).or_else(|| self.suggest.current().and_then(|s| by(&s)));
         match pick {
             Some((name, _, true)) => self.say(format!("already on {name}"), false),
@@ -580,8 +658,13 @@ impl App {
     }
 
     pub(super) fn confirm_key(&mut self, c: Confirm, key: &KeyEvent) {
-        let again = matches!(c, Confirm::DeleteBranch { .. } | Confirm::DeleteTag(_) | Confirm::DeleteRemote(_) | Confirm::DropStash(_));
-        if !(matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter) || (again && matches!(key.code, KeyCode::Char('d' | 'D')))) {
+        let again = matches!(
+            c,
+            Confirm::DeleteBranch { .. } | Confirm::DeleteTag(_) | Confirm::DeleteRemote(_) | Confirm::DropStash(_)
+        );
+        if !(matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter)
+            || (again && matches!(key.code, KeyCode::Char('d' | 'D'))))
+        {
             return;
         }
         match c {

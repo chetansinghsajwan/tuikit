@@ -113,7 +113,6 @@ fn rgb(r: u8, g: u8, b: u8) -> Hex {
     Hex(Color::Rgb(r, g, b))
 }
 
-
 impl Default for Colors {
     fn default() -> Self {
         Colors {
@@ -155,7 +154,15 @@ impl Default for Chrome {
 
 impl Default for Layout {
     fn default() -> Self {
-        Layout { gap: 0, padding_x: 1, padding_y: 0, sidebar_width: 30, preview_percent: 65, popup_percent: 90, bottom_height: 12 }
+        Layout {
+            gap: 0,
+            padding_x: 1,
+            padding_y: 0,
+            sidebar_width: 30,
+            preview_percent: 65,
+            popup_percent: 90,
+            bottom_height: 12,
+        }
     }
 }
 

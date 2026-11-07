@@ -134,11 +134,18 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
     }
     for r in repo.references().map_err(err)?.all().map_err(err)?.flatten() {
         let mut r = r;
-        if r.name().category().is_some_and(|c| matches!(c, gix::reference::Category::LocalBranch | gix::reference::Category::RemoteBranch | gix::reference::Category::Tag))
-            && let Ok(id) = r.peel_to_id()
-                && repo.find_commit(id.detach()).is_ok() {
-                    tips.push(id.detach());
-                }
+        if r.name().category().is_some_and(|c| {
+            matches!(
+                c,
+                gix::reference::Category::LocalBranch
+                    | gix::reference::Category::RemoteBranch
+                    | gix::reference::Category::Tag
+            )
+        }) && let Ok(id) = r.peel_to_id()
+            && repo.find_commit(id.detach()).is_ok()
+        {
+            tips.push(id.detach());
+        }
     }
     tips.sort();
     tips.dedup();
@@ -231,15 +238,35 @@ fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Si
     for change in list {
         let mode = |m: gix::object::tree::EntryMode| format!("{:o}", m.value());
         let (path, old_path, modes, kind, before, after) = match change {
-            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => (location.to_str_lossy().into_owned(), None, None, Kind::Added, Vec::new(), blob(repo, id)),
-            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => (location.to_str_lossy().into_owned(), None, None, Kind::Deleted, blob(repo, id), Vec::new()),
-            Change::Modification { location, previous_id, id, entry_mode, previous_entry_mode, .. } if entry_mode.is_blob() => {
+            Change::Addition { location, id, entry_mode, .. } if entry_mode.is_blob() => {
+                (location.to_str_lossy().into_owned(), None, None, Kind::Added, Vec::new(), blob(repo, id))
+            }
+            Change::Deletion { location, id, entry_mode, .. } if entry_mode.is_blob() => {
+                (location.to_str_lossy().into_owned(), None, None, Kind::Deleted, blob(repo, id), Vec::new())
+            }
+            Change::Modification { location, previous_id, id, entry_mode, previous_entry_mode, .. }
+                if entry_mode.is_blob() =>
+            {
                 let modes = (previous_entry_mode != entry_mode).then(|| (mode(previous_entry_mode), mode(entry_mode)));
-                (location.to_str_lossy().into_owned(), None, modes, Kind::Modified, blob(repo, previous_id), blob(repo, id))
+                (
+                    location.to_str_lossy().into_owned(),
+                    None,
+                    modes,
+                    Kind::Modified,
+                    blob(repo, previous_id),
+                    blob(repo, id),
+                )
             }
             Change::Rewrite { location, source_location, source_id, id, entry_mode, source_entry_mode, .. } => {
                 let modes = (source_entry_mode != entry_mode).then(|| (mode(source_entry_mode), mode(entry_mode)));
-                (location.to_str_lossy().into_owned(), Some(source_location.to_str_lossy().into_owned()), modes, Kind::Renamed, blob(repo, source_id), blob(repo, id))
+                (
+                    location.to_str_lossy().into_owned(),
+                    Some(source_location.to_str_lossy().into_owned()),
+                    modes,
+                    Kind::Renamed,
+                    blob(repo, source_id),
+                    blob(repo, id),
+                )
             }
             _ => continue, // trees, submodules
         };
@@ -328,7 +355,9 @@ pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     while i < raw.len() {
         // Merge changes whose context would touch or overlap.
         let mut j = i;
-        while j + 1 < raw.len() && (raw[j + 1].before.start as usize).saturating_sub(raw[j].before.end as usize) <= 2 * CONTEXT {
+        while j + 1 < raw.len()
+            && (raw[j + 1].before.start as usize).saturating_sub(raw[j].before.end as usize) <= 2 * CONTEXT
+        {
             j += 1;
         }
         let first = &raw[i];
@@ -379,7 +408,16 @@ pub(crate) fn patch(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Re
         .map(|s| {
             let binary = s.before.contains(&0) || s.after.contains(&0);
             let hunks = if binary { Vec::new() } else { hunks(&s.before, &s.after) };
-            FilePatch { path: s.path, old_path: s.old_path, modes: s.modes, kind: s.kind, binary, hunks, before: full_text(&s.before), after: full_text(&s.after) }
+            FilePatch {
+                path: s.path,
+                old_path: s.old_path,
+                modes: s.modes,
+                kind: s.kind,
+                binary,
+                hunks,
+                before: full_text(&s.before),
+                after: full_text(&s.after),
+            }
         })
         .collect())
 }

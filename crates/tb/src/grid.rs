@@ -187,7 +187,8 @@ impl Grid {
                 return Action::None;
             }
             Mode::Confirm(what) => {
-                let yes = matches!(key.code, KeyCode::Char('d' | 'y') | KeyCode::Enter) && !matches!((what, key.code), (Confirm::Quit, KeyCode::Char('d')));
+                let yes = matches!(key.code, KeyCode::Char('d' | 'y') | KeyCode::Enter)
+                    && !matches!((what, key.code), (Confirm::Quit, KeyCode::Char('d')));
                 let quit_again = matches!((what, key.code), (Confirm::Quit, KeyCode::Char('q')));
                 if yes || quit_again {
                     return self.confirmed(what);
@@ -375,14 +376,23 @@ impl Grid {
     fn widths(&self) -> Vec<usize> {
         (0..self.cols())
             .map(|c| {
-                (0..self.table.row_count().min(MEASURE_ROWS)).map(|r| self.table.value(r, c).replace('\n', " ").width()).max().unwrap_or(0).clamp(MIN_COL, MAX_COL)
+                (0..self.table.row_count().min(MEASURE_ROWS))
+                    .map(|r| self.table.value(r, c).replace('\n', " ").width())
+                    .max()
+                    .unwrap_or(0)
+                    .clamp(MIN_COL, MAX_COL)
             })
             .collect()
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
-        let name = self.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "table".into());
+        let name = self
+            .path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "table".into());
         let title = if self.modified() { format!("{name} [+]") } else { name.clone() };
         let pane = Pane::new(theme).title(&title).icon(ui::icons::file(&name, false)).focused(focused);
         let mut inner = pane.inner(area);
@@ -405,9 +415,20 @@ impl Grid {
                 (Line::from(Span::styled(q, Style::new().fg(c.warning.into()))), None, "")
             }
             Mode::Normal => match &self.message {
-                Some((m, err)) => (Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into()))), None, ""),
+                Some((m, err)) => (
+                    Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into()))),
+                    None,
+                    "",
+                ),
                 None => {
-                    let info = format!("R{} C{}  {} rows × {} cols{}", self.cur.0 + 1, self.cur.1 + 1, self.table.row_count(), self.table.col_count(), if self.modified() { "  modified" } else { "" });
+                    let info = format!(
+                        "R{} C{}  {} rows × {} cols{}",
+                        self.cur.0 + 1,
+                        self.cur.1 + 1,
+                        self.table.row_count(),
+                        self.table.col_count(),
+                        if self.modified() { "  modified" } else { "" }
+                    );
                     (Line::from(Span::styled(info, Style::new().fg(c.muted.into()))), None, "")
                 }
             },
@@ -450,7 +471,11 @@ impl Grid {
         let draw_row = |r: usize, y: u16, buf: &mut Buffer| {
             let is_head = header && r == 0;
             let bar_style = if r == self.cur.0 { ui::list::active(theme) } else { Style::new() };
-            let bar = Rect { y, height: 1, ..Rect { x: inner.x.saturating_sub(1).max(area.x + 1), width: inner.width + 1, ..inner } };
+            let bar = Rect {
+                y,
+                height: 1,
+                ..Rect { x: inner.x.saturating_sub(1).max(area.x + 1), width: inner.width + 1, ..inner }
+            };
             buf.set_style(bar, bar_style);
             buf.set_string(inner.x, y, format!("{:>w$} ", r + 1, w = digits), muted);
             let mut x = inner.x + gutter as u16;
@@ -463,7 +488,11 @@ impl Grid {
                 let text = self.table.value(r, col).replace('\n', "⏎");
                 let room = (inner.right() - x) as usize;
                 let shown = fit(&text, w.min(room), numeric(r, col) && !is_head);
-                let mut style = if is_head { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD) } else { Style::new().fg(c.fg.into()) };
+                let mut style = if is_head {
+                    Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::new().fg(c.fg.into())
+                };
                 if (r, col) == self.cur {
                     style = ui::list::style(theme, true, None).fg(c.fg.into());
                 } else if r == self.cur.0 {

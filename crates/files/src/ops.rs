@@ -164,11 +164,7 @@ pub fn move_progress(src: &Path, dest: &Path, tick: &mut dyn FnMut(u64) -> bool)
 
 /// Delete permanently.
 pub fn remove(path: &Path) -> io::Result<()> {
-    if path.symlink_metadata()?.is_dir() {
-        std::fs::remove_dir_all(path)
-    } else {
-        std::fs::remove_file(path)
-    }
+    if path.symlink_metadata()?.is_dir() { std::fs::remove_dir_all(path) } else { std::fs::remove_file(path) }
 }
 
 /// Move `src` to `dest` (which must not exist); across file systems this copies, then removes.

@@ -4,7 +4,9 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::terminal::{
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use std::fs::OpenOptions;
 use std::io;
 use std::path::PathBuf;
@@ -96,8 +98,12 @@ fn run(cli: Cli) -> io::Result<u8> {
                 Quit::Yes => return Ok(()),
                 Quit::Edit(path) => {
                     leave(&mut term)?;
-                    let editor = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".into());
-                    let status = std::process::Command::new("sh").arg("-c").arg(format!("{editor} {}", ui::popup::quote(&path.to_string_lossy()))).status();
+                    let editor =
+                        std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).unwrap_or_else(|_| "vi".into());
+                    let status = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(format!("{editor} {}", ui::popup::quote(&path.to_string_lossy())))
+                        .status();
                     enter(&mut term)?;
                     app.edited(status.map(|s| s.success()).unwrap_or(false));
                 }

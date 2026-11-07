@@ -38,14 +38,21 @@ impl MacWifi {
     fn saved(&self, iface: &CWInterface) -> Vec<String> {
         let Some(config) = (unsafe { iface.configuration() }) else { return Vec::new() };
         let profiles = unsafe { config.networkProfiles() };
-        (0..profiles.count()).filter_map(|i| unsafe { profiles.objectAtIndex(i).ssid() }).map(|s| s.to_string()).collect()
+        (0..profiles.count())
+            .filter_map(|i| unsafe { profiles.objectAtIndex(i).ssid() })
+            .map(|s| s.to_string())
+            .collect()
     }
 
     fn security_of(n: &CWNetwork) -> Security {
         let supports = |s: CWSecurity| unsafe { n.supportsSecurity(s) };
         if supports(CWSecurity::None) {
             Security::Open
-        } else if supports(CWSecurity::WPAEnterprise) || supports(CWSecurity::WPAEnterpriseMixed) || supports(CWSecurity::WPA2Enterprise) || supports(CWSecurity::WPA3Enterprise) {
+        } else if supports(CWSecurity::WPAEnterprise)
+            || supports(CWSecurity::WPAEnterpriseMixed)
+            || supports(CWSecurity::WPA2Enterprise)
+            || supports(CWSecurity::WPA3Enterprise)
+        {
             Security::Enterprise
         } else if supports(CWSecurity::WEP) || supports(CWSecurity::DynamicWEP) {
             Security::Wep
@@ -74,7 +81,15 @@ impl MacWifi {
             unsafe { n.wlanChannel() }.map(|c| channel_mhz(unsafe { c.channelNumber() } as u32)).unwrap_or(0),
             unsafe { n.bssid() }.map(|b| b.to_string()).unwrap_or_default(),
         );
-        Network { active: active == Some(ssid.as_str()), known: saved.contains(&ssid), security: Self::security_of(n), strength: crate::bluetooth::rssi_percent(rssi), frequency_mhz, bssid, ssid }
+        Network {
+            active: active == Some(ssid.as_str()),
+            known: saved.contains(&ssid),
+            security: Self::security_of(n),
+            strength: crate::bluetooth::rssi_percent(rssi),
+            frequency_mhz,
+            bssid,
+            ssid,
+        }
     }
 }
 
@@ -127,7 +142,11 @@ impl Backend for MacWifi {
 
     fn connect(&self, ssid: &str, password: Option<&str>) -> Result<()> {
         let iface = self.interface()?;
-        let target = self.scanned(&iface, false)?.into_iter().find(|n| unsafe { n.ssid() }.is_some_and(|s| s.to_string() == ssid)).ok_or_else(|| Error(format!("{ssid} is not in range")))?;
+        let target = self
+            .scanned(&iface, false)?
+            .into_iter()
+            .find(|n| unsafe { n.ssid() }.is_some_and(|s| s.to_string() == ssid))
+            .ok_or_else(|| Error(format!("{ssid} is not in range")))?;
         let password = password.map(NSString::from_str);
         unsafe { iface.associateToNetwork_password_error(&target, password.as_deref()) }.map_err(ns_error)
     }
@@ -138,7 +157,9 @@ impl Backend for MacWifi {
     }
 
     fn forget(&self, _ssid: &str) -> Result<()> {
-        Err(Error("forgetting a network needs administrator rights on macOS: use System Settings, Wi-Fi, Advanced".into()))
+        Err(Error(
+            "forgetting a network needs administrator rights on macOS: use System Settings, Wi-Fi, Advanced".into(),
+        ))
     }
 }
 
@@ -157,7 +178,10 @@ impl MacBluetooth {
 
     fn find(&self, address: &str) -> Result<Retained<IOBluetoothDevice>> {
         let wanted = normalize(address);
-        self.paired().into_iter().find(|d| unsafe { d.addressString() }.is_some_and(|a| normalize(&a.to_string()) == wanted)).ok_or_else(|| Error(format!("{address} is not paired")))
+        self.paired()
+            .into_iter()
+            .find(|d| unsafe { d.addressString() }.is_some_and(|a| normalize(&a.to_string()) == wanted))
+            .ok_or_else(|| Error(format!("{address} is not paired")))
     }
 }
 
@@ -193,9 +217,15 @@ fn kind_of(major: u32, minor: u32) -> Kind {
 
 impl Bluetooth for MacBluetooth {
     fn status(&self) -> Result<BtStatus> {
-        let Some(controller) = (unsafe { IOBluetoothHostController::defaultController() }) else { return Ok(BtStatus::default()) };
+        let Some(controller) = (unsafe { IOBluetoothHostController::defaultController() }) else {
+            return Ok(BtStatus::default());
+        };
         // BluetoothHCIPowerState: 1 is on.
-        Ok(BtStatus { adapter: Some("default".into()), powered: unsafe { controller.powerState() }.0 == 1, discovering: false })
+        Ok(BtStatus {
+            adapter: Some("default".into()),
+            powered: unsafe { controller.powerState() }.0 == 1,
+            discovering: false,
+        })
     }
 
     fn devices(&self) -> Result<Vec<Device>> {
@@ -222,7 +252,9 @@ impl Bluetooth for MacBluetooth {
     }
 
     fn scan(&self, _on: bool) -> Result<()> {
-        Err(Error("looking for new devices is not supported on macOS yet: pair them in System Settings, Bluetooth".into()))
+        Err(Error(
+            "looking for new devices is not supported on macOS yet: pair them in System Settings, Bluetooth".into(),
+        ))
     }
 
     fn set_powered(&self, _on: bool) -> Result<()> {

@@ -79,8 +79,17 @@ pub fn render(path: &Path, kind: Kind, theme: &Theme, opts: &Options) -> Result<
     let cap = opts.height.map(|h| usize::from(h).saturating_sub(4).max(3)).unwrap_or(ROW_CAP).min(ROW_CAP);
     let shown_rows: Vec<Vec<String>> = rows.iter().take(cap).cloned().collect();
     let (table, hidden_cols) = crate::markdown::grid_lines(&head, &shown_rows, theme, room);
-    let mut facts = format!("{name} · {} column{}", head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0)), if head.len() == 1 { "" } else { "s" });
-    facts.push_str(&format!(" · {} of {}{} rows", commas(shown_rows.len()), commas(total), if more_than { "+" } else { "" }));
+    let mut facts = format!(
+        "{name} · {} column{}",
+        head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0)),
+        if head.len() == 1 { "" } else { "s" }
+    );
+    facts.push_str(&format!(
+        " · {} of {}{} rows",
+        commas(shown_rows.len()),
+        commas(total),
+        if more_than { "+" } else { "" }
+    ));
     if hidden_cols > 0 {
         facts.push_str(&format!(" · {hidden_cols} column{} not shown", if hidden_cols == 1 { "" } else { "s" }));
     }
@@ -88,7 +97,10 @@ pub fn render(path: &Path, kind: Kind, theme: &Theme, opts: &Options) -> Result<
     out.extend(table.into_iter().map(Line::from));
     if total > shown_rows.len() || more_than {
         let left = total.saturating_sub(shown_rows.len());
-        out.push(Line::from(Span::styled(format!("… {}{} more rows", commas(left), if more_than { "+" } else { "" }), muted.add_modifier(Modifier::ITALIC))));
+        out.push(Line::from(Span::styled(
+            format!("… {}{} more rows", commas(left), if more_than { "+" } else { "" }),
+            muted.add_modifier(Modifier::ITALIC),
+        )));
     }
     if let Some(e) = extra {
         out.push(Line::default());
@@ -109,7 +121,8 @@ fn delimited(path: &Path, delim: Option<u8>) -> Result<Parsed, Error> {
     }
     let text = String::from_utf8_lossy(&buf);
     let d = delim.unwrap_or_else(|| sniff(&text));
-    let mut reader = csv::ReaderBuilder::new().delimiter(d).has_headers(false).flexible(true).from_reader(text.as_bytes());
+    let mut reader =
+        csv::ReaderBuilder::new().delimiter(d).has_headers(false).flexible(true).from_reader(text.as_bytes());
     let mut head: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut total = 0usize;

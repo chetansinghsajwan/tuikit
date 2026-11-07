@@ -15,7 +15,12 @@ fn globs_include_and_exclude_by_comma_list() {
         if let Some(ov) = globs(&d, &o) {
             walk.overrides(ov);
         }
-        let mut v: Vec<String> = walk.build().flatten().filter(|e| e.path().is_file()).map(|e| e.path().strip_prefix(&d).unwrap().to_string_lossy().into_owned()).collect();
+        let mut v: Vec<String> = walk
+            .build()
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .map(|e| e.path().strip_prefix(&d).unwrap().to_string_lossy().into_owned())
+            .collect();
         v.sort();
         v
     };

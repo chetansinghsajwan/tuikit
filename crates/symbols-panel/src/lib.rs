@@ -52,7 +52,9 @@ impl Kind {
     fn color(self, theme: &Theme) -> Color {
         let s = &theme.colors.syntax;
         match self {
-            Kind::Module | Kind::Class | Kind::Struct | Kind::Interface | Kind::Enum | Kind::TypeParameter => s.type_.into(),
+            Kind::Module | Kind::Class | Kind::Struct | Kind::Interface | Kind::Enum | Kind::TypeParameter => {
+                s.type_.into()
+            }
             Kind::Function | Kind::Method | Kind::Constructor => s.function.into(),
             Kind::Field | Kind::Variable => s.variable.into(),
             Kind::Constant => s.constant.into(),
@@ -80,7 +82,10 @@ pub struct Symbol {
 pub enum Action {
     None,
     /// Jump to this 0-based line and column.
-    Goto { line: u32, col: u32 },
+    Goto {
+        line: u32,
+        col: u32,
+    },
     /// Give the keyboard back to the editor.
     Close,
     /// The palette or the help were asked for (hosts that draw them handle these).
@@ -174,14 +179,31 @@ impl Panel {
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         let q = self.filter.to_lowercase();
         let mut rows = Vec::new();
-        fn walk(list: &[Symbol], path: &mut Vec<usize>, depth: usize, folded: &HashSet<Vec<usize>>, q: &str, rows: &mut Vec<Row>) -> bool {
+        fn walk(
+            list: &[Symbol],
+            path: &mut Vec<usize>,
+            depth: usize,
+            folded: &HashSet<Vec<usize>>,
+            q: &str,
+            rows: &mut Vec<Row>,
+        ) -> bool {
             let mut any = false;
             for (i, s) in list.iter().enumerate() {
                 path.push(i);
                 let start = rows.len();
                 let hit = q.is_empty() || s.name.to_lowercase().contains(q);
                 let fold = !q.is_empty() || !folded.contains(path);
-                rows.push(Row { path: path.clone(), depth, name: s.name.clone(), detail: s.detail.clone(), kind: s.kind, line: s.line, col: s.col, end_line: s.end_line, folded: (!s.children.is_empty()).then_some(!fold) });
+                rows.push(Row {
+                    path: path.clone(),
+                    depth,
+                    name: s.name.clone(),
+                    detail: s.detail.clone(),
+                    kind: s.kind,
+                    line: s.line,
+                    col: s.col,
+                    end_line: s.end_line,
+                    folded: (!s.children.is_empty()).then_some(!fold),
+                });
                 let inner = if fold { walk(&s.children, path, depth + 1, folded, q, rows) } else { false };
                 // With a filter a symbol stays when its name or a member matches.
                 if hit || inner {
@@ -195,12 +217,20 @@ impl Panel {
         }
         walk(&self.symbols, &mut Vec::new(), 0, &self.folded, &q, &mut rows);
         self.rows = rows;
-        self.cursor = keep.and_then(|p| self.rows.iter().position(|r| r.path == p)).unwrap_or(self.cursor).min(self.rows.len().saturating_sub(1));
+        self.cursor = keep
+            .and_then(|p| self.rows.iter().position(|r| r.path == p))
+            .unwrap_or(self.cursor)
+            .min(self.rows.len().saturating_sub(1));
     }
 
     /// The row of the innermost symbol that contains `line`.
     fn row_at_line(&self, line: u32) -> Option<usize> {
-        self.rows.iter().enumerate().filter(|(_, r)| r.line <= line && line <= r.end_line.max(r.line)).max_by_key(|(_, r)| (r.depth, r.line)).map(|(i, _)| i)
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.line <= line && line <= r.end_line.max(r.line))
+            .max_by_key(|(_, r)| (r.depth, r.line))
+            .map(|(i, _)| i)
     }
 
     fn set_fold(&mut self, path: Vec<usize>, fold: bool) {
@@ -294,10 +324,11 @@ impl Panel {
             }
             "tree.in" => {
                 if let Some(r) = self.rows.get(self.cursor)
-                    && r.folded == Some(true) {
-                        let p = r.path.clone();
-                        self.set_fold(p, false);
-                    }
+                    && r.folded == Some(true)
+                {
+                    let p = r.path.clone();
+                    self.set_fold(p, false);
+                }
             }
             "item.open" => {
                 if let Some(r) = self.rows.get(self.cursor) {
@@ -331,9 +362,17 @@ impl Panel {
         }
         // The filter prompt or a message takes the last row.
         let footer = match &self.mode {
-            Mode::Filter(input) => Some((ui::prompt::line(theme, "filter: ", input.value()), Some(input.visual_cursor()))),
-            Mode::Normal if !self.filter.is_empty() => Some((Line::from(Span::styled(format!("filter: {}", self.filter), Style::new().fg(c.warning.into()))), None)),
-            Mode::Normal => self.message.as_ref().map(|m| (Line::from(Span::styled(m.clone(), Style::new().fg(c.error.into()))), None)),
+            Mode::Filter(input) => {
+                Some((ui::prompt::line(theme, "filter: ", input.value()), Some(input.visual_cursor())))
+            }
+            Mode::Normal if !self.filter.is_empty() => Some((
+                Line::from(Span::styled(format!("filter: {}", self.filter), Style::new().fg(c.warning.into()))),
+                None,
+            )),
+            Mode::Normal => self
+                .message
+                .as_ref()
+                .map(|m| (Line::from(Span::styled(m.clone(), Style::new().fg(c.error.into()))), None)),
         };
         if let Some((line, cursor)) = footer {
             let row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
@@ -352,10 +391,12 @@ impl Panel {
             return;
         }
         // Without the focus the cursor stays on the symbol the editor's cursor is in.
-        if !focused && !self.is_typing()
-            && let Some(i) = self.following.and_then(|l| self.row_at_line(l)) {
-                self.cursor = i;
-            }
+        if !focused
+            && !self.is_typing()
+            && let Some(i) = self.following.and_then(|l| self.row_at_line(l))
+        {
+            self.cursor = i;
+        }
         self.page = usize::from(inner.height).max(1);
         if self.cursor < self.offset {
             self.offset = self.cursor;
@@ -370,12 +411,26 @@ impl Panel {
                 ui::tree::guides(theme, row.depth),
                 ui::tree::fold_mark(theme, row.folded),
                 Span::styled(format!("{} ", row.kind.glyph()), Style::new().fg(row.kind.color(theme))),
-                Span::styled(row.name.clone(), Style::new().fg(c.fg.into()).add_modifier(if row.folded.is_some() { Modifier::BOLD } else { Modifier::empty() })),
+                Span::styled(
+                    row.name.clone(),
+                    Style::new().fg(c.fg.into()).add_modifier(if row.folded.is_some() {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+                ),
             ];
             if !row.detail.is_empty() {
                 spans.push(Span::styled(format!(" {}", row.detail), Style::new().fg(c.muted.into())));
             }
-            ui::list::ListRow { id: ui::anim::hash_of(&(row.depth, &row.name, row.kind.glyph())), left: spans, selected: at, focused, ..Default::default() }.draw(theme, buf, &geo, y);
+            ui::list::ListRow {
+                id: ui::anim::hash_of(&(row.depth, &row.name, row.kind.glyph())),
+                left: spans,
+                selected: at,
+                focused,
+                ..Default::default()
+            }
+            .draw(theme, buf, &geo, y);
         }
     }
 }

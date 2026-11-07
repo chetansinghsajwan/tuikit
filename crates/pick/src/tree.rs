@@ -104,10 +104,11 @@ pub fn ancestors(rows: &[Row], at: usize) -> Vec<usize> {
             break;
         }
         if let Row::Dir { depth: d, .. } = &rows[i]
-            && *d < need {
-                found.push(i);
-                need = *d;
-            }
+            && *d < need
+        {
+            found.push(i);
+            need = *d;
+        }
     }
     found.reverse();
     found

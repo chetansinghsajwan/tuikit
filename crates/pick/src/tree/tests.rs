@@ -29,7 +29,17 @@ fn shape(t: &Tree) -> Vec<String> {
 
 #[test]
 fn folders_first_items_indented_and_single_chains_merged() {
-    let t = build(vec![e(0, "README.md"), e(1, "src/b.rs"), e(2, "src/a.rs"), e(3, "src/ui/c.rs"), e(4, "docs/guide/x.md"), e(5, "Zed/y.txt")], false);
+    let t = build(
+        vec![
+            e(0, "README.md"),
+            e(1, "src/b.rs"),
+            e(2, "src/a.rs"),
+            e(3, "src/ui/c.rs"),
+            e(4, "docs/guide/x.md"),
+            e(5, "Zed/y.txt"),
+        ],
+        false,
+    );
     assert_eq!(
         shape(&t),
         vec![

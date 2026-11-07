@@ -36,7 +36,8 @@ pub fn topo_order(commits: Vec<CommitInfo>) -> Vec<CommitInfo> {
             }
         }
     }
-    let mut ready: BinaryHeap<(i64, Reverse<usize>)> = (0..commits.len()).filter(|&i| waiting[i] == 0).map(|i| (commits[i].time, Reverse(i))).collect();
+    let mut ready: BinaryHeap<(i64, Reverse<usize>)> =
+        (0..commits.len()).filter(|&i| waiting[i] == 0).map(|i| (commits[i].time, Reverse(i))).collect();
     let mut order = Vec::with_capacity(commits.len());
     while let Some((_, Reverse(i))) = ready.pop() {
         order.push(i);
@@ -93,7 +94,8 @@ pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
     let mut lanes: Vec<Option<String>> = Vec::new();
     let mut rows = Vec::with_capacity(commits.len());
     for c in commits {
-        let incoming: Vec<usize> = lanes.iter().enumerate().filter(|(_, w)| w.as_deref() == Some(c.oid.as_str())).map(|(i, _)| i).collect();
+        let incoming: Vec<usize> =
+            lanes.iter().enumerate().filter(|(_, w)| w.as_deref() == Some(c.oid.as_str())).map(|(i, _)| i).collect();
         let col = match incoming.first() {
             Some(&i) => i,
             None => match lanes.iter().position(Option::is_none) {
@@ -123,7 +125,11 @@ pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
             match lanes.iter().position(|w| w.as_deref() == Some(p.as_str())) {
                 Some(j) => joins.push((j, if j > col { '┤' } else { '├' })),
                 None => {
-                    let j = match lanes.iter().enumerate().position(|(i, w)| w.is_none() && i != col && !incoming.contains(&i)) {
+                    let j = match lanes
+                        .iter()
+                        .enumerate()
+                        .position(|(i, w)| w.is_none() && i != col && !incoming.contains(&i))
+                    {
                         Some(j) => j,
                         None => {
                             lanes.push(None);
@@ -143,7 +149,9 @@ pub fn graph(commits: &[CommitInfo]) -> Vec<GraphRow> {
                 '●'
             } else if let Some(&(_, g)) = joins.iter().find(|(j, _)| *j == i) {
                 g
-            } else if lanes.get(i).is_some_and(Option::is_some) || (incoming.contains(&i) && lanes.get(i).is_some_and(Option::is_some)) {
+            } else if lanes.get(i).is_some_and(Option::is_some)
+                || (incoming.contains(&i) && lanes.get(i).is_some_and(Option::is_some))
+            {
                 '│'
             } else {
                 ' '

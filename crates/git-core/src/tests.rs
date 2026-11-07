@@ -7,7 +7,12 @@ use std::process::Command;
 fn identity() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        for (k, v) in [("GIT_AUTHOR_NAME", "t"), ("GIT_AUTHOR_EMAIL", "t@t"), ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@t")] {
+        for (k, v) in [
+            ("GIT_AUTHOR_NAME", "t"),
+            ("GIT_AUTHOR_EMAIL", "t@t"),
+            ("GIT_COMMITTER_NAME", "t"),
+            ("GIT_COMMITTER_EMAIL", "t@t"),
+        ] {
             // SAFETY: set once, before any test spawns git, to constants.
             unsafe { std::env::set_var(k, v) };
         }
@@ -143,7 +148,17 @@ fn patch_has_hunks_with_context() {
     git(&d, &["add", "."]);
     git(&d, &["commit", "-q", "-m", "base"]);
     // Change line 5 and line 18 (far apart: two hunks), add a file, delete one.
-    let changed: String = (1..=20).map(|n| if n == 5 { "FIVE\n".into() } else if n == 18 { "EIGHTEEN\n".into() } else { format!("{n}\n") }).collect();
+    let changed: String = (1..=20)
+        .map(|n| {
+            if n == 5 {
+                "FIVE\n".into()
+            } else if n == 18 {
+                "EIGHTEEN\n".into()
+            } else {
+                format!("{n}\n")
+            }
+        })
+        .collect();
     fs::write(d.join("long.txt"), changed).unwrap();
     fs::write(d.join("new.txt"), "x\ny\n").unwrap();
     git(&d, &["rm", "-q", "b.txt"]);
@@ -176,7 +191,10 @@ fn patch_has_hunks_with_context() {
 
     let new = file("new.txt");
     assert_eq!(new.hunks.len(), 1);
-    assert_eq!((new.hunks[0].old_start, new.hunks[0].old_len, new.hunks[0].new_start, new.hunks[0].new_len), (0, 0, 1, 2));
+    assert_eq!(
+        (new.hunks[0].old_start, new.hunks[0].old_len, new.hunks[0].new_start, new.hunks[0].new_len),
+        (0, 0, 1, 2)
+    );
     assert!(new.hunks[0].lines.iter().all(|l| l.kind == PatchKind::Added));
     let gone = file("b.txt");
     assert_eq!((gone.kind, gone.hunks[0].new_len), (Kind::Deleted, 0));
@@ -221,11 +239,13 @@ fn diff_file_shows_staged_and_unstaged_sides() {
 
     let staged = r.diff_file(Path::new("a.txt"), Side::Staged).unwrap();
     assert_eq!(staged.kind, Kind::Modified);
-    let adds: Vec<&str> = staged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
+    let adds: Vec<&str> =
+        staged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
     assert_eq!(adds, vec!["THREE"]);
 
     let unstaged = r.diff_file(Path::new("a.txt"), Side::Unstaged).unwrap();
-    let adds: Vec<&str> = unstaged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
+    let adds: Vec<&str> =
+        unstaged.hunks[0].lines.iter().filter(|l| l.kind == PatchKind::Added).map(|l| l.text.as_str()).collect();
     assert_eq!(adds, vec!["six"]);
 
     let untracked = r.diff_file(Path::new("new.txt"), Side::Unstaged).unwrap();
@@ -425,7 +445,17 @@ fn commit_operations_tags_and_amend() {
     git(&d, &["commit", "-qm", "newer"]);
     let before = Repo::discover(&d).unwrap().commits(5).unwrap();
     assert!(before.len() >= 2);
-    let tree = |rev: &str| String::from_utf8(std::process::Command::new("git").current_dir(&d).args(["rev-parse", &format!("{rev}^{{tree}}")]).output().unwrap().stdout).unwrap();
+    let tree = |rev: &str| {
+        String::from_utf8(
+            std::process::Command::new("git")
+                .current_dir(&d)
+                .args(["rev-parse", &format!("{rev}^{{tree}}")])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+    };
     let head_tree = tree("HEAD");
     r.reword_commit(&before[1].oid, "older, reworded").unwrap();
     let after = Repo::discover(&d).unwrap().commits(5).unwrap();
@@ -517,7 +547,10 @@ fn fetch_pull_and_push_against_a_local_remote() {
     r.rename_remote_branch("origin/old-name", "new-name").unwrap();
     r.fetch().unwrap();
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
-    assert!(names.contains(&"origin/new-name".to_string()) && !names.contains(&"origin/old-name".to_string()), "{names:?}");
+    assert!(
+        names.contains(&"origin/new-name".to_string()) && !names.contains(&"origin/old-name".to_string()),
+        "{names:?}"
+    );
     git(&d, &["tag", "t1"]);
     r.rename_tag("t1", "t2").unwrap();
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
@@ -534,7 +567,10 @@ fn fetch_pull_and_push_against_a_local_remote() {
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"origin/new-name".to_string()), "{names:?}");
     assert!(r.rename_remote_branch("origin/new-name", "new-name").is_err());
-    assert!(r.rename_remote_branch("origin/HEAD", "x").is_err() && r.rename_remote_branch("origin/new-name", "bad name").is_err());
+    assert!(
+        r.rename_remote_branch("origin/HEAD", "x").is_err()
+            && r.rename_remote_branch("origin/new-name", "bad name").is_err()
+    );
     assert!(r.rename_branch("main", "-x").is_err());
     // Several at once: all or none.
     git(&d, &["branch", "grp/a"]);
@@ -546,10 +582,19 @@ fn fetch_pull_and_push_against_a_local_remote() {
     assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "same"), pair("grp/b", "same")]).is_err());
     assert!(r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "bad name")]).is_err());
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
-    assert!(names.contains(&"grp/a".to_string()) && names.contains(&"grp/b".to_string()) && !names.contains(&"new/a".to_string()), "{names:?}");
+    assert!(
+        names.contains(&"grp/a".to_string())
+            && names.contains(&"grp/b".to_string())
+            && !names.contains(&"new/a".to_string()),
+        "{names:?}"
+    );
     r.rename_many(RefKind::Branch, &[pair("grp/a", "new/a"), pair("grp/b", "new/b")]).unwrap();
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
-    assert!(names.contains(&"new/a".to_string()) && names.contains(&"new/b".to_string()) && !names.contains(&"grp/a".to_string()));
+    assert!(
+        names.contains(&"new/a".to_string())
+            && names.contains(&"new/b".to_string())
+            && !names.contains(&"grp/a".to_string())
+    );
     r.rename_remote("origin", "upstream").unwrap();
     let names: Vec<String> = Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"upstream/main".to_string()), "{names:?}");

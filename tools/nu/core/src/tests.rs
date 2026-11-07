@@ -1,7 +1,15 @@
 use super::*;
 
 fn net(ssid: &str, strength: u8, active: bool) -> Network {
-    Network { ssid: ssid.into(), strength, security: Security::Psk, active, known: false, frequency_mhz: 2412, bssid: String::new() }
+    Network {
+        ssid: ssid.into(),
+        strength,
+        security: Security::Psk,
+        active,
+        known: false,
+        frequency_mhz: 2412,
+        bssid: String::new(),
+    }
 }
 
 #[test]

@@ -225,7 +225,9 @@ impl Picker {
         if c.buffer.is_some() || c.git.is_some() {
             return None;
         }
-        let split = |p: &str| -> Vec<String> { p.split('/').filter(|s| !s.is_empty() && *s != ".").map(String::from).collect() };
+        let split = |p: &str| -> Vec<String> {
+            p.split('/').filter(|s| !s.is_empty() && *s != ".").map(String::from).collect()
+        };
         if let Some(loc) = &c.loc {
             // A grep match: the file is the folder, its matches the items.
             return Some(crate::tree::Entry { idx, dirs: split(&loc.path), sort: format!("{:010}", loc.line) });
@@ -272,9 +274,10 @@ impl Picker {
             // With nothing typed the list starts at its top: the cursor takes the first row
             // as drawn (folders first), not the first match in path order.
             if self.input.value().is_empty()
-                && let Some(&first) = self.tree.as_ref().and_then(|t| t.order.first()) {
-                    self.cursor = first;
-                }
+                && let Some(&first) = self.tree.as_ref().and_then(|t| t.order.first())
+            {
+                self.cursor = first;
+            }
         }
     }
 
@@ -314,7 +317,13 @@ impl Picker {
         self.nucleo.restart(true);
         self.grep_opts.include = self.include.value().to_string();
         self.grep_opts.exclude = self.exclude.value().to_string();
-        grep::spawn(self.opts.root.clone(), self.input.value().to_string(), self.grep_opts.clone(), self.nucleo.injector(), self.cancel.clone());
+        grep::spawn(
+            self.opts.root.clone(),
+            self.input.value().to_string(),
+            self.grep_opts.clone(),
+            self.nucleo.injector(),
+            self.cancel.clone(),
+        );
         self.cursor = 0;
         self.offset = 0;
         self.tree_dirty = true;
@@ -385,12 +394,13 @@ impl Picker {
         self.refresh_tree();
         // In the hierarchy, Up/Down walk the items in the order they are drawn.
         if let Some(tree) = &self.tree
-            && let Some(&pos) = tree.pos_of.get(&self.cursor) {
-                let last = tree.order.len() as i64 - 1;
-                let to = (pos as i64 + delta).clamp(0, last) as usize;
-                self.cursor = tree.order[to];
-                return;
-            }
+            && let Some(&pos) = tree.pos_of.get(&self.cursor)
+        {
+            let last = tree.order.len() as i64 - 1;
+            let to = (pos as i64 + delta).clamp(0, last) as usize;
+            self.cursor = tree.order[to];
+            return;
+        }
         let n = i64::from(self.matched());
         if n == 0 {
             return;
@@ -407,7 +417,9 @@ impl Picker {
         }
         let ctrl = modifiers.contains(KeyModifiers::CONTROL);
         // `--expect` keys accept and report which key was used.
-        if let Some((name, _)) = self.expect.iter().find(|(_, want)| crate::keys::matches(&KeyEvent::new(*code, *modifiers), want)) {
+        if let Some((name, _)) =
+            self.expect.iter().find(|(_, want)| crate::keys::matches(&KeyEvent::new(*code, *modifiers), want))
+        {
             let name = name.clone();
             let picked: Vec<String> = if self.marked.is_empty() {
                 self.current().map(|c| c.output()).into_iter().collect()

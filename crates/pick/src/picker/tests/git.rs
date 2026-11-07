@@ -31,7 +31,14 @@ fn repo(name: &str) -> PathBuf {
 }
 
 fn picker(root: &std::path::Path, what: GitSource, query: &str) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: false, root: root.to_path_buf(), preview: true, git: false, query: query.into() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: false,
+        root: root.to_path_buf(),
+        preview: true,
+        git: false,
+        query: query.into(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     spawn_git(p.injector(), root.to_path_buf(), what);
     for _ in 0..300 {
@@ -52,7 +59,8 @@ fn enter(p: &mut Picker) -> Action {
 fn refs_list_branches_and_tags_and_print_names() {
     let d = repo("refs");
     let mut p = picker(&d, GitSource::Refs, "");
-    let names: Vec<String> = p.nucleo.snapshot().matched_items(..).map(|i| i.data.git.as_ref().unwrap().name.clone()).collect();
+    let names: Vec<String> =
+        p.nucleo.snapshot().matched_items(..).map(|i| i.data.git.as_ref().unwrap().name.clone()).collect();
     assert_eq!(names, vec!["main".to_string(), "v1".to_string()]);
     assert_eq!(enter(&mut p), Action::Accept(vec!["main".into()])); // head branch is first
 }
@@ -81,8 +89,12 @@ fn commits_print_full_hash_and_preview_shows_the_commit() {
     let area = Rect::new(0, 0, 100, 16);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default());
-    let text: String = (0..16).map(|y| (0..100).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-    assert!(text.contains("add the second line") && text.contains("·") && text.contains("1 file") && text.contains("+1"), "{text}");
+    let text: String =
+        (0..16).map(|y| (0..100).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    assert!(
+        text.contains("add the second line") && text.contains("·") && text.contains("1 file") && text.contains("+1"),
+        "{text}"
+    );
 }
 
 #[test]

@@ -50,4 +50,3 @@ pub(crate) fn head_blob(repo: &gix::Repository, rela: &Path) -> Option<Vec<u8>> 
     let entry = tree.lookup_entry_by_path(rela).ok()??;
     Some(entry.object().ok()?.detach().data)
 }
-

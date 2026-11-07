@@ -3,9 +3,9 @@
 //! the changed words of a changed line marked stronger, trailing whitespace on added lines and conflict markers
 //! called out, and a side-by-side layout when there is room.
 
+use crate::Options;
 use crate::git::{self, PatchKind};
 use crate::text::{syntax_set, syntax_theme};
-use crate::Options;
 use git_core::{FilePatch, Hunk};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -85,7 +85,21 @@ const BIG_FILE: usize = 400;
 
 fn folds_by_itself(f: &FilePatch, changed: usize) -> bool {
     let name = f.path.rsplit('/').next().unwrap_or(&f.path);
-    let generated = ["Cargo.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "flake.lock", "poetry.lock", "go.sum", "composer.lock", "Gemfile.lock"].contains(&name) || name.ends_with(".min.js") || name.ends_with(".min.css") || name.ends_with(".map");
+    let generated = [
+        "Cargo.lock",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "flake.lock",
+        "poetry.lock",
+        "go.sum",
+        "composer.lock",
+        "Gemfile.lock",
+    ]
+    .contains(&name)
+        || name.ends_with(".min.js")
+        || name.ends_with(".min.css")
+        || name.ends_with(".map");
     generated || changed > BIG_FILE
 }
 
@@ -147,7 +161,11 @@ fn highlight_window(text: &str, path: &str, theme: &Theme, from: usize, upto: us
     let mut hl = HighlightLines::new(syntax, &theme);
     let mut out: Vec<Vec<(Style, String)>> = vec![Vec::new(); start];
     for (n, line) in LinesWithEndings::from(text).enumerate().skip(start).take(upto.saturating_sub(start)) {
-        let spent = BUDGET.with(|b| { let left = b.get(); b.set(left.saturating_sub(1)); left == 0 });
+        let spent = BUDGET.with(|b| {
+            let left = b.get();
+            b.set(left.saturating_sub(1));
+            left == 0
+        });
         if spent || line.len() > LONG_LINE {
             out.push(Vec::new());
             continue;
@@ -200,7 +218,22 @@ fn is_conflict_marker(line: &str) -> bool {
 /// The line a hunk sits in, like git's `@@ ... @@ fn name`: the nearest line above `from` (0-based) that starts a
 /// function, a type, a section, or any line starting at column 0 with a letter, `_` or `$`.
 fn context_of(lines: &[&str], from: usize) -> Option<String> {
-    const KEYWORDS: [&str; 14] = ["fn ", "pub fn ", "async fn ", "def ", "class ", "func ", "function ", "impl ", "struct ", "enum ", "trait ", "interface ", "public ", "private "];
+    const KEYWORDS: [&str; 14] = [
+        "fn ",
+        "pub fn ",
+        "async fn ",
+        "def ",
+        "class ",
+        "func ",
+        "function ",
+        "impl ",
+        "struct ",
+        "enum ",
+        "trait ",
+        "interface ",
+        "public ",
+        "private ",
+    ];
     let upto = from.min(lines.len());
     for line in lines[..upto].iter().rev() {
         let trimmed = line.trim_start();
@@ -221,7 +254,14 @@ fn context_of(lines: &[&str], from: usize) -> Option<String> {
 
 /// The cells of one code line: the syntax colours of `pieces`, the `strong` byte ranges on a stronger background,
 /// tabs spread over four columns; `bg` is the row tint.
-fn cells_of(text: &str, pieces: Option<&[(Style, String)]>, strong: &[Range<usize>], bg: Option<Color>, strong_bg: Color, base: Style) -> Vec<Cell> {
+fn cells_of(
+    text: &str,
+    pieces: Option<&[(Style, String)]>,
+    strong: &[Range<usize>],
+    bg: Option<Color>,
+    strong_bg: Color,
+    base: Style,
+) -> Vec<Cell> {
     let mut out = Vec::new();
     let mut offset = 0usize;
     let push = |c: char, at: usize, style: Style, out: &mut Vec<Cell>| {
@@ -290,9 +330,10 @@ fn spans_of(cells: &[Cell], width: Option<usize>, fill: Option<Color>) -> Vec<Sp
         return out;
     }
     if let (Some(max), Some(bg)) = (width, fill)
-        && used < max {
-            out.push(Span::styled(" ".repeat(max - used), Style::new().bg(bg)));
-        }
+        && used < max
+    {
+        out.push(Span::styled(" ".repeat(max - used), Style::new().bg(bg)));
+    }
     out
 }
 
@@ -317,12 +358,21 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
     let whole = !file.before.is_empty() || !file.after.is_empty();
     let (old_hl, new_hl) = if whole {
         let (os, ns) = (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize);
-        (highlight_window(&file.before, &file.path, theme, os, os + h.old_len as usize), highlight_window(&file.after, &file.path, theme, ns, ns + h.new_len as usize))
+        (
+            highlight_window(&file.before, &file.path, theme, os, os + h.old_len as usize),
+            highlight_window(&file.after, &file.path, theme, ns, ns + h.new_len as usize),
+        )
     } else {
         (Vec::new(), Vec::new())
     };
-    let (hunk_old, hunk_new) = if whole { (Vec::new(), Vec::new()) } else { let (o, n) = hunk_sides(h); (highlight(&o, &file.path, theme, usize::MAX), highlight(&n, &file.path, theme, usize::MAX)) };
-    let (mut old_idx, mut new_idx) = if whole { (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize) } else { (0, 0) };
+    let (hunk_old, hunk_new) = if whole {
+        (Vec::new(), Vec::new())
+    } else {
+        let (o, n) = hunk_sides(h);
+        (highlight(&o, &file.path, theme, usize::MAX), highlight(&n, &file.path, theme, usize::MAX))
+    };
+    let (mut old_idx, mut new_idx) =
+        if whole { (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize) } else { (0, 0) };
     let (mut old_no, mut new_no) = (h.old_start, h.new_start);
 
     // Word-level marks for each run of removed lines followed by added lines, paired in order.
@@ -374,13 +424,29 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
                 r
             }
             PatchKind::Removed => {
-                let r = (PatchKind::Removed, Some(old_no), None, old_side(old_idx), Some(del_bg), &marks[k].0[..], ui::mix(del, c.bg.into(), 42));
+                let r = (
+                    PatchKind::Removed,
+                    Some(old_no),
+                    None,
+                    old_side(old_idx),
+                    Some(del_bg),
+                    &marks[k].0[..],
+                    ui::mix(del, c.bg.into(), 42),
+                );
                 old_no += 1;
                 old_idx += 1;
                 r
             }
             PatchKind::Added => {
-                let r = (PatchKind::Added, None, Some(new_no), new_side(new_idx), Some(add_bg), &marks[k].1[..], ui::mix(add, c.bg.into(), 42));
+                let r = (
+                    PatchKind::Added,
+                    None,
+                    Some(new_no),
+                    new_side(new_idx),
+                    Some(add_bg),
+                    &marks[k].1[..],
+                    ui::mix(add, c.bg.into(), 42),
+                );
                 new_no += 1;
                 new_idx += 1;
                 r
@@ -453,7 +519,10 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
             continue;
         }
         if folded {
-            out.push(Line::from(Span::styled(format!("  {} lines changed, folded (fold key opens it)", added + removed), muted)));
+            out.push(Line::from(Span::styled(
+                format!("  {} lines changed, folded (fold key opens it)", added + removed),
+                muted,
+            )));
             continue;
         }
         let after_lines: Vec<&str> = f.after.lines().collect();
@@ -469,9 +538,11 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
                 context_of(&before_lines, h.old_start.saturating_sub(1) as usize)
             };
             // Where the change is, by name when there is one: the numbers are in the gutter below.
-            let mut header = vec![Span::styled(format!("  ⋯ line {}", h.new_start.max(1)), Style::new().fg(c.info.into()))];
+            let mut header =
+                vec![Span::styled(format!("  ⋯ line {}", h.new_start.max(1)), Style::new().fg(c.info.into()))];
             if let Some(ctx) = context {
-                header.push(Span::styled(format!("  {ctx}"), Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD)));
+                header
+                    .push(Span::styled(format!("  {ctx}"), Style::new().fg(c.fg.into()).add_modifier(Modifier::BOLD)));
             }
             out.push(Line::from(header));
             let rows = hunk_rows(h, f, theme);
@@ -492,7 +563,14 @@ pub fn render(files: &[FilePatch], theme: &Theme, opts: &Options, limit: usize) 
 
 /// A file's header: one tinted bar across the pane with the fold mark, the state letter, the folder muted and the
 /// file name bold (`old → new` for a rename), and the counts at the right edge, so files stand out while scrolling.
-pub(crate) fn file_bar(f: &FilePatch, folded: bool, added: usize, removed: usize, width: Option<usize>, theme: &Theme) -> Line<'static> {
+pub(crate) fn file_bar(
+    f: &FilePatch,
+    folded: bool,
+    added: usize,
+    removed: usize,
+    width: Option<usize>,
+    theme: &Theme,
+) -> Line<'static> {
     let c = &theme.colors;
     let bar_bg = ui::mix(c.accent.into(), c.bg.into(), 16);
     let kind_color = git::kind_color(theme, f.kind);
@@ -503,7 +581,10 @@ pub(crate) fn file_bar(f: &FilePatch, folded: bool, added: usize, removed: usize
     };
     let mut spans = vec![
         Span::styled(if folded { "▸ " } else { "▾ " }, muted),
-        Span::styled(format!("{} ", crate::commit::sign(f.kind)), Style::new().fg(kind_color).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{} ", crate::commit::sign(f.kind)),
+            Style::new().fg(kind_color).add_modifier(Modifier::BOLD),
+        ),
     ];
     if let Some(old) = &f.old_path {
         spans.push(Span::styled(format!("{old} → "), muted));
@@ -516,7 +597,11 @@ pub(crate) fn file_bar(f: &FilePatch, folded: bool, added: usize, removed: usize
     let counts = if f.binary {
         vec![Span::styled("binary", muted)]
     } else {
-        vec![Span::styled(format!("+{added}"), Style::new().fg(c.git.added.into())), Span::raw(" "), Span::styled(format!("−{removed}"), Style::new().fg(c.git.deleted.into()))]
+        vec![
+            Span::styled(format!("+{added}"), Style::new().fg(c.git.added.into())),
+            Span::raw(" "),
+            Span::styled(format!("−{removed}"), Style::new().fg(c.git.deleted.into())),
+        ]
     };
     let used: usize = spans.iter().chain(counts.iter()).map(|s| s.content.width()).sum();
     if let Some(w) = width {
@@ -581,7 +666,10 @@ fn side_rows(rows: &[Row], digits: usize, width: usize, theme: &Theme, out: &mut
             PatchKind::Added => ('+', c.git.added),
             PatchKind::Removed => ('-', c.git.deleted),
         };
-        let mut head = vec![Span::styled(n, Style::new().fg(c.muted.into())), Span::styled(format!("{sign} "), Style::new().fg(color.into()))];
+        let mut head = vec![
+            Span::styled(n, Style::new().fg(c.muted.into())),
+            Span::styled(format!("{sign} "), Style::new().fg(color.into())),
+        ];
         if let Some(bg) = r.bg {
             head.iter_mut().for_each(|s| s.style = s.style.bg(bg));
         }

@@ -57,7 +57,13 @@ impl App {
         }
         self.author_w = AUTHOR_COL;
         // Every column has one width, whatever the commits are: the refs column too (when any commit has a ref).
-        self.refs_need = self.commits.iter().filter_map(|k| self.labels.get(&k.oid)).map(|l| pills(l).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>()).max().unwrap_or(0);
+        self.refs_need = self
+            .commits
+            .iter()
+            .filter_map(|k| self.labels.get(&k.oid))
+            .map(|l| pills(l).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>())
+            .max()
+            .unwrap_or(0);
         self.refs_w = self.refs_need.min(REFS_COL);
         self.stashes = self.repo.stashes().unwrap_or_default();
         self.build_ref_rows(keep);

@@ -34,7 +34,11 @@ pub fn unquote(raw: &str) -> String {
 
 /// Cell text as it is written: quoted when it has the delimiter, a quote or a line break.
 pub fn quote(value: &str, delim: char) -> String {
-    if value.contains([delim, '"', '\n', '\r']) { format!("\"{}\"", value.replace('"', "\"\"")) } else { value.to_string() }
+    if value.contains([delim, '"', '\n', '\r']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
 }
 
 impl Table {
@@ -163,7 +167,10 @@ impl Table {
         let skip = usize::from(header).min(self.rows.len());
         let body = &mut self.rows[skip..];
         body.sort_by(|a, b| {
-            let (x, y) = (unquote(a.get(col).map(String::as_str).unwrap_or("")), unquote(b.get(col).map(String::as_str).unwrap_or("")));
+            let (x, y) = (
+                unquote(a.get(col).map(String::as_str).unwrap_or("")),
+                unquote(b.get(col).map(String::as_str).unwrap_or("")),
+            );
             match (x.is_empty(), y.is_empty()) {
                 (true, true) => return Ordering::Equal,
                 (true, false) => return Ordering::Greater,

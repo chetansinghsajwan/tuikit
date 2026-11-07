@@ -23,7 +23,8 @@ impl App {
         // The filters in force, on a row of their own above the list.
         if which == Focus::Commits && self.filter.active() {
             let c = &theme.colors;
-            let mut spans = vec![Span::styled("filter ", Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))];
+            let mut spans =
+                vec![Span::styled("filter ", Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))];
             for (i, (what, value)) in self.filter.parts().into_iter().enumerate() {
                 if i > 0 {
                     spans.push(Span::styled("  ·  ", Style::new().fg(c.muted.into())));
@@ -58,7 +59,15 @@ impl App {
         for (row, i) in (offset..(offset + page).min(n)).enumerate() {
             let y = inner.y + row as u16;
             let (left, right) = self.row(which, i, theme);
-            ui::list::ListRow { left: left.spans, right: vec![Span::raw(right)], min_left: 12, selected: i == cursor, focused, ..Default::default() }.draw(theme, buf, &rows, y);
+            ui::list::ListRow {
+                left: left.spans,
+                right: vec![Span::raw(right)],
+                min_left: 12,
+                selected: i == cursor,
+                focused,
+                ..Default::default()
+            }
+            .draw(theme, buf, &rows, y);
         }
     }
 
@@ -107,7 +116,14 @@ impl App {
                 let accent = Style::new().fg(c.accent.into());
                 match &self.ref_rows[i] {
                     RefRow::Section { key, label, count } => {
-                        let mut spans = ui::tree::group(theme, 0, self.folded.contains(key), None, label, accent.add_modifier(Modifier::BOLD));
+                        let mut spans = ui::tree::group(
+                            theme,
+                            0,
+                            self.folded.contains(key),
+                            None,
+                            label,
+                            accent.add_modifier(Modifier::BOLD),
+                        );
                         spans.push(ui::tree::count(theme, *count));
                         (Line::from(spans), String::new())
                     }
@@ -126,14 +142,23 @@ impl App {
                             fg
                         };
                         // Indentation guides, like the files tree: a thin line at each level.
-                        (Line::from(vec![ui::tree::guides(theme, *depth), Span::styled(name.clone(), style)]), ago(b.time))
+                        (
+                            Line::from(vec![ui::tree::guides(theme, *depth), Span::styled(name.clone(), style)]),
+                            ago(b.time),
+                        )
                     }
                 }
             }
             Focus::Commits => {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
-                let who = if self.cols.author_name { let mut n: String = k.author.chars().take(self.author_w).collect(); n.push_str(&" ".repeat(self.author_w.saturating_sub(n.chars().count()))); n } else { format!("{:<2}", initials(&k.author)) };
+                let who = if self.cols.author_name {
+                    let mut n: String = k.author.chars().take(self.author_w).collect();
+                    n.push_str(&" ".repeat(self.author_w.saturating_sub(n.chars().count())));
+                    n
+                } else {
+                    format!("{:<2}", initials(&k.author))
+                };
                 let author = Span::styled(format!("{who} "), Style::new().fg(author_color(theme, &k.author)));
                 let hit = self.commit_matches(i);
                 let mut spans = Vec::new();
@@ -146,7 +171,16 @@ impl App {
                     spans.push(author);
                 }
                 if self.cols.hash {
-                    spans.push(Span::styled(format!("{:<w$} ", k.short, w = HASH_W), if self.compare.as_deref() == Some(k.oid.as_str()) { Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD | Modifier::UNDERLINED) } else { muted }));
+                    spans.push(Span::styled(
+                        format!("{:<w$} ", k.short, w = HASH_W),
+                        if self.compare.as_deref() == Some(k.oid.as_str()) {
+                            Style::new()
+                                .fg(theme.colors.accent.into())
+                                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+                        } else {
+                            muted
+                        },
+                    ));
                 }
                 if self.cols.refs && self.refs_w > 0 {
                     let mut used = 0;
@@ -169,7 +203,10 @@ impl App {
                 }
                 if !self.cols.subject {
                 } else if hit {
-                    spans.push(Span::styled(k.subject.clone(), Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD)));
+                    spans.push(Span::styled(
+                        k.subject.clone(),
+                        Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD),
+                    ));
                 } else {
                     spans.extend(ui::subject::spans(theme, &k.subject, fg));
                 }
@@ -184,7 +221,10 @@ impl App {
             }
             _ => {
                 let s = &self.stashes[i];
-                (Line::from(vec![Span::styled(format!("{} ", s.index), muted), Span::styled(s.message.clone(), fg)]), ago(s.time))
+                (
+                    Line::from(vec![Span::styled(format!("{} ", s.index), muted), Span::styled(s.message.clone(), fg)]),
+                    ago(s.time),
+                )
             }
         }
     }
@@ -193,7 +233,12 @@ impl App {
     pub(in crate::app) fn graph_spans(&self, row: &git_core::GraphRow, theme: &Theme) -> Vec<Span<'static>> {
         let c = &theme.colors;
         let palette = [c.accent, c.success, c.warning, c.info, c.error, c.git.renamed];
-        let mut spans: Vec<Span<'static>> = row.cells.iter().take(self.graph_w).map(|(ch, lane)| Span::styled(ch.to_string(), Style::new().fg(palette[lane % palette.len()].into()))).collect();
+        let mut spans: Vec<Span<'static>> = row
+            .cells
+            .iter()
+            .take(self.graph_w)
+            .map(|(ch, lane)| Span::styled(ch.to_string(), Style::new().fg(palette[lane % palette.len()].into())))
+            .collect();
         let used = spans.len();
         spans.push(Span::raw(" ".repeat(self.graph_w.saturating_sub(used) + 1)));
         spans

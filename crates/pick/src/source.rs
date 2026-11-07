@@ -65,7 +65,13 @@ pub fn spawn_dirs(inj: Injector<Candidate>, root: PathBuf) {
 
 fn walk(inj: Injector<Candidate>, root: PathBuf, files: bool, dirs: bool, max_depth: Option<usize>) {
     thread::spawn(move || {
-        for entry in ignore::WalkBuilder::new(&root).hidden(false).max_depth(max_depth).filter_entry(|e| e.file_name() != ".git").build().flatten() {
+        for entry in ignore::WalkBuilder::new(&root)
+            .hidden(false)
+            .max_depth(max_depth)
+            .filter_entry(|e| e.file_name() != ".git")
+            .build()
+            .flatten()
+        {
             let Some(ft) = entry.file_type() else { continue };
             if entry.depth() == 0 || !((files && ft.is_file()) || (dirs && ft.is_dir())) {
                 continue;
@@ -113,12 +119,26 @@ pub fn spawn_git(inj: Injector<Candidate>, root: PathBuf, what: GitSource) {
                         RefKind::Remote => GitKind::Remote,
                         RefKind::Tag => GitKind::Tag,
                     };
-                    push(Candidate::git_item(GitItem { kind, name: r.name, oid: r.oid, subject: r.subject, time: r.time, is_head: r.is_head }));
+                    push(Candidate::git_item(GitItem {
+                        kind,
+                        name: r.name,
+                        oid: r.oid,
+                        subject: r.subject,
+                        time: r.time,
+                        is_head: r.is_head,
+                    }));
                 }
             }
             GitSource::Commits => {
                 for c in repo.commits(MAX_COMMITS).unwrap_or_default() {
-                    push(Candidate::git_item(GitItem { kind: GitKind::Commit, name: c.short, oid: c.oid, subject: c.subject, time: c.time, is_head: false }));
+                    push(Candidate::git_item(GitItem {
+                        kind: GitKind::Commit,
+                        name: c.short,
+                        oid: c.oid,
+                        subject: c.subject,
+                        time: c.time,
+                        is_head: false,
+                    }));
                 }
             }
             GitSource::Stashes => {

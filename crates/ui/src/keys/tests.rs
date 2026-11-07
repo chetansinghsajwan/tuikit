@@ -72,7 +72,8 @@ fn the_menu_lists_what_can_follow_with_group_names() {
     m.feed(&k(' '));
     let menu = m.menu().unwrap();
     assert_eq!(menu.title, "Quick Keys");
-    let shown: Vec<(&str, &str, bool)> = menu.entries.iter().map(|e| (e.key.as_str(), e.name.as_str(), e.group)).collect();
+    let shown: Vec<(&str, &str, bool)> =
+        menu.entries.iter().map(|e| (e.key.as_str(), e.name.as_str(), e.group)).collect();
     assert_eq!(shown, vec![("f", "find", false), ("v", "view", true)]);
     m.feed(&k('v'));
     let menu = m.menu().unwrap();
@@ -119,7 +120,8 @@ fn rows_and_help_list_every_action_with_its_keys() {
     let mut buf = Buffer::empty(area);
     let mut help = Help::default();
     help.render(area, &mut buf, &Theme::default(), "Keys", &rows);
-    let text: String = (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String =
+        (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
     assert!(text.contains("Keys") && text.contains("space v c") && text.contains("toggle hidden files"), "{text}");
     let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     assert!(help.key(&k('j')) && !help.key(&esc));
@@ -132,8 +134,12 @@ fn the_popup_draws_the_title_and_the_entries() {
     let area = Rect::new(0, 0, 40, 10);
     let mut buf = Buffer::empty(area);
     render_menu(area, &mut buf, &Theme::default(), &m.menu().unwrap());
-    let text: String = (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-    assert!(text.contains("Quick Keys") && text.contains("find") && text.contains("view") && text.contains('▸'), "{text}");
+    let text: String =
+        (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    assert!(
+        text.contains("Quick Keys") && text.contains("find") && text.contains("view") && text.contains('▸'),
+        "{text}"
+    );
 }
 
 #[test]
@@ -144,7 +150,9 @@ fn help_search_filters_rows_and_esc_clears_before_closing() {
     let text = |h: &mut Help| {
         let mut buf = Buffer::empty(area);
         h.render(area, &mut buf, &Theme::default(), "Keys", &rows);
-        (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect::<String>()
+        (0..24)
+            .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
+            .collect::<String>()
     };
     let mut help = Help::default();
     assert!(text(&mut help).contains("/ to search"));

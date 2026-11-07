@@ -1,9 +1,9 @@
 //! The BlueZ backend: Bluetooth over its D-Bus API (`org.bluez`). Adapters and devices are
 //! objects under `/org/bluez`, listed with the ObjectManager at `/`.
 
+use crate::Error;
 use crate::Result;
 use crate::bluetooth::{Bluetooth, BtStatus, Device, Kind, sort};
-use crate::Error;
 use std::collections::HashMap;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
@@ -64,7 +64,11 @@ impl BlueZ {
 
     /// The first adapter: its path, interface name and properties.
     fn adapter(&self) -> Result<Option<(OwnedObjectPath, Props)>> {
-        let mut found: Vec<(OwnedObjectPath, Props)> = self.managed()?.into_iter().filter_map(|(p, mut ifaces)| ifaces.remove(IF_ADAPTER).map(|props| (p, props))).collect();
+        let mut found: Vec<(OwnedObjectPath, Props)> = self
+            .managed()?
+            .into_iter()
+            .filter_map(|(p, mut ifaces)| ifaces.remove(IF_ADAPTER).map(|props| (p, props)))
+            .collect();
         found.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         Ok(found.into_iter().next())
     }
@@ -87,11 +91,20 @@ impl Bluetooth for BlueZ {
     fn status(&self) -> Result<BtStatus> {
         let Some((path, props)) = self.adapter()? else { return Ok(BtStatus::default()) };
         let name = path.as_str().rsplit('/').next().unwrap_or("").to_string();
-        Ok(BtStatus { adapter: Some(name), powered: get(&props, "Powered").unwrap_or(false), discovering: get(&props, "Discovering").unwrap_or(false) })
+        Ok(BtStatus {
+            adapter: Some(name),
+            powered: get(&props, "Powered").unwrap_or(false),
+            discovering: get(&props, "Discovering").unwrap_or(false),
+        })
     }
 
     fn devices(&self) -> Result<Vec<Device>> {
-        let mut out: Vec<Device> = self.managed()?.into_values().filter_map(|mut ifaces| ifaces.remove(IF_DEVICE)).filter_map(|props| device_of(&props)).collect();
+        let mut out: Vec<Device> = self
+            .managed()?
+            .into_values()
+            .filter_map(|mut ifaces| ifaces.remove(IF_DEVICE))
+            .filter_map(|props| device_of(&props))
+            .collect();
         // Devices BlueZ remembers only because they were seen once and are neither paired nor in range are noise.
         out.retain(|d| d.paired || d.connected || d.rssi.is_some());
         sort(&mut out);

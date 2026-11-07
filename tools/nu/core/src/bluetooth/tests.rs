@@ -16,7 +16,13 @@ fn kinds_come_from_icons() {
 
 #[test]
 fn sort_puts_connected_then_paired_then_strongest_first() {
-    let mut v = vec![dev("far", false, false, Some(-90)), dev("near", false, false, Some(-50)), dev("known", true, false, None), dev("live", true, true, Some(-70)), dev("alpha", false, false, None)];
+    let mut v = vec![
+        dev("far", false, false, Some(-90)),
+        dev("near", false, false, Some(-50)),
+        dev("known", true, false, None),
+        dev("live", true, true, Some(-70)),
+        dev("alpha", false, false, None),
+    ];
     sort(&mut v);
     assert_eq!(v.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), vec!["live", "known", "near", "far", "alpha"]);
 }

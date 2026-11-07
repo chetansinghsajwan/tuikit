@@ -100,9 +100,9 @@ impl Status {
 }
 
 pub(crate) fn compute(repo: &gix::Repository) -> Result<Status, Error> {
+    use gix::status::Item;
     use gix::status::index_worktree::Item as Iw;
     use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
-    use gix::status::Item;
 
     let mut out = Status::default();
     let iter = repo

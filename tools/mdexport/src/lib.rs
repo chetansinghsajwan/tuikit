@@ -51,7 +51,16 @@ pub fn typst_source(markdown: &str, base: Option<&Path>) -> String {
 
 /// `typst_source` with these settings.
 pub fn typst_source_with(markdown: &str, base: Option<&Path>, settings: &Settings) -> String {
-    let mut t = Typst { out: String::new(), base, lists: Vec::new(), notes: HashMap::new(), stack: Vec::new(), image_alt: None, image_src: String::new(), skip: 0 };
+    let mut t = Typst {
+        out: String::new(),
+        base,
+        lists: Vec::new(),
+        notes: HashMap::new(),
+        stack: Vec::new(),
+        image_alt: None,
+        image_src: String::new(),
+        skip: 0,
+    };
     t.run(markdown);
     format!("{}{}", preamble(settings), t.out)
 }
@@ -175,12 +184,18 @@ impl Typst<'_> {
         let root = base.canonicalize().ok()?;
         file.strip_prefix(&root).ok()?;
         let rel = file.strip_prefix(&root).ok()?;
-        matches!(rel.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("png" | "jpg" | "jpeg" | "gif" | "svg" | "webp")).then(|| format!("/{}", rel.to_string_lossy()))
+        matches!(
+            rel.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
+            Some("png" | "jpg" | "jpeg" | "gif" | "svg" | "webp")
+        )
+        .then(|| format!("/{}", rel.to_string_lossy()))
     }
 
     fn event(&mut self, event: Event) {
         if self.skip > 0 {
-            if let Event::End(TagEnd::MetadataBlock(_)) = event { self.skip -= 1 }
+            if let Event::End(TagEnd::MetadataBlock(_)) = event {
+                self.skip -= 1
+            }
             return;
         }
         match event {
@@ -207,7 +222,10 @@ impl Typst<'_> {
                         CodeBlockKind::Fenced(l) => l.split([' ', ',', '{']).next().unwrap_or("").to_string(),
                         CodeBlockKind::Indented => String::new(),
                     };
-                    self.out.push_str(&format!("#raw(block: true, lang: {}, ", if lang.is_empty() { "none".to_string() } else { string(&lang) }));
+                    self.out.push_str(&format!(
+                        "#raw(block: true, lang: {}, ",
+                        if lang.is_empty() { "none".to_string() } else { string(&lang) }
+                    ));
                     self.out.push('\u{2}');
                 }
                 Tag::List(start) => self.lists.push(start),
@@ -236,7 +254,11 @@ impl Typst<'_> {
                 }
                 Tag::Table(aligns) => {
                     let list: Vec<&str> = aligns.iter().map(align).collect();
-                    self.out.push_str(&format!("#table(columns: {}, align: ({},), stroke: 0.5pt + luma(180), inset: 6pt,\n", aligns.len().max(1), list.join(", ")));
+                    self.out.push_str(&format!(
+                        "#table(columns: {}, align: ({},), stroke: 0.5pt + luma(180), inset: 6pt,\n",
+                        aligns.len().max(1),
+                        list.join(", ")
+                    ));
                 }
                 Tag::TableHead => self.out.push_str("table.header("),
                 Tag::TableRow => {}
@@ -280,7 +302,9 @@ impl Typst<'_> {
                     let src = std::mem::take(&mut self.image_src);
                     match self.image_path(&src) {
                         Some(path) => self.out.push_str(&format!("#box(image({}, width: 80%))", string(&path))),
-                        None => self.out.push_str(&escape(&format!("[image: {}]", if alt.is_empty() { src } else { alt }))),
+                        None => {
+                            self.out.push_str(&escape(&format!("[image: {}]", if alt.is_empty() { src } else { alt })))
+                        }
                     }
                 }
                 TagEnd::Table => self.out.push_str(")\n\n"),
@@ -317,7 +341,9 @@ impl Typst<'_> {
                 }
             }
             Event::InlineMath(t) => self.out.push_str(&format!("#emph(raw({}))", string(&t))),
-            Event::DisplayMath(t) => self.out.push_str(&format!("\n#align(center, emph(raw({})))\n\n", string(t.trim()))),
+            Event::DisplayMath(t) => {
+                self.out.push_str(&format!("\n#align(center, emph(raw({})))\n\n", string(t.trim())))
+            }
             Event::FootnoteReference(name) => self.out.push_str(&format!("\u{1}{name}\u{1}")),
             Event::Html(_) | Event::InlineHtml(_) => {}
             Event::SoftBreak => self.out.push(' '),

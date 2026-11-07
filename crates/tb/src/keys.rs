@@ -30,7 +30,12 @@ pub const ACTIONS: &[Action] = &[
     action("col.right", "move column right", "move the column one right", &["L", "leader c l"]),
     action("sort.asc", "sort ascending", "sort the rows by this column (numbers as numbers)", &["s"]),
     action("sort.desc", "sort descending", "sort the rows by this column, largest first", &["S"]),
-    action("view.header", "toggle header", "the first row is a header: it stays on top and is not sorted", &["leader t h"]),
+    action(
+        "view.header",
+        "toggle header",
+        "the first row is a header: it stays on top and is not sorted",
+        &["leader t h"],
+    ),
     action("find.start", "find", "jump to the next cell containing the text", &["/"]),
     action("find.next", "next match", "jump to the next match", &["n"]),
     action("find.prev", "previous match", "jump to the previous match", &["N"]),
@@ -42,7 +47,8 @@ pub const ACTIONS: &[Action] = &[
     basic("quit", "quit", "close the editor (asks when there are unsaved changes)", &["q", "ctrl-c"]),
 ];
 
-pub const GROUPS: &[Group] = &[Group { prefix: "leader c", name: "column" }, Group { prefix: "leader t", name: "table" }];
+pub const GROUPS: &[Group] =
+    &[Group { prefix: "leader c", name: "column" }, Group { prefix: "leader t", name: "table" }];
 
 #[cfg(test)]
 mod tests;

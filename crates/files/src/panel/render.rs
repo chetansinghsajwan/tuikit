@@ -6,11 +6,7 @@ impl Panel {
     pub(super) fn git_state(&self, row: &Row) -> Option<(char, Kind)> {
         let (repo, status) = self.git.as_ref()?;
         let rela = repo.relative(&row.path)?;
-        if row.is_dir {
-            status.dir(&rela).map(|k| (k.letter(), k))
-        } else {
-            status.get(&rela)?.sign()
-        }
+        if row.is_dir { status.dir(&rela).map(|k| (k.letter(), k)) } else { status.get(&rela)?.sign() }
     }
 
     /// Every state beneath a folder, most serious first (a file has one sign, see `git_state`).
@@ -28,7 +24,8 @@ impl Panel {
             return;
         }
         let mut running = self.dir_sizes.values().filter(|d| !d.state().1).count();
-        let visible: Vec<PathBuf> = self.visible().into_iter().map(|i| &self.rows[i]).filter(|r| r.is_dir).map(|r| r.path.clone()).collect();
+        let visible: Vec<PathBuf> =
+            self.visible().into_iter().map(|i| &self.rows[i]).filter(|r| r.is_dir).map(|r| r.path.clone()).collect();
         for p in visible {
             if running >= 3 {
                 break;
@@ -42,7 +39,11 @@ impl Panel {
 
     /// The folder sizes of the visible rows and how far each count is.
     pub(super) fn size_signature(&self) -> Vec<(PathBuf, (u64, bool))> {
-        self.visible().into_iter().map(|i| &self.rows[i]).filter_map(|r| self.dir_sizes.get(&r.path).map(|d| (r.path.clone(), d.state()))).collect()
+        self.visible()
+            .into_iter()
+            .map(|i| &self.rows[i])
+            .filter_map(|r| self.dir_sizes.get(&r.path).map(|d| (r.path.clone(), d.state())))
+            .collect()
     }
 
     /// Call between events: starts more folder counts and says whether something on
@@ -65,9 +66,7 @@ impl Panel {
     pub(super) fn footer(&self, theme: &Theme) -> Option<Line<'static>> {
         let c = &theme.colors;
         match &self.mode {
-            Mode::Prompt(kind, input) => {
-                Some(ui::prompt::line(theme, Self::prompt_label(kind), input.value()))
-            }
+            Mode::Prompt(kind, input) => Some(ui::prompt::line(theme, Self::prompt_label(kind), input.value())),
             Mode::Confirm(kind, targets) => {
                 let what = if targets.len() == 1 {
                     targets[0].file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
@@ -75,7 +74,10 @@ impl Panel {
                     format!("{} items", targets.len())
                 };
                 let verb = if *kind == ConfirmKind::Trash { "Trash" } else { "Delete permanently" };
-                Some(Line::from(Span::styled(format!("{verb} {what}? ({} again, Esc cancels)", kind.confirm_key()), Style::new().fg(c.warning.into()))))
+                Some(Line::from(Span::styled(
+                    format!("{verb} {what}? ({} again, Esc cancels)", kind.confirm_key()),
+                    Style::new().fg(c.warning.into()),
+                )))
             }
             Mode::Bookmark(op) => {
                 let verb = match op {
@@ -85,14 +87,19 @@ impl Panel {
                 };
                 let mut spans = vec![Span::styled(format!("{verb}: "), Style::new().fg(c.accent.into()))];
                 for (k, p) in self.bookmarks.iter() {
-                    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string());
+                    let name = p
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| p.display().to_string());
                     spans.push(Span::styled(format!("{k}"), Style::new().fg(c.warning.into())));
                     spans.push(Span::styled(format!(" {name}  "), Style::new().fg(c.muted.into())));
                 }
                 Some(Line::from(spans))
             }
             Mode::Normal if self.job.is_some() => self.job_line(theme),
-            Mode::Normal => self.message.as_ref().map(|(m, err)| Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into())))),
+            Mode::Normal => self.message.as_ref().map(|(m, err)| {
+                Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into())))
+            }),
         }
     }
 
@@ -102,7 +109,11 @@ impl Panel {
         let c = &theme.colors;
         let title = self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
         let icon = ui::icons::dir(&title, true);
-        let shown = if self.ignored_hidden > 0 { format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden) } else { title.clone() };
+        let shown = if self.ignored_hidden > 0 {
+            format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden)
+        } else {
+            title.clone()
+        };
         let pane = Pane::new(theme).title(&shown).icon(icon).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
@@ -160,7 +171,11 @@ impl Panel {
                 }
                 let mut text = String::new();
                 if matches!(mode, Linemode::Full | Linemode::SizeTime) {
-                    let size = if row.is_dir { sizes.get(&row.path).map(|d| meta::size_cell(d.state())).unwrap_or_default() } else { meta::size_short(row.size) };
+                    let size = if row.is_dir {
+                        sizes.get(&row.path).map(|d| meta::size_cell(d.state())).unwrap_or_default()
+                    } else {
+                        meta::size_short(row.size)
+                    };
                     text.push_str(&format!("{size:>5} "));
                 }
                 text.push_str(&format!("{:>8}", meta::time_relative(row.modified)));
@@ -206,4 +221,3 @@ impl Panel {
         self.sizes_shown = self.size_signature();
     }
 }
-

@@ -45,7 +45,10 @@ pub(super) enum PromptKind {
     RenameTag(String),
     RenameRemoteBranch(String),
     RenameRemote(String),
-    RenameFolder { kind: RefKind, prefix: String },
+    RenameFolder {
+        kind: RefKind,
+        prefix: String,
+    },
     /// A branch at this commit.
     BranchAt(String),
     /// A tag at this commit.
@@ -59,12 +62,18 @@ pub(super) enum PromptKind {
 }
 
 pub(super) enum Confirm {
-    DeleteBranch { name: String, force: bool },
+    DeleteBranch {
+        name: String,
+        force: bool,
+    },
     Merge(String),
     DropStash(usize),
     Rebase(String),
     Revert(String),
-    Reset { oid: String, mode: ResetMode },
+    Reset {
+        oid: String,
+        mode: ResetMode,
+    },
     ForcePush,
     /// Delete a tag.
     DeleteTag(String),
@@ -98,10 +107,23 @@ pub(super) enum Mode {
 /// A row of the Refs tree: a section (Branches, Remotes, Tags), a folder (`feature/`, `origin/`) or a ref.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum RefRow {
-    Section { key: String, label: &'static str, count: usize },
-    Folder { key: String, name: String, depth: usize, count: usize },
+    Section {
+        key: String,
+        label: &'static str,
+        count: usize,
+    },
+    Folder {
+        key: String,
+        name: String,
+        depth: usize,
+        count: usize,
+    },
     /// `index` into `branches`; `name` is the last path part.
-    Item { index: usize, name: String, depth: usize },
+    Item {
+        index: usize,
+        name: String,
+        depth: usize,
+    },
 }
 
 /// Which columns of the Commits table show (`v` menu).
@@ -119,7 +141,15 @@ pub(super) struct Columns {
 
 impl Default for Columns {
     fn default() -> Self {
-        Columns { hash: true, author: true, author_name: false, refs: true, subject: true, rel_time: true, abs_time: false }
+        Columns {
+            hash: true,
+            author: true,
+            author_name: false,
+            refs: true,
+            subject: true,
+            rel_time: true,
+            abs_time: false,
+        }
     }
 }
 
@@ -163,9 +193,23 @@ impl FileNode {
 }
 
 impl CommitFiles {
-    pub(super) fn new(oid: String, short: String, subject: String, mut changes: Vec<git_core::FileChange>) -> CommitFiles {
+    pub(super) fn new(
+        oid: String,
+        short: String,
+        subject: String,
+        mut changes: Vec<git_core::FileChange>,
+    ) -> CommitFiles {
         changes.sort_by(|a, b| a.path.cmp(&b.path));
-        let mut cf = CommitFiles { oid, short, subject, changes, rows: Vec::new(), cursor: 0, offset: 0, folded: Default::default() };
+        let mut cf = CommitFiles {
+            oid,
+            short,
+            subject,
+            changes,
+            rows: Vec::new(),
+            cursor: 0,
+            offset: 0,
+            folded: Default::default(),
+        };
         cf.rebuild();
         cf
     }
@@ -183,9 +227,16 @@ impl CommitFiles {
             node.files.push(c.clone());
         }
         let mut rows = Vec::new();
-        fn push(node: &FileNode, prefix: &str, depth: usize, folded: &std::collections::HashSet<String>, rows: &mut Vec<FileRow>) {
+        fn push(
+            node: &FileNode,
+            prefix: &str,
+            depth: usize,
+            folded: &std::collections::HashSet<String>,
+            rows: &mut Vec<FileRow>,
+        ) {
             for (name, child) in &node.dirs {
-                let (mut label, mut child, mut path) = (name.clone(), child, if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") });
+                let (mut label, mut child, mut path) =
+                    (name.clone(), child, if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") });
                 // A folder with nothing but one folder in it joins it: `src/lib`.
                 while child.files.is_empty() && child.dirs.len() == 1 {
                     let (n, c) = child.dirs.iter().next().expect("one folder");
@@ -194,7 +245,13 @@ impl CommitFiles {
                     child = c;
                 }
                 let is_folded = folded.contains(&path);
-                rows.push(FileRow::Folder { path: path.clone(), label, depth, count: child.count(), folded: is_folded });
+                rows.push(FileRow::Folder {
+                    path: path.clone(),
+                    label,
+                    depth,
+                    count: child.count(),
+                    folded: is_folded,
+                });
                 if !is_folded {
                     push(child, &path, depth + 1, folded, rows);
                 }
@@ -205,7 +262,10 @@ impl CommitFiles {
         }
         push(&root, "", 0, &self.folded, &mut rows);
         self.rows = rows;
-        self.cursor = keep.and_then(|p| self.rows.iter().position(|r| r.path() == p)).unwrap_or(self.cursor).min(self.rows.len().saturating_sub(1));
+        self.cursor = keep
+            .and_then(|p| self.rows.iter().position(|r| r.path() == p))
+            .unwrap_or(self.cursor)
+            .min(self.rows.len().saturating_sub(1));
     }
 
     pub(super) fn move_by(&mut self, delta: isize) {
@@ -235,7 +295,11 @@ pub(super) struct Filter {
 
 impl Filter {
     pub(super) fn active(&self) -> bool {
-        !self.text.is_empty() || !self.authors.is_empty() || !self.branches.is_empty() || !self.categories.is_empty() || self.since.is_some()
+        !self.text.is_empty()
+            || !self.authors.is_empty()
+            || !self.branches.is_empty()
+            || !self.categories.is_empty()
+            || self.since.is_some()
     }
 
     /// The parts that are set, as `(what, value)` for the filter bar and the popup.
@@ -262,7 +326,8 @@ impl Filter {
     pub(super) fn keeps(&self, c: &CommitInfo) -> bool {
         (self.text.is_empty() || c.message.to_lowercase().contains(&self.text.to_lowercase()))
             && (self.authors.is_empty() || self.authors.iter().any(|a| a.eq_ignore_ascii_case(&c.author)))
-            && (self.categories.is_empty() || ui::subject::category_word(&c.subject).is_some_and(|w| self.categories.contains(&w)))
+            && (self.categories.is_empty()
+                || ui::subject::category_word(&c.subject).is_some_and(|w| self.categories.contains(&w)))
             && self.since.as_ref().is_none_or(|(_, t)| c.time >= *t)
     }
 }
@@ -271,12 +336,23 @@ impl Filter {
 pub(super) fn parse_since(text: &str, now: i64) -> Option<i64> {
     let text = text.trim();
     let (digits, unit) = text.split_at(text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len()));
-    if let (Ok(n), Some(secs)) = (digits.parse::<i64>(), match unit { "d" => Some(86_400), "w" => Some(7 * 86_400), "m" => Some(30 * 86_400), "y" => Some(365 * 86_400), _ => None }) {
+    if let (Ok(n), Some(secs)) = (
+        digits.parse::<i64>(),
+        match unit {
+            "d" => Some(86_400),
+            "w" => Some(7 * 86_400),
+            "m" => Some(30 * 86_400),
+            "y" => Some(365 * 86_400),
+            _ => None,
+        },
+    ) {
         return Some(now - n * secs);
     }
     // A date: days since 1970-01-01 by the civil-calendar formula.
     let mut it = text.split('-').map(|p| p.parse::<i64>());
-    let (Some(Ok(y)), Some(Ok(m)), Some(Ok(d)), None) = (it.next(), it.next(), it.next(), it.next()) else { return None };
+    let (Some(Ok(y)), Some(Ok(m)), Some(Ok(d)), None) = (it.next(), it.next(), it.next(), it.next()) else {
+        return None;
+    };
     if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
         return None;
     }
@@ -300,4 +376,3 @@ pub(super) struct Preview {
     /// Where the files and hunks of the patch start (for the jump keys).
     pub(super) anchors: pv::Anchors,
 }
-

@@ -72,7 +72,16 @@ impl Repo {
             }
         };
         let binary = before.contains(&0) || after.contains(&0);
-        Ok(FilePatch { path: rela.to_string_lossy().into_owned(), old_path: None, modes: None, kind, binary, hunks: if binary { Vec::new() } else { hunks(&before, &after) }, before: crate::history::full_text(&before), after: crate::history::full_text(&after) })
+        Ok(FilePatch {
+            path: rela.to_string_lossy().into_owned(),
+            old_path: None,
+            modes: None,
+            kind,
+            binary,
+            hunks: if binary { Vec::new() } else { hunks(&before, &after) },
+            before: crate::history::full_text(&before),
+            after: crate::history::full_text(&after),
+        })
     }
 
     /// The checked-out branch, or `None` on a detached HEAD.
@@ -121,7 +130,11 @@ impl Repo {
     }
 
     pub fn unstage_all(&self) -> Result<(), Error> {
-        if self.has_head() { self.git(&["reset", "-q"], &[]).map(|_| ()) } else { self.git(&["rm", "-r", "--cached", "-q", "."], &[]).map(|_| ()) }
+        if self.has_head() {
+            self.git(&["reset", "-q"], &[]).map(|_| ())
+        } else {
+            self.git(&["rm", "-r", "--cached", "-q", "."], &[]).map(|_| ())
+        }
     }
 
     /// Throw away work-tree changes: tracked files are restored from the index,
@@ -166,7 +179,12 @@ impl Repo {
 
     /// Put the work tree and index changes on the stash (`message` may be empty).
     pub fn stash_push(&self, message: &str) -> Result<(), Error> {
-        if message.trim().is_empty() { self.git(&["stash", "push"], &[]) } else { self.git(&["stash", "push", "-m", message], &[]) }.map(|_| ())
+        if message.trim().is_empty() {
+            self.git(&["stash", "push"], &[])
+        } else {
+            self.git(&["stash", "push", "-m", message], &[])
+        }
+        .map(|_| ())
     }
 
     /// Apply stash entry `index` and keep it.
@@ -189,7 +207,11 @@ impl Repo {
     /// (keys in an agent still work).
     fn git_net(&self, args: &[&str]) -> Result<String, Error> {
         let base = std::env::var("GIT_SSH_COMMAND").ok().or_else(|| {
-            let out = Command::new("git").current_dir(&self.root).args(["config", "--get", "core.sshCommand"]).output().ok()?;
+            let out = Command::new("git")
+                .current_dir(&self.root)
+                .args(["config", "--get", "core.sshCommand"])
+                .output()
+                .ok()?;
             let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
             (!s.is_empty()).then_some(s)
         });
@@ -269,7 +291,9 @@ impl Repo {
         if name.starts_with('-') {
             return Err(Error(format!("\"{name}\" is not a valid branch name")));
         }
-        self.git(&["check-ref-format", &format!("refs/heads/{name}")], &[]).map(|_| ()).map_err(|_| Error(format!("\"{name}\" is not a valid branch name")))
+        self.git(&["check-ref-format", &format!("refs/heads/{name}")], &[])
+            .map(|_| ())
+            .map_err(|_| Error(format!("\"{name}\" is not a valid branch name")))
     }
 
     /// Whether `name` is usable as a tag name.
@@ -277,7 +301,9 @@ impl Repo {
         if name.starts_with('-') {
             return Err(Error(format!("\"{name}\" is not a valid tag name")));
         }
-        self.git(&["check-ref-format", &format!("refs/tags/{name}")], &[]).map(|_| ()).map_err(|_| Error(format!("\"{name}\" is not a valid tag name")))
+        self.git(&["check-ref-format", &format!("refs/tags/{name}")], &[])
+            .map(|_| ())
+            .map_err(|_| Error(format!("\"{name}\" is not a valid tag name")))
     }
 
     /// Rename a tag: a new tag at the same commit with the same message (an annotated tag is made again; its
@@ -304,12 +330,19 @@ impl Repo {
     /// Rename several branches (or tags) at once, all or none: every new name is checked first (valid, not taken, not
     /// used twice), and if one rename fails the ones already done are undone.
     pub fn rename_many(&self, kind: RefKind, pairs: &[(String, String)]) -> Result<(), Error> {
-        let rename = |old: &str, new: &str| if kind == RefKind::Tag { self.rename_tag(old, new) } else { self.rename_branch(old, new) };
-        let taken: std::collections::HashSet<String> = self.refs()?.into_iter().filter(|r| r.kind == kind).map(|r| r.name).collect();
+        let rename = |old: &str, new: &str| {
+            if kind == RefKind::Tag { self.rename_tag(old, new) } else { self.rename_branch(old, new) }
+        };
+        let taken: std::collections::HashSet<String> =
+            self.refs()?.into_iter().filter(|r| r.kind == kind).map(|r| r.name).collect();
         let leaving: std::collections::HashSet<&str> = pairs.iter().map(|(old, _)| old.as_str()).collect();
         let mut news = std::collections::HashSet::new();
         for (_, new) in pairs {
-            if kind == RefKind::Tag { self.check_tag_name(new)? } else { self.check_branch_name(new)? }
+            if kind == RefKind::Tag {
+                self.check_tag_name(new)?
+            } else {
+                self.check_branch_name(new)?
+            }
             if !news.insert(new.as_str()) {
                 return Err(Error(format!("\"{new}\" would be used twice")));
             }
@@ -338,7 +371,8 @@ impl Repo {
 
     /// Rename a branch on its remote (`origin/old` to `new`: push the commit under the new name, then delete the old one).
     pub fn rename_remote_branch(&self, remote_ref: &str, new: &str) -> Result<(), Error> {
-        let (remote, old) = remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
+        let (remote, old) =
+            remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
         if old == "HEAD" {
             return Err(Error("origin/HEAD is not a branch".into()));
         }
@@ -366,7 +400,8 @@ impl Repo {
 
     /// Delete a branch on its remote (`origin/topic` runs `git push origin --delete topic`).
     pub fn delete_remote_branch(&self, remote_ref: &str) -> Result<(), Error> {
-        let (remote, branch) = remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
+        let (remote, branch) =
+            remote_ref.split_once('/').ok_or_else(|| Error(format!("{remote_ref} is not a remote branch")))?;
         self.git_net(&["push", remote, "--delete", branch]).map(|_| ())
     }
 
@@ -433,17 +468,27 @@ impl Repo {
         if target == head {
             return self.reword(message);
         }
-        self.git(&["merge-base", "--is-ancestor", &target, &head], &[]).map_err(|_| Error("that commit is not on the checked-out history".into()))?;
+        self.git(&["merge-base", "--is-ancestor", &target, &head], &[])
+            .map_err(|_| Error("that commit is not on the checked-out history".into()))?;
         let mut chain = vec![target.clone()];
-        chain.extend(self.git(&["rev-list", "--reverse", "--topo-order", "--ancestry-path", &format!("{target}..{head}")], &[])?.lines().map(str::to_string));
+        chain.extend(
+            self.git(&["rev-list", "--reverse", "--topo-order", "--ancestry-path", &format!("{target}..{head}")], &[])?
+                .lines()
+                .map(str::to_string),
+        );
         let mut done: std::collections::HashMap<String, String> = Default::default();
         for c in &chain {
-            let info = self.git(&["show", "-s", "--date=raw", "--format=%T%n%P%n%an%n%ae%n%ad%n%cn%n%ce%n%cd", c], &[])?;
+            let info =
+                self.git(&["show", "-s", "--date=raw", "--format=%T%n%P%n%an%n%ae%n%ad%n%cn%n%ce%n%cd", c], &[])?;
             let mut f = info.lines();
             let mut next = || f.next().unwrap_or("").to_string();
             let (tree, parents) = (next(), next());
             let (an, ae, ad, cn, ce, cd) = (next(), next(), next(), next(), next(), next());
-            let body = if *c == target { message.to_string() } else { self.git(&["show", "-s", "--format=%B", c], &[])?.trim_end().to_string() };
+            let body = if *c == target {
+                message.to_string()
+            } else {
+                self.git(&["show", "-s", "--format=%B", c], &[])?.trim_end().to_string()
+            };
             let mut cmd = Command::new("git");
             cmd.current_dir(&self.root).args(["commit-tree", &tree]);
             for p in parents.split_whitespace() {
@@ -460,7 +505,14 @@ impl Repo {
                 .output()
                 .map_err(err)?;
             if !out.status.success() {
-                return Err(Error(String::from_utf8_lossy(&out.stderr).trim().lines().last().unwrap_or("commit-tree failed").to_string()));
+                return Err(Error(
+                    String::from_utf8_lossy(&out.stderr)
+                        .trim()
+                        .lines()
+                        .last()
+                        .unwrap_or("commit-tree failed")
+                        .to_string(),
+                ));
             }
             done.insert(c.clone(), String::from_utf8_lossy(&out.stdout).trim().to_string());
         }
@@ -485,7 +537,8 @@ impl Repo {
     }
 
     fn git_dir(&self) -> Option<PathBuf> {
-        let out = Command::new("git").current_dir(&self.root).args(["rev-parse", "--absolute-git-dir"]).output().ok()?;
+        let out =
+            Command::new("git").current_dir(&self.root).args(["rev-parse", "--absolute-git-dir"]).output().ok()?;
         out.status.success().then(|| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
     }
 

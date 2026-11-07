@@ -1,7 +1,14 @@
 use super::*;
 
 fn item(path: &str, line: u32, sev: Severity, msg: &str) -> Item {
-    Item { path: PathBuf::from("/ws").join(path), line, col: 3, severity: sev, message: msg.into(), source: Some("lsp".into()) }
+    Item {
+        path: PathBuf::from("/ws").join(path),
+        line,
+        col: 3,
+        severity: sev,
+        message: msg.into(),
+        source: Some("lsp".into()),
+    }
 }
 
 fn key(c: KeyCode) -> Event {
@@ -22,7 +29,9 @@ fn draw(p: &mut Panel) -> Vec<String> {
     let area = Rect::new(0, 0, 70, 14);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default(), true);
-    (0..14).map(|y| (0..70).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string()).collect()
+    (0..14)
+        .map(|y| (0..70).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+        .collect()
 }
 
 #[test]
@@ -32,7 +41,12 @@ fn groups_by_file_sorted_by_path_then_line_with_counts_in_the_title() {
     let l = draw(&mut p);
     let pos = |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
     assert!(l[0].contains("diagnostics: 2 errors, 1 warning"), "{}", l[0]);
-    assert!(pos("README.md") < pos("a note") && pos("a note") < pos("src/a.rs") && pos("src/a.rs") < pos("2:3") && pos("2:3") < pos("5:3"));
+    assert!(
+        pos("README.md") < pos("a note")
+            && pos("a note") < pos("src/a.rs")
+            && pos("src/a.rs") < pos("2:3")
+            && pos("2:3") < pos("5:3")
+    );
     assert!(pos("5:3") < pos("src/b.rs") && pos("src/b.rs") < pos("4:3") && pos("4:3") < pos("20:3"));
     // Only the first line of a message shows; the source follows it.
     assert!(l[pos("4:3")].contains("mismatched types") && !l.iter().any(|r| r.contains("expected u32")));
@@ -67,7 +81,10 @@ fn the_filter_cycles_and_the_cursor_stays_on_the_same_problem() {
     assert!(matches!(p.handle_event(&key(KeyCode::Enter)), Action::Open { line: 20, .. }));
     p.handle_event(&key(KeyCode::Char('f'))); // errors + warnings: the hint and the note vanish
     let l = draw(&mut p);
-    assert!(l[0].contains("[errors + warnings]") && !l.iter().any(|r| r.contains("a note") || r.contains("let")), "{l:#?}");
+    assert!(
+        l[0].contains("[errors + warnings]") && !l.iter().any(|r| r.contains("a note") || r.contains("let")),
+        "{l:#?}"
+    );
     assert!(matches!(p.handle_event(&key(KeyCode::Enter)), Action::Open { line: 20, .. }), "same problem");
     p.handle_event(&key(KeyCode::Char('f'))); // errors only: the warning is gone, the cursor lands on a neighbor
     let l = draw(&mut p);

@@ -60,13 +60,17 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let base = base_dir.or_else(|| input.parent().map(|p| if p.as_os_str().is_empty() { PathBuf::from(".") } else { p.to_path_buf() }));
+    let base = base_dir.or_else(|| {
+        input.parent().map(|p| if p.as_os_str().is_empty() { PathBuf::from(".") } else { p.to_path_buf() })
+    });
     if typst {
         print!("{}", mdexport::typst_source_with(&text, base.as_deref(), &s));
         return ExitCode::SUCCESS;
     }
     let out = output.unwrap_or_else(|| if stdin { PathBuf::from("out.pdf") } else { input.with_extension("pdf") });
-    match mdexport::to_pdf(&text, &Export { base, settings: s }).and_then(|pdf| std::fs::write(&out, pdf).map_err(|e| e.to_string())) {
+    match mdexport::to_pdf(&text, &Export { base, settings: s })
+        .and_then(|pdf| std::fs::write(&out, pdf).map_err(|e| e.to_string()))
+    {
         Ok(()) => {
             println!("{}", out.display());
             ExitCode::SUCCESS

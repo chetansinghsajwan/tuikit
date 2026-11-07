@@ -68,20 +68,37 @@ impl App {
         }
         let geo = ui::list::Rows::new(area, inner);
         let counts = ui::tree::CountWidths::of(cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))));
-        let depths: Vec<usize> = cf.rows.iter().map(|r| match r { FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth }).collect();
+        let depths: Vec<usize> = cf
+            .rows
+            .iter()
+            .map(|r| match r {
+                FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
+            })
+            .collect();
         let scope = ui::tree::active_scope(&depths, cf.cursor);
         for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
             let y = inner.y + (n - cf.offset) as u16;
             let selected = n == cf.cursor;
             let file_row = match row {
-                FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), ..Default::default() },
+                FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow {
+                    depth: *depth,
+                    name: label,
+                    is_dir: true,
+                    open: !*folded,
+                    count: Some(*count),
+                    ..Default::default()
+                },
                 FileRow::File { change, depth } => {
                     let color = pv::kind_color(theme, change.kind);
                     // The line counts in aligned columns, left of the sign (when there is room for them).
                     let trailing = if inner.width < 30 {
                         Vec::new()
                     } else {
-                        let mut t = ui::tree::line_counts(theme, (!change.binary).then_some((change.added, change.removed)), counts);
+                        let mut t = ui::tree::line_counts(
+                            theme,
+                            (!change.binary).then_some((change.added, change.removed)),
+                            counts,
+                        );
                         t.push(Span::raw(" "));
                         t
                     };
@@ -95,7 +112,18 @@ impl App {
                     }
                 }
             };
-            ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { selected, focused: true, active_guide: scope.and_then(|s| s.col_at(n)), ..file_row });
+            ui::tree::file_row(
+                theme,
+                buf,
+                &geo,
+                y,
+                &ui::tree::FileRow {
+                    selected,
+                    focused: true,
+                    active_guide: scope.and_then(|s| s.col_at(n)),
+                    ..file_row
+                },
+            );
         }
     }
 

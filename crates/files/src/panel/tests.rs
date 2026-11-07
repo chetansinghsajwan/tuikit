@@ -32,7 +32,18 @@ fn names(p: &Panel) -> Vec<String> {
 }
 
 fn panel(d: &Path) -> Panel {
-    Panel::new(d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() })
+    Panel::new(
+        d,
+        PanelOptions {
+            hidden: false,
+            git: false,
+            linemode: Linemode::Off,
+            bookmarks: None,
+            background_bytes: None,
+            leader: "space".into(),
+            actions: Vec::new(),
+        },
+    )
 }
 
 #[test]
@@ -41,7 +52,17 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
     let _ = fs::remove_dir_all(&d);
     fs::create_dir_all(d.join("src")).unwrap();
     let git = |args: &[&str]| {
-        assert!(std::process::Command::new("git").args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]).args(args).current_dir(&d).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_SYSTEM", "/dev/null").status().unwrap().success());
+        assert!(
+            std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+                .args(args)
+                .current_dir(&d)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .status()
+                .unwrap()
+                .success()
+        );
     };
     git(&["init", "-q", "-b", "main"]);
     fs::write(d.join("src/a.rs"), "a\n").unwrap();
@@ -52,12 +73,24 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
     fs::remove_file(d.join("src/b.rs")).unwrap();
     fs::write(d.join("src/c.rs"), "new\n").unwrap();
     let d = d.canonicalize().unwrap();
-    let p = &mut Panel::new(&d, PanelOptions { hidden: false, git: true, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
+    let p = &mut Panel::new(
+        &d,
+        PanelOptions {
+            hidden: false,
+            git: true,
+            linemode: Linemode::Off,
+            bookmarks: None,
+            background_bytes: None,
+            leader: "space".into(),
+            actions: Vec::new(),
+        },
+    );
     let theme = Theme::default();
     for _ in 0..5 {
         let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
         p.render(Rect::new(0, 0, 40, 10), &mut buf, &theme, true);
-        let text: Vec<String> = (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+        let text: Vec<String> =
+            (0..10).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
         assert!(text.iter().any(|l| l.contains("src") && l.contains("D M ?")), "{text:#?}");
         p.refresh();
     }
@@ -95,7 +128,10 @@ fn wanted_width_fits_the_longest_name_on_screen() {
     // Given that width the name is drawn whole.
     let mut wide = Buffer::empty(Rect::new(0, 0, want, 12));
     p.render(Rect::new(0, 0, want, 12), &mut wide, &theme, true);
-    let text: String = (0..12).map(|y| (0..want).map(|x| wide[(x, y)].symbol().to_string()).collect::<String>()).collect::<Vec<_>>().join("\n");
+    let text: String = (0..12)
+        .map(|y| (0..want).map(|x| wide[(x, y)].symbol().to_string()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(text.contains(long), "{text}");
 }
 
@@ -155,15 +191,17 @@ fn reveal_expands_to_the_file_and_refresh_keeps_the_cursor() {
 fn respects_gitignore_and_shows_git_state() {
     let d = tree("git");
     let git = |args: &[&str]| {
-        assert!(Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
-            .args(args)
-            .current_dir(&d)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_SYSTEM", "/dev/null")
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
+                .args(args)
+                .current_dir(&d)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .status()
+                .unwrap()
+                .success()
+        );
     };
     git(&["init", "-q", "-b", "main"]);
     fs::write(d.join(".gitignore"), "docs/\n").unwrap();
@@ -186,7 +224,10 @@ fn respects_gitignore_and_shows_git_state() {
     let row = |y: u16| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>();
     let text: Vec<String> = (0..8).map(row).collect();
     // src has an untracked file beneath it (`?`), README.md is modified (M).
-    assert!(text.iter().any(|l| l.contains("src") && l.trim_end().trim_end_matches('│').trim_end().ends_with('?')), "{text:?}");
+    assert!(
+        text.iter().any(|l| l.contains("src") && l.trim_end().trim_end_matches('│').trim_end().ends_with('?')),
+        "{text:?}"
+    );
     assert!(text.iter().any(|l| l.contains("README.md") && l.contains('M')), "{text:?}");
 }
 
@@ -200,12 +241,14 @@ fn renders_a_pane_with_the_root_name_and_scrolls() {
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let all: String = (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let all: String =
+        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
     assert!(all.contains("files-test-") && all.contains("docs"), "{all}");
     p.handle_event(&key(KeyCode::Char('G')));
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let all: String = (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let all: String =
+        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
     assert!(all.contains("file29.txt") && !all.contains("docs"), "{all}");
 }
 
@@ -369,7 +412,18 @@ fn bookmarks_save_jump_and_delete() {
 fn columns_show_size_and_time_for_files_when_wide() {
     let d = tree("columns");
     std::fs::write(d.join("README.md"), vec![b'x'; 2048]).unwrap();
-    let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
+    let mut p = Panel::new(
+        &d,
+        PanelOptions {
+            hidden: false,
+            git: false,
+            linemode: Linemode::SizeTime,
+            bookmarks: None,
+            background_bytes: None,
+            leader: "space".into(),
+            actions: Vec::new(),
+        },
+    );
     let area = Rect::new(0, 0, 70, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
@@ -387,7 +441,18 @@ fn columns_show_size_and_time_for_files_when_wide() {
 fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
     let d = tree("linemode");
     std::fs::write(d.join("src/main.rs"), vec![b'x'; 3000]).unwrap();
-    let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::SizeTime, bookmarks: None, background_bytes: None, leader: "space".into(), actions: Vec::new() });
+    let mut p = Panel::new(
+        &d,
+        PanelOptions {
+            hidden: false,
+            git: false,
+            linemode: Linemode::SizeTime,
+            bookmarks: None,
+            background_bytes: None,
+            leader: "space".into(),
+            actions: Vec::new(),
+        },
+    );
     let area = Rect::new(0, 0, 70, 8);
     let draw = |p: &mut Panel| {
         let mut buf = Buffer::empty(area);
@@ -417,7 +482,18 @@ fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
 fn a_big_paste_runs_in_the_background_and_reports_when_done() {
     let d = tree("bgpaste");
     std::fs::write(d.join("big.bin"), vec![7u8; 3 << 20]).unwrap();
-    let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: Some(0), leader: "space".into(), actions: Vec::new() });
+    let mut p = Panel::new(
+        &d,
+        PanelOptions {
+            hidden: false,
+            git: false,
+            linemode: Linemode::Off,
+            bookmarks: None,
+            background_bytes: Some(0),
+            leader: "space".into(),
+            actions: Vec::new(),
+        },
+    );
     let find = |p: &mut Panel, name: &str| {
         let rows = p.rows.iter().position(|r| r.name == name).unwrap();
         p.cursor = rows;
@@ -436,7 +512,10 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
     }
     assert!(d.join("docs/big.bin").is_file() && !d.join("big.bin").exists());
     // The end waits for the next event.
-    assert_eq!(p.handle_event(&key(KeyCode::Char('R'))), Action::Moved(vec![(d.join("big.bin"), d.join("docs/big.bin"))]));
+    assert_eq!(
+        p.handle_event(&key(KeyCode::Char('R'))),
+        Action::Moved(vec![(d.join("big.bin"), d.join("docs/big.bin"))])
+    );
 
     // A copy (yank) of a folder with a few files, also in the background.
     find(&mut p, "src");
@@ -468,7 +547,8 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     let area = Rect::new(0, 0, 60, 30);
     let mut buf = Buffer::empty(area);
     ui::keys::render_menu(area, &mut buf, &Theme::default(), &menu);
-    let text: String = (0..30).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    let text: String =
+        (0..30).map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
     assert!(text.contains("grep") && text.contains("bookmarks"), "{text}");
     // A group opens a deeper menu; Esc closes it without doing anything.
     p.handle_event(&key(KeyCode::Char('v')));
@@ -485,8 +565,20 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     p.handle_event(&key(KeyCode::Esc));
     assert!(p.menu().is_none());
     // Host actions come back as commands; the leader key is configurable.
-    let acts = vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false, keys: &["leader t n"] }];
-    let mut p = Panel::new(&d, PanelOptions { hidden: false, git: false, linemode: Linemode::Off, bookmarks: None, background_bytes: None, leader: ",".into(), actions: acts });
+    let acts =
+        vec![ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false, keys: &["leader t n"] }];
+    let mut p = Panel::new(
+        &d,
+        PanelOptions {
+            hidden: false,
+            git: false,
+            linemode: Linemode::Off,
+            bookmarks: None,
+            background_bytes: None,
+            leader: ",".into(),
+            actions: acts,
+        },
+    );
     p.handle_event(&key(KeyCode::Char(',')));
     p.handle_event(&key(KeyCode::Char('t')));
     assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::Command("tab.new"));
@@ -504,7 +596,8 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> = (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+    let text: Vec<String> =
+        (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
     // Border, then the folders above the first scrolling row, outermost first, then files.
     assert!(text[1].contains("src") && !text[1].contains("deep"), "{text:#?}");
     assert!(text[2].contains("deep") && text[3].contains("er"), "{text:#?}");
@@ -514,6 +607,7 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
     p.handle_event(&key(KeyCode::Char('g')));
     let mut buf = Buffer::empty(area);
     p.render(area, &mut buf, &Theme::default(), true);
-    let text: Vec<String> = (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
+    let text: Vec<String> =
+        (0..8).map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>()).collect();
     assert!(text[1].contains("docs"), "{text:#?}");
 }

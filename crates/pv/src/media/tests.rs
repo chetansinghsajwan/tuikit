@@ -31,7 +31,8 @@ fn an_image_is_drawn_in_half_blocks_that_fit() {
         *p = if x < 20 { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 255, 255]) };
     }
     img.save(&f).unwrap();
-    let lines = image(&f, &Theme::default(), &Options { width: Some(21), height: Some(8), git: false, focus: None }).unwrap();
+    let lines =
+        image(&f, &Theme::default(), &Options { width: Some(21), height: Some(8), git: false, focus: None }).unwrap();
     assert!(flat(&lines[0]).contains("40×20"));
     assert!(lines.len() <= 8, "{}", lines.len());
     let row = lines.last().unwrap();

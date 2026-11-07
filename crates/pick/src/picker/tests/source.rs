@@ -7,7 +7,14 @@ fn files_source_marks_dirs_only_when_asked() {
     std::fs::create_dir_all(d.join("sub")).unwrap();
     std::fs::write(d.join("sub/f.txt"), "x").unwrap();
     for (dirs, want) in [(false, 1u32), (true, 2u32)] {
-        let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root: d.clone(), preview: false, git: false, query: String::new() };
+        let opts = PickerOptions {
+            mode: Mode::Fuzzy,
+            paths: true,
+            root: d.clone(),
+            preview: false,
+            git: false,
+            query: String::new(),
+        };
         let mut p = Picker::new(opts, Arc::new(|| {}));
         crate::source::spawn_files(p.injector(), d.clone(), dirs, None);
         for _ in 0..20 {

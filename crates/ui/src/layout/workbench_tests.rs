@@ -37,7 +37,12 @@ fn closed_docks_take_no_room_and_big_ones_are_limited() {
     for r in [w.left, w.right, w.bottom, w.editor, w.ribbon] {
         assert!(r.x >= main.x && r.right() <= main.right() && r.y >= main.y && r.bottom() <= main.bottom(), "{r:?}");
     }
-    assert!(w.left.right() <= w.editor.x && w.editor.right() <= w.right.x && w.editor.bottom() <= w.bottom.y && w.bottom.bottom() <= w.ribbon.y);
+    assert!(
+        w.left.right() <= w.editor.x
+            && w.editor.right() <= w.right.x
+            && w.editor.bottom() <= w.bottom.y
+            && w.bottom.bottom() <= w.ribbon.y
+    );
 }
 
 #[test]

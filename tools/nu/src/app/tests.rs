@@ -39,7 +39,20 @@ fn wait(app: &mut App) {
 fn both_panes_and_the_details_show() {
     let (mut app, ..) = app();
     let s = screen(&mut app);
-    for want in ["Wi-Fi", "Bluetooth", "home", "cafe", "saved", "WPA", "Headphones", "Keyboard", "audio", "paired", "Signal", "Security"] {
+    for want in [
+        "Wi-Fi",
+        "Bluetooth",
+        "home",
+        "cafe",
+        "saved",
+        "WPA",
+        "Headphones",
+        "Keyboard",
+        "audio",
+        "paired",
+        "Signal",
+        "Security",
+    ] {
         assert!(s.contains(want), "{want} in\n{s}");
     }
     // The Bluetooth pane's details follow once it has the focus.
@@ -140,8 +153,14 @@ fn a_missing_backend_shows_why_in_its_pane() {
         let mut app = App::new(w, b);
         screen(&mut app)
     };
-    let s = app_with(Arc::new(nu_core::Unavailable("NetworkManager is not running".into())), Arc::new(FakeBluetooth::new()));
-    assert!(s.contains("unavailable: NetworkManager is not") && s.contains("running") && s.contains("Headphones"), "{s}");
+    let s = app_with(
+        Arc::new(nu_core::Unavailable("NetworkManager is not running".into())),
+        Arc::new(FakeBluetooth::new()),
+    );
+    assert!(
+        s.contains("unavailable: NetworkManager is not") && s.contains("running") && s.contains("Headphones"),
+        "{s}"
+    );
     let s = app_with(Arc::new(Fake::new()), Arc::new(nu_core::Unavailable("BlueZ is not running".into())));
     assert!(s.contains("unavailable: BlueZ is not") && s.contains("running") && s.contains("home"), "{s}");
 }

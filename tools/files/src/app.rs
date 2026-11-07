@@ -5,7 +5,9 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+use ratatui::crossterm::terminal::{
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -19,15 +21,69 @@ use ui::{Pane, Theme};
 
 /// The standalone app's own actions, added to the panel's keymap.
 const ACTIONS: &[ui::keys::Action] = &[
-    ui::keys::Action { id: "tab.new", name: "new tab", desc: "open a new tab in the same folder", basic: false, keys: &["leader t n"] },
-    ui::keys::Action { id: "tab.reopen", name: "reopen tab", desc: "bring back the tab closed last", basic: false, keys: &["leader t r"] },
-    ui::keys::Action { id: "tab.duplicate", name: "duplicate tab", desc: "open a copy of this tab next to it", basic: false, keys: &["leader t d"] },
-    ui::keys::Action { id: "tab.move_left", name: "move tab left", desc: "move this tab one place left", basic: false, keys: &["leader t ["] },
-    ui::keys::Action { id: "tab.move_right", name: "move tab right", desc: "move this tab one place right", basic: false, keys: &["leader t ]"] },
-    ui::keys::Action { id: "tab.close", name: "close tab", desc: "close this tab (q closes it too, and quits on the last)", basic: false, keys: &["leader t c"] },
-    ui::keys::Action { id: "tab.next", name: "next tab", desc: "switch to the next tab", basic: false, keys: &["]", "leader t l"] },
-    ui::keys::Action { id: "tab.prev", name: "previous tab", desc: "switch to the previous tab", basic: false, keys: &["[", "leader t h"] },
-    ui::keys::Action { id: "view.properties", name: "properties", desc: "show or hide the properties pane", basic: false, keys: &["leader v i"] },
+    ui::keys::Action {
+        id: "tab.new",
+        name: "new tab",
+        desc: "open a new tab in the same folder",
+        basic: false,
+        keys: &["leader t n"],
+    },
+    ui::keys::Action {
+        id: "tab.reopen",
+        name: "reopen tab",
+        desc: "bring back the tab closed last",
+        basic: false,
+        keys: &["leader t r"],
+    },
+    ui::keys::Action {
+        id: "tab.duplicate",
+        name: "duplicate tab",
+        desc: "open a copy of this tab next to it",
+        basic: false,
+        keys: &["leader t d"],
+    },
+    ui::keys::Action {
+        id: "tab.move_left",
+        name: "move tab left",
+        desc: "move this tab one place left",
+        basic: false,
+        keys: &["leader t ["],
+    },
+    ui::keys::Action {
+        id: "tab.move_right",
+        name: "move tab right",
+        desc: "move this tab one place right",
+        basic: false,
+        keys: &["leader t ]"],
+    },
+    ui::keys::Action {
+        id: "tab.close",
+        name: "close tab",
+        desc: "close this tab (q closes it too, and quits on the last)",
+        basic: false,
+        keys: &["leader t c"],
+    },
+    ui::keys::Action {
+        id: "tab.next",
+        name: "next tab",
+        desc: "switch to the next tab",
+        basic: false,
+        keys: &["]", "leader t l"],
+    },
+    ui::keys::Action {
+        id: "tab.prev",
+        name: "previous tab",
+        desc: "switch to the previous tab",
+        basic: false,
+        keys: &["[", "leader t h"],
+    },
+    ui::keys::Action {
+        id: "view.properties",
+        name: "properties",
+        desc: "show or hide the properties pane",
+        basic: false,
+        keys: &["leader v i"],
+    },
 ];
 
 pub struct Options {
@@ -62,7 +118,16 @@ struct App {
 pub fn run(opts: Options) -> io::Result<u8> {
     let dir = opts.dir.canonicalize()?;
     let panel_opts = panel_opts(&opts);
-    let mut app = App { theme: Theme::load(), tabs: ui::tabs::Tabs::new(Panel::new(dir, panel_opts)), preview: None, help: None, show_meta: true, meta: None, dirsize: None, opts };
+    let mut app = App {
+        theme: Theme::load(),
+        tabs: ui::tabs::Tabs::new(Panel::new(dir, panel_opts)),
+        preview: None,
+        help: None,
+        show_meta: true,
+        meta: None,
+        dirsize: None,
+        opts,
+    };
 
     // Draw on the controlling terminal so stdout stays free for the caller.
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
@@ -149,12 +214,15 @@ impl App {
             }
             return Ok(None);
         }
-        if !self.panel().is_busy() && self.panel().menu().is_none() && !modifiers.contains(KeyModifiers::CONTROL)
-            && let KeyCode::Char(c @ '1'..='9') = code {
-                let i = *c as usize - '1' as usize;
-                self.tabs.goto(i);
-                return Ok(None);
-            }
+        if !self.panel().is_busy()
+            && self.panel().menu().is_none()
+            && !modifiers.contains(KeyModifiers::CONTROL)
+            && let KeyCode::Char(c @ '1'..='9') = code
+        {
+            let i = *c as usize - '1' as usize;
+            self.tabs.goto(i);
+            return Ok(None);
+        }
         let action = self.panel().handle_event(ev);
         self.act(action, term)
     }
@@ -275,7 +343,8 @@ impl App {
 
     fn tab_bar(&self, area: Rect, buf: &mut Buffer) {
         let roots: Vec<&Path> = self.tabs.iter().map(|tab| tab.root()).collect();
-        let labels: Vec<ui::tabs::Label> = ui::tabs::short_titles(&roots).into_iter().map(ui::tabs::Label::new).collect();
+        let labels: Vec<ui::tabs::Label> =
+            ui::tabs::short_titles(&roots).into_iter().map(ui::tabs::Label::new).collect();
         ui::tabs::render(area, buf, &self.theme, &labels, self.tabs.active_index(), true);
     }
 
@@ -283,7 +352,8 @@ impl App {
         let current = self.tabs.active().current().map(Path::to_path_buf);
         let theme = self.theme.clone();
         let area = self.render_meta(area, buf, current.as_deref());
-        let title = current.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let title =
+            current.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let pane = match current.as_deref() {
             Some(p) if p.is_dir() => Pane::new(&theme).title(&title).icon(ui::icons::dir(&title, false)),
             Some(_) => Pane::new(&theme).title(&title).icon(ui::icons::file(&title, false)),
@@ -297,7 +367,8 @@ impl App {
         }
         let key = (path.clone(), inner.width, inner.height, pv::raw_tables());
         if self.preview.as_ref().is_none_or(|p| p.key != key) {
-            let opts = pv::Options { width: Some(inner.width), height: Some(inner.height), git: self.opts.git, focus: None };
+            let opts =
+                pv::Options { width: Some(inner.width), height: Some(inner.height), git: self.opts.git, focus: None };
             let lines = pv::preview(&path, &theme, &opts).map_err(|e| e.to_string());
             self.preview = Some(Preview { key, lines });
         }
@@ -321,7 +392,14 @@ fn open(path: &Path) -> Result<(), String> {
         open_with(&editor, path)
     } else {
         let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-        Command::new(opener).arg(path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map(|_| ()).map_err(|e| format!("{opener}: {e}"))
+        Command::new(opener)
+            .arg(path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("{opener}: {e}"))
     }
 }
 
@@ -401,5 +479,11 @@ impl App {
 
 /// The panel options of a tab: the standalone app's columns and its own actions.
 fn panel_opts(o: &Options) -> PanelOptions {
-    PanelOptions { hidden: o.hidden, git: o.git, linemode: files::Linemode::Full, actions: ACTIONS.to_vec(), ..PanelOptions::default() }
+    PanelOptions {
+        hidden: o.hidden,
+        git: o.git,
+        linemode: files::Linemode::Full,
+        actions: ACTIONS.to_vec(),
+        ..PanelOptions::default()
+    }
 }

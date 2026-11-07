@@ -16,10 +16,9 @@ fn gap_changes_every_split() {
 
 #[test]
 fn parses_json() {
-    let t: Theme = serde_json::from_str(
-        r##"{"chrome":{"border":"double"},"layout":{"gap":3},"colors":{"bg":"#102030"}}"##,
-    )
-    .unwrap();
+    let t: Theme =
+        serde_json::from_str(r##"{"chrome":{"border":"double"},"layout":{"gap":3},"colors":{"bg":"#102030"}}"##)
+            .unwrap();
     assert_eq!(t.layout.gap, 3);
     assert_eq!(t.chrome.border, "double");
 }

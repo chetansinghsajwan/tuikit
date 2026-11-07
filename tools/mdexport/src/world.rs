@@ -30,7 +30,11 @@ impl World for Doc {
     }
 
     fn source(&self, id: FileId) -> FileResult<Source> {
-        if id == self.main.id() { Ok(self.main.clone()) } else { Err(FileError::NotFound(id.vpath().as_rootless_path().to_path_buf())) }
+        if id == self.main.id() {
+            Ok(self.main.clone())
+        } else {
+            Err(FileError::NotFound(id.vpath().as_rootless_path().to_path_buf()))
+        }
     }
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
@@ -77,13 +81,14 @@ pub fn system_fonts(wanted: Option<&[&str]>) -> (Vec<Font>, std::collections::Ha
             _ => continue,
         };
         if let Ok(data) = std::fs::read(&path)
-            && let Some(font) = Font::new(Bytes::new(data), face.index) {
-                // The name asked for may be another name of the family than the one Typst reads.
-                if let Some(w) = wanted.and_then(|w| w.iter().find(|w| hit(w))) {
-                    aliases.insert((*w).to_string(), font.info().family.clone());
-                }
-                out.push(font);
+            && let Some(font) = Font::new(Bytes::new(data), face.index)
+        {
+            // The name asked for may be another name of the family than the one Typst reads.
+            if let Some(w) = wanted.and_then(|w| w.iter().find(|w| hit(w))) {
+                aliases.insert((*w).to_string(), font.info().family.clone());
             }
+            out.push(font);
+        }
     }
     (out, aliases)
 }
@@ -101,6 +106,9 @@ pub fn compile(source: String, base: Option<PathBuf>, fonts: Vec<Font>) -> Resul
     let book = FontBook::from_infos(fonts.iter().map(|f| f.info().clone()));
     let main = Source::new(FileId::new(None, VirtualPath::new("/main.typ")), source);
     let world = Doc { library: LazyHash::new(Library::default()), book: LazyHash::new(book), fonts, main, base };
-    let document = typst::compile::<typst::layout::PagedDocument>(&world).output.map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))?;
-    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default()).map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))
+    let document = typst::compile::<typst::layout::PagedDocument>(&world)
+        .output
+        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))?;
+    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
+        .map_err(|errors| errors.iter().map(|e| e.message.to_string()).collect::<Vec<_>>().join("; "))
 }

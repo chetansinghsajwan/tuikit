@@ -1,5 +1,5 @@
-use git_core::{Kind, Repo, Side};
 use crate::keys;
+use git_core::{Kind, Repo, Side};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
@@ -7,8 +7,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
-use tui_input::backend::crossterm::EventHandler;
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 use ui::{Pane, Theme, layout};
 
 /// What the host should do after an event.
@@ -53,8 +53,17 @@ impl Change {
 
 enum Row {
     /// A directory (single-child chains are joined: `src/lib`).
-    Folder { path: PathBuf, label: String, depth: usize, count: usize, folded: bool },
-    File { change: Change, depth: usize },
+    Folder {
+        path: PathBuf,
+        label: String,
+        depth: usize,
+        count: usize,
+        folded: bool,
+    },
+    File {
+        change: Change,
+        depth: usize,
+    },
 }
 
 /// The changed files as a directory tree.
@@ -133,7 +142,12 @@ impl Panel {
 
     /// The panel with a leader key and the host's own `actions` added to its keymap (they come
     /// back as `Action::Command(id)`).
-    pub fn with_actions(path: &Path, leader: &str, actions: Vec<ui::keys::Action>, groups: &[ui::keys::Group]) -> Option<Panel> {
+    pub fn with_actions(
+        path: &Path,
+        leader: &str,
+        actions: Vec<ui::keys::Action>,
+        groups: &[ui::keys::Group],
+    ) -> Option<Panel> {
         let repo = Repo::discover(path)?;
         let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(actions).collect();
         let all_groups: Vec<ui::keys::Group> = keys::GROUPS.iter().chain(groups).cloned().collect();
@@ -176,7 +190,11 @@ impl Panel {
         self.all = status
             .iter()
             .filter_map(|(path, st)| {
-                let (staged, unstaged) = if st.unstaged == Some(Kind::Conflict) { (None, Some(Kind::Conflict)) } else { (st.staged, st.unstaged) };
+                let (staged, unstaged) = if st.unstaged == Some(Kind::Conflict) {
+                    (None, Some(Kind::Conflict))
+                } else {
+                    (st.staged, st.unstaged)
+                };
                 (staged.is_some() || unstaged.is_some()).then(|| Change { rela: path.to_path_buf(), staged, unstaged })
             })
             .collect();
@@ -203,7 +221,9 @@ impl Panel {
         }
         // Stay on the same row.
         self.cursor = keep
-            .and_then(|(p, folder)| (0..self.items.len()).find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder)))
+            .and_then(|(p, folder)| {
+                (0..self.items.len()).find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder))
+            })
             .unwrap_or(self.cursor)
             .min(self.items.len().saturating_sub(1));
         self.version += 1;
@@ -333,7 +353,8 @@ impl Panel {
     /// Scroll the diff to the next or previous hunk.
     fn jump_hunk(&mut self, forward: bool) {
         let Some(p) = &self.preview else { return };
-        let target = if forward { pv::Anchors::next(&p.hunks, self.pscroll) } else { pv::Anchors::prev(&p.hunks, self.pscroll) };
+        let target =
+            if forward { pv::Anchors::next(&p.hunks, self.pscroll) } else { pv::Anchors::prev(&p.hunks, self.pscroll) };
         if let Some(t) = target {
             self.pscroll = t;
         }
@@ -389,7 +410,12 @@ impl Panel {
             }
             "change.unstage" => {
                 let targets: Vec<PathBuf> = match self.current_folder() {
-                    Some(path) => self.changes_under(&path).into_iter().filter(|c| c.staged.is_some()).map(|c| c.rela.clone()).collect(),
+                    Some(path) => self
+                        .changes_under(&path)
+                        .into_iter()
+                        .filter(|c| c.staged.is_some())
+                        .map(|c| c.rela.clone())
+                        .collect(),
                     None => self.current().filter(|c| c.staged.is_some()).map(|c| c.rela.clone()).into_iter().collect(),
                 };
                 if !targets.is_empty() {
@@ -483,7 +509,9 @@ impl Panel {
     /// shown above it, so it is not hidden by what you are typing.
     fn footer(&self, theme: &Theme) -> Vec<Line<'static>> {
         let c = &theme.colors;
-        let message = self.message.as_ref().map(|(m, err)| Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into()))));
+        let message = self.message.as_ref().map(|(m, err)| {
+            Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.muted }.into())))
+        });
         match &self.mode {
             Mode::Commit(input) => {
                 let prompt = Line::from(vec![
@@ -494,7 +522,10 @@ impl Panel {
             }
             Mode::Discard(rela, untracked) => {
                 let what = if *untracked { "Delete" } else { "Discard" };
-                vec![Line::from(Span::styled(format!("{what} {}? d again", rela.display()), Style::new().fg(c.warning.into())))]
+                vec![Line::from(Span::styled(
+                    format!("{what} {}? d again", rela.display()),
+                    Style::new().fg(c.warning.into()),
+                ))]
             }
             Mode::Normal => message.into_iter().collect(),
         }

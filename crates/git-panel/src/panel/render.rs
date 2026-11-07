@@ -43,16 +43,19 @@ impl Panel {
         if !footer.is_empty() {
             let rows = (footer.len() as u16).min(inner.height);
             let top = inner.bottom() - rows;
-            for (i, line) in footer.into_iter().rev().take(usize::from(rows)).collect::<Vec<_>>().into_iter().rev().enumerate() {
+            for (i, line) in
+                footer.into_iter().rev().take(usize::from(rows)).collect::<Vec<_>>().into_iter().rev().enumerate()
+            {
                 Paragraph::new(line).render(Rect { y: top + i as u16, height: 1, ..inner }, buf);
             }
             if let Mode::Commit(input) = &self.mode {
                 // The prompt is the last footer row.
                 let (x, y) = (inner.x + 8 + input.visual_cursor() as u16, inner.bottom() - 1);
                 if x < inner.right()
-                    && let Some(cell) = buf.cell_mut((x, y)) {
-                        cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
-                    }
+                    && let Some(cell) = buf.cell_mut((x, y))
+                {
+                    cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
+                }
             }
             inner.height -= rows;
             if inner.height == 0 {
@@ -71,7 +74,13 @@ impl Panel {
         } else if crow >= self.offset + self.page {
             self.offset = crow + 1 - self.page;
         }
-        let depths: Vec<usize> = self.rows.iter().map(|r| match r { Row::Folder { depth, .. } | Row::File { depth, .. } => *depth }).collect();
+        let depths: Vec<usize> = self
+            .rows
+            .iter()
+            .map(|r| match r {
+                Row::Folder { depth, .. } | Row::File { depth, .. } => *depth,
+            })
+            .collect();
         let scope = ui::tree::active_scope(&depths, crow);
         let geo = ui::list::Rows::new(area, inner);
         for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
@@ -79,14 +88,37 @@ impl Panel {
             let selected = i == crow;
             match row {
                 Row::Folder { label, depth, count, folded, .. } => {
-                    ui::tree::file_row(theme, buf, &geo, y, &ui::tree::FileRow { depth: *depth, name: label, is_dir: true, open: !*folded, count: Some(*count), selected, focused: true, active_guide: scope.and_then(|s| s.col_at(i)), ..Default::default() });
+                    ui::tree::file_row(
+                        theme,
+                        buf,
+                        &geo,
+                        y,
+                        &ui::tree::FileRow {
+                            depth: *depth,
+                            name: label,
+                            is_dir: true,
+                            open: !*folded,
+                            count: Some(*count),
+                            selected,
+                            focused: true,
+                            active_guide: scope.and_then(|s| s.col_at(i)),
+                            ..Default::default()
+                        },
+                    );
                 }
                 Row::File { change, depth } => {
-                    let name = if self.tree { change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default() } else { change.rela.display().to_string() };
+                    let name = if self.tree {
+                        change.rela.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+                    } else {
+                        change.rela.display().to_string()
+                    };
                     // Two marks like `git status -s`: what is staged (always in the staged color, green, so a staged file
                     // is told apart at a glance), then what is not (in the color of its change).
-                    let staged = |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), c.success.into()));
-                    let unstaged = |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), pv::kind_color(theme, k)));
+                    let staged =
+                        |kind: Option<Kind>| kind.map_or((' ', c.fg.into()), |k| (kind_char(k), c.success.into()));
+                    let unstaged = |kind: Option<Kind>| {
+                        kind.map_or((' ', c.fg.into()), |k| (kind_char(k), pv::kind_color(theme, k)))
+                    };
                     ui::tree::file_row(
                         theme,
                         buf,
@@ -128,7 +160,10 @@ impl Panel {
             let side = if staged { Side::Staged } else { Side::Unstaged };
             let (lines, hunks) = match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
                 Ok((l, a)) => (l, a.hunks),
-                Err(e) => (vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))], Vec::new()),
+                Err(e) => (
+                    vec![Line::from(Span::styled(e.to_string(), Style::new().fg(theme.colors.muted.into())))],
+                    Vec::new(),
+                ),
             };
             self.preview = Some(Preview { key, lines, hunks });
             self.pscroll = 0;
@@ -136,7 +171,8 @@ impl Panel {
         self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
             self.pscroll = self.pscroll.min(p.lines.len().saturating_sub(1));
-            let shown: Vec<Line<'static>> = p.lines.iter().skip(self.pscroll).take(usize::from(inner.height)).cloned().collect();
+            let shown: Vec<Line<'static>> =
+                p.lines.iter().skip(self.pscroll).take(usize::from(inner.height)).cloned().collect();
             Paragraph::new(shown).render(inner, buf);
         }
     }

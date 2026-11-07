@@ -145,7 +145,11 @@ impl ListRow {
     pub fn paint(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
         use ratatui::text::Line;
         use ratatui::widgets::{Paragraph, Widget};
-        let base = if self.selected && !self.focused { active(theme) } else { style(theme, self.selected && self.focused, self.tint) };
+        let base = if self.selected && !self.focused {
+            active(theme)
+        } else {
+            style(theme, self.selected && self.focused, self.tint)
+        };
         buf.set_style(rows.bar(y), base);
         let area = rows.content(y);
         let width = usize::from(area.width);
@@ -160,7 +164,11 @@ impl ListRow {
         Paragraph::new(Line::from(left)).style(base).render(Rect { width: limit as u16, ..area }, buf);
         if show_right {
             let x = area.right().saturating_sub((cell + right_w) as u16);
-            let right: Vec<Span> = self.right.iter().map(|s| Span::styled(s.content.to_string(), Style::new().fg(theme.colors.muted.into()).patch(s.style))).collect();
+            let right: Vec<Span> = self
+                .right
+                .iter()
+                .map(|s| Span::styled(s.content.to_string(), Style::new().fg(theme.colors.muted.into()).patch(s.style)))
+                .collect();
             Paragraph::new(Line::from(right)).style(base).render(Rect { x, width: right_w as u16, ..area }, buf);
         }
         let mut x = area.right().saturating_sub(1);

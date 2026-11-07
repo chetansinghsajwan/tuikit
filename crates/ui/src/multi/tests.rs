@@ -60,6 +60,13 @@ fn it_draws_the_sections_the_list_and_what_is_chosen() {
     let area = Rect::new(0, 0, 80, 24);
     let mut buf = Buffer::empty(area);
     m.render(area, &mut buf, &Theme::default());
-    let text: String = (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
-    assert!(text.contains("Author (1)") && text.contains("[x] Ada") && text.contains("[ ] Bob") && text.contains("author: Ada"), "{text}");
+    let text: String =
+        (0..24).map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n").collect();
+    assert!(
+        text.contains("Author (1)")
+            && text.contains("[x] Ada")
+            && text.contains("[ ] Bob")
+            && text.contains("author: Ada"),
+        "{text}"
+    );
 }

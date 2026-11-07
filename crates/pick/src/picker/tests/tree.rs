@@ -2,7 +2,14 @@ use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
 fn files(paths: &[&str]) -> Picker {
-    let opts = PickerOptions { mode: Mode::Fuzzy, paths: true, root: std::env::temp_dir().join("pick-tree-none"), preview: false, git: false, query: String::new() };
+    let opts = PickerOptions {
+        mode: Mode::Fuzzy,
+        paths: true,
+        root: std::env::temp_dir().join("pick-tree-none"),
+        preview: false,
+        git: false,
+        query: String::new(),
+    };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     crate::source::push_candidates(&p.injector(), paths.iter().map(|s| Candidate::plain(*s)).collect());
     p.set_cursor(0);
@@ -18,7 +25,9 @@ fn lines(p: &mut Picker) -> Vec<String> {
     let area = Rect::new(0, 0, 60, 14);
     let mut b = Buffer::empty(area);
     p.render(area, &mut b, &Theme::default());
-    (0..14).map(|y| (0..60).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string()).collect()
+    (0..14)
+        .map(|y| (0..60).map(|x| b[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+        .collect()
 }
 
 fn accept(p: &mut Picker) -> Vec<String> {
@@ -54,11 +63,22 @@ fn list_is_a_hierarchy_with_leaf_names_only() {
     let find = |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
     // docs/guide merged into one header; folders first, items after, README last.
     assert!(find(" docs/guide") < find("x.md") && find("x.md") < find(" src"));
-    assert!(find(" src") < find(" ui") && find(" ui") < find("c.rs") && find("c.rs") < find("a.rs") && find("a.rs") < find("README.md"));
+    assert!(
+        find(" src") < find(" ui")
+            && find(" ui") < find("c.rs")
+            && find("c.rs") < find("a.rs")
+            && find("a.rs") < find("README.md")
+    );
     // The folders are headers, so file rows do not repeat them.
-    assert!(!l.iter().any(|r| r.contains("src/ui/c.rs") || r.contains("src/a.rs") || r.contains("docs/guide/x.md")), "{l:#?}");
+    assert!(
+        !l.iter().any(|r| r.contains("src/ui/c.rs") || r.contains("src/a.rs") || r.contains("docs/guide/x.md")),
+        "{l:#?}"
+    );
     // Indentation: c.rs sits deeper than a.rs.
-    let col = |s: &str| { let row = &l[find(s)]; row[..row.find(s).unwrap()].chars().count() };
+    let col = |s: &str| {
+        let row = &l[find(s)];
+        row[..row.find(s).unwrap()].chars().count()
+    };
     assert!(col("c.rs") > col("a.rs") && col("a.rs") > col(" src"));
 }
 
@@ -131,7 +151,8 @@ fn grep_results_are_grouped_under_their_file() {
     std::fs::create_dir_all(d.join("src")).unwrap();
     std::fs::write(d.join("src/one.rs"), "needle a\nfiller\nneedle b\n").unwrap();
     std::fs::write(d.join("top.txt"), "needle c\n").unwrap();
-    let opts = PickerOptions { mode: Mode::Grep, paths: true, root: d, preview: false, git: false, query: "needle".into() };
+    let opts =
+        PickerOptions { mode: Mode::Grep, paths: true, root: d, preview: false, git: false, query: "needle".into() };
     let mut p = Picker::new(opts, Arc::new(|| {}));
     p.set_tree(true);
     for _ in 0..300 {
@@ -144,7 +165,12 @@ fn grep_results_are_grouped_under_their_file() {
     let l = lines(&mut p);
     let pos = |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
     // `src/one.rs` is a header (merged chain), its two matches are rows beneath it.
-    assert!(pos(" src/one.rs") < pos("1: needle a") && pos("1: needle a") < pos("3: needle b") && pos("3: needle b") < pos(" top.txt"), "{l:#?}");
+    assert!(
+        pos(" src/one.rs") < pos("1: needle a")
+            && pos("1: needle a") < pos("3: needle b")
+            && pos("3: needle b") < pos(" top.txt"),
+        "{l:#?}"
+    );
     // Accepting a match still prints path:line:col:text.
     p.handle_event(&key(KeyCode::Down));
     let got = accept(&mut p);

@@ -283,7 +283,14 @@ impl App {
             return;
         }
         let backend = self.bt.clone();
-        let (address, label) = (device.address.clone(), if device.paired { format!("connecting to {}", device.name) } else { format!("pairing with {}", device.name) });
+        let (address, label) = (
+            device.address.clone(),
+            if device.paired {
+                format!("connecting to {}", device.name)
+            } else {
+                format!("pairing with {}", device.name)
+            },
+        );
         let handle = std::thread::spawn(move || backend.connect(&address));
         self.job = Some(Job { label, handle });
     }
@@ -402,7 +409,14 @@ impl App {
                 let Some(d) = self.device().cloned() else { return };
                 match self.bt.set_trusted(&d.address, !d.trusted) {
                     Ok(()) => {
-                        self.say(if d.trusted { format!("{} is no longer trusted", d.name) } else { format!("trusting {}", d.name) }, false);
+                        self.say(
+                            if d.trusted {
+                                format!("{} is no longer trusted", d.name)
+                            } else {
+                                format!("trusting {}", d.name)
+                            },
+                            false,
+                        );
                         self.refresh();
                     }
                     Err(e) => self.say(e.to_string(), true),

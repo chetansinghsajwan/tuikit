@@ -1,8 +1,8 @@
 mod basic;
-mod source;
-mod grep;
-mod git;
 mod buffer;
 mod cmd;
+mod git;
+mod grep;
 mod shell;
+mod source;
 mod tree;

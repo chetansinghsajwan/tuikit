@@ -71,7 +71,9 @@ fn all_labels_show_numbered_when_they_fit() {
     let active = (0..60).find(|&x| buf[(x, 0)].symbol() == "g").unwrap();
     assert!(buf[(active, 0)].modifier.contains(Modifier::BOLD));
     let other = (0..60).find(|&x| buf[(x, 0)].symbol() == "R").unwrap();
-    assert!(!buf[(other, 0)].modifier.contains(Modifier::BOLD) && !buf[(active, 0)].modifier.contains(Modifier::UNDERLINED));
+    assert!(
+        !buf[(other, 0)].modifier.contains(Modifier::BOLD) && !buf[(active, 0)].modifier.contains(Modifier::UNDERLINED)
+    );
     // Without numbers the labels are plain.
     let mut buf = Buffer::empty(area);
     render(area, &mut buf, &Theme::default(), &ls, 0, false);

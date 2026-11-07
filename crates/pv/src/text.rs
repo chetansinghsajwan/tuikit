@@ -3,7 +3,6 @@
 use crate::git::{self, LineKind, Repo};
 use crate::{Error, Options};
 use ratatui::style::Color;
-use unicode_width::UnicodeWidthStr;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::io::Read;
@@ -15,6 +14,7 @@ use syntect::highlighting::{
 };
 use syntect::parsing::SyntaxSet;
 use ui::Theme;
+use unicode_width::UnicodeWidthStr;
 
 /// Cap on bytes read, so a huge file never stalls a preview.
 const MAX_BYTES: u64 = 1 << 20;
@@ -61,15 +61,16 @@ pub(crate) fn syntax_theme(t: &Theme) -> SynTheme {
         .filter_map(|(sel, c, font)| {
             Some(ThemeItem {
                 scope: ScopeSelectors::from_str(sel).ok()?,
-                style: StyleModifier { foreground: Some(rgb(*c)), font_style: if font.is_empty() { None } else { Some(*font) }, ..Default::default() },
+                style: StyleModifier {
+                    foreground: Some(rgb(*c)),
+                    font_style: if font.is_empty() { None } else { Some(*font) },
+                    ..Default::default()
+                },
             })
         })
         .collect();
     SynTheme {
-        settings: ThemeSettings {
-            foreground: Some(rgb(t.colors.fg)),
-            ..Default::default()
-        },
+        settings: ThemeSettings { foreground: Some(rgb(t.colors.fg)), ..Default::default() },
         scopes,
         ..Default::default()
     }
@@ -115,7 +116,13 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
 /// Render `buf` as the contents of `path` (which only picks the syntax and,
 /// with `git_marks`, the file to compare against `HEAD`). Used for text that
 /// is not on disk as shown, e.g. an editor buffer with unsaved changes.
-pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_marks: bool) -> Result<Vec<Line<'static>>, Error> {
+pub fn render_bytes(
+    path: &Path,
+    buf: &[u8],
+    theme: &Theme,
+    opts: &Options,
+    git_marks: bool,
+) -> Result<Vec<Line<'static>>, Error> {
     let buf = &buf[..buf.len().min(MAX_BYTES as usize)];
     if is_binary(buf) {
         return Err(Error::Unsupported("binary".into()));
@@ -124,7 +131,8 @@ pub fn render_bytes(path: &Path, buf: &[u8], theme: &Theme, opts: &Options, git_
 
     let syntaxes: &SyntaxSet = syntax_set();
     // `flake.lock` is JSON whatever its extension says.
-    let by_name = if path.file_name().is_some_and(|n| n == "flake.lock") { syntaxes.find_syntax_by_name("JSON") } else { None };
+    let by_name =
+        if path.file_name().is_some_and(|n| n == "flake.lock") { syntaxes.find_syntax_by_name("JSON") } else { None };
     let syntax = by_name
         .or_else(|| syntaxes.find_syntax_for_file(path).ok().flatten())
         .or_else(|| text.lines().next().and_then(|l| syntaxes.find_syntax_by_first_line(l)))
@@ -251,7 +259,12 @@ fn indent_depths(text: &str) -> (Vec<usize>, usize) {
             if l.trim().is_empty() {
                 None
             } else {
-                Some(l.chars().take_while(|c| *c == ' ' || *c == '\t').map(|c| if c == '\t' { TAB.len() } else { 1 }).sum())
+                Some(
+                    l.chars()
+                        .take_while(|c| *c == ' ' || *c == '\t')
+                        .map(|c| if c == '\t' { TAB.len() } else { 1 })
+                        .sum(),
+                )
             }
         })
         .collect();

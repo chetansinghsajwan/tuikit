@@ -111,9 +111,10 @@ pub fn file(name: &str, executable: bool) -> Icon {
         return i;
     }
     if let Some(ext) = Path::new(&lower).extension().and_then(|e| e.to_str())
-        && let Some(i) = find(EXTS, ext) {
-            return i;
-        }
+        && let Some(i) = find(EXTS, ext)
+    {
+        return i;
+    }
     if executable { EXEC } else { FILE }
 }
 

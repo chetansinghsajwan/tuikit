@@ -23,7 +23,9 @@ pub fn kind(path: &Path) -> Option<Kind> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" => Some(Kind::Image),
-        "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" | "aiff" | "aif" | "ape" | "wv" => Some(Kind::Audio),
+        "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" | "aiff" | "aif" | "ape" | "wv" => {
+            Some(Kind::Audio)
+        }
         "mp4" | "m4v" | "mov" | "mkv" | "webm" | "avi" | "wmv" | "flv" | "mpg" | "mpeg" => Some(Kind::Video),
         _ => None,
     }
@@ -50,14 +52,25 @@ fn size_text(bytes: u64) -> String {
 /// `1:02:03` or `4:05`.
 pub fn duration_text(d: Duration) -> String {
     let s = d.as_secs();
-    if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) }
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
 }
 
 /// `label  value` rows, the labels aligned.
 fn facts(theme: &Theme, rows: &[(&str, String)]) -> Vec<Line<'static>> {
     let c = &theme.colors;
     let w = rows.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
-    rows.iter().map(|(l, v)| Line::from(vec![Span::styled(format!("{l:<w$}  "), Style::new().fg(c.muted.into())), Span::styled(v.clone(), Style::new().fg(c.fg.into()))])).collect()
+    rows.iter()
+        .map(|(l, v)| {
+            Line::from(vec![
+                Span::styled(format!("{l:<w$}  "), Style::new().fg(c.muted.into())),
+                Span::styled(v.clone(), Style::new().fg(c.fg.into())),
+            ])
+        })
+        .collect()
 }
 
 fn unreadable(what: &str, e: impl std::fmt::Display) -> Error {
@@ -103,7 +116,8 @@ fn picture(img: &image::DynamicImage, theme: &Theme, cols: u32, rows: u32) -> Ve
         Color::Rgb(mix(p[0], br), mix(p[1], bgc), mix(p[2], bb))
     };
     for y in (0..small.height()).step_by(2) {
-        let spans: Vec<Span<'static>> = (0..small.width()).map(|x| Span::styled("▀", Style::new().fg(at(x, y)).bg(at(x, y + 1)))).collect();
+        let spans: Vec<Span<'static>> =
+            (0..small.width()).map(|x| Span::styled("▀", Style::new().fg(at(x, y)).bg(at(x, y + 1)))).collect();
         out.push(Line::from(spans));
     }
     out
@@ -123,7 +137,12 @@ fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
         add("title", t.title().map(|s| s.into_owned()));
         add("artist", t.artist().map(|s| s.into_owned()));
         add("album", t.album().map(|s| s.into_owned()));
-        add("year", t.get_string(&lofty::tag::ItemKey::RecordingDate).or_else(|| t.get_string(&lofty::tag::ItemKey::Year)).map(|s| s.chars().take(4).collect()));
+        add(
+            "year",
+            t.get_string(&lofty::tag::ItemKey::RecordingDate)
+                .or_else(|| t.get_string(&lofty::tag::ItemKey::Year))
+                .map(|s| s.chars().take(4).collect()),
+        );
         add("track", t.track().map(|n| n.to_string()));
         add("genre", t.genre().map(|s| s.into_owned()));
     }
@@ -149,7 +168,8 @@ fn video(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     if matches!(ext.as_str(), "mp4" | "m4v" | "mov") {
         let file = std::fs::File::open(path)?;
-        let mp4 = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), bytes).map_err(|e| unreadable("video", e))?;
+        let mp4 =
+            mp4::Mp4Reader::read_header(std::io::BufReader::new(file), bytes).map_err(|e| unreadable("video", e))?;
         rows.push(("length", duration_text(mp4.duration())));
         let mut ids: Vec<_> = mp4.tracks().keys().copied().collect();
         ids.sort_unstable();
@@ -174,7 +194,10 @@ fn video(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     let mut out = facts(theme, &rows);
     if !matches!(ext.as_str(), "mp4" | "m4v" | "mov") {
         out.push(Line::default());
-        out.push(Line::from(Span::styled("details are only read from mp4, m4v and mov files", Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::ITALIC))));
+        out.push(Line::from(Span::styled(
+            "details are only read from mp4, m4v and mov files",
+            Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::ITALIC),
+        )));
     }
     Ok(out)
 }

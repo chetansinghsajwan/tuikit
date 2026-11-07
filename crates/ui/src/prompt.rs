@@ -11,7 +11,10 @@ use unicode_width::UnicodeWidthStr;
 /// `label` in the accent color followed by the typed `value`.
 pub fn line(theme: &Theme, label: &str, value: &str) -> Line<'static> {
     let c = &theme.colors;
-    Line::from(vec![Span::styled(label.to_string(), Style::new().fg(c.accent.into())), Span::styled(value.to_string(), Style::new().fg(c.fg.into()))])
+    Line::from(vec![
+        Span::styled(label.to_string(), Style::new().fg(c.accent.into())),
+        Span::styled(value.to_string(), Style::new().fg(c.fg.into())),
+    ])
 }
 
 /// Mark the cursor cell: `cursor` columns into the value, after `label`, on the
@@ -19,9 +22,10 @@ pub fn line(theme: &Theme, label: &str, value: &str) -> Line<'static> {
 pub fn cursor(buf: &mut Buffer, area: Rect, label: &str, cursor: usize) {
     let x = area.x + label.width() as u16 + cursor as u16;
     if x < area.right()
-        && let Some(cell) = buf.cell_mut((x, area.y)) {
-            cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
-        }
+        && let Some(cell) = buf.cell_mut((x, area.y))
+    {
+        cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
+    }
 }
 
 /// The suggestions for a prompt: the options, the ones matching what is typed, and the selected one.
@@ -51,7 +55,8 @@ impl Suggest {
     /// The options containing what is typed (case-insensitive), the ones that start with it first.
     pub fn matches(&self) -> Vec<&str> {
         let q = self.typed.to_lowercase();
-        let mut hits: Vec<&str> = self.items.iter().map(String::as_str).filter(|i| i.to_lowercase().contains(&q)).collect();
+        let mut hits: Vec<&str> =
+            self.items.iter().map(String::as_str).filter(|i| i.to_lowercase().contains(&q)).collect();
         hits.sort_by_key(|i| !i.to_lowercase().starts_with(&q));
         hits
     }
@@ -90,7 +95,11 @@ impl Suggest {
         for (i, hit) in hits.iter().skip(first).take(rows).enumerate() {
             let row = Rect { x: prompt.x, y: prompt.y - (rows - i) as u16, width, height: 1 };
             let on = first + i == self.selected;
-            let style = if on { crate::list::style(theme, true, None).fg(c.fg.into()) } else { Style::new().bg(c.selection.into()).fg(c.fg.into()) };
+            let style = if on {
+                crate::list::style(theme, true, None).fg(c.fg.into())
+            } else {
+                Style::new().bg(c.selection.into()).fg(c.fg.into())
+            };
             buf.set_style(row, style);
             buf.set_stringn(row.x + 1, row.y, hit, usize::from(width.saturating_sub(2)), style);
         }

@@ -43,7 +43,11 @@ impl App {
         self.pscroll = 0;
         self.reload_history();
         let n = self.commits.len();
-        let shown = if self.filter.active() { format!("{what}: {n} commit{}", if n == 1 { "" } else { "s" }) } else { what.to_string() };
+        let shown = if self.filter.active() {
+            format!("{what}: {n} commit{}", if n == 1 { "" } else { "s" })
+        } else {
+            what.to_string()
+        };
         self.say(shown, false);
     }
 
@@ -53,7 +57,9 @@ impl App {
         let q = q.to_lowercase();
         let Some(k) = self.commits.get(i) else { return false };
         let refs = self.labels.get(&k.oid).into_iter().flatten().map(|r| r.name.as_str()).collect::<Vec<_>>().join(" ");
-        [k.oid.as_str(), k.subject.as_str(), k.author.as_str(), refs.as_str()].iter().any(|s| s.to_lowercase().contains(&q))
+        [k.oid.as_str(), k.subject.as_str(), k.author.as_str(), refs.as_str()]
+            .iter()
+            .any(|s| s.to_lowercase().contains(&q))
     }
 
     /// Go to the next (`step` 1) or previous (-1) commit matching the search, wrapping around.
@@ -64,7 +70,9 @@ impl App {
             return;
         }
         let from = self.lists[1].cursor;
-        let found = (1..=n).map(|d| (from as isize + step * d as isize).rem_euclid(n as isize) as usize).find(|&i| self.commit_matches(i));
+        let found = (1..=n)
+            .map(|d| (from as isize + step * d as isize).rem_euclid(n as isize) as usize)
+            .find(|&i| self.commit_matches(i));
         let total = (0..n).filter(|&i| self.commit_matches(i)).count();
         match found {
             Some(i) => {

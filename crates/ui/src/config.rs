@@ -48,13 +48,17 @@ struct File {
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
 fn base() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
 /// The two files read for `tool`, the shared one first.
 pub fn paths(tool: &str) -> Vec<PathBuf> {
     let shared = std::env::var_os("UI_CONFIG").map(PathBuf::from).or_else(|| base().map(|b| b.join("ui/config.toml")));
-    let own = std::env::var_os("UI_TOOL_CONFIG").map(PathBuf::from).or_else(|| base().map(|b| b.join(tool).join("config.toml")));
+    let own = std::env::var_os("UI_TOOL_CONFIG")
+        .map(PathBuf::from)
+        .or_else(|| base().map(|b| b.join(tool).join("config.toml")));
     shared.into_iter().chain(own).collect()
 }
 
@@ -90,10 +94,13 @@ impl Config {
             self.animations = f.animations;
         }
         for (id, keys) in f.keys {
-            self.keys.insert(id, match keys {
-                Keys::One(k) => vec![k],
-                Keys::Many(ks) => ks,
-            });
+            self.keys.insert(
+                id,
+                match keys {
+                    Keys::One(k) => vec![k],
+                    Keys::Many(ks) => ks,
+                },
+            );
         }
     }
 }

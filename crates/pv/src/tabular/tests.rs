@@ -42,7 +42,15 @@ fn numbers_align_right_and_big_files_are_capped_with_a_footer() {
 fn many_columns_are_cut_to_what_fits_and_tsv_uses_tabs() {
     let head: Vec<String> = (0..40).map(|i| format!("column{i}")).collect();
     let p = tmp("wide.tsv", &format!("{}\n{}\n", head.join("\t"), head.join("\t")));
-    let t = flat(&render(&p, kind(&p).unwrap(), &Theme::default(), &Options { width: Some(60), height: None, git: false, focus: None }).unwrap());
+    let t = flat(
+        &render(
+            &p,
+            kind(&p).unwrap(),
+            &Theme::default(),
+            &Options { width: Some(60), height: None, git: false, focus: None },
+        )
+        .unwrap(),
+    );
     assert!(t.contains("columns not shown"), "{t}");
     assert!(t.lines().all(|l| unicode_width::UnicodeWidthStr::width(l) <= 60), "{t}");
     assert_eq!(kind(Path::new("a.xlsx")), Some(Kind::Sheet));

@@ -1,9 +1,9 @@
 //! `Pane`: the one place a bordered, titled, padded region is drawn.
 
+use crate::icons::Icon;
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use crate::icons::Icon;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Widget};
@@ -44,7 +44,11 @@ impl<'a> Pane<'a> {
             .borders(Borders::ALL)
             .border_type(self.theme.chrome.border_type())
             .border_style(Style::new().fg(border.into()))
-            .style(if self.theme.chrome.transparent { Style::new().fg(c.fg.into()) } else { Style::new().fg(c.fg.into()).bg(c.bg.into()) })
+            .style(if self.theme.chrome.transparent {
+                Style::new().fg(c.fg.into())
+            } else {
+                Style::new().fg(c.fg.into()).bg(c.bg.into())
+            })
             .padding(Padding::symmetric(l.padding_x, l.padding_y));
         if let (true, Some(t)) = (self.theme.chrome.titles, self.title) {
             block = block.title(self.title_line(t, border.into()));
@@ -57,7 +61,11 @@ impl<'a> Pane<'a> {
     fn title_line(&self, title: &str, border: ratatui::style::Color) -> Line<'a> {
         let c = &self.theme.colors;
         let bar = self.theme.chrome.border_type().to_border_set().horizontal_top;
-        let style = if self.focused { Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD) } else { Style::new().fg(c.muted.into()) };
+        let style = if self.focused {
+            Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
+        } else {
+            Style::new().fg(c.muted.into())
+        };
         let mut spans = vec![Span::styled(bar, Style::new().fg(border)), Span::raw(" ")];
         if let Some(i) = self.icon {
             spans.push(Span::styled(format!("{} ", i.glyph), Style::new().fg(i.color)));

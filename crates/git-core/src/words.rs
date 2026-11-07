@@ -19,7 +19,15 @@ pub struct Intraline {
 
 /// The tokens of `s` with their byte offsets: a run of letters, digits and `_`, a run of whitespace, or one other char.
 fn tokens(s: &str) -> Vec<(usize, &str)> {
-    let class = |c: char| if c.is_alphanumeric() || c == '_' { 0 } else if c.is_whitespace() { 1 } else { 2 };
+    let class = |c: char| {
+        if c.is_alphanumeric() || c == '_' {
+            0
+        } else if c.is_whitespace() {
+            1
+        } else {
+            2
+        }
+    };
     let mut out = Vec::new();
     let mut chars = s.char_indices().peekable();
     while let Some((start, c)) = chars.next() {

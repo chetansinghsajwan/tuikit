@@ -4,8 +4,8 @@ use pick::{Action, Mode, Picker, PickerOptions, source};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
-use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
@@ -125,7 +125,9 @@ fn run(cli: Cli) -> io::Result<u8> {
         (None, None, None) => (std::env::current_dir()?, false),
     };
     if cli.files.is_none() && cli.grep.is_none() && cli.git.is_none() && io::stdin().is_terminal() {
-        eprintln!("usage: <command> | pick [--paths DIR]   or   pick --files [DIR]   or   pick --grep [DIR]   or   pick --git refs|commits|stashes");
+        eprintln!(
+            "usage: <command> | pick [--paths DIR]   or   pick --files [DIR]   or   pick --grep [DIR]   or   pick --git refs|commits|stashes"
+        );
         return Ok(2);
     }
 
@@ -144,11 +146,21 @@ fn run(cli: Cli) -> io::Result<u8> {
         Arc::new(move || wake.store(true, Ordering::Relaxed)) as Arc<dyn Fn() + Send + Sync>
     };
     let mut picker = Picker::new(
-        PickerOptions { mode, paths, root: root.clone(), preview: !cli.no_preview && (paths || cli.git.is_some()), git: !cli.no_git, query: cli.query },
+        PickerOptions {
+            mode,
+            paths,
+            root: root.clone(),
+            preview: !cli.no_preview && (paths || cli.git.is_some()),
+            git: !cli.no_git,
+            query: cli.query,
+        },
         notify,
     );
     // Path lists read better as a hierarchy; folder listings and plain text stay flat.
-    picker.set_tree(!cli.flat && ((cli.files.is_some() && !cli.dirs && !cli.only_dirs) || cli.paths.is_some() || cli.grep.is_some()));
+    picker.set_tree(
+        !cli.flat
+            && ((cli.files.is_some() && !cli.dirs && !cli.only_dirs) || cli.paths.is_some() || cli.grep.is_some()),
+    );
     if cli.git.is_some() {
         picker.set_icon(ui::icons::GIT);
     }
@@ -182,7 +194,11 @@ fn run(cli: Cli) -> io::Result<u8> {
                 header.push(line.trim_end_matches(['\n', '\r']).to_string());
             }
             picker.set_header(header);
-            let fmt = source::LineFormat { with_nth: cli.with_nth, delimiter: cli.delimiter.clone(), timestamps: cli.timestamps };
+            let fmt = source::LineFormat {
+                with_nth: cli.with_nth,
+                delimiter: cli.delimiter.clone(),
+                timestamps: cli.timestamps,
+            };
             source::spawn_lines_with(picker.injector(), reader, fmt);
         }
     }

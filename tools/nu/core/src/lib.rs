@@ -163,7 +163,12 @@ impl bluetooth::Bluetooth for Unavailable {
 
 /// Order for display: the connected network first, then by strength, then by name.
 pub fn sort(networks: &mut [Network]) {
-    networks.sort_by(|a, b| b.active.cmp(&a.active).then(b.strength.cmp(&a.strength)).then_with(|| a.ssid.to_lowercase().cmp(&b.ssid.to_lowercase())));
+    networks.sort_by(|a, b| {
+        b.active
+            .cmp(&a.active)
+            .then(b.strength.cmp(&a.strength))
+            .then_with(|| a.ssid.to_lowercase().cmp(&b.ssid.to_lowercase()))
+    });
 }
 
 /// The strongest access point per SSID (hidden networks, with an empty SSID, are dropped).

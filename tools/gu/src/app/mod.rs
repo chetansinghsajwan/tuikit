@@ -20,8 +20,8 @@ mod render;
 mod search;
 mod types;
 use pills::*;
-use types::*;
 pub use types::Quit;
+use types::*;
 
 #[cfg(test)]
 mod tests;
@@ -90,7 +90,7 @@ impl App {
         let repo = Repo::discover(dir)?;
         let root = repo.root().to_path_buf();
         let watch = ui::watch::Watch::new(&root, || {});
-        
+
         let mut files = Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
         files.set_title("Files");
         let mut app = App {
@@ -135,7 +135,9 @@ impl App {
         };
         app.reload_all();
         // The Refs pane starts on the checked-out branch.
-        if let Some(i) = app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head)) {
+        if let Some(i) =
+            app.ref_rows.iter().position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head))
+        {
             app.lists[0].cursor = i;
         }
         Some(app)

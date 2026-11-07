@@ -28,7 +28,8 @@ fn info(doc: &lopdf::Document, key: &[u8]) -> Option<String> {
     let bytes = value.as_str().ok()?;
     // UTF-16 with a byte order mark, else Latin-1 (close enough for a title).
     let text = if bytes.starts_with(&[0xFE, 0xFF]) {
-        let units: Vec<u16> = bytes[2..].chunks(2).filter(|c| c.len() == 2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+        let units: Vec<u16> =
+            bytes[2..].chunks(2).filter(|c| c.len() == 2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
         String::from_utf16_lossy(&units)
     } else {
         bytes.iter().map(|&b| b as char).collect()
@@ -48,7 +49,15 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
         out.push(Line::from(Span::styled(t, Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))));
     }
     let author = info(&doc, b"Author").map(|a| format!("{a} · ")).unwrap_or_default();
-    out.push(Line::from(Span::styled(format!("{author}{} page{} · {:.1} KiB", pages.len(), if pages.len() == 1 { "" } else { "s" }, size as f64 / 1024.0), muted)));
+    out.push(Line::from(Span::styled(
+        format!(
+            "{author}{} page{} · {:.1} KiB",
+            pages.len(),
+            if pages.len() == 1 { "" } else { "s" },
+            size as f64 / 1024.0
+        ),
+        muted,
+    )));
     let width = usize::from(opts.width.unwrap_or(80)).saturating_sub(2).max(20);
     let limit = opts.height.map(usize::from).unwrap_or(usize::MAX);
     let mut text_pages = 0;
@@ -63,15 +72,24 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
         }
         text_pages += 1;
         out.push(Line::default());
-        out.push(Line::from(Span::styled(format!("── page {n} {}", "─".repeat(width.saturating_sub(10).min(50))), muted)));
+        out.push(Line::from(Span::styled(
+            format!("── page {n} {}", "─".repeat(width.saturating_sub(10).min(50))),
+            muted,
+        )));
         out.extend(crate::markdown::wrap_words(&words, width).into_iter().map(Line::from));
     }
     if text_pages == 0 {
         out.push(Line::default());
-        out.push(Line::from(Span::styled("no text in the first pages (a scan, or text drawn as shapes)", muted.add_modifier(Modifier::ITALIC))));
+        out.push(Line::from(Span::styled(
+            "no text in the first pages (a scan, or text drawn as shapes)",
+            muted.add_modifier(Modifier::ITALIC),
+        )));
     } else if pages.len() > PAGES as usize {
         out.push(Line::default());
-        out.push(Line::from(Span::styled(format!("… {} more pages", pages.len() - PAGES as usize), muted.add_modifier(Modifier::ITALIC))));
+        out.push(Line::from(Span::styled(
+            format!("… {} more pages", pages.len() - PAGES as usize),
+            muted.add_modifier(Modifier::ITALIC),
+        )));
     }
     out.truncate(limit.max(1));
     Ok(out)

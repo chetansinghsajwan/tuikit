@@ -37,7 +37,16 @@ impl App {
 
     /// A pane with the list `rows` drawn in it: each entry is `(left, right, highlighted tint)`.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn render_list(&mut self, focus: Focus, title: &str, area: Rect, buf: &mut Buffer, theme: &Theme, note: Option<(String, bool)>, rows: Vec<(Line<'static>, String, bool)>) {
+    pub(super) fn render_list(
+        &mut self,
+        focus: Focus,
+        title: &str,
+        area: Rect,
+        buf: &mut Buffer,
+        theme: &Theme,
+        note: Option<(String, bool)>,
+        rows: Vec<(Line<'static>, String, bool)>,
+    ) {
         let c = &theme.colors;
         let focused = self.focus == focus;
         let mut pane = Pane::new(theme).title(title).focused(focused);
@@ -51,7 +60,10 @@ impl App {
         }
         if let Some((text, warn)) = note {
             // A reason can be long: wrap it inside the pane.
-            Paragraph::new(text).wrap(ratatui::widgets::Wrap { trim: true }).style(Style::new().fg(if warn { c.warning } else { c.muted }.into())).render(inner, buf);
+            Paragraph::new(text)
+                .wrap(ratatui::widgets::Wrap { trim: true })
+                .style(Style::new().fg(if warn { c.warning } else { c.muted }.into()))
+                .render(inner, buf);
             return;
         }
         let page = usize::from(inner.height);
@@ -66,7 +78,16 @@ impl App {
         for (row, i) in (offset..(offset + page).min(rows.len())).enumerate() {
             let (left, right, active) = &rows[i];
             let y = inner.y + row as u16;
-            ui::list::ListRow { left: left.spans.clone(), right: vec![Span::raw(right.clone())], min_left: 12, tint: active.then(|| c.success.into()), selected: i == cursor, focused, ..Default::default() }.draw(theme, buf, &geo, y);
+            ui::list::ListRow {
+                left: left.spans.clone(),
+                right: vec![Span::raw(right.clone())],
+                min_left: 12,
+                tint: active.then(|| c.success.into()),
+                selected: i == cursor,
+                focused,
+                ..Default::default()
+            }
+            .draw(theme, buf, &geo, y);
         }
     }
 
@@ -87,8 +108,15 @@ impl App {
             .networks
             .iter()
             .map(|n| {
-                let name_style = if n.active { Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD) } else { Style::new().fg(c.fg.into()) };
-                let left = Line::from(vec![Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))), Span::styled(n.ssid.clone(), name_style)]);
+                let name_style = if n.active {
+                    Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::new().fg(c.fg.into())
+                };
+                let left = Line::from(vec![
+                    Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))),
+                    Span::styled(n.ssid.clone(), name_style),
+                ]);
                 let mut tags = String::new();
                 if n.known {
                     tags.push_str("saved ");
@@ -120,7 +148,13 @@ impl App {
             .devices
             .iter()
             .map(|d| {
-                let name_style = if d.connected { Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD) } else if d.paired { Style::new().fg(c.fg.into()) } else { Style::new().fg(c.muted.into()) };
+                let name_style = if d.connected {
+                    Style::new().fg(c.success.into()).add_modifier(Modifier::BOLD)
+                } else if d.paired {
+                    Style::new().fg(c.fg.into())
+                } else {
+                    Style::new().fg(c.muted.into())
+                };
                 let signal = d.rssi.map(rssi_percent);
                 let left = Line::from(vec![
                     match signal {
@@ -146,15 +180,26 @@ impl App {
 
     pub(super) fn details_wifi(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
-        let pane = Pane::new(theme).title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details")).icon(ui::icons::WIFI);
+        let pane =
+            Pane::new(theme).title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details")).icon(ui::icons::WIFI);
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(n) = self.network() else { return };
         let label = |t: &str| Span::styled(format!("{t:<10}"), Style::new().fg(c.muted.into()));
         let val = |t: String| Span::styled(t, Style::new().fg(c.fg.into()));
-        let band = if n.frequency_mhz >= 5900 { "6 GHz" } else if n.frequency_mhz >= 4900 { "5 GHz" } else { "2.4 GHz" };
+        let band = if n.frequency_mhz >= 5900 {
+            "6 GHz"
+        } else if n.frequency_mhz >= 4900 {
+            "5 GHz"
+        } else {
+            "2.4 GHz"
+        };
         let lines = vec![
-            Line::from(vec![label("Signal"), Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))), val(format!("{}%", n.strength))]),
+            Line::from(vec![
+                label("Signal"),
+                Span::styled(format!("{} ", bars(n.strength)), Style::new().fg(strength_color(theme, n.strength))),
+                val(format!("{}%", n.strength)),
+            ]),
             Line::from(vec![label("Security"), val(n.security.label().to_string())]),
             Line::from(vec![label("Band"), val(format!("{band} ({} MHz)", n.frequency_mhz))]),
             Line::from(vec![label("Access pt"), val(n.bssid.clone())]),
@@ -166,7 +211,9 @@ impl App {
 
     pub(super) fn details_bluetooth(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
-        let pane = Pane::new(theme).title(self.device().map(|d| d.name.as_str()).unwrap_or("Details")).icon(ui::icons::BLUETOOTH);
+        let pane = Pane::new(theme)
+            .title(self.device().map(|d| d.name.as_str()).unwrap_or("Details"))
+            .icon(ui::icons::BLUETOOTH);
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(d) = self.device() else { return };
@@ -175,7 +222,11 @@ impl App {
         let signal = match d.rssi {
             Some(r) => {
                 let s = rssi_percent(r);
-                Line::from(vec![label("Signal"), Span::styled(format!("{} ", bars(s)), Style::new().fg(strength_color(theme, s))), val(format!("{r} dBm"))])
+                Line::from(vec![
+                    label("Signal"),
+                    Span::styled(format!("{} ", bars(s)), Style::new().fg(strength_color(theme, s))),
+                    val(format!("{r} dBm")),
+                ])
             }
             None => Line::from(vec![label("Signal"), Span::styled("not in range", Style::new().fg(c.muted.into()))]),
         };
@@ -198,11 +249,20 @@ impl App {
                 ui::prompt::cursor(buf, area, &label, input.visual_cursor());
                 ui::prompt::line(theme, &label, &"•".repeat(input.value().chars().count()))
             }
-            Mode::ForgetWifi(ssid) => Line::from(Span::styled(format!("Forget {ssid}? (d again or y)"), Style::new().fg(c.warning.into()))),
-            Mode::ForgetDevice(_, name) => Line::from(Span::styled(format!("Forget {name}? (d again or y)"), Style::new().fg(c.warning.into()))),
-            Mode::Normal if self.job.is_some() => Line::from(Span::styled(format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")), Style::new().fg(c.accent.into()))),
+            Mode::ForgetWifi(ssid) => {
+                Line::from(Span::styled(format!("Forget {ssid}? (d again or y)"), Style::new().fg(c.warning.into())))
+            }
+            Mode::ForgetDevice(_, name) => {
+                Line::from(Span::styled(format!("Forget {name}? (d again or y)"), Style::new().fg(c.warning.into())))
+            }
+            Mode::Normal if self.job.is_some() => Line::from(Span::styled(
+                format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")),
+                Style::new().fg(c.accent.into()),
+            )),
             Mode::Normal => match &self.message {
-                Some((m, err)) => Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into()))),
+                Some((m, err)) => {
+                    Line::from(Span::styled(m.clone(), Style::new().fg(if *err { c.error } else { c.accent }.into())))
+                }
                 None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
             },
         };
@@ -211,8 +271,12 @@ impl App {
 
     pub(super) fn hints(&self) -> &'static str {
         match self.focus {
-            Focus::Wifi => "enter connect  x disconnect  d forget  s scan  space p on/off  tab pane  space space commands  ? keys",
-            Focus::Bluetooth => "enter connect  x disconnect  t trust  d forget  s scan  space p on/off  tab pane  space space commands  ? keys",
+            Focus::Wifi => {
+                "enter connect  x disconnect  d forget  s scan  space p on/off  tab pane  space space commands  ? keys"
+            }
+            Focus::Bluetooth => {
+                "enter connect  x disconnect  t trust  d forget  s scan  space p on/off  tab pane  space space commands  ? keys"
+            }
         }
     }
 }

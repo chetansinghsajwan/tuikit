@@ -100,7 +100,11 @@ pub fn parse(text: &str) -> Vec<Line<'static>> {
                     }
                     if end == Some('m') {
                         flush(&mut cur, &mut spans, style);
-                        let params: Vec<u32> = if body.is_empty() { vec![0] } else { body.split(';').map(|p| p.parse().unwrap_or(0)).collect() };
+                        let params: Vec<u32> = if body.is_empty() {
+                            vec![0]
+                        } else {
+                            body.split(';').map(|p| p.parse().unwrap_or(0)).collect()
+                        };
                         style = apply(style, &params);
                     }
                 }

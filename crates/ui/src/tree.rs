@@ -42,7 +42,11 @@ impl Scope {
 /// Every tree view calls this, so the highlight needs no option and behaves the same everywhere.
 pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
     let cur = *depths.get(cursor)?;
-    let folder = if depths.get(cursor + 1).is_some_and(|d| *d > cur) { cursor } else { depths[..cursor].iter().rposition(|d| *d + 1 == cur)? };
+    let folder = if depths.get(cursor + 1).is_some_and(|d| *d > cur) {
+        cursor
+    } else {
+        depths[..cursor].iter().rposition(|d| *d + 1 == cur)?
+    };
     let depth = depths[folder];
     let to = depths[folder + 1..].iter().position(|d| *d <= depth).map_or(depths.len(), |n| folder + 1 + n);
     Some(Scope { from: folder, to, col: depth })
@@ -52,9 +56,26 @@ pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
 /// neighbors' indentation, so guides run through it.
 pub fn indent_levels(own: &[Option<usize>]) -> Vec<usize> {
     let mut before = 0;
-    let before: Vec<usize> = own.iter().map(|d| { if let Some(d) = d { before = *d; } before }).collect();
+    let before: Vec<usize> = own
+        .iter()
+        .map(|d| {
+            if let Some(d) = d {
+                before = *d;
+            }
+            before
+        })
+        .collect();
     let mut after = 0;
-    let mut after_rev: Vec<usize> = own.iter().rev().map(|d| { if let Some(d) = d { after = *d; } after }).collect();
+    let mut after_rev: Vec<usize> = own
+        .iter()
+        .rev()
+        .map(|d| {
+            if let Some(d) = d {
+                after = *d;
+            }
+            after
+        })
+        .collect();
     after_rev.reverse();
     own.iter().enumerate().map(|(i, d)| d.unwrap_or_else(|| before[i].min(after_rev[i]))).collect()
 }
@@ -72,13 +93,21 @@ pub fn code_scope(indents: &[Option<usize>], unit: usize, cursor: usize) -> Opti
 pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<Span<'static>> {
     let Some(col) = active.filter(|c| *c < depth) else { return vec![guides(theme, depth)] };
     let muted = Style::new().fg(theme.colors.muted.into());
-    vec![Span::styled("│ ".repeat(col), muted), Span::styled("│ ", Style::new().fg(theme.colors.accent.into())), Span::styled("│ ".repeat(depth - col - 1), muted)]
+    vec![
+        Span::styled("│ ".repeat(col), muted),
+        Span::styled("│ ", Style::new().fg(theme.colors.accent.into())),
+        Span::styled("│ ".repeat(depth - col - 1), muted),
+    ]
 }
 
 /// The start of a folder row: guides, the open or closed folder icon, and the name (accent, bold).
 pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'static>> {
     let icon = crate::icons::dir(name.rsplit('/').next().unwrap_or(name), open);
-    vec![guides(theme, depth), Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)), Span::styled(name.to_string(), Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD))]
+    vec![
+        guides(theme, depth),
+        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
+        Span::styled(name.to_string(), Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD)),
+    ]
 }
 
 /// The fold arrow of a row that can fold (`Some(true)` folded), or blank space of the same width for one that cannot.
@@ -92,7 +121,14 @@ pub fn fold_mark(theme: &Theme, folded: Option<bool>) -> Span<'static> {
 }
 
 /// The start of a group row: guides, the fold arrow, the icon if there is one, and the label in `style`.
-pub fn group(theme: &Theme, depth: usize, folded: bool, icon: Option<Icon>, label: &str, style: Style) -> Vec<Span<'static>> {
+pub fn group(
+    theme: &Theme,
+    depth: usize,
+    folded: bool,
+    icon: Option<Icon>,
+    label: &str,
+    style: Style,
+) -> Vec<Span<'static>> {
     let mut spans = vec![guides(theme, depth), fold_mark(theme, Some(folded))];
     if let Some(icon) = icon {
         spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
@@ -194,7 +230,10 @@ pub fn line_counts(theme: &Theme, change: Option<(u32, u32)>, widths: CountWidth
                 Span::raw(" ".repeat(total - used)),
                 Span::styled(format!("{:>w$}", format!("+{a}"), w = widths.added), Style::new().fg(c.git.added.into())),
                 Span::raw(" "),
-                Span::styled(format!("{:<w$}", format!("−{r}"), w = widths.removed), Style::new().fg(c.git.deleted.into())),
+                Span::styled(
+                    format!("{:<w$}", format!("−{r}"), w = widths.removed),
+                    Style::new().fg(c.git.deleted.into()),
+                ),
             ]
         }
         None => vec![Span::styled(format!("{:>total$}", "binary"), Style::new().fg(c.muted.into()))],
@@ -266,7 +305,8 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         name_style = name_style.add_modifier(Modifier::DIM);
     }
     let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-    let icon = if row.is_dir { crate::icons::dir(base_name, row.open) } else { crate::icons::file(base_name, row.executable) };
+    let icon =
+        if row.is_dir { crate::icons::dir(base_name, row.open) } else { crate::icons::file(base_name, row.executable) };
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
     spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
     let name_at = spans.len();
@@ -283,14 +323,29 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     // is dropped, so a narrow pane keeps the name. The rest (bar, columns, signs, motion) is `list::ListRow`.
     let signs = if row.signs.is_empty() { 1 } else { row.signs.len() * 2 };
     let count_w = row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
-    let budget = |trailing: usize| width.saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0))).saturating_sub(row.depth * 2 + 2 + count_w);
+    let budget = |trailing: usize| {
+        width
+            .saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0)))
+            .saturating_sub(row.depth * 2 + 2 + count_w)
+    };
     let trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
     let show_trailing = trailing > 0 && budget(trailing) >= MIN_NAME;
-    spans[name_at] = Span::styled(crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })), name_style);
+    spans[name_at] =
+        Span::styled(crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })), name_style);
     list::ListRow {
         id: crate::anim::hash_of(&(row.depth, row.name)),
         // What the row shows apart from the cursor.
-        content: crate::anim::hash_of(&(row.tint, row.is_dir, row.executable, row.marked, row.cut, row.count, row.note, row.signs.clone(), row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>())),
+        content: crate::anim::hash_of(&(
+            row.tint,
+            row.is_dir,
+            row.executable,
+            row.marked,
+            row.cut,
+            row.count,
+            row.note,
+            row.signs.clone(),
+            row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>(),
+        )),
         left: spans,
         right: if show_trailing { row.trailing.clone() } else { Vec::new() },
         signs: row.signs.clone(),
@@ -308,10 +363,18 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
     let Some(w) = width else {
         let mut spans = guides_marked(theme, row.depth, row.active_guide);
         let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-        let icon = if row.is_dir { crate::icons::dir(base_name, row.open) } else { crate::icons::file(base_name, row.executable) };
+        let icon = if row.is_dir {
+            crate::icons::dir(base_name, row.open)
+        } else {
+            crate::icons::file(base_name, row.executable)
+        };
         spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
         let c = &theme.colors;
-        let style = if row.is_dir { Style::new().fg(row.tint.unwrap_or(c.accent.into())).add_modifier(Modifier::BOLD) } else { Style::new().fg(row.tint.unwrap_or(c.fg.into())) };
+        let style = if row.is_dir {
+            Style::new().fg(row.tint.unwrap_or(c.accent.into())).add_modifier(Modifier::BOLD)
+        } else {
+            Style::new().fg(row.tint.unwrap_or(c.fg.into()))
+        };
         spans.push(Span::styled(row.name.to_string(), style));
         if let Some(n) = row.count {
             spans.push(count(theme, n));
