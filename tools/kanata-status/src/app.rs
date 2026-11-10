@@ -3,7 +3,7 @@ use crate::link::{Event, State};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event as Term, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use ui::{Pane, Theme, mix};
@@ -11,7 +11,6 @@ use ui::{Pane, Theme, mix};
 const HISTORY_LIMIT: usize = 500;
 /// The widest row of the keyboard, in quarter keys (a 1u key is 4).
 const ROW_QUARTERS: usize = 60;
-const KEY_ROWS_HEIGHT: u16 = 14;
 
 enum Item {
     Press(String),
@@ -132,35 +131,67 @@ impl App {
 
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         let l = &self.theme.layout;
-        let keyboard_h = KEY_ROWS_HEIGHT + 2 + 2 + 2 * l.padding_y;
+        let keyboard_h = self.keys_height() + 2 + 2 + 2 * l.padding_y;
         let rows = ui::layout::rows(
             &self.theme,
             area,
-            &[Constraint::Length(keyboard_h), Constraint::Min(3), Constraint::Length(1)],
+            &[
+                Constraint::Length(1),
+                Constraint::Length(keyboard_h),
+                Constraint::Min(3),
+                Constraint::Length(1),
+            ],
         );
         let rows: Vec<Rect> = rows.iter().map(|r| r.intersection(area)).collect();
-        self.render_keyboard(rows[0], buf);
-        self.render_history(rows[1], buf);
-        if rows[2].is_empty() {
+        self.render_layer(rows[0], buf);
+        self.render_keyboard(rows[1], buf);
+        self.render_history(rows[2], buf);
+        if rows[3].is_empty() {
             return;
         }
         let hint = "^q quit   ^n ^p layer   ^l follow live   ^k clear history";
         buf.set_stringn(
-            rows[2].x,
-            rows[2].y,
+            rows[3].x,
+            rows[3].y,
             hint,
-            rows[2].width as usize,
+            rows[3].width as usize,
             Style::new().fg(self.theme.colors.muted.into()),
         );
     }
 
+    /// Height of the key rows: one line per row with a thin line between rows.
+    fn keys_height(&self) -> u16 {
+        (self.cfg.rows.len() as u16 * 2).saturating_sub(1)
+    }
+
+    /// A color for a layer, so each one is recognisable at a glance.
+    fn layer_color(&self, name: &str) -> Color {
+        let c = &self.theme.colors;
+        let palette = [c.success, c.info, c.warning, c.accent, c.error, c.git.renamed];
+        let i = self.cfg.layers.iter().position(|l| l.name == name).unwrap_or(0);
+        palette[i % palette.len()].into()
+    }
+
+    fn render_layer(&self, area: Rect, buf: &mut Buffer) {
+        if area.is_empty() {
+            return;
+        }
+        let name = self.cfg.layers[self.shown_index()].name.clone();
+        let suffix = if self.browsing.is_some() { " (browsing)" } else { "" };
+        let text = format!(" {}{suffix} ", name.to_uppercase());
+        let style = Style::new()
+            .fg(self.theme.colors.bg.into())
+            .bg(self.layer_color(&name))
+            .add_modifier(Modifier::BOLD);
+        let w = (text.chars().count() as u16).min(area.width);
+        buf.set_stringn(area.x + (area.width - w) / 2, area.y, text, w as usize, style);
+    }
+
     fn render_keyboard(&self, area: Rect, buf: &mut Buffer) {
         let c = &self.theme.colors;
-        let idx = self.shown_index();
-        let layer = self.cfg.layers[idx].name.clone();
+        let layer = self.cfg.layers[self.shown_index()].name.clone();
         let live = self.browsing.is_none();
-        let title = format!("Keyboard  {layer}{}", if live { "" } else { "  (browsing)" });
-        let pane = Pane::new(&self.theme).title(&title).focused(true);
+        let pane = Pane::new(&self.theme).title("Keyboard").focused(true);
         let inner = pane.inner(area);
         pane.render(area, buf);
 
@@ -168,10 +199,10 @@ impl App {
         let width = inner.width.min(144) as usize;
         let at = |q: usize| (q * width / ROW_QUARTERS) as u16;
         let base_bg = mix(c.muted.into(), c.bg.into(), 16);
-        let lit_bg = mix(c.accent.into(), c.bg.into(), 55);
+        let lit_bg = self.layer_color(&layer);
         for (r, row) in self.cfg.rows.iter().enumerate() {
-            let y = inner.y + (r as u16) * 3;
-            if y + 1 >= inner.y + inner.height {
+            let y = inner.y + (r as u16) * 2;
+            if y >= inner.y + inner.height {
                 break;
             }
             let fixed: usize = row.iter().filter(|k| *k != "spc").map(|k| quarters(k)).sum();
@@ -184,27 +215,29 @@ impl App {
                 };
                 let (x0, x1) = (at(cum), at(cum + q));
                 cum += q;
+                let action = self.cfg.action(&layer, &self.base, key);
+                if action == Action::Blocked {
+                    continue;
+                }
                 let w = (x1 - x0).saturating_sub(1);
                 if w == 0 || x0 + w > inner.width {
                     continue;
                 }
-                let cell = Rect::new(inner.x + x0, y, w, 2);
-                let on = lit.contains(key);
-                buf.set_style(cell, Style::new().bg(if on { lit_bg } else { base_bg }));
-                let action = self.cfg.action(&layer, &self.base, key);
+                let cell = Rect::new(inner.x + x0, y, w, 1);
                 let (label, color) = self.label(key, &action);
-                let src_style = Style::new().fg(if on { c.accent.into() } else { c.muted.into() });
-                let mut label_style = Style::new().fg(color);
-                if on {
-                    label_style = label_style.add_modifier(Modifier::BOLD);
-                }
-                let max = w as usize;
-                buf.set_stringn(cell.x, y, format!(" {}", kbd::short(key)), max, src_style);
-                buf.set_stringn(cell.x, y + 1, format!(" {label}"), max, label_style);
+                let style = if lit.contains(key) {
+                    Style::new().fg(c.bg.into()).bg(lit_bg).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::new().fg(color).bg(base_bg)
+                };
+                buf.set_style(cell, style);
+                let label: String = label.to_uppercase().chars().take(w as usize).collect();
+                let pad = (w as usize - label.chars().count()) / 2;
+                buf.set_stringn(cell.x + pad as u16, y, &label, w as usize - pad, style);
             }
         }
 
-        let status_y = inner.y + KEY_ROWS_HEIGHT + 1;
+        let status_y = inner.y + self.keys_height() + 1;
         if status_y < inner.y + inner.height {
             let line = self.status_line();
             Paragraph::new(line).render(Rect::new(inner.x, status_y, inner.width, 1), buf);
@@ -218,9 +251,9 @@ impl App {
             Action::Blocked => ("·".into(), c.muted.into()),
             Action::Transparent => (kbd::short(key), c.muted.into()),
             Action::Keys { label, outputs } if outputs.len() == 1 && outputs[0] == key => {
-                (label.clone(), c.muted.into())
+                (kbd::short(label), c.muted.into())
             }
-            Action::Keys { label, .. } => (label.clone(), c.fg.into()),
+            Action::Keys { label, .. } => (kbd::short(label), c.fg.into()),
             Action::Switch(l) => (format!("→{l}"), c.accent.into()),
             Action::Hold(l) => (format!("{l}↓"), c.accent.into()),
             Action::Other(o) => (o.clone(), c.info.into()),
@@ -243,8 +276,14 @@ impl App {
         if self.state.keys.is_empty() {
             spans.push(Span::styled("none", Style::new().fg(c.muted.into())));
         } else {
-            let held =
-                self.state.keys.iter().map(|k| kbd::short(k)).collect::<Vec<_>>().join(" + ");
+            let mut names: Vec<String> = Vec::new();
+            for k in &self.state.keys {
+                let name = kbd::short(k).to_uppercase();
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            let held = names.join(" + ");
             spans.push(Span::styled(
                 held,
                 Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
@@ -253,6 +292,7 @@ impl App {
         Line::from(spans)
     }
 
+    /// One line per event, newest at the bottom, like a log.
     fn render_history(&self, area: Rect, buf: &mut Buffer) {
         let c = &self.theme.colors;
         let pane = Pane::new(&self.theme).title("History");
@@ -261,31 +301,29 @@ impl App {
         if inner.width == 0 || inner.height == 0 {
             return;
         }
-        let (width, height) = (inner.width as usize, inner.height as usize);
         let last = self.history.len().saturating_sub(1);
-        let mut lines: Vec<Vec<Span>> = vec![Vec::new()];
-        let mut used = 0;
-        for (i, item) in self.history.iter().enumerate() {
-            let (text, style) = match item {
-                Item::Press(k) if i == last => {
-                    (kbd::short(k), Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD))
+        let skip = self.history.len().saturating_sub(inner.height as usize);
+        let lines: Vec<Line> = self
+            .history
+            .iter()
+            .enumerate()
+            .skip(skip)
+            .map(|(i, item)| match item {
+                Item::Press(k) => {
+                    let style = if i == last {
+                        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::new().fg(c.fg.into())
+                    };
+                    Line::styled(kbd::short(k).to_uppercase(), style)
                 }
-                Item::Press(k) => (kbd::short(k), Style::new().fg(c.fg.into())),
-                Item::Layer(l) => (format!("[{l}]"), Style::new().fg(c.info.into())),
-            };
-            let w = text.chars().count() + 2;
-            if used + w > width && used > 0 {
-                lines.push(Vec::new());
-                used = 0;
-            }
-            used += w;
-            let line = lines.last_mut().expect("one line");
-            line.push(Span::styled(text, style));
-            line.push(Span::raw("  "));
-        }
-        let skip = lines.len().saturating_sub(height);
-        let text: Vec<Line> = lines.into_iter().skip(skip).map(Line::from).collect();
-        Paragraph::new(text).render(inner, buf);
+                Item::Layer(l) => Line::styled(
+                    format!("-> {}", l.to_uppercase()),
+                    Style::new().fg(self.layer_color(l)),
+                ),
+            })
+            .collect();
+        Paragraph::new(lines).render(inner, buf);
     }
 }
 
