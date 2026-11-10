@@ -12,8 +12,8 @@ use std::fs::OpenOptions;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::mpsc::TryRecvError;
-use std::time::Duration;
+use std::sync::mpsc;
+use std::thread;
 
 /// The keyboard, the active kanata layer, the keys held and the keys pressed.
 #[derive(Parser)]
@@ -25,6 +25,12 @@ struct Cli {
     /// Where `kb daemon` serves its state.
     #[arg(long, default_value = "127.0.0.1:6667")]
     addr: String,
+}
+
+/// Everything the main loop waits on, so it sleeps until something happens.
+enum Msg {
+    Daemon(link::Event),
+    Term(event::Event),
 }
 
 type Term = Terminal<CrosstermBackend<std::fs::File>>;
@@ -58,7 +64,16 @@ fn run(cli: Cli) -> Result<(), String> {
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let cfg = Config::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut app = App::new(cfg, cli.addr.clone());
-    let events = link::follow(cli.addr);
+    let (tx, rx) = mpsc::channel();
+    let daemon_tx = tx.clone();
+    link::follow(cli.addr, move |e| daemon_tx.send(Msg::Daemon(e)).is_ok());
+    thread::spawn(move || {
+        while let Ok(e) = event::read() {
+            if tx.send(Msg::Term(e)).is_err() {
+                break;
+            }
+        }
+    });
 
     let tty =
         OpenOptions::new().read(true).write(true).open("/dev/tty").map_err(|e| e.to_string())?;
@@ -76,19 +91,20 @@ fn run(cli: Cli) -> Result<(), String> {
                 })?;
                 dirty = false;
             }
-            loop {
-                match events.try_recv() {
-                    Ok(e) => dirty |= app.apply(e),
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return Ok(()),
+            let Ok(first) = rx.recv() else { return Ok(()) };
+            let mut next = Some(first);
+            while let Some(msg) = next {
+                match msg {
+                    Msg::Daemon(e) => dirty |= app.apply(e),
+                    Msg::Term(e) => {
+                        let (quit, redraw) = app.handle_event(&e);
+                        if quit {
+                            return Ok(());
+                        }
+                        dirty |= redraw;
+                    }
                 }
-            }
-            if event::poll(Duration::from_millis(30))? {
-                let (quit, redraw) = app.handle_event(&event::read()?);
-                if quit {
-                    return Ok(());
-                }
-                dirty |= redraw;
+                next = rx.try_recv().ok();
             }
         }
     })();
