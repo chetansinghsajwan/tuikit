@@ -3,7 +3,7 @@ use ui::keys::Keymap;
 
 #[test]
 fn every_pane_has_described_actions_and_no_shared_keys() {
-    for pane in 0..3 {
+    for pane in 0..4 {
         let actions = pane_actions(pane);
         let mut ids = std::collections::HashSet::new();
         let mut keys = std::collections::HashSet::new();

@@ -645,3 +645,33 @@ fn fetch_pull_and_push_against_a_local_remote() {
         Repo::discover(&d).unwrap().refs().unwrap().into_iter().map(|x| x.name).collect();
     assert!(names.contains(&"upstream/main".to_string()), "{names:?}");
 }
+
+#[test]
+fn submodules_are_listed_and_show_in_status() {
+    let sub = repo("submodule-source");
+    fs::write(sub.join("a.txt"), "a\n").unwrap();
+    git(&sub, &["add", "."]);
+    git(&sub, &["commit", "-m", "one"]);
+    let dir = repo("submodule-host");
+    fs::write(dir.join("f.txt"), "f\n").unwrap();
+    git(&dir, &["add", "."]);
+    git(&dir, &["commit", "-m", "init"]);
+    git(
+        &dir,
+        &["-c", "protocol.file.allow=always", "submodule", "add", sub.to_str().unwrap(), "mod"],
+    );
+    git(&dir, &["commit", "-m", "add submodule"]);
+    let r = Repo::discover(&dir).unwrap();
+    let list = r.submodules().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!((list[0].path.as_str(), list[0].state), ("mod", SubmoduleState::Clean));
+    assert!(!list[0].dirty);
+    // An uncommitted file inside the submodule makes it a changed file of the host.
+    fs::write(dir.join("mod/new.txt"), "x\n").unwrap();
+    let r = Repo::discover(&dir).unwrap();
+    assert!(r.submodules().unwrap()[0].dirty);
+    assert!(r.status().unwrap().get(Path::new("mod")).is_some());
+    // Removing it leaves no trace in the index or `.gitmodules`.
+    r.submodule_remove("mod").unwrap();
+    assert!(r.submodules().unwrap().is_empty());
+}

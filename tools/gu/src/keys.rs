@@ -24,6 +24,13 @@ pub const GLOBAL: &[Action] = &[
     ),
     basic("focus.commits", "commits tab", "show the Commits tab (the full graph)", &["2"]),
     basic("focus.stashes", "refs: stashes", "show the Refs tab on the stashes", &["4"]),
+    basic("focus.submodules", "refs: submodules", "show the Refs tab on the submodules", &["5"]),
+    action(
+        "repo.up",
+        "up to parent repo",
+        "go back to the repository this submodule was opened from",
+        &["leader U"],
+    ),
     action(
         "remote.fetch",
         "fetch",
@@ -289,12 +296,53 @@ const STASHES: &[Action] = &[
     action("stash.drop", "drop stash", "drop the stash (asks first)", &["d", "leader d"]),
 ];
 
-/// The actions of the Branches, Commits and Stashes panes (0, 1, 2).
+const SUBMODULES: &[Action] = &[
+    action(
+        "submodule.open",
+        "open",
+        "open the submodule as the repository on screen (leader U goes back up); a submodule not cloned yet is cloned first",
+        &["enter", "l", "right", "leader k"],
+    ),
+    action(
+        "submodule.update",
+        "update",
+        "clone if needed and check out the commit the super-project records",
+        &["u", "leader a"],
+    ),
+    action("submodule.update_all", "update all", "update every submodule", &["U"]),
+    action(
+        "submodule.update_remote",
+        "update to remote tip",
+        "check out the latest commit of the submodule's remote branch (shows as a change to stage)",
+        &["r", "leader p"],
+    ),
+    action(
+        "submodule.sync",
+        "sync urls",
+        "copy the URLs of .gitmodules to the config of the repo and the submodules",
+        &["s"],
+    ),
+    action(
+        "submodule.add",
+        "add",
+        "add a submodule: the URL, then optionally a space and the path",
+        &["n", "a", "leader n"],
+    ),
+    action(
+        "submodule.remove",
+        "remove",
+        "remove the submodule and delete its work tree (asks first)",
+        &["d", "leader d"],
+    ),
+];
+
+/// The actions of the Branches, Commits, Stashes and Submodules panes (0, 1, 2, 3).
 pub fn pane_actions(pane: usize) -> Vec<Action> {
     let own: &[Action] = match pane {
         0 => BRANCHES,
         1 => COMMITS,
         2 => STASHES,
+        3 => SUBMODULES,
         _ => &[],
     };
     own.iter().chain(COMMON).chain(GLOBAL).cloned().collect()

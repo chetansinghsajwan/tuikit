@@ -86,6 +86,8 @@ impl App {
             "focus.branches" => self.show(Focus::Branches),
             "focus.commits" => self.show(Focus::Commits),
             "focus.stashes" => self.show(Focus::Stashes),
+            "focus.submodules" => self.show(Focus::Submodules),
+            "repo.up" => self.repo_up(),
             "back" => {
                 // Esc: clear a search first, then go back to the Status tab.
                 if self.work {
@@ -479,6 +481,7 @@ impl App {
                     _ => {}
                 }
             }
+            Focus::Submodules => self.submodule_action(id),
             Focus::Stashes => {
                 let cur = self.stashes.get(self.lists[2].cursor).map(|s| s.index);
                 match (id, cur) {
@@ -691,6 +694,19 @@ impl App {
                         self.run("reworded".to_string(), move |r| r.reword_commit(&oid, &v));
                     }
                     PromptKind::SwitchTo => self.switch_to(value),
+                    PromptKind::AddSubmodule => {
+                        let mut parts = value.split_whitespace();
+                        let Some(url) = parts.next().map(str::to_string) else { return };
+                        // Without a path, the last part of the URL names the folder, as `git submodule add` does.
+                        let path = parts.next().map(str::to_string).unwrap_or_else(|| {
+                            let tail = url.trim_end_matches('/').rsplit(['/', ':']).next();
+                            tail.unwrap_or("").trim_end_matches(".git").to_string()
+                        });
+                        let done = format!("added {path}");
+                        self.remote("adding the submodule", &done, move |r| {
+                            r.submodule_add(&url, &path)
+                        });
+                    }
                     PromptKind::Amend(old) => {
                         let v = value.clone();
                         self.run("amended the last commit".to_string(), move |r| {
@@ -740,6 +756,7 @@ impl App {
                 | Confirm::DeleteTag(_)
                 | Confirm::DeleteRemote(_)
                 | Confirm::DropStash(_)
+                | Confirm::RemoveSubmodule(_)
         );
         if !(matches!(key.code, KeyCode::Char('y' | 'Y') | KeyCode::Enter)
             || (again && matches!(key.code, KeyCode::Char('d' | 'D'))))
@@ -774,6 +791,84 @@ impl App {
             Confirm::DeleteRemote(name) => {
                 let n = name.clone();
                 self.remote("deleting", "deleted", move |r| r.delete_remote_branch(&n));
+            }
+            Confirm::RemoveSubmodule(path) => {
+                let p = path.clone();
+                self.run(format!("removed {path}"), move |r| r.submodule_remove(&p));
+            }
+        }
+    }
+}
+
+impl App {
+    /// The actions that act on the highlighted submodule.
+    fn submodule_action(&mut self, id: &str) {
+        let cur = self.submodules.get(self.lists[3].cursor).cloned();
+        match (id, cur) {
+            ("submodule.add", _) => {
+                self.mode = Mode::Prompt(PromptKind::AddSubmodule, Input::default())
+            }
+            ("submodule.update_all", _) => {
+                self.remote("updating", "updated every submodule", |r| r.submodule_update_all())
+            }
+            ("submodule.sync", _) => {
+                self.run("synced the urls".to_string(), |r| r.submodule_sync())
+            }
+            ("submodule.open", Some(s)) => self.open_submodule(&s.path),
+            ("submodule.update", Some(s)) => {
+                let done = format!("updated {}", s.path);
+                self.remote("updating", &done, move |r| r.submodule_update(&s.path));
+            }
+            ("submodule.update_remote", Some(s)) => {
+                let done = format!("{} is at the remote tip", s.path);
+                self.remote("updating", &done, move |r| r.submodule_update_remote(&s.path));
+            }
+            ("submodule.remove", Some(s)) => {
+                self.mode = Mode::Confirm(Confirm::RemoveSubmodule(s.path))
+            }
+            _ => {}
+        }
+    }
+
+    /// Show the submodule at `path` as the repository on screen, remembering this one.
+    fn open_submodule(&mut self, path: &str) {
+        let dir = self.root.join(path);
+        // A submodule that is not cloned has an empty folder: clone it first.
+        if Repo::discover(&dir)
+            .is_none_or(|r| r.root() != dir.canonicalize().unwrap_or(dir.clone()))
+        {
+            self.say(format!("{path} is not cloned: u updates it first"), true);
+            return;
+        }
+        let Some(mut app) = App::new(&dir) else {
+            self.say(format!("cannot open {path}"), true);
+            return;
+        };
+        app.parents = std::mem::take(&mut self.parents);
+        app.parents.push(self.root.clone());
+        app.screen = Screen::Refs;
+        app.focus = Focus::Branches;
+        *self = app;
+    }
+
+    /// Go back to the repository the current one was opened from.
+    fn repo_up(&mut self) {
+        let Some(parent) = self.parents.pop() else {
+            self.say("this is the top repository", false);
+            return;
+        };
+        let parents = std::mem::take(&mut self.parents);
+        match App::new(&parent) {
+            Some(mut app) => {
+                app.parents = parents;
+                app.screen = Screen::Refs;
+                app.focus = Focus::Submodules;
+                *self = app;
+            }
+            None => {
+                self.parents = parents;
+                self.parents.push(parent);
+                self.say("the parent repository is gone", true);
             }
         }
     }

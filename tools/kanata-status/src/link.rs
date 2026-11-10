@@ -3,7 +3,6 @@
 use serde::Deserialize;
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
-use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
 
@@ -26,27 +25,27 @@ pub enum Event {
     Down,
 }
 
-/// Follows the daemon at `addr` on a thread, reconnecting forever.
-pub fn follow(addr: String) -> Receiver<Event> {
-    let (tx, rx) = mpsc::channel();
+/// Follows the daemon at `addr` on a thread, reconnecting forever; `send` returns false once
+/// nobody listens any more.
+pub fn follow(addr: String, send: impl Fn(Event) -> bool + Send + 'static) {
     thread::spawn(move || {
         loop {
             if let Ok(stream) = TcpStream::connect(&addr) {
+                let _ = stream.set_nodelay(true);
                 for line in BufReader::new(stream).lines().map_while(Result::ok) {
                     if let Ok(state) = serde_json::from_str(&line)
-                        && tx.send(Event::State(state)).is_err()
+                        && !send(Event::State(state))
                     {
                         return;
                     }
                 }
             }
-            if tx.send(Event::Down).is_err() {
+            if !send(Event::Down) {
                 return;
             }
             thread::sleep(Duration::from_secs(2));
         }
     });
-    rx
 }
 
 #[cfg(test)]

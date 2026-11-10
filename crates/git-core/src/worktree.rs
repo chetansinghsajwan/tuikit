@@ -90,7 +90,7 @@ impl Repo {
         Some(name.shorten().to_str_lossy().into_owned())
     }
 
-    fn git(&self, args: &[&str], paths: &[PathBuf]) -> Result<String, Error> {
+    pub(crate) fn git(&self, args: &[&str], paths: &[PathBuf]) -> Result<String, Error> {
         let mut cmd = Command::new("git");
         cmd.current_dir(&self.root).args(["--no-pager", "-c", "core.quotepath=off"]).args(args);
         if !paths.is_empty() {
@@ -215,7 +215,7 @@ impl Repo {
     /// Like `git`, for commands that talk to a remote: never prompts (the TUI owns the
     /// terminal), and ssh runs in batch mode so a passphrase prompt cannot take over the screen
     /// (keys in an agent still work).
-    fn git_net(&self, args: &[&str]) -> Result<String, Error> {
+    pub(crate) fn git_net(&self, args: &[&str]) -> Result<String, Error> {
         let base = std::env::var("GIT_SSH_COMMAND").ok().or_else(|| {
             let out = Command::new("git")
                 .current_dir(&self.root)

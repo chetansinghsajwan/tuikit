@@ -21,6 +21,7 @@ impl App {
                     PromptKind::Reword(_) => "message: ",
                     PromptKind::Amend(_) => "amend with message: ",
                     PromptKind::SwitchTo => "switch to (branch, tag or commit): ",
+                    PromptKind::AddSubmodule => "submodule url [path]: ",
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
                 if matches!(kind, PromptKind::SwitchTo) {
@@ -51,6 +52,9 @@ impl App {
                         format!("Force-push {} (with lease)? (y/n)", self.files.branch())
                     }
                     Confirm::DeleteTag(name) => format!("Delete tag {name}? (d again or y)"),
+                    Confirm::RemoveSubmodule(path) => {
+                        format!("Remove submodule {path} and delete its folder? (d again or y)")
+                    }
                     Confirm::DeleteRemote(name) => {
                         format!("Delete {name} on the remote? (d again or y)")
                     }
@@ -108,6 +112,9 @@ impl App {
                 "enter checkout  m compare  M vs work tree  C cherry-pick  R revert  r reword  A amend  b branch  t tag  space z reset  space space commands  ? keys"
             }
             Focus::Stashes => "n new  a apply  p pop  d drop  tab refs  [ ] tabs  ? keys",
+            Focus::Submodules => {
+                "enter open  u update  U all  r remote tip  s sync  n add  d remove  space U back up  [ ] tabs  ? keys"
+            }
         }
     }
 }
