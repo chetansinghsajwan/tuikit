@@ -109,6 +109,11 @@ pub(crate) fn compute(repo: &gix::Repository) -> Result<Status, Error> {
         .status(gix::progress::Discard)
         .map_err(err)?
         .untracked_files(gix::status::UntrackedFiles::Files)
+        // Submodules count as changed files (moved commit, dirty work tree), whatever `ignore` says in the config.
+        .index_worktree_submodules(gix::status::Submodule::Given {
+            ignore: gix::submodule::config::Ignore::None,
+            check_dirty: true,
+        })
         .into_iter(Vec::new())
         .map_err(err)?;
 

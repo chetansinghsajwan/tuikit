@@ -13,7 +13,9 @@ impl App {
         let rev = self.current_rev(which);
         let short = |s: &str| s.chars().take(8).collect::<String>();
         let whole = rev.clone().unwrap_or_default();
-        let title = if let Some(a) = whole.strip_suffix('\u{3}') {
+        let title = if let Some(p) = whole.strip_prefix('\u{4}') {
+            p.to_string()
+        } else if let Some(a) = whole.strip_suffix('\u{3}') {
             format!("{}..work tree", short(a))
         } else if let Some((a, b)) = whole.split_once('\u{2}') {
             format!("{}..{}", short(a), short(b))
@@ -25,6 +27,7 @@ impl App {
         let icon = match which {
             Focus::Branches => ui::icons::BRANCH,
             Focus::Stashes => ui::icons::STASH,
+            Focus::Submodules => ui::icons::GIT,
             _ => ui::icons::COMMIT,
         };
         let pane = Pane::new(theme).title(&title).icon(icon);
@@ -48,6 +51,33 @@ impl App {
             let opts =
                 pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let result = match rev.split_once('\u{1}') {
+                _ if rev.starts_with('\u{4}') => {
+                    let text = Repo::discover(&self.root)
+                        .ok_or_else(|| "not a repository".to_string())
+                        .and_then(|r| {
+                            let path = rev.trim_start_matches('\u{4}');
+                            let info = r.submodules().map_err(|e| e.to_string())?;
+                            let info = info.iter().find(|s| s.path == path);
+                            let mut out = String::new();
+                            if let Some(s) = info {
+                                out.push_str(&format!(
+                                    "url     {}\ncommit  {}\nstate   {:?}{}\n\n",
+                                    s.url,
+                                    s.oid,
+                                    s.state,
+                                    if s.dirty { ", uncommitted changes inside" } else { "" }
+                                ));
+                            }
+                            out.push_str(&r.submodule_summary(path).map_err(|e| e.to_string())?);
+                            Ok(out)
+                        })
+                        .unwrap_or_else(|e| e);
+                    let fg = Style::new().fg(theme.colors.muted.into());
+                    Ok((
+                        text.lines().map(|l| Line::from(Span::styled(l.to_string(), fg))).collect(),
+                        Default::default(),
+                    ))
+                }
                 _ if rev.ends_with('\u{3}') => {
                     let base = rev.trim_end_matches('\u{3}');
                     match Repo::discover(&self.root)

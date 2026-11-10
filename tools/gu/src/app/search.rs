@@ -8,7 +8,7 @@ impl App {
         match focus {
             Focus::Files => Screen::Status,
             Focus::Commits => Screen::Commits,
-            Focus::Branches | Focus::Stashes => Screen::Refs,
+            Focus::Branches | Focus::Stashes | Focus::Submodules => Screen::Refs,
         }
     }
 

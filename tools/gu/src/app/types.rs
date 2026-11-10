@@ -27,12 +27,13 @@ pub(super) enum Focus {
     Branches,
     Commits,
     Stashes,
+    Submodules,
 }
 
 /// The panes of each tab, in focus order.
 pub(super) const STATUS_PANES: [Focus; 1] = [Focus::Files];
 pub(super) const COMMITS_PANES: [Focus; 1] = [Focus::Commits];
-pub(super) const REFS_PANES: [Focus; 2] = [Focus::Branches, Focus::Stashes];
+pub(super) const REFS_PANES: [Focus; 3] = [Focus::Branches, Focus::Stashes, Focus::Submodules];
 
 pub(super) enum PromptKind {
     /// Search the commits.
@@ -57,6 +58,8 @@ pub(super) enum PromptKind {
     Reword(String),
     /// Check out a branch, tag, remote branch or commit by name.
     SwitchTo,
+    /// Add a submodule: the URL, and optionally the path after a space.
+    AddSubmodule,
     /// Amend the last commit with what is staged, with this message (the old one is the value).
     Amend(String),
 }
@@ -79,6 +82,8 @@ pub(super) enum Confirm {
     DeleteTag(String),
     /// Delete a branch on its remote (`origin/topic`).
     DeleteRemote(String),
+    /// Remove a submodule (by path): its work tree goes too.
+    RemoveSubmodule(String),
 }
 
 /// A git command talking to a remote, running on its own thread.

@@ -1,4 +1,6 @@
-use git_core::{CommitInfo, Operation, RefInfo, RefKind, Repo, ResetMode, StashInfo};
+use git_core::{
+    CommitInfo, Operation, RefInfo, RefKind, Repo, ResetMode, StashInfo, SubmoduleInfo,
+};
 use git_panel::{Action as PanelAction, Panel};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
@@ -34,8 +36,11 @@ pub struct App {
     branches: Vec<RefInfo>,
     commits: Vec<CommitInfo>,
     stashes: Vec<StashInfo>,
-    /// Cursor and scroll of the branches, commits and stashes panes.
-    lists: [ListState; 3],
+    submodules: Vec<SubmoduleInfo>,
+    /// The repos opened above this one (entering a submodule pushes, `leader U` pops).
+    parents: Vec<PathBuf>,
+    /// Cursor and scroll of the branches, commits, stashes and submodules panes.
+    lists: [ListState; 4],
     focus: Focus,
     mode: Mode,
     message: Option<(String, bool)>,
@@ -44,8 +49,8 @@ pub struct App {
     /// The commit whose files were folded by hand (another commit starts with none).
     fold_rev: Option<String>,
     pheight: usize,
-    /// The keymaps of the Branches, Commits and Stashes panes (the Files pane has its own).
-    maps: [Keymap; 3],
+    /// The keymaps of the Branches, Commits, Stashes and Submodules panes (the Files pane has its own).
+    maps: [Keymap; 4],
     help: Option<ui::keys::Help>,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
@@ -102,7 +107,9 @@ impl App {
             branches: Vec::new(),
             commits: Vec::new(),
             stashes: Vec::new(),
-            lists: [ListState::default(); 3],
+            submodules: Vec::new(),
+            parents: Vec::new(),
+            lists: [ListState::default(); 4],
             focus: Focus::Files,
             mode: Mode::Normal,
             message: None,
@@ -110,7 +117,7 @@ impl App {
             pscroll: 0,
             fold_rev: None,
             pheight: 10,
-            maps: [0, 1, 2]
+            maps: [0, 1, 2, 3]
                 .map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
             help: None,
             job: None,

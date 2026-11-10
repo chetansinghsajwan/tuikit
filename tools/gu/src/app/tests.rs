@@ -284,7 +284,7 @@ fn focus_moves_with_tab_and_digits_and_q_quits() {
     let mut app = App::new(&d).unwrap();
     press(&mut app, "2");
     assert_eq!((app.screen, app.focus), (Screen::Commits, Focus::Commits));
-    // Commits has one pane: Tab stays. Refs has two: Tab and Shift-Tab move between them.
+    // Commits has one pane: Tab stays. Refs has three: Tab and Shift-Tab move between them.
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Commits);
     press(&mut app, "3");
@@ -292,9 +292,11 @@ fn focus_moves_with_tab_and_digits_and_q_quits() {
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Stashes);
     app.handle_event(&key(KeyCode::Tab));
+    assert_eq!(app.focus, Focus::Submodules);
+    app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Branches);
     app.handle_event(&Event::Key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)));
-    assert_eq!(app.focus, Focus::Stashes);
+    assert_eq!(app.focus, Focus::Submodules);
     press(&mut app, "1");
     assert_eq!((app.screen, app.focus), (Screen::Status, Focus::Files));
     assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);

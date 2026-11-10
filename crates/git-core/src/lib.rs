@@ -6,6 +6,7 @@ mod graph;
 mod history;
 mod lines;
 mod status;
+mod submodule;
 mod words;
 mod worktree;
 
@@ -15,6 +16,7 @@ pub use history::{
 };
 pub use lines::{LineChange, LineKind};
 pub use status::{FileStatus, Kind, Status};
+pub use submodule::{SubmoduleInfo, SubmoduleState};
 /// The hunks (3 lines of context) of the difference between two versions of a file.
 pub fn hunks_of(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     history::hunks(before, after)

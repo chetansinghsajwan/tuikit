@@ -13,6 +13,7 @@ impl App {
         let (title, n) = match which {
             Focus::Branches => ("Refs", self.ref_rows.len()),
             Focus::Commits => ("Commits", self.commits.len()),
+            Focus::Submodules => ("Submodules", self.submodules.len()),
             _ => ("Stashes", self.stashes.len()),
         };
         let focused = self.focus == which;
@@ -251,6 +252,26 @@ impl App {
                 }
                 (Line::from(spans), when.join("  "))
             }
+            Focus::Submodules => {
+                use git_core::SubmoduleState as St;
+                let s = &self.submodules[i];
+                let c = &theme.colors;
+                let (mark, color) = match (s.state, s.dirty) {
+                    (St::Conflict, _) => ("U", c.error),
+                    (St::Uninitialized, _) => ("-", c.muted),
+                    (St::Moved, _) => ("+", c.warning),
+                    (_, true) => ("*", c.warning),
+                    _ => (" ", c.muted),
+                };
+                (
+                    Line::from(vec![
+                        Span::styled(format!("{mark} "), Style::new().fg(color.into())),
+                        Span::styled(s.path.clone(), fg),
+                        Span::styled(format!("  {}", s.describe), muted),
+                    ]),
+                    s.oid.chars().take(8).collect(),
+                )
+            }
             _ => {
                 let s = &self.stashes[i];
                 (
@@ -303,6 +324,9 @@ impl App {
             },
             Focus::Stashes => {
                 self.stashes.get(self.lists[2].cursor).map(|s| format!("stash@{{{}}}", s.index))
+            }
+            Focus::Submodules => {
+                self.submodules.get(self.lists[3].cursor).map(|s| format!("\u{4}{}", s.path))
             }
             Focus::Files => None,
         }

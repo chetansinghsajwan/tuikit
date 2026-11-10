@@ -69,9 +69,12 @@ impl App {
             .unwrap_or(0);
         self.refs_w = self.refs_need.min(REFS_COL);
         self.stashes = self.repo.stashes().unwrap_or_default();
+        self.submodules = self.repo.submodules().unwrap_or_default();
         self.build_ref_rows(keep);
         for (i, len) in
-            [self.ref_rows.len(), self.commits.len(), self.stashes.len()].into_iter().enumerate()
+            [self.ref_rows.len(), self.commits.len(), self.stashes.len(), self.submodules.len()]
+                .into_iter()
+                .enumerate()
         {
             self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
         }
@@ -101,6 +104,7 @@ impl App {
             Focus::Branches => Some(0),
             Focus::Commits => Some(1),
             Focus::Stashes => Some(2),
+            Focus::Submodules => Some(3),
         }
     }
 
@@ -110,6 +114,7 @@ impl App {
             Focus::Branches => self.ref_rows.len(),
             Focus::Commits => self.commits.len(),
             Focus::Stashes => self.stashes.len(),
+            Focus::Submodules => self.submodules.len(),
         }
     }
 
