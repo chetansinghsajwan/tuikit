@@ -26,6 +26,7 @@
                 pv = "tuikit-pv-cli";
                 files = "tuikit-files-cli";
                 gu = "tuikit-gu";
+                kanata-status = "tuikit-kanata-status";
                 tb = "tuikit-tb-cli";
                 nu = "tuikit-nu";
                 mdexport = "tuikit-mdexport";

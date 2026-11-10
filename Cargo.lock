@@ -5514,6 +5514,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tuikit-kanata-status"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "tuikit-ui",
+]
+
+[[package]]
 name = "tuikit-mdexport"
 version = "0.1.0"
 dependencies = [

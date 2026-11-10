@@ -1,0 +1,26 @@
+[package]
+name = "tuikit-kanata-status"
+description = "kanata-status: the keyboard, its active kanata layer, held keys and key history"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "kanata_status"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kanata-status"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tuikit-ui.workspace = true

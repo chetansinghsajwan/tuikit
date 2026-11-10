@@ -30,6 +30,7 @@ ignore = "0.4.34"
 pulldown-cmark = { version = "0.13", default-features = false }
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 toml = "1.1.8"
 tui-input = "0.15.5"
 unicode-width = "0.2.2"
