@@ -671,6 +671,10 @@ fn submodules_are_listed_and_show_in_status() {
     let r = Repo::discover(&dir).unwrap();
     assert!(r.submodules().unwrap()[0].dirty);
     assert!(r.status().unwrap().get(Path::new("mod")).is_some());
+    let st = r.status().unwrap();
+    assert!(st.is_submodule(Path::new("mod")) && !st.is_submodule(Path::new("f.txt")));
+    // A folder view asks for the kinds beneath it: the submodule's own change counts.
+    assert_eq!(st.dir_kinds(Path::new("mod")), vec![Kind::Modified]);
     // Removing it leaves no trace in the index or `.gitmodules`.
     r.submodule_remove("mod").unwrap();
     assert!(r.submodules().unwrap().is_empty());

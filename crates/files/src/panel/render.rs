@@ -186,6 +186,10 @@ impl Panel {
             let area = rows.content(y);
             let selected = i == self.cursor;
             let git = self.git_state(row);
+            let submodule = row.is_dir
+                && self.git.as_ref().is_some_and(|(r, s)| {
+                    r.relative(&row.path).is_some_and(|p| s.is_submodule(&p))
+                });
             let tint = git.map(|(_, k)| pv::kind_color(theme, k));
 
             // Size and modified-time columns sit left of the git sign, when there is room.
@@ -235,6 +239,7 @@ impl Panel {
                     is_dir: row.is_dir,
                     open: self.expanded.contains(&row.path),
                     executable: !row.is_dir && is_executable(&row.path),
+                    icon: submodule.then_some(ui::icons::SUBMODULE),
                     tint,
                     selected,
                     focused,
