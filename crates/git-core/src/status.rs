@@ -50,6 +50,8 @@ impl FileStatus {
 #[derive(Debug, Default)]
 pub struct Status {
     files: HashMap<PathBuf, FileStatus>,
+    /// Paths of the submodules (a folder that is a repository of its own).
+    submodules: std::collections::HashSet<PathBuf>,
 }
 
 impl Status {
@@ -71,7 +73,7 @@ impl Status {
         let mut kinds: Vec<Kind> = self
             .files
             .iter()
-            .filter(|(p, _)| p.starts_with(rela) && *p != rela)
+            .filter(|(p, _)| p.starts_with(rela))
             .filter_map(|(_, s)| s.primary())
             .map(|k| if k == Kind::Typechange { Kind::Modified } else { k })
             .collect();
@@ -83,6 +85,11 @@ impl Status {
     /// The most serious state of a folder (the first of `dir_kinds`); `None` if nothing beneath it changed.
     pub fn dir(&self, rela: &Path) -> Option<Kind> {
         self.dir_kinds(rela).into_iter().next()
+    }
+
+    /// Whether `rela` is a submodule: a folder shown and tinted like a file, its change a moved commit or edits inside.
+    pub fn is_submodule(&self, rela: &Path) -> bool {
+        self.submodules.contains(rela)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Path, &FileStatus)> {
@@ -105,6 +112,12 @@ pub(crate) fn compute(repo: &gix::Repository) -> Result<Status, Error> {
     use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 
     let mut out = Status::default();
+    if let Ok(Some(subs)) = repo.submodules() {
+        out.submodules = subs
+            .filter_map(|s| s.path().ok())
+            .map(|p| PathBuf::from(p.to_str_lossy().into_owned()))
+            .collect();
+    }
     let iter = repo
         .status(gix::progress::Discard)
         .map_err(err)?

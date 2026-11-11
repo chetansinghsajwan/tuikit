@@ -189,13 +189,6 @@ impl Panel {
         let keep = self.row_key(self.cursor);
         self.branch = self.repo.branch().unwrap_or_else(|| "(detached)".into());
         let status = self.repo.status().unwrap_or_default();
-        let submodules: std::collections::HashSet<PathBuf> = self
-            .repo
-            .submodules()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|s| PathBuf::from(s.path))
-            .collect();
         self.all = status
             .iter()
             .filter_map(|(path, st)| {
@@ -206,7 +199,7 @@ impl Panel {
                 };
                 (staged.is_some() || unstaged.is_some()).then(|| Change {
                     rela: path.to_path_buf(),
-                    submodule: submodules.contains(path),
+                    submodule: status.is_submodule(path),
                     staged,
                     unstaged,
                 })
