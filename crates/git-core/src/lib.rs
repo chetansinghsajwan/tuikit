@@ -135,6 +135,14 @@ impl Repo {
         history::patch(&self.repo, None, rev)
     }
 
+    /// Like `status`, with the changes inside every submodule too, under its path: for views that
+    /// list the files of a folder. (Changes to stage belong to the one repo: use `status` for those.)
+    pub fn status_deep(&self) -> Result<Status, Error> {
+        let mut status = status::compute(&self.repo)?;
+        status.add_submodule_changes(&self.root);
+        Ok(status)
+    }
+
     /// Changed lines of `path` in the work tree compared to `HEAD`.
     pub fn line_changes(&self, path: &Path) -> Result<Vec<LineChange>, Error> {
         let rela = self.relative(path).ok_or_else(|| err("path is outside the work tree"))?;
