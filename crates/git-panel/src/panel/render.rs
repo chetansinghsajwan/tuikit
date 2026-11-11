@@ -152,6 +152,7 @@ impl Panel {
                             depth: *depth,
                             name: &name,
                             tint: Some(pv::kind_color(theme, change.kind())),
+                            icon: change.submodule.then_some(ui::icons::SUBMODULE),
                             selected,
                             focused: true,
                             signs: vec![staged(change.staged), unstaged(change.unstaged)],
@@ -164,14 +165,36 @@ impl Panel {
         }
     }
 
+    /// The preview of a submodule: where it is, then the commits that moved it.
+    fn submodule_lines(&self, rela: &Path, theme: &Theme) -> Vec<Line<'static>> {
+        let path = rela.to_string_lossy();
+        let mut text = String::new();
+        if let Some(s) = self.repo.submodules().unwrap_or_default().iter().find(|s| s.path == path)
+        {
+            text.push_str(&format!(
+                "url     {}\ncommit  {}\nstate   {:?}{}\n\n",
+                s.url,
+                s.oid,
+                s.state,
+                if s.dirty { ", uncommitted changes inside" } else { "" }
+            ));
+        }
+        match self.repo.submodule_summary(&path) {
+            Ok(s) => text.push_str(&s),
+            Err(e) => text.push_str(&e.to_string()),
+        }
+        let style = Style::new().fg(theme.colors.muted.into());
+        text.lines().map(|l| Line::from(Span::styled(l.to_string(), style))).collect()
+    }
+
     pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone()));
-        let title = current.as_ref().map(|(_, p)| p.display().to_string()).unwrap_or_default();
+        let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone(), c.submodule));
+        let title = current.as_ref().map(|(_, p, _)| p.display().to_string()).unwrap_or_default();
         let name = title.trim_end_matches('/').rsplit('/').next().unwrap_or(&title).to_string();
         let pane = Pane::new(theme).title(&title).icon(ui::icons::file(&name, false));
         let inner = pane.inner(area);
         pane.render(area, buf);
-        let Some((staged, rela)) = current else {
+        let Some((staged, rela, submodule)) = current else {
             self.preview = None;
             return;
         };
@@ -183,7 +206,9 @@ impl Panel {
             let opts =
                 pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let side = if staged { Side::Staged } else { Side::Unstaged };
-            let (lines, hunks) =
+            let (lines, hunks) = if submodule {
+                (self.submodule_lines(&rela, theme), Vec::new())
+            } else {
                 match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
                     Ok((l, a)) => (l, a.hunks),
                     Err(e) => (
@@ -193,7 +218,8 @@ impl Panel {
                         ))],
                         Vec::new(),
                     ),
-                };
+                }
+            };
             self.preview = Some(Preview { key, lines, hunks });
             self.pscroll = 0;
         }
