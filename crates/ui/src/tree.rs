@@ -273,6 +273,8 @@ pub struct FileRow<'a> {
     pub open: bool,
     /// A file is executable (its icon).
     pub executable: bool,
+    /// An icon to use instead of the one the name and kind give (a submodule).
+    pub icon: Option<Icon>,
     /// The git color of the row (or any status color): tints the row and colors the name.
     pub tint: Option<Color>,
 
@@ -326,11 +328,13 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         name_style = name_style.add_modifier(Modifier::DIM);
     }
     let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-    let icon = if row.is_dir {
-        crate::icons::dir(base_name, row.open)
-    } else {
-        crate::icons::file(base_name, row.executable)
-    };
+    let icon = row.icon.unwrap_or_else(|| {
+        if row.is_dir {
+            crate::icons::dir(base_name, row.open)
+        } else {
+            crate::icons::file(base_name, row.executable)
+        }
+    });
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
     spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
     let name_at = spans.len();
@@ -390,11 +394,13 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
     let Some(w) = width else {
         let mut spans = guides_marked(theme, row.depth, row.active_guide);
         let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-        let icon = if row.is_dir {
-            crate::icons::dir(base_name, row.open)
-        } else {
-            crate::icons::file(base_name, row.executable)
-        };
+        let icon = row.icon.unwrap_or_else(|| {
+            if row.is_dir {
+                crate::icons::dir(base_name, row.open)
+            } else {
+                crate::icons::file(base_name, row.executable)
+            }
+        });
         spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
         let c = &theme.colors;
         let style = if row.is_dir {

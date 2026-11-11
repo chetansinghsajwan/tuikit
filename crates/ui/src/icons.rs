@@ -30,6 +30,9 @@ pub const COMMIT: Icon = Icon { glyph: "\u{f417}", color: rgb(0xe8a838) };
 /// An archive box, for stash rows.
 pub const STASH: Icon = Icon { glyph: "\u{f187}", color: rgb(0x6d8086) };
 
+/// A git box, for submodules (a folder that is a repository of its own).
+pub const SUBMODULE: Icon = Icon { glyph: "\u{f1d3}", color: rgb(0x59c2ff) };
+
 /// The git logo, for git panes (yazi's color for git files).
 pub const GIT: Icon = Icon { glyph: "\u{e702}", color: rgb(0xf54d27) };
 
