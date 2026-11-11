@@ -196,3 +196,19 @@ impl FileStatus {
 
 #[cfg(test)]
 mod dir_tests;
+
+impl Status {
+    /// Add what changed inside each submodule, under the submodule's path (so a folder view can
+    /// show the changes of the files beneath it). Nested submodules are followed.
+    pub(crate) fn add_submodule_changes(&mut self, root: &Path) {
+        for sub in self.submodules.clone() {
+            let Ok(repo) = gix::open(root.join(&sub)) else { continue };
+            let Ok(mut inner) = compute(&repo) else { continue };
+            inner.add_submodule_changes(&root.join(&sub));
+            for (path, st) in inner.files {
+                self.files.insert(sub.join(path), st);
+            }
+            self.submodules.extend(inner.submodules.into_iter().map(|p| sub.join(p)));
+        }
+    }
+}

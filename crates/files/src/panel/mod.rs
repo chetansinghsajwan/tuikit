@@ -108,7 +108,7 @@ impl Panel {
     /// Reread the directories and the git status.
     fn rebuild(&mut self) {
         self.git = if self.opts.git {
-            Repo::discover(&self.root).and_then(|r| r.status().ok().map(|s| (r, s)))
+            Repo::discover(&self.root).and_then(|r| r.status_deep().ok().map(|s| (r, s)))
         } else {
             None
         };
