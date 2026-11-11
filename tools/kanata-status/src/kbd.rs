@@ -85,11 +85,15 @@ impl Config {
         let mut cfg = Config::default();
         let mut aliases: HashMap<String, Node> = HashMap::new();
         collect_aliases(&nodes, &mut aliases);
+        let mut templates: HashMap<String, Vec<Node>> = HashMap::new();
+        collect_templates(&nodes, &mut templates);
         for node in &nodes {
             let Node::List(items) = node else { continue };
             match items.first().and_then(Node::atom) {
                 Some("defsrc") => cfg.rows = rows_of(&items[1..]),
-                Some("deflayermap") => cfg.layers.push(layer_of(&items[1..], &aliases)?),
+                Some("deflayermap") => {
+                    cfg.layers.push(layer_of(&items[1..], &aliases, &templates)?)
+                }
                 _ => {}
             }
         }
@@ -154,6 +158,36 @@ fn collect_aliases(nodes: &[Node], out: &mut HashMap<String, Node>) {
     }
 }
 
+/// `(deftemplate name (params) body...)`, kept as its body; only parameterless use is understood.
+fn collect_templates(nodes: &[Node], out: &mut HashMap<String, Vec<Node>>) {
+    for node in nodes {
+        let Node::List(items) = node else { continue };
+        if let [Node::Atom(head, _), Node::Atom(name, _), Node::List(_), body @ ..] =
+            items.as_slice()
+            && head == "deftemplate"
+        {
+            out.insert(name.clone(), body.to_vec());
+        }
+    }
+}
+
+/// Splices `(t! name)` into the surrounding list.
+fn expand_templates(items: &[Node], templates: &HashMap<String, Vec<Node>>) -> Vec<Node> {
+    let mut out = Vec::new();
+    for item in items {
+        match item {
+            Node::List(l) if l.first().and_then(Node::atom) == Some("t!") => {
+                match l.get(1).and_then(Node::atom).and_then(|n| templates.get(n)) {
+                    Some(body) => out.extend(expand_templates(body, templates)),
+                    None => out.push(item.clone()),
+                }
+            }
+            other => out.push(other.clone()),
+        }
+    }
+    out
+}
+
 fn rows_of(items: &[Node]) -> Vec<Vec<String>> {
     let mut rows: Vec<(usize, Vec<String>)> = Vec::new();
     for item in items {
@@ -167,7 +201,11 @@ fn rows_of(items: &[Node]) -> Vec<Vec<String>> {
     rows.into_iter().map(|(_, r)| r).collect()
 }
 
-fn layer_of(items: &[Node], aliases: &HashMap<String, Node>) -> Result<Layer, String> {
+fn layer_of(
+    items: &[Node],
+    aliases: &HashMap<String, Node>,
+    templates: &HashMap<String, Vec<Node>>,
+) -> Result<Layer, String> {
     let name = match items.first() {
         Some(Node::Atom(n, _)) => n.clone(),
         Some(Node::List(l)) => {
@@ -179,7 +217,8 @@ fn layer_of(items: &[Node], aliases: &HashMap<String, Node>) -> Result<Layer, St
         return Err("a deflayermap has no name".into());
     }
     let mut layer = Layer { name, ..Layer::default() };
-    for pair in items[1..].chunks(2) {
+    let items = expand_templates(&items[1..], templates);
+    for pair in items.chunks(2) {
         let [Node::Atom(key, _), body] = pair else { continue };
         let action = action_of(body, aliases);
         if key == "___" {
@@ -213,6 +252,9 @@ fn action_of(node: &Node, aliases: &HashMap<String, Node>) -> Action {
             match (items.first().and_then(Node::atom), items.get(1).and_then(Node::atom)) {
                 (Some("layer-switch"), Some(l)) => Action::Switch(l.to_owned()),
                 (Some("layer-while-held"), Some(l)) => Action::Hold(l.to_owned()),
+                (Some("fork"), _) => {
+                    items.get(1).map_or(Action::Other("fork".into()), |n| action_of(n, aliases))
+                }
                 (Some(head), _) => Action::Other(head.to_owned()),
                 (None, _) => Action::Other("?".into()),
             }

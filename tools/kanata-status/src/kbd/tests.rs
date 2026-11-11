@@ -65,3 +65,23 @@ fn missing_pieces_are_errors() {
     assert!(Config::parse("(defcfg)").is_err());
     assert!(Config::parse("(defsrc a)").is_err());
 }
+
+#[test]
+fn templates_are_spliced_and_forks_show_the_plain_key() {
+    let cfg = Config::parse(
+        r#"
+(defsrc q w)
+(deftemplate mods ()
+  q lctl
+)
+(deflayermap main
+  (t! mods)
+  w (fork bspc del (lsft rsft))
+  ___ XX
+)
+"#,
+    )
+    .unwrap();
+    assert_eq!(cfg.action("main", "main", "q"), keys("ctl", &["lctl"]));
+    assert_eq!(cfg.action("main", "main", "w"), keys("bspc", &["bspc"]));
+}
