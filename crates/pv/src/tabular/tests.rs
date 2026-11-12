@@ -25,7 +25,7 @@ fn the_delimiter_is_sniffed_and_quoted_fields_stay_whole() {
     let p = tmp("q.csv", "name,note\nann,\"one, two\"\nbob,plain\n");
     let t = flat(&render(&p, kind(&p).unwrap(), &Theme::default(), &Options::default()).unwrap());
     assert!(t.contains("one, two") && t.contains("csv · 2 columns · 2 of 2 rows"), "{t}");
-    assert!(t.contains("┌") && t.contains("name"), "{t}");
+    assert!(t.contains("╭") && t.contains("name"), "{t}");
 }
 
 #[test]

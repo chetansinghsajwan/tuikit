@@ -63,10 +63,10 @@ fn h2_and_below_stay_one_row() {
 fn tables_are_bordered_aligned_and_fit_the_width() {
     let md = "| name | n |\n|:-----|--:|\n| alpha | 1 |\n| b | 22 |\n";
     let lines = text(&render(md, &Theme::default(), 40));
-    assert_eq!(lines[0], "┌───────┬─────┐", "{lines:#?}");
+    assert_eq!(lines[0], "╭───────┬─────╮", "{lines:#?}");
     assert!(lines[1].contains("name") && lines[1].starts_with('│'), "{lines:#?}");
     assert!(lines.iter().any(|l| l == "│ alpha │   1 │"), "numbers align right: {lines:#?}");
-    assert!(lines.last().unwrap().starts_with('└'));
+    assert!(lines.last().unwrap().starts_with('╰'));
     // Too wide: the columns shrink and the cells wrap, nothing sticks out.
     let wide = format!("| a | b |\n|---|---|\n| {} | y |\n", "word ".repeat(30));
     let lines = text(&render(&wide, &Theme::default(), 40));
@@ -111,29 +111,32 @@ fn code_blocks_are_highlighted_and_images_fall_back_to_their_alt_text() {
 }
 
 #[test]
-fn code_blocks_are_rounded_boxes_with_the_language_inside() {
+fn code_blocks_are_tinted_blocks_with_rounded_corners_and_the_language_inside() {
     let lines =
         text(&render("```rust\nfn main() {}\nlet a_long_line = 1;\n```\n", &Theme::default(), 40));
-    assert!(lines[0].starts_with('╭') && lines[0].ends_with('╮'), "{lines:#?}");
-    assert!(
-        lines[1].starts_with("│ rust") && lines[1].ends_with('│'),
-        "the language is inside: {lines:#?}"
-    );
+    // No frame: half blocks along the top and bottom, quarter blocks as the corners.
+    assert!(lines[0].starts_with('▗') && lines[0].ends_with('▖'), "{lines:#?}");
+    assert!(lines[0]['▗'.len_utf8()..lines[0].len() - '▖'.len_utf8()].chars().all(|c| c == '▄'));
+    assert!(lines[1].starts_with(" rust"), "the language is inside: {lines:#?}");
     assert!(lines[2].contains("fn main") && lines[3].contains("let a_long_line"));
-    assert!(lines[4].starts_with('╰') && lines[4].ends_with('╯'));
+    assert!(lines[4].starts_with('▝') && lines[4].ends_with('▘'), "{lines:#?}");
     assert!(
         lines[..5].iter().all(|l| l.width() == lines[0].width()),
         "every row is as wide as the top: {lines:#?}"
     );
-    // Only the inside is tinted: the frame (corners, edges, sides) is on the terminal's background,
-    // so no colour shows outside the rounded corners.
+    assert!(!lines.iter().any(|l| l.contains('│') || l.contains('╭')), "no frame lines: {lines:#?}");
+    // The edge rows and corners are the tint drawn as a foreground, on the terminal background; only
+    // the rows between carry it as a background, so no colour shows outside the rounded corners.
     let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
-    let bg = |row: usize, col: usize| styled[row].spans[col].style.bg;
-    let last = |row: usize| styled[row].spans.len() - 1;
-    assert!(bg(0, 0).is_none(), "the top left corner has no tint");
-    assert!(bg(2, 0).is_none() && bg(2, last(2)).is_none(), "the sides have no tint");
-    assert!(bg(3, 0).is_none(), "the bottom left corner has no tint");
-    assert!(bg(2, 1).is_some(), "the inside is tinted");
+    let row = |i: usize| &styled[i].spans;
+    let tint = row(2)[0].style.bg;
+    assert!(tint.is_some(), "the inside is tinted");
+    for edge in [0, 3] {
+        let s = row(edge)[0].style;
+        assert!(s.bg.is_none(), "the edge row has no background");
+        assert_eq!(s.fg, tint, "the edge is the tint as a foreground");
+    }
+    assert!(row(2).iter().all(|s| s.style.bg == tint), "the whole row is on the tint");
 }
 
 #[test]
