@@ -26,11 +26,37 @@ fn headings_lists_quotes_and_code_lose_their_markup() {
     let md = "# Title\n\nSome *emphasis* and `code` here.\n\n- one\n- two\n\n1. first\n\n> quoted\n\n```rust\nlet x = 1;\n```\n";
     let lines = text(&render(md, &Theme::default(), 60));
     let all = lines.join("\n");
-    assert!(all.contains("Title") && !all.contains("# Title"), "{all}");
-    assert!(all.contains("Some emphasis and code here."), "{all}");
+    assert!(!all.contains("# Title"), "{all}");
+    // A level one heading is big text (see `h1_is_three_rows_of_blocks`), not the words.
+    assert!(lines[0].contains('▀') || lines[0].contains('█'), "{all}");
+    // Inline code is a pill: the code between rounded caps.
+    assert!(all.contains("Some emphasis and \u{e0b6}code\u{e0b4} here."), "{all}");
     assert!(all.contains("• one") && all.contains("• two") && all.contains("1. first"), "{all}");
     assert!(all.contains("▏ quoted"), "{all}");
     assert!(all.contains("let x = 1;") && !all.contains("```"), "{all}");
+}
+
+#[test]
+fn h1_is_three_rows_of_blocks() {
+    let lines = text(&render("# Hi\n\nafter\n", &Theme::default(), 40));
+    assert_eq!(lines[0], "█ █ ▀█▀", "{lines:#?}");
+    assert_eq!(lines[1].chars().count(), 7);
+    assert_eq!(lines[2].chars().count(), 7);
+    assert!(lines[3].is_empty() && lines[4] == "after", "{lines:#?}");
+}
+
+#[test]
+fn h1_that_does_not_fit_or_has_no_glyphs_stays_one_row() {
+    let wide = text(&render("# A long heading that cannot fit\n", &Theme::default(), 20));
+    assert_eq!(wide[0], "█ A long heading that cannot fit".chars().take(wide[0].chars().count()).collect::<String>(), "{wide:#?}");
+    let code = text(&render("# With `code`\n", &Theme::default(), 40));
+    assert!(code[0].starts_with("█ With"), "{code:#?}");
+}
+
+#[test]
+fn h2_and_below_stay_one_row() {
+    let lines = text(&render("## Title\n", &Theme::default(), 40));
+    assert_eq!(lines[0], "▌ Title", "{lines:#?}");
 }
 
 #[test]
@@ -106,6 +132,20 @@ fn code_blocks_are_rounded_boxes_with_the_language_inside() {
         bg(0, 0).is_some() && bg(0, 0) == bg(2, 1),
         "the top left corner shares the tint of the code"
     );
+}
+
+#[test]
+fn inline_code_is_a_pill_between_rounded_caps() {
+    let r = render("use `a b` here, or `x`.\n", &Theme::default(), 60);
+    let line = &r[0];
+    let shown: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
+    assert!(
+        shown.windows(3).any(|w| w == ["\u{e0b6}", "a b", "\u{e0b4}"]),
+        "a cap, the code, a cap: {shown:?}"
+    );
+    assert!(shown.contains(&"x"), "{shown:?}");
+    let code = line.spans.iter().find(|s| s.content == "a b").unwrap();
+    assert!(code.style.bg.is_some(), "the code sits on a tint");
 }
 
 #[test]

@@ -3,6 +3,7 @@
 //! their own borders, colors or gaps.
 
 pub mod anim;
+pub mod bigtext;
 pub mod ansi;
 pub mod clipboard;
 pub mod config;
@@ -14,6 +15,7 @@ pub mod layout;
 pub mod list;
 pub mod multi;
 pub mod pane;
+pub mod pill;
 pub mod popup;
 pub mod prompt;
 pub mod recent;

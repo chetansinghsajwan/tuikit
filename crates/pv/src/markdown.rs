@@ -151,6 +151,16 @@ impl Out {
     }
 }
 
+/// The rows of the heading being collected as big text, when all of it has glyphs and it fits.
+fn big_heading(out: &Out) -> Option<[String; ui::bigtext::HEIGHT]> {
+    // The first two words are the marker and its separator.
+    let text: Vec<&str> =
+        out.words.iter().skip(2).map(|(w, _)| w.as_str()).filter(|w| !w.is_empty()).collect();
+    let rows = ui::bigtext::render(&text.join(" "))?;
+    let avail = out.width.saturating_sub(out.prefix_width() + 2).max(10);
+    (rows[0].chars().count() <= avail).then_some(rows)
+}
+
 /// `words` wrapped to lines of at most `avail` columns (a word longer than that gets a line of its own).
 pub(crate) fn wrap_words(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
     wrap(words, avail)
@@ -174,7 +184,7 @@ fn wrap(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
             line.push(Span::raw(" "));
             used += 1;
         }
-        line.push(Span::styled(word.clone(), *style));
+        line.extend(ui::pill::word_spans(word, *style));
         used += w;
     }
     if !line.is_empty() {
@@ -473,7 +483,17 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                 _ => {}
             },
             Event::End(tag) => match tag {
-                TagEnd::Heading(_) => {
+                TagEnd::Heading(level) => {
+                    // A level one heading is drawn big when it fits, else as the marked line.
+                    if level == HeadingLevel::H1
+                        && let Some(rows) = big_heading(&out)
+                    {
+                        let style = out.style();
+                        out.words.clear();
+                        for row in rows {
+                            out.push_line(vec![Span::styled(row, style)]);
+                        }
+                    }
                     out.flush();
                     out.styles.pop();
                     out.lines.push(Line::default());
@@ -674,7 +694,8 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                 } else {
                     let style =
                         Style::new().fg(Color::from(c.syntax.string)).bg(Color::from(c.selection));
-                    out.words.push((format!("{t}"), style));
+                    // A pill: the text on its tint between rounded caps.
+                    out.words.push((ui::pill::word(&t), style));
                 }
             }
             Event::InlineMath(t) => out.words.push((
