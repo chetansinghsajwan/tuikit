@@ -517,8 +517,9 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let total = out.width.saturating_sub(out.prefix_width() + 1).max(12);
                     let inner = total - 2;
                     let tint = Style::new().bg(ui::mix(c.fg.into(), c.bg.into(), 7));
-                    // The frame sits on the same tint as the inside, so the rounded corners belong to the block.
-                    let edge = tint.fg(muted);
+                    // The frame sits on the terminal's own background and only the inside is tinted: a tint
+                    // behind a line glyph would show above and below the line and spill outside the corners.
+                    let edge = Style::new().fg(muted);
                     out.push_line(vec![Span::styled(format!("╭{}╮", "─".repeat(inner)), edge)]);
                     let row = |spans: Vec<Span<'static>>, used: usize| -> Vec<Span<'static>> {
                         let mut line = vec![Span::styled("│", edge), Span::styled(" ", tint)];

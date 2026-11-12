@@ -125,13 +125,15 @@ fn code_blocks_are_rounded_boxes_with_the_language_inside() {
         lines[..5].iter().all(|l| l.width() == lines[0].width()),
         "every row is as wide as the top: {lines:#?}"
     );
-    // The frame is on the same tint as the inside: the corners are part of the block.
+    // Only the inside is tinted: the frame (corners, edges, sides) is on the terminal's background,
+    // so no colour shows outside the rounded corners.
     let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
     let bg = |row: usize, col: usize| styled[row].spans[col].style.bg;
-    assert!(
-        bg(0, 0).is_some() && bg(0, 0) == bg(2, 1),
-        "the top left corner shares the tint of the code"
-    );
+    let last = |row: usize| styled[row].spans.len() - 1;
+    assert!(bg(0, 0).is_none(), "the top left corner has no tint");
+    assert!(bg(2, 0).is_none() && bg(2, last(2)).is_none(), "the sides have no tint");
+    assert!(bg(3, 0).is_none(), "the bottom left corner has no tint");
+    assert!(bg(2, 1).is_some(), "the inside is tinted");
 }
 
 #[test]
