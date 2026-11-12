@@ -289,7 +289,7 @@ fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>>
         let body: Vec<String> = widths.iter().map(|w| "─".repeat(w + 2)).collect();
         vec![Span::styled(format!("{l}{}{r}", body.join(m)), muted)]
     };
-    let mut out = vec![border("┌", "┬", "┐")];
+    let mut out = vec![border("╭", "┬", "╮")];
     let emit = |row: &Vec<Words>, head: bool, out: &mut Vec<Vec<Span<'static>>>| {
         let cells: Vec<Vec<Vec<Span<'static>>>> = (0..n)
             .map(|i| {
@@ -337,7 +337,7 @@ fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>>
     for row in &t.rows {
         emit(row, false, &mut out);
     }
-    out.push(border("└", "┴", "┘"));
+    out.push(border("╰", "┴", "╯"));
     out
 }
 
@@ -513,23 +513,23 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let code = std::mem::take(&mut out.code);
                     let lang = std::mem::take(&mut out.code_lang);
                     let code = code.trim_end_matches('\n');
-                    // A rounded box: the width of the block, a tinted inside with the language as its first line.
+                    // A tinted block with rounded corners and no frame. Its top and bottom rows are half blocks and
+                    // its corners quarter blocks, drawn in the tint colour on the terminal background, so the
+                    // corners are round and nothing is tinted outside them. The language is its first line.
                     let total = out.width.saturating_sub(out.prefix_width() + 1).max(12);
-                    let inner = total - 2;
+                    let content = total - 2;
                     let tint = Style::new().bg(ui::mix(c.fg.into(), c.bg.into(), 7));
-                    // The frame sits on the terminal's own background and only the inside is tinted: a tint
-                    // behind a line glyph would show above and below the line and spill outside the corners.
-                    let edge = Style::new().fg(muted);
-                    out.push_line(vec![Span::styled(format!("╭{}╮", "─".repeat(inner)), edge)]);
+                    let shade = Style::new().fg(tint.bg.unwrap_or(Color::Reset));
+                    out.push_line(vec![Span::styled(format!("▗{}▖", "▄".repeat(total - 2)), shade)]);
+                    // A margin of one column on both sides, the text padded out to the full width.
                     let row = |spans: Vec<Span<'static>>, used: usize| -> Vec<Span<'static>> {
-                        let mut line = vec![Span::styled("│", edge), Span::styled(" ", tint)];
+                        let mut line = vec![Span::styled(" ", tint)];
                         line.extend(spans);
-                        line.push(Span::styled(" ".repeat(inner.saturating_sub(used + 1)), tint));
-                        line.push(Span::styled("│", edge));
+                        line.push(Span::styled(" ".repeat(total - 1 - used), tint));
                         line
                     };
                     if !lang.is_empty() {
-                        let label: String = lang.chars().take(inner.saturating_sub(2)).collect();
+                        let label: String = lang.chars().take(content).collect();
                         let used = label.width();
                         let spans = vec![Span::styled(
                             label,
@@ -540,9 +540,9 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     for pieces in crate::text::highlight_code(code, &lang, theme) {
                         // Long lines are cut at the width.
                         let mut spans = Vec::new();
-                        let mut used = 1;
+                        let mut used = 0;
                         for (style, piece) in pieces {
-                            if used >= inner {
+                            if used >= content {
                                 break;
                             }
                             let piece: String = piece
@@ -551,7 +551,7 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                                     *w += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
                                     Some((*w, ch))
                                 })
-                                .take_while(|(w, _)| used + w <= inner)
+                                .take_while(|(w, _)| used + w <= content)
                                 .map(|(_, ch)| ch)
                                 .collect();
                             used += piece.width();
@@ -560,12 +560,13 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                                 style.bg(tint.bg.unwrap_or(Color::Reset)),
                             ));
                         }
-                        out.push_line(row(spans, used - 1));
+                        out.push_line(row(spans, used));
                     }
                     if code.is_empty() {
                         out.push_line(row(Vec::new(), 0));
                     }
-                    out.push_line(vec![Span::styled(format!("╰{}╯", "─".repeat(inner)), edge)]);
+                    out.push_line(vec![Span::styled(format!("▝{}▘", "▀".repeat(total - 2)), shade)]);
+
                     out.lines.push(Line::default());
                 }
                 TagEnd::List(_) => {
