@@ -217,6 +217,7 @@ impl DirSize {
 }
 
 impl Drop for DirSize {
+    /// Stops the background size count when the value is dropped, so it does not keep counting for a result nobody will read.
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
     }

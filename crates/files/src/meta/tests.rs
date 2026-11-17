@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// A fresh, empty per-test directory under the temp dir, so tests do not share files.
 fn dir(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("files-meta-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&d);
@@ -9,6 +10,7 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
+/// The plain text of each styled line, for comparing without the styles.
 fn text(lines: &[Line]) -> Vec<String> {
     lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect()
 }

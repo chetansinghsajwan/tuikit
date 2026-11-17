@@ -109,6 +109,7 @@ const EXIT_CANCEL: u8 = 130;
 struct Tty(Terminal<CrosstermBackend<std::fs::File>>);
 
 impl Drop for Tty {
+    /// Leaves raw mode and the alternate screen.
     fn drop(&mut self) {
         let _ = disable_raw_mode();
         let _ = execute!(self.0.backend_mut(), LeaveAlternateScreen);
@@ -284,6 +285,7 @@ enum GitWhat {
 }
 
 impl From<GitWhat> for GitSource {
+    /// Maps the command-line choice onto the picker's own source type.
     fn from(w: GitWhat) -> Self {
         match w {
             GitWhat::Refs => GitSource::Refs,

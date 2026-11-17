@@ -48,6 +48,7 @@ fn main() -> ExitCode {
 }
 
 impl From<Cli> for app::Options {
+    /// Turns the parsed command line into the app's options, applying the defaults.
     fn from(c: Cli) -> Self {
         app::Options {
             dir: c.dir.unwrap_or_else(|| PathBuf::from(".")),

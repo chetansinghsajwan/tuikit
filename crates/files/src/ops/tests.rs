@@ -3,6 +3,7 @@
 use super::*;
 use std::fs;
 
+/// A fresh, empty per-test directory under the temp dir, so tests do not share files.
 fn dir(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("files-ops-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&d);
