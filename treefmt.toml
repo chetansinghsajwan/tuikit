@@ -15,10 +15,18 @@ command = "taplo"
 options = ["format"]
 includes = ["*.toml"]
 
+# Markdown: rumdl fixes structure (code block languages, list indent), then dprint sets the layout.
+[formatter.rumdl]
+command = "rumdl"
+options = ["fmt"]
+includes = ["*.md"]
+priority = 0
+
 [formatter.dprint]
 command = "dprint"
 options = ["fmt"]
 includes = ["*.md"]
+priority = 1
 
 [formatter.yamlfmt]
 command = "yamlfmt"
