@@ -189,7 +189,7 @@ impl App {
         let c = &theme.colors;
         let pane = Pane::new(theme)
             .title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details"))
-            .icon(theme.icons.wifi());
+            .icon(theme.icons.wifi);
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(n) = self.network() else { return };
@@ -224,7 +224,7 @@ impl App {
         let c = &theme.colors;
         let pane = Pane::new(theme)
             .title(self.device().map(|d| d.name.as_str()).unwrap_or("Details"))
-            .icon(theme.icons.bluetooth());
+            .icon(theme.icons.bluetooth);
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(d) = self.device() else { return };

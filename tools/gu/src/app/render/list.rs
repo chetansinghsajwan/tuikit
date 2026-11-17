@@ -19,7 +19,7 @@ impl App {
         let focused = self.focus == which;
         let mut pane = Pane::new(theme).title(title).focused(focused);
         let icon = if which == Focus::Branches {
-            Some(theme.icons.branch())
+            Some(theme.icons.branch)
         } else {
             theme.icons.title(title)
         };

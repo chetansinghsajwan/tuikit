@@ -166,7 +166,7 @@ fn run(cli: Cli) -> io::Result<u8> {
                 || cli.grep.is_some()),
     );
     if cli.git.is_some() {
-        picker.set_icon(ui::icons::IconProvider.git());
+        picker.set_icon(ui::icons::IconProvider::default().git);
     }
     picker.set_separator(!cli.no_separator);
     picker.set_row_style(pick::RowStyle { syntax: cli.syntax.clone(), numbers: cli.numbers });

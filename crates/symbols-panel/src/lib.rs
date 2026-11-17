@@ -312,7 +312,7 @@ impl Panel {
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
-        let pane = Pane::new(theme).title("Symbols").icon(theme.icons.branch()).focused(focused);
+        let pane = Pane::new(theme).title("Symbols").icon(theme.icons.branch).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {

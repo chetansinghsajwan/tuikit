@@ -39,7 +39,7 @@ impl Panel {
     ) {
         let c = &theme.colors;
         let title = self.title.clone().unwrap_or_else(|| format!("git: {}", self.branch));
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.git()).focused(focused);
+        let pane = Pane::new(theme).title(&title).icon(theme.icons.git).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {
@@ -152,7 +152,7 @@ impl Panel {
                             depth: *depth,
                             name: &name,
                             tint: Some(pv::kind_color(theme, change.kind())),
-                            icon: change.submodule.then_some(theme.icons.submodule()),
+                            icon: change.submodule.then_some(theme.icons.submodule),
                             selected,
                             focused: true,
                             signs: vec![staged(change.staged), unstaged(change.unstaged)],

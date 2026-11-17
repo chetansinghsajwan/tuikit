@@ -239,7 +239,7 @@ impl Panel {
                     is_dir: row.is_dir,
                     open: self.expanded.contains(&row.path),
                     executable: !row.is_dir && is_executable(&row.path),
-                    icon: submodule.then_some(theme.icons.submodule()),
+                    icon: submodule.then_some(theme.icons.submodule),
                     tint,
                     selected,
                     focused,

@@ -1,8 +1,13 @@
 //! Icons (Nerd Font glyphs) and their colors, all behind `IconProvider`: files and folders (the set
 //! yazi ships), pane titles, git objects and symbol kinds. The `Theme` owns one, so tools ask
-//! `theme.icons`. Data in `icons_data.rs` is generated from yazi's preset theme (MIT).
+//! `theme.icons`. Data in `data.rs` is generated from yazi's preset theme (MIT).
 
-use crate::icons_data::{DIRS, EXTS, FILES};
+mod data;
+
+use data::{
+    BLUETOOTH, BRANCH, COMMIT, DIAGNOSTICS, DIR, DIR_OPEN, DIRS, EXEC, EXTS, FILE, FILES, GIT, STASH,
+    SUBMODULE, WIFI,
+};
 use crate::symbol::Kind;
 use ratatui::style::Color;
 use std::path::Path;
@@ -17,19 +22,6 @@ const fn rgb(c: u32) -> Color {
     Color::Rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
-const BLUETOOTH: Icon = Icon { glyph: "\u{f293}", color: rgb(0x3b82f6) };
-const WIFI: Icon = Icon { glyph: "\u{f1eb}", color: rgb(0x59c2ff) };
-const BRANCH: Icon = Icon { glyph: "\u{e0a0}", color: rgb(0xf54d27) };
-const COMMIT: Icon = Icon { glyph: "\u{f417}", color: rgb(0xe8a838) };
-const STASH: Icon = Icon { glyph: "\u{f187}", color: rgb(0x6d8086) };
-const SUBMODULE: Icon = Icon { glyph: "\u{f1d3}", color: rgb(0x59c2ff) };
-const GIT: Icon = Icon { glyph: "\u{e702}", color: rgb(0xf54d27) };
-const DIAGNOSTICS: Icon = Icon { glyph: "\u{f071}", color: rgb(0xffc107) };
-const DIR: Icon = Icon { glyph: "\u{e5ff}", color: rgb(0x03a9f4) };
-const DIR_OPEN: Icon = Icon { glyph: "\u{e5fe}", color: rgb(0x03a9f4) };
-const EXEC: Icon = Icon { glyph: "\u{f489}", color: rgb(0x8bc34a) };
-const FILE: Icon = Icon { glyph: "\u{f15b}", color: rgb(0xffffff) };
-
 fn find(table: &[(&'static str, &'static str, u32)], key: &str) -> Option<Icon> {
     let i = table.binary_search_by(|(n, _, _)| (*n).cmp(key)).ok()?;
     let (_, glyph, color) = table[i];
@@ -37,50 +29,42 @@ fn find(table: &[(&'static str, &'static str, u32)], key: &str) -> Option<Icon> 
 }
 
 /// Where every icon comes from, so a thing looks the same in every tool. Owned by the `Theme`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct IconProvider;
+#[derive(Debug, Clone, Copy)]
+pub struct IconProvider {
+    /// The Bluetooth rune, for the Bluetooth pane.
+    pub bluetooth: Icon,
+    /// A Wi-Fi symbol, for the Wi-Fi pane.
+    pub wifi: Icon,
+    /// A git branch, for branch rows.
+    pub branch: Icon,
+    /// A git commit, for commit rows.
+    pub commit: Icon,
+    /// An archive box, for stash rows.
+    pub stash: Icon,
+    /// A git box, for submodules (a folder that is a repository of its own).
+    pub submodule: Icon,
+    /// The git logo, for git panes (yazi's color for git files).
+    pub git: Icon,
+    /// A warning triangle, for the diagnostics pane.
+    pub diagnostics: Icon,
+}
+
+impl Default for IconProvider {
+    fn default() -> Self {
+        IconProvider {
+            bluetooth: BLUETOOTH,
+            wifi: WIFI,
+            branch: BRANCH,
+            commit: COMMIT,
+            stash: STASH,
+            submodule: SUBMODULE,
+            git: GIT,
+            diagnostics: DIAGNOSTICS,
+        }
+    }
+}
 
 impl IconProvider {
-    /// The Bluetooth rune, for the Bluetooth pane.
-    pub fn bluetooth(&self) -> Icon {
-        BLUETOOTH
-    }
-
-    /// A Wi-Fi symbol, for the Wi-Fi pane.
-    pub fn wifi(&self) -> Icon {
-        WIFI
-    }
-
-    /// A git branch, for branch rows.
-    pub fn branch(&self) -> Icon {
-        BRANCH
-    }
-
-    /// A git commit, for commit rows.
-    pub fn commit(&self) -> Icon {
-        COMMIT
-    }
-
-    /// An archive box, for stash rows.
-    pub fn stash(&self) -> Icon {
-        STASH
-    }
-
-    /// A git box, for submodules (a folder that is a repository of its own).
-    pub fn submodule(&self) -> Icon {
-        SUBMODULE
-    }
-
-    /// The git logo, for git panes (yazi's color for git files).
-    pub fn git(&self) -> Icon {
-        GIT
-    }
-
-    /// A warning triangle, for the diagnostics pane.
-    pub fn diagnostics(&self) -> Icon {
-        DIAGNOSTICS
-    }
-
     /// The glyph for a kind of code symbol; its color is the kind's own (`Kind::color`).
     pub fn symbol(&self, kind: Kind) -> &'static str {
         match kind {

@@ -25,10 +25,10 @@ impl App {
             whole
         };
         let icon = match which {
-            Focus::Branches => theme.icons.branch(),
-            Focus::Stashes => theme.icons.stash(),
-            Focus::Submodules => theme.icons.git(),
-            _ => theme.icons.commit(),
+            Focus::Branches => theme.icons.branch,
+            Focus::Stashes => theme.icons.stash,
+            Focus::Submodules => theme.icons.git,
+            _ => theme.icons.commit,
         };
         let pane = Pane::new(theme).title(&title).icon(icon);
         let inner = pane.inner(area);

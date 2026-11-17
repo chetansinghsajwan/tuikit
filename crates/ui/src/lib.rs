@@ -9,7 +9,6 @@ pub mod clipboard;
 pub mod config;
 pub mod dim;
 pub mod icons;
-mod icons_data;
 pub mod keys;
 pub mod layout;
 pub mod list;

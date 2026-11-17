@@ -1,6 +1,21 @@
 // Generated from yazi's preset theme (MIT, github.com/sxyazi/yazi, yazi-config/preset/theme-dark.toml).
 // Sorted by name, lowercase; looked up by binary search.
 
+use super::{Icon, rgb};
+
+pub const BLUETOOTH: Icon = Icon { glyph: "", color: rgb(0x3b82f6) };
+pub const WIFI: Icon = Icon { glyph: "", color: rgb(0x59c2ff) };
+pub const BRANCH: Icon = Icon { glyph: "", color: rgb(0xf54d27) };
+pub const COMMIT: Icon = Icon { glyph: "", color: rgb(0xe8a838) };
+pub const STASH: Icon = Icon { glyph: "", color: rgb(0x6d8086) };
+pub const SUBMODULE: Icon = Icon { glyph: "", color: rgb(0x59c2ff) };
+pub const GIT: Icon = Icon { glyph: "", color: rgb(0xf54d27) };
+pub const DIAGNOSTICS: Icon = Icon { glyph: "", color: rgb(0xffc107) };
+pub const DIR: Icon = Icon { glyph: "", color: rgb(0x03a9f4) };
+pub const DIR_OPEN: Icon = Icon { glyph: "", color: rgb(0x03a9f4) };
+pub const EXEC: Icon = Icon { glyph: "", color: rgb(0x8bc34a) };
+pub const FILE: Icon = Icon { glyph: "", color: rgb(0xffffff) };
+
 pub static DIRS: &[(&str, &str, u32)] = &[
     (".config", "", 0xff9800),
     (".git", "", 0x00bcd4),

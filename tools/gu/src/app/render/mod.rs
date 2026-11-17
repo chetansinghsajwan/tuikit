@@ -54,7 +54,7 @@ impl App {
         let Some(cf) = self.commit_files.as_mut() else { return };
         let c = &theme.colors;
         let title = format!("{}  {}", cf.short, cf.subject);
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.commit()).focused(true);
+        let pane = Pane::new(theme).title(&title).icon(theme.icons.commit).focused(true);
         let inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {

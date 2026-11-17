@@ -494,7 +494,7 @@ impl Picker {
         let mut pane = Pane::new(theme);
         if let Some(c) = cand.as_ref() {
             if c.git.is_some() {
-                pane = pane.title(&title).icon(theme.icons.git());
+                pane = pane.title(&title).icon(theme.icons.git);
             } else if !self.opts.paths {
                 pane = pane.title(&title);
             }
