@@ -16,15 +16,6 @@ tasks:
     desc: Format every file.
     cmds:
       - treefmt
-  lint:
-    desc: Run the linters.
-    cmds:
-      - cargo clippy --workspace --all-targets --locked -- -D warnings
-      - statix check .
-      - deadnix --fail .
-      - rumdl check .
-      - actionlint
-      - typos
   test:
     desc: Run the tests.
     cmds:
@@ -39,9 +30,19 @@ tasks:
       # audit hints, not defects: temp dirs are test fixtures, `unsafe` is the macOS FFI code.
       - >-
         semgrep scan --config p/rust --metrics off --error --quiet --exclude-rule rust.lang.security.args-os.args-os --exclude-rule rust.lang.security.current-exe.current-exe --exclude-rule rust.lang.security.temp-dir.temp-dir --exclude-rule rust.lang.security.unsafe-usage.unsafe-usage
+  clippy:
+    desc: Lint the Rust code. Runs on every platform because some code is platform-specific.
+    cmds:
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
   check:
-    desc: Check formatting, lint and test. CI and pre-push call this.
+    desc: Check formatting and lint. CI and pre-push call this.
     cmds:
       - treefmt --fail-on-change
-      - task: lint
-      - task: test
+      - task: clippy
+      - statix check .
+      - deadnix --fail .
+      - taplo lint
+      - rumdl check .
+      - actionlint
+      - zizmor --offline .github
+      - typos

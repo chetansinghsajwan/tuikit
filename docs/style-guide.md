@@ -6,17 +6,17 @@ instructions; this file holds what is specific to tuikit.
 ## Tooling
 
 Run everything through Taskfile tasks inside the dev shell (`nix develop`): `task fmt`,
-`task lint`, `task test`, `task scan`, `task check`. Hooks and CI call these tasks, never the raw
+`task clippy`, `task test`, `task scan`, `task check`. Hooks and CI call these tasks, never the raw
 tools.
 
-| Language       | Format    | Lint            |
-| -------------- | --------- | --------------- |
-| GitHub Actions | yamlfmt   | actionlint      |
-| Markdown       | dprint    | rumdl           |
-| Nix            | alejandra | statix, deadnix |
-| Rust           | rustfmt   | clippy          |
-| TOML           | taplo     | taplo           |
-| YAML           | yamlfmt   | none exists     |
+| Language       | Format    | Lint               |
+| -------------- | --------- | ------------------ |
+| GitHub Actions | yamlfmt   | actionlint, zizmor |
+| Markdown       | dprint    | rumdl              |
+| Nix            | alejandra | statix, deadnix    |
+| Rust           | rustfmt   | clippy             |
+| TOML           | taplo     | taplo              |
+| YAML           | yamlfmt   | none exists        |
 
 Spelling is checked with typos. Tests run with cargo-nextest. Scans: cargo-deny and osv-scanner
 for dependencies, gitleaks for secrets, semgrep for SAST.

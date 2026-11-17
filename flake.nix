@@ -135,6 +135,7 @@
             rumdl
             yamlfmt
             actionlint
+            zizmor
             typos
 
             # Tests and vulnerability scanners.

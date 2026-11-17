@@ -5,13 +5,16 @@ pre-commit:
     fmt:
       run: task fmt
       stage_fixed: true
-    lint:
-      run: task lint
+    check:
+      run: task check
 commit-msg:
   commands:
     conventional-commits:
       run: cog verify --file {1}
 pre-push:
+  parallel: false
   commands:
     check:
       run: task check
+    test:
+      run: task test
