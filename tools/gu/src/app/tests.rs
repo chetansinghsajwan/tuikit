@@ -312,7 +312,9 @@ fn focus_moves_with_tab_and_digits_and_q_quits() {
     assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
 }
 
+// macOS file systems ignore case, so git cannot keep `Feature/a` and `feature/b` apart there.
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "needs a case-sensitive file system")]
 fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     let d = repo("cursor");
     git(&d, &["branch", "Feature/a"]);
