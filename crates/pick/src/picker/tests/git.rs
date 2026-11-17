@@ -1,8 +1,11 @@
+//! Tests for the git pickers (refs, commits, stashes) on a real temporary repository.
+
 use super::super::*;
 use crate::source::{GitSource, spawn_git};
 use ratatui::crossterm::event::KeyEvent;
 use std::process::Command;
 
+/// Run `git` with `args` in `dir`, ignoring user and system config so results match everywhere.
 fn git(dir: &std::path::Path, args: &[&str]) {
     let ok = Command::new("git")
         .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
@@ -16,6 +19,7 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     assert!(ok, "git {args:?}");
 }
 
+/// A new repository with two commits and a tag `v1`, in a temp folder unique to `name`.
 fn repo(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("pick-git-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -30,6 +34,7 @@ fn repo(name: &str) -> PathBuf {
     d.canonicalize().unwrap()
 }
 
+/// A git picker for `what` in `root`, filled by the real source and waited for.
 fn picker(root: &std::path::Path, what: GitSource, query: &str) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -51,6 +56,7 @@ fn picker(root: &std::path::Path, what: GitSource, query: &str) -> Picker {
     p
 }
 
+/// Press Enter and return what the picker answers.
 fn enter(p: &mut Picker) -> Action {
     p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)))
 }

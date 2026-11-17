@@ -23,6 +23,7 @@ pub enum Severity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// One problem to show: where it is, how bad it is and what it says.
 pub struct Item {
     /// Absolute path of the file.
     pub path: PathBuf,
@@ -50,6 +51,7 @@ pub enum Action {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Which severities the list shows. The `f` key cycles through them.
 enum Filter {
     All,
     /// Errors and warnings.
@@ -58,6 +60,7 @@ enum Filter {
 }
 
 impl Filter {
+    /// The filter that follows this one in the `f` cycle.
     fn next(self) -> Filter {
         match self {
             Filter::All => Filter::Problems,
@@ -66,6 +69,7 @@ impl Filter {
         }
     }
 
+    /// Whether a problem of severity `s` stays in the list at this filter.
     fn keeps(self, s: Severity) -> bool {
         match self {
             Filter::All => true,
@@ -74,6 +78,7 @@ impl Filter {
         }
     }
 
+    /// Text added to the title when the filter hides something.
     fn label(self) -> &'static str {
         match self {
             Filter::All => "",
@@ -83,6 +88,7 @@ impl Filter {
     }
 }
 
+/// One line of the list: a file heading or a problem under it.
 enum Row {
     /// A file: the number of problems shown under it.
     File(PathBuf, usize),
@@ -90,6 +96,7 @@ enum Row {
     Item(usize),
 }
 
+/// The problems list: holds the items, the rows built from them, the cursor and the filter.
 pub struct Panel {
     root: PathBuf,
     items: Vec<Item>,
@@ -143,6 +150,7 @@ impl Panel {
         (e, w, self.items.len())
     }
 
+    /// The problem under the cursor, or `None` when the list is empty.
     fn current(&self) -> Option<&Item> {
         match self.rows.get(*self.selectable.get(self.cursor)?)? {
             Row::Item(i) => self.items.get(*i),
@@ -150,6 +158,7 @@ impl Panel {
         }
     }
 
+    /// Rebuilds the rows from the items and the filter, keeping the cursor on `keep` when it is still shown.
     fn rebuild(&mut self, keep: Option<Item>) {
         self.rows.clear();
         self.selectable.clear();
@@ -181,11 +190,13 @@ impl Panel {
             .min(self.selectable.len().saturating_sub(1));
     }
 
+    /// Moves the cursor by `delta` problems, stopping at the first and last.
     fn move_by(&mut self, delta: isize) {
         let last = self.selectable.len().saturating_sub(1) as isize;
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
     }
 
+    /// Handles a key press and tells the host what to do (open a place, close, or nothing).
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(KeyEvent { code, modifiers, kind, .. }) = ev else { return Action::None };
         if *kind == KeyEventKind::Release {
@@ -222,6 +233,7 @@ impl Panel {
         Action::None
     }
 
+    /// The theme colour that marks a severity.
     fn sev_color(theme: &Theme, s: Severity) -> Color {
         let c = &theme.colors;
         match s {
@@ -233,10 +245,12 @@ impl Panel {
         .into()
     }
 
+    /// A path relative to the workspace root, for shorter file headings.
     fn rel<'a>(&'a self, p: &'a Path) -> &'a Path {
         p.strip_prefix(&self.root).unwrap_or(p)
     }
 
+    /// Draws the list into `area`, scrolling to keep the cursor in view.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
         let (e, w, _) = self.counts();
@@ -336,5 +350,6 @@ impl Panel {
     }
 }
 
+/// Tests for the panel.
 #[cfg(test)]
 mod tests;

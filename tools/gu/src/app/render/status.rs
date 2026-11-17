@@ -3,6 +3,8 @@
 use super::super::*;
 
 impl App {
+    /// The bottom line: the prompt or question being asked, a job in progress, a message, or key
+    /// hints.
     pub(in crate::app) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let line = match &self.mode {
@@ -94,6 +96,7 @@ impl App {
             .render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
     }
 
+    /// The key hints for the focused pane, shown when nothing else is in the status line.
     pub(in crate::app) fn hints(&self) -> &'static str {
         if self.screen == Screen::Commits {
             if self.commit_files.is_some() {

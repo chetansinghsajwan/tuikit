@@ -1,9 +1,13 @@
+//! Tests for key parsing, sequences, the which-key menu and the help popup.
+
 use super::*;
 
+/// A plain key press of the character `c`.
 fn k(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
+/// A small set of actions with single keys, aliases and leader sequences.
 const ACTIONS: [Action; 5] = [
     Action { id: "nav.down", name: "down", desc: "move down", basic: false, keys: &["j", "down"] },
     Action {
@@ -29,8 +33,10 @@ const ACTIONS: [Action; 5] = [
         keys: &["ctrl-d"],
     },
 ];
+/// The one group the test actions use: `leader v` is "view".
 const GROUPS: [Group; 1] = [Group { prefix: "leader v", name: "view" }];
 
+/// A keymap over the test actions with `space` as the leader.
 fn map() -> Keymap {
     Keymap::new("space", &ACTIONS, &GROUPS)
 }

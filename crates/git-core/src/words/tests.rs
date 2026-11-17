@@ -1,5 +1,8 @@
+//! Tests for the word-level line diff.
+
 use super::*;
 
+/// The pieces of `s` the `ranges` cover, to compare marked words as text.
 fn cut<'a>(s: &'a str, ranges: &[Range<usize>]) -> Vec<&'a str> {
     ranges.iter().map(|r| &s[r.clone()]).collect()
 }

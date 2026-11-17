@@ -5,6 +5,7 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
+/// The look of a PDF. Missing fields in the config file keep their defaults.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -34,6 +35,7 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Where the config file lives: under `$XDG_CONFIG_HOME`, else `~/.config`.
     pub fn path() -> Option<PathBuf> {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
@@ -64,5 +66,6 @@ impl Settings {
     }
 }
 
+/// Tests for reading the config file.
 #[cfg(test)]
 mod tests;

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// The saved key-to-folder bookmarks, optionally backed by a file so they outlive the session.
 #[derive(Debug, Default, Clone)]
 pub struct Bookmarks {
     file: Option<PathBuf>,
@@ -35,25 +36,30 @@ impl Bookmarks {
         Bookmarks { file, map }
     }
 
+    /// The folder saved under `key`, if any.
     pub fn get(&self, key: char) -> Option<&Path> {
         self.map.get(&key).map(PathBuf::as_path)
     }
 
+    /// Every bookmark in key order, for listing them in a menu.
     pub fn iter(&self) -> impl Iterator<Item = (char, &Path)> {
         self.map.iter().map(|(k, p)| (*k, p.as_path()))
     }
 
+    /// Save `path` under `key` (replacing any old one) and write the file.
     pub fn set(&mut self, key: char, path: PathBuf) -> std::io::Result<()> {
         self.map.insert(key, path);
         self.save()
     }
 
+    /// Delete the bookmark under `key`; says whether there was one.
     pub fn remove(&mut self, key: char) -> std::io::Result<bool> {
         let had = self.map.remove(&key).is_some();
         self.save()?;
         Ok(had)
     }
 
+    /// Write all bookmarks to the file, creating its folder; a no-op when memory-only.
     fn save(&self) -> std::io::Result<()> {
         let Some(file) = &self.file else { return Ok(()) };
         if let Some(dir) = file.parent() {

@@ -1,9 +1,13 @@
+//! Tests for the multi-choice popup.
+
 use super::*;
 
+/// A key press of `c` with no modifiers.
 fn k(c: KeyCode) -> KeyEvent {
     KeyEvent::new(c, KeyModifiers::NONE)
 }
 
+/// A popup with one text, one many-choice and one single-choice section.
 fn popup() -> Multi {
     Multi::new(
         "Filter",

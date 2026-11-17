@@ -1,5 +1,8 @@
+//! Tests for table previews.
+
 use super::*;
 
+/// Write `body` to a file `name` in a temp folder and return its path.
 fn tmp(name: &str, body: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("pv-tab-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
@@ -8,6 +11,7 @@ fn tmp(name: &str, body: &str) -> std::path::PathBuf {
     p
 }
 
+/// The text of all `lines`, joined with newlines, with the styles dropped.
 fn flat(lines: &[Line]) -> String {
     lines
         .iter()

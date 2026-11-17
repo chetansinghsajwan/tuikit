@@ -5,6 +5,7 @@
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
+/// An `InvalidInput` error with `msg`, the one error kind this module uses for bad names.
 fn invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, msg.to_string())
 }

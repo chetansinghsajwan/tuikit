@@ -15,8 +15,13 @@ pub(super) fn ref_width(icons: &ui::icons::IconProvider, r: &RefInfo, remotes: &
 
 /// The text of a pill: the name, with the remotes that point at the same commit under the same name
 /// (`main · origin`), and the branch icon on the checked-out branch.
-pub(super) fn pill_text(icons: &ui::icons::IconProvider, r: &RefInfo, remotes: &[String]) -> String {
-    let mut text = if r.is_head { format!("{} {}", icons.branch.glyph, r.name) } else { r.name.clone() };
+pub(super) fn pill_text(
+    icons: &ui::icons::IconProvider,
+    r: &RefInfo,
+    remotes: &[String],
+) -> String {
+    let mut text =
+        if r.is_head { format!("{} {}", icons.branch.glyph, r.name) } else { r.name.clone() };
     if !remotes.is_empty() {
         text.push_str(&format!(" · {}", remotes.join(", ")));
     }

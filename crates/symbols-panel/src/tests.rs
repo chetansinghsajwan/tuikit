@@ -1,10 +1,14 @@
+//! Tests for the symbol explorer.
+
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 
+/// Builds a symbol at column 4 with no detail.
 fn sym(name: &str, kind: Kind, line: u32, end: u32, children: Vec<Symbol>) -> Symbol {
     Symbol { name: name.into(), detail: String::new(), kind, line, col: 4, end_line: end, children }
 }
 
+/// A panel loaded with a small nested symbol tree.
 fn panel() -> Panel {
     let mut p = Panel::default();
     p.set_symbols(vec![
@@ -20,10 +24,12 @@ fn panel() -> Panel {
     p
 }
 
+/// Wraps a key code as a press event.
 fn key(c: KeyCode) -> Event {
     Event::Key(KeyEvent::new(c, KeyModifiers::NONE))
 }
 
+/// Sends the keys named by `s` to the panel and returns the last action.
 fn press(p: &mut Panel, s: &str) -> Action {
     let mut last = Action::None;
     for c in s.chars() {
@@ -32,6 +38,7 @@ fn press(p: &mut Panel, s: &str) -> Action {
     last
 }
 
+/// Renders the panel to text so tests can look at what is shown.
 fn draw(p: &mut Panel, focused: bool) -> String {
     let area = Rect::new(0, 0, 40, 10);
     let mut b = Buffer::empty(area);

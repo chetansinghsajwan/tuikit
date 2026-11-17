@@ -192,6 +192,7 @@ impl App {
         }
     }
 
+    /// Move the diff scroll to the next or previous hunk, or file when `files` is set.
     pub(super) fn jump_diff(&mut self, forward: bool, files: bool) {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };

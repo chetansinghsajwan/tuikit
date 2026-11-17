@@ -3,6 +3,7 @@
 use super::*;
 
 impl Picker {
+    /// Draw the list, and the preview beside it when the preview is on.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let (list_area, preview_area) = if self.opts.preview {
             let [l, p] = layout::main_preview(theme, area);
@@ -55,15 +56,20 @@ impl Picker {
             spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
         }
         // Symbols: the icon of their kind, in its color.
-        if let Some(h) = &cand.hier {
-            if let Some(k) = h.kind {
-                spans.push(Span::styled(format!("{} ", theme.icons.symbol(k).glyph), Style::new().fg(k.color(theme))));
-            }
+        if let Some(h) = &cand.hier
+            && let Some(k) = h.kind
+        {
+            spans.push(Span::styled(
+                format!("{} ", theme.icons.symbol(k).glyph),
+                Style::new().fg(k.color(theme)),
+            ));
         }
         spans.extend(self.row_spans_inner(cand, name_fg, theme, snap_index, leaf));
         spans
     }
 
+    /// The part of a row after the icons: a grep match with the hit emphasized, or the text with
+    /// the matched characters highlighted.
     pub(super) fn row_spans_inner(
         &mut self,
         cand: &Candidate,
@@ -165,6 +171,7 @@ impl Picker {
         rows
     }
 
+    /// Draw the grep toggles and the include and exclude filter lines.
     pub(super) fn render_grep_filters(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let on = |b: bool| {
@@ -210,6 +217,7 @@ impl Picker {
         }
     }
 
+    /// Draw the query line, the count and the matched rows, flat or as a hierarchy.
     pub(super) fn render_list(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let (snap_total, snap_matched) = {
@@ -374,15 +382,15 @@ impl Picker {
             }
             let take = (self.page as usize).saturating_sub(pinned.len());
             // The guide of the scope the cursor is in is highlighted, as in the files panel.
-            let depths: Vec<usize> =
-                tree.rows
-                    .iter()
-                    .map(|r| match r {
-                        crate::tree::Row::Dir { depth, .. }
-                        | crate::tree::Row::Head { depth, .. }
-                        | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
-                    })
-                    .collect();
+            let depths: Vec<usize> = tree
+                .rows
+                .iter()
+                .map(|r| match r {
+                    crate::tree::Row::Dir { depth, .. }
+                    | crate::tree::Row::Head { depth, .. }
+                    | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
+                })
+                .collect();
             let scope = ui::tree::active_scope(&depths, crow as usize);
             let window = tree
                 .rows
@@ -408,10 +416,7 @@ impl Picker {
                     };
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    spans.push(Span::styled(
-                        format!("{} ", icon.glyph),
-                        icon.style(),
-                    ));
+                    spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
                     spans.push(Span::styled(
                         label.clone(),
                         Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
@@ -428,9 +433,7 @@ impl Picker {
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let (glyph, style) = match kind {
-                        Some(k) => {
-                            (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme)))
-                        }
+                        Some(k) => (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme))),
                         None => {
                             let icon =
                                 theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
@@ -483,6 +486,8 @@ impl Picker {
         }
     }
 
+    /// Draw the preview of the highlighted candidate. The rendered lines are kept until the
+    /// candidate or the pane size changes, so a frame does not render the file again.
     pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let cand = self.current();
         let title = cand

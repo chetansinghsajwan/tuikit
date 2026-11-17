@@ -8,8 +8,11 @@ use mdexport::{Export, Settings};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// The help text, also printed when no input file is given.
 const USAGE: &str = "usage: mdexport <file.md|-> [-o out.pdf] [--base dir] [--paper a4|letter] [--margin cm] [--font name] [--mono name] [--size pt] [--no-justify] [--no-numbers] [--typst] | --fonts | --defaults";
 
+/// Reads the command line over the saved settings, then writes the PDF (or the Typst markup, the
+/// font list or the defaults when asked) and sets the exit code.
 fn main() -> ExitCode {
     let mut input: Option<PathBuf> = None;
     let mut output: Option<PathBuf> = None;

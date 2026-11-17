@@ -28,6 +28,8 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// Read an `animations` config value ("on", "reduced", "off" and a few aliases);
+    /// `None` if unknown.
     pub fn parse(s: &str) -> Option<Mode> {
         match s.trim().to_ascii_lowercase().as_str() {
             "on" | "true" | "full" => Some(Mode::On),
@@ -44,13 +46,16 @@ pub const FRAME: Duration = Duration::from_millis(33);
 const FADE: Duration = Duration::from_millis(140);
 /// How long one spinner frame shows.
 const STEP: Duration = Duration::from_millis(80);
+/// The braille frames of the spinner, in the order they show.
 const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+/// The moment motion timing counts from, fixed on first use so spinner frames stay in step.
 fn start() -> Instant {
     static START: OnceLock<Instant> = OnceLock::new();
     *START.get_or_init(Instant::now)
 }
 
+/// The motion mode from the config; `On` when unset or unreadable.
 fn mode() -> Mode {
     crate::config::get().animations.as_deref().and_then(Mode::parse).unwrap_or_default()
 }
@@ -76,6 +81,7 @@ pub fn take_redraw() -> bool {
     STATE.with(|s| std::mem::take(&mut s.borrow_mut().wanted))
 }
 
+/// Easing curve that starts fast and settles slowly, so motion feels soft where it stops.
 fn ease_out(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
 }
@@ -97,6 +103,7 @@ struct Scroll {
     rect: Rect,
 }
 
+/// What the animator remembers about one list between frames: its rows and the motion under way.
 #[derive(Default)]
 struct PaneState {
     /// The rows of the last frame.
@@ -108,6 +115,7 @@ struct PaneState {
     scroll: Option<Scroll>,
 }
 
+/// All animator memory for the process, kept between frames so `finish` can tell what changed.
 #[derive(Default)]
 struct State {
     /// A frame is wanted soon: something is still moving.
@@ -129,9 +137,11 @@ struct State {
 }
 
 thread_local! {
+    /// The animator's state. Thread-local because drawing happens on one thread and needs no lock.
     static STATE: RefCell<State> = RefCell::new(State { first: true, ..State::default() });
 }
 
+/// Ask for another frame soon, because something is still moving.
 fn want() {
     STATE.with(|s| s.borrow_mut().wanted = true);
 }
@@ -167,13 +177,20 @@ pub fn tab(strip: (u16, u16), active: usize, content: Rect) {
     STATE.with(|s| s.borrow_mut().tabs.push((strip, active, content)));
 }
 
+/// How long a row a fold opened takes to fade in.
 const REVEAL: Duration = Duration::from_millis(140);
+/// The delay between one revealed row and the next, so a fold opens top to bottom.
 const STAGGER: Duration = Duration::from_millis(22);
+/// How long the highlight on a changed row takes to fade out.
 const FLASH: Duration = Duration::from_millis(700);
+/// How long a list takes to glide to a new scroll position.
 const GLIDE: Duration = Duration::from_millis(160);
+/// How long an overlay (popup, menu) takes to fade in.
 const OVERLAY: Duration = Duration::from_millis(100);
+/// How long the content of a newly selected tab takes to fade in.
 const TAB: Duration = Duration::from_millis(160);
 
+/// How far a motion that began at `began` has got by `now`, from 0.0 to 1.0.
 fn progress(began: Instant, now: Instant, over: Duration) -> f32 {
     if now < began {
         0.0
@@ -182,6 +199,7 @@ fn progress(began: Instant, now: Instant, over: Duration) -> f32 {
     }
 }
 
+/// `c` if it is a truecolor value, else `fallback`; fades can only blend truecolor.
 fn rgb(c: Color, fallback: Color) -> Color {
     if matches!(c, Color::Rgb(..)) { c } else { fallback }
 }

@@ -1,7 +1,10 @@
+//! Tests for the picker over text lines from a shell pipe (fields, delimiters, timestamps).
+
 use super::super::*;
 use crate::source::LineFormat;
 use ratatui::crossterm::event::KeyEvent;
 
+/// A picker over `lines`, showing the field `fmt.with_nth` names while keeping the whole line.
 fn picker_from(lines: &[&str], fmt: LineFormat) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -24,10 +27,12 @@ fn picker_from(lines: &[&str], fmt: LineFormat) -> Picker {
     p
 }
 
+/// A key press of `code` with the modifiers `m`.
 fn key(code: KeyCode, m: KeyModifiers) -> Event {
     Event::Key(KeyEvent::new(code, m))
 }
 
+/// Render the picker into a 100 by 12 buffer and return its text, one line per row.
 fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 12);
     let mut b = Buffer::empty(area);

@@ -8,6 +8,8 @@ use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 
+/// The one-document Typst world: its library, fonts, the main source and the folder that
+/// images are read from.
 struct Doc {
     library: LazyHash<Library>,
     book: LazyHash<FontBook>,
@@ -29,6 +31,7 @@ impl World for Doc {
         self.main.id()
     }
 
+    /// Serves the main source only; the document has no other Typst files to import.
     fn source(&self, id: FileId) -> FileResult<Source> {
         if id == self.main.id() {
             Ok(self.main.clone())
@@ -37,6 +40,7 @@ impl World for Doc {
         }
     }
 
+    /// Reads a file (an image) from the base folder, and fails when there is no base folder.
     fn file(&self, id: FileId) -> FileResult<Bytes> {
         let rel = id.vpath().as_rootless_path();
         let base = self.base.as_ref().ok_or_else(|| FileError::NotFound(rel.to_path_buf()))?;
@@ -49,6 +53,7 @@ impl World for Doc {
         self.fonts.get(index).cloned()
     }
 
+    /// Reports no date, so output depends only on the input and stays the same on every run.
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
         None
     }
@@ -65,6 +70,8 @@ fn norm(s: &str) -> String {
     s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
+/// Finds the installed fonts that match `wanted` (all when `None`), plus a map from each name
+/// asked for to the family name Typst reads from the font.
 pub fn system_fonts(
     wanted: Option<&[&str]>,
 ) -> (Vec<Font>, std::collections::HashMap<String, String>) {

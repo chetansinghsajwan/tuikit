@@ -1,3 +1,5 @@
+//! Tests for dimming the area behind a popup.
+
 use super::*;
 use ratatui::style::Style;
 

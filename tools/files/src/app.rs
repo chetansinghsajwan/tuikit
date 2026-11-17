@@ -1,3 +1,6 @@
+//! The standalone explorer: tabs of the shared `Panel`, a preview and properties pane, and the
+//! //! hand-offs to the editor, `pick` and the system opener.
+
 use files::meta::{self, DirSize, Meta};
 use files::{Action, Panel, PanelOptions, Search, ops};
 use ratatui::Terminal;
@@ -86,6 +89,7 @@ const ACTIONS: &[ui::keys::Action] = &[
     },
 ];
 
+/// What the command line asked for, passed from `main` so this module does not parse arguments.
 pub struct Options {
     pub dir: PathBuf,
     pub chooser_file: Option<PathBuf>,
@@ -95,6 +99,7 @@ pub struct Options {
     pub git: bool,
 }
 
+/// The terminal we draw on, backed by `/dev/tty` so stdout stays free for the caller.
 type Term = Terminal<CrosstermBackend<File>>;
 
 /// The last preview, kept until the cursor, the pane size or the file changes.
@@ -103,6 +108,7 @@ struct Preview {
     lines: Result<Vec<Line<'static>>, String>,
 }
 
+/// The state of the running explorer: its tabs, the preview cache and the open overlays.
 struct App {
     opts: Options,
     theme: Theme,
@@ -115,6 +121,8 @@ struct App {
     dirsize: Option<DirSize>,
 }
 
+/// Runs the explorer on the terminal and returns its exit code. On exit it writes the folder
+/// it ended in to `--cwd-file`, so a shell can follow.
 pub fn run(opts: Options) -> io::Result<u8> {
     let dir = opts.dir.canonicalize()?;
     let panel_opts = panel_opts(&opts);
@@ -141,12 +149,14 @@ pub fn run(opts: Options) -> io::Result<u8> {
     result
 }
 
+/// Puts the terminal into the full-screen raw mode the explorer draws in.
 fn enter(term: &mut Term) -> io::Result<()> {
     enable_raw_mode()?;
     execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
     term.clear()
 }
 
+/// Gives the terminal back to the shell.
 fn leave(term: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(term.backend_mut(), LeaveAlternateScreen)
@@ -167,10 +177,13 @@ fn suspended<T>(term: &mut Term, f: impl FnOnce() -> T) -> io::Result<T> {
 }
 
 impl App {
+    /// The panel of the active tab.
     fn panel(&mut self) -> &mut Panel {
         self.tabs.active_mut()
     }
 
+    /// Draws when something changed and waits for input, redrawing on ticks for background work
+    /// such as folder sizes and animations.
     fn event_loop(&mut self, term: &mut Term) -> io::Result<u8> {
         let theme = self.theme.clone();
         let mut dirty = true;
@@ -227,6 +240,7 @@ impl App {
         self.act(action, term)
     }
 
+    /// Carries out what the panel asked for: open, search, rename, close, help or a command.
     fn act(&mut self, action: Action, term: &mut Term) -> io::Result<Option<u8>> {
         match action {
             Action::Open(path) => {
@@ -311,12 +325,14 @@ impl App {
         }
     }
 
+    /// Shows a failure from an external command as an error notice on the panel.
     fn report(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
             self.panel().notify(e, true);
         }
     }
 
+    /// Draws the tab bar (when there are several tabs), the list, the preview and the overlays.
     fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
         let mut body = area;
@@ -344,6 +360,7 @@ impl App {
         }
     }
 
+    /// Draws the tab titles, shortened so they stay unique.
     fn tab_bar(&self, area: Rect, buf: &mut Buffer) {
         let roots: Vec<&Path> = self.tabs.iter().map(|tab| tab.root()).collect();
         let labels: Vec<ui::tabs::Label> =
@@ -351,6 +368,8 @@ impl App {
         ui::tabs::render(area, buf, &self.theme, &labels, self.tabs.active_index(), true);
     }
 
+    /// Draws the preview pane for the file under the cursor, rebuilding the preview only when the
+    /// file or the pane size changes.
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
         let current = self.tabs.active().current().map(Path::to_path_buf);
         let theme = self.theme.clone();
@@ -395,6 +414,7 @@ impl App {
     }
 }
 
+/// Guesses whether a file is text by looking for a zero byte in its first 8 KiB.
 fn is_text(path: &Path) -> bool {
     let mut buf = [0u8; 8192];
     File::open(path)

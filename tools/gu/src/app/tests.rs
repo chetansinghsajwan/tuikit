@@ -1,9 +1,12 @@
+//! End-to-end tests of the screen: real temp git repos driven by key presses and rendered text.
+
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 use std::fs;
 use std::process::Command;
 use std::sync::Once;
 
+/// Fix the git author and config once, so test commits do not depend on the machine.
 fn identity() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
@@ -21,6 +24,7 @@ fn identity() {
     });
 }
 
+/// Run `git` in `dir` and fail the test if it does not succeed.
 fn git(dir: &Path, args: &[&str]) {
     assert!(
         Command::new("git").args(args).current_dir(dir).status().unwrap().success(),
@@ -28,6 +32,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
+/// A fresh temp repository with one commit and a branch `other`.
 fn repo(name: &str) -> PathBuf {
     identity();
     let d = std::env::temp_dir().join(format!("git-ui-test-{}-{name}", std::process::id()));
@@ -49,16 +54,19 @@ fn ref_row(app: &App, name: &str) -> usize {
         .unwrap_or_else(|| panic!("no ref {name}"))
 }
 
+/// A plain key press event.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+/// Press each character of `keys` as a key and check none of them quits.
 fn press(app: &mut App, keys: &str) {
     for c in keys.chars() {
         assert_eq!(app.handle_event(&key(KeyCode::Char(c))), Quit::No);
     }
 }
 
+/// Render the screen at 120x36 and return its text, one string per row.
 fn screen(app: &mut App) -> Vec<String> {
     let area = Rect::new(0, 0, 120, 36);
     let mut buf = Buffer::empty(area);
@@ -74,6 +82,7 @@ fn screen(app: &mut App) -> Vec<String> {
         .collect()
 }
 
+/// The checked-out branch of the repository at `d`.
 fn head(d: &Path) -> String {
     Repo::discover(d).unwrap().branch().unwrap()
 }
@@ -154,6 +163,7 @@ fn amend_adds_the_staged_file_and_enter_keeps_the_message() {
     assert!(app.repo.status().unwrap().is_empty(), "{:?}", app.message);
 }
 
+/// Press the Tab key.
 fn tab(app: &mut App) {
     app.handle_event(&key(KeyCode::Tab));
 }
@@ -543,7 +553,10 @@ fn a_branch_and_its_remote_branch_share_a_pill() {
             ("origin/other".to_string(), vec![])
         ]
     );
-    assert_eq!(pill_text(&ui::icons::IconProvider::default(), &refs[0], &["origin".to_string()]), "main · origin");
+    assert_eq!(
+        pill_text(&ui::icons::IconProvider::default(), &refs[0], &["origin".to_string()]),
+        "main · origin"
+    );
 }
 
 #[test]
@@ -616,10 +629,12 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     assert!(ids.contains(&"stash.apply") && !ids.contains(&"branch.merge"), "{ids:?}");
 }
 
+/// Press one character without checking the result.
 fn press_raw(app: &mut App, c: char) {
     app.handle_event(&key(KeyCode::Char(c)));
 }
 
+/// Type `text` and press enter, as into a prompt.
 fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         app.handle_event(&key(KeyCode::Char(c)));
@@ -627,6 +642,7 @@ fn type_text(app: &mut App, text: &str) {
     app.handle_event(&key(KeyCode::Enter));
 }
 
+/// Write a file and commit it with `msg`.
 fn commit_file(d: &Path, name: &str, body: &str, msg: &str) {
     fs::write(d.join(name), body).unwrap();
     git(d, &["add", name]);

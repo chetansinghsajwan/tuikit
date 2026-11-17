@@ -90,6 +90,7 @@ pub fn render(text: &str) -> Option<[String; HEIGHT]> {
     Some([row(0, Some(1)), row(2, Some(3)), row(4, None)])
 }
 
+/// Tests for the big text glyphs.
 #[cfg(test)]
 mod tests {
     use super::*;

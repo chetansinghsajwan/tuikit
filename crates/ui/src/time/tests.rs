@@ -1,3 +1,5 @@
+//! Tests for the relative-time text.
+
 use super::*;
 
 #[test]

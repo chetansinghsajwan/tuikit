@@ -16,11 +16,14 @@ use unicode_width::UnicodeWidthStr;
 
 /// The widest a column is drawn.
 const MAX_COL: usize = 32;
+/// The narrowest a column is drawn, so empty columns stay visible.
 const MIN_COL: usize = 3;
 /// How many rows are measured for the width of a column.
 const MEASURE_ROWS: usize = 2000;
+/// How many changes undo remembers, to bound memory on big tables.
 const UNDO_DEPTH: usize = 100;
 
+/// What the host must do after the grid handled an event.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
     None,
@@ -29,6 +32,7 @@ pub enum Action {
     Help,
 }
 
+/// What the keys do now: move around, type into a cell or the find box, or answer a question.
 enum Mode {
     Normal,
     Edit(Input),
@@ -36,6 +40,7 @@ enum Mode {
     Confirm(Confirm),
 }
 
+/// The risky actions that ask for a second key press first.
 #[derive(Clone, Copy)]
 enum Confirm {
     DeleteRow,
@@ -43,6 +48,7 @@ enum Confirm {
     Quit,
 }
 
+/// The table editor: the table, the cursor, the scroll position, undo history and keymap.
 pub struct Grid {
     table: Table,
     path: Option<PathBuf>,
@@ -64,6 +70,8 @@ pub struct Grid {
 }
 
 impl Grid {
+    /// Makes an editor for `table`, saved to `path` (if any), with key prefixes starting at
+    /// `leader`.
     pub fn new(table: Table, path: Option<PathBuf>, leader: &str) -> Grid {
         Grid {
             saved: table.clone(),
@@ -84,6 +92,7 @@ impl Grid {
         }
     }
 
+    /// Reads a csv, tsv or psv file into an editor; a missing file starts as an empty table.
     pub fn open(path: &std::path::Path, leader: &str) -> Result<Grid, String> {
         let delim = table::delimiter(path)
             .ok_or_else(|| format!("{}: not a csv, tsv or psv file", path.display()))?;
@@ -95,38 +104,47 @@ impl Grid {
         Ok(Grid::new(Table::parse(&text, delim), Some(path.to_path_buf()), leader))
     }
 
+    /// The table being edited.
     pub fn table(&self) -> &Table {
         &self.table
     }
 
+    /// The cell the cursor is in, as (row, column).
     pub fn cursor(&self) -> (usize, usize) {
         self.cur
     }
 
+    /// Whether the table differs from what was last saved.
     pub fn modified(&self) -> bool {
         self.table != self.saved
     }
 
+    /// Tells the host that keys go to a text prompt, so it must not treat them as its own.
     pub fn is_typing(&self) -> bool {
         matches!(self.mode, Mode::Edit(_) | Mode::Find(_))
     }
 
+    /// The pending key-prefix menu, for the host to draw.
     pub fn menu(&self) -> Option<ui::keys::Menu> {
         self.keymap.menu()
     }
 
+    /// Every action with its keys, for the host's help screen.
     pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
         self.keymap.rows()
     }
 
+    /// Shows a message in the footer; `error` colours it as a failure.
     fn say(&mut self, text: impl Into<String>, error: bool) {
         self.message = Some((text.into(), error));
     }
 
+    /// The row count, at least 1 so the cursor always has a place.
     fn rows(&self) -> usize {
         self.table.row_count().max(1)
     }
 
+    /// The column count, at least 1 so the cursor always has a place.
     fn cols(&self) -> usize {
         self.table.col_count().max(1)
     }
@@ -140,19 +158,23 @@ impl Grid {
         self.redo.clear();
     }
 
+    /// Pulls the cursor back inside the table after a change shrank it.
     fn clamp(&mut self) {
         self.cur.0 = self.cur.0.min(self.rows() - 1);
         self.cur.1 = self.cur.1.min(self.cols() - 1);
     }
 
+    /// Moves the cursor by `delta` rows, stopping at the first and last.
     fn go_rows(&mut self, delta: isize) {
         self.cur.0 = (self.cur.0 as isize + delta).clamp(0, self.rows() as isize - 1) as usize;
     }
 
+    /// Moves the cursor by `delta` columns, stopping at the first and last.
     fn go_cols(&mut self, delta: isize) {
         self.cur.1 = (self.cur.1 as isize + delta).clamp(0, self.cols() as isize - 1) as usize;
     }
 
+    /// Handles a key press: first any open prompt or question, else the keymap.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
         if *kind == KeyEventKind::Release {
@@ -212,6 +234,7 @@ impl Grid {
         }
     }
 
+    /// Carries out a risky action after the user pressed the key a second time.
     fn confirmed(&mut self, what: Confirm) -> Action {
         match what {
             Confirm::DeleteRow => {
@@ -231,6 +254,7 @@ impl Grid {
         Action::None
     }
 
+    /// Runs one action by id. Also lets the host run an action picked from its palette.
     pub fn run(&mut self, id: &'static str) -> Action {
         let half = (self.page / 2).max(1) as isize;
         match id {
@@ -343,6 +367,7 @@ impl Grid {
         Action::None
     }
 
+    /// Writes the table to its file and marks it as saved.
     pub fn save(&mut self) {
         let Some(path) = &self.path else {
             self.say("no file to save to", true);
@@ -378,6 +403,7 @@ impl Grid {
         self.say(format!("{} not found", self.find), true);
     }
 
+    /// The drawn width of each column, from its longest cell within sane bounds.
     fn widths(&self) -> Vec<usize> {
         (0..self.cols())
             .map(|c| {
@@ -390,6 +416,8 @@ impl Grid {
             .collect()
     }
 
+    /// Draws the table with a row-number gutter, the header and a footer, scrolling to keep the
+    /// cursor in view.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
         let name = self
@@ -567,5 +595,6 @@ fn fit(text: &str, width: usize, right: bool) -> String {
     if right { format!("{pad}{out}") } else { format!("{out}{pad}") }
 }
 
+/// Tests for the grid.
 #[cfg(test)]
 mod tests;

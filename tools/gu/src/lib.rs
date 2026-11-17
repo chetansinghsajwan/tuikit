@@ -3,7 +3,9 @@
 //! right. Built on `git-core` (reads through gix, changes through the `git` command
 //! line), `git-panel` (the files pane), `pv` (previews) and `ui` (every look).
 
+/// The screen: its state, events and drawing.
 mod app;
+/// The actions of each pane and their default keys.
 mod keys;
 
 pub use app::{App, Quit};

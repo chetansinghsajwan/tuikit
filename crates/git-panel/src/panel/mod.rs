@@ -1,3 +1,6 @@
+//! The git panel's state and behaviour: the change list, key handling and the git actions.
+//! Drawing lives in `render`.
+
 use crate::keys;
 use git_core::{Kind, Repo, Side};
 use ratatui::buffer::Buffer;
@@ -37,7 +40,8 @@ struct Change {
     rela: PathBuf,
     staged: Option<Kind>,
     unstaged: Option<Kind>,
-    /// A submodule: a folder that is a repository of its own (its change is a moved commit or inner edits).
+    /// A submodule: a folder that is a repository of its own (its change is a moved commit or inner
+    /// edits).
     submodule: bool,
 }
 
@@ -53,6 +57,7 @@ impl Change {
     }
 }
 
+/// One line of the change list: a folder or a changed file.
 enum Row {
     /// A directory (single-child chains are joined: `src/lib`).
     Folder {
@@ -76,11 +81,13 @@ struct Node {
 }
 
 impl Node {
+    /// How many changed files are in this folder, counting the sub-folders.
     fn count(&self) -> usize {
         self.files.len() + self.dirs.values().map(Node::count).sum::<usize>()
     }
 }
 
+/// What the keys do now: move around, type a commit message, or answer a discard question.
 enum Mode {
     Normal,
     /// Commit message prompt.
@@ -89,6 +96,7 @@ enum Mode {
     Discard(PathBuf, bool),
 }
 
+/// The cached diff of the highlighted file, so it is not recomputed on every frame.
 struct Preview {
     key: (PathBuf, bool, u16, u16, u64),
     lines: Vec<Line<'static>>,
@@ -96,6 +104,8 @@ struct Preview {
     hunks: Vec<usize>,
 }
 
+/// The git panel: the repository, the change list rows, the cursor, the diff preview and the
+/// keymap.
 pub struct Panel {
     repo: Repo,
     root: PathBuf,
@@ -114,7 +124,8 @@ pub struct Panel {
     version: u64,
     pscroll: usize,
     pheight: usize,
-    /// The changed files as a tree of directories (the default) or one flat list; the folded folders.
+    /// The changed files as a tree of directories (the default) or one flat list; the folded
+    /// folders.
     tree: bool,
     folded: std::collections::HashSet<PathBuf>,
     /// Every changed file, also the ones folded away.
@@ -124,6 +135,7 @@ pub struct Panel {
     keymap: ui::keys::Keymap,
 }
 
+/// The one-letter mark of a change kind, as in `git status -s`.
 fn kind_char(k: Kind) -> char {
     match k {
         Kind::Added => 'A',
@@ -180,6 +192,7 @@ impl Panel {
         Some(p)
     }
 
+    /// The repository's root folder.
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -299,15 +312,19 @@ impl Panel {
         }
     }
 
+    /// Shows a message in the footer; `error` colours it as a failure.
     fn say(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
+    /// Moves the cursor by `delta` rows, stopping at the first and last.
     fn move_by(&mut self, delta: isize) {
         let last = self.items.len().saturating_sub(1) as isize;
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
     }
 
+    /// Turns the result of a git change into a footer message and a refresh, and tells the host the
+    /// repo changed.
     fn finish(&mut self, what: &str, result: Result<(), git_core::Error>) -> Action {
         match result {
             Ok(()) => {
@@ -327,6 +344,7 @@ impl Panel {
         matches!(self.mode, Mode::Commit(..))
     }
 
+    /// Handles a key press: first the commit and discard prompts, else the keymap.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
         if *kind == KeyEventKind::Release {
@@ -505,6 +523,8 @@ impl Panel {
         Action::None
     }
 
+    /// Handles a key while the commit message is typed: Enter commits, Esc cancels, anything else
+    /// edits.
     fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Esc => Action::None,
@@ -563,7 +583,9 @@ impl Panel {
     }
 }
 
+/// Drawing: the change list and the diff pane.
 mod render;
 
+/// Tests for the panel.
 #[cfg(test)]
 mod tests;

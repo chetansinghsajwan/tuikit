@@ -112,6 +112,7 @@ const COMMON: &[Action] = &[
     basic("quit", "quit", "close gu", &["q", "ctrl-c", "leader q"]),
 ];
 
+/// The actions of the Refs pane (branches, remotes and tags).
 const BRANCHES: &[Action] = &[
     action(
         "branch.checkout",
@@ -157,6 +158,7 @@ const BRANCHES: &[Action] = &[
     ),
 ];
 
+/// The actions of the Commits pane.
 const COMMITS: &[Action] = &[
     action(
         "commit.files",
@@ -284,6 +286,7 @@ const COMMITS: &[Action] = &[
     ),
 ];
 
+/// The actions of the Stashes pane.
 const STASHES: &[Action] = &[
     action("stash.new", "new stash", "stash the changes with a message", &["n", "leader n"]),
     action(
@@ -296,6 +299,7 @@ const STASHES: &[Action] = &[
     action("stash.drop", "drop stash", "drop the stash (asks first)", &["d", "leader d"]),
 ];
 
+/// The actions of the Submodules pane.
 const SUBMODULES: &[Action] = &[
     action(
         "submodule.open",
@@ -348,5 +352,6 @@ pub fn pane_actions(pane: usize) -> Vec<Action> {
     own.iter().chain(COMMON).chain(GLOBAL).cloned().collect()
 }
 
+/// Tests of the key tables.
 #[cfg(test)]
 mod tests;

@@ -1,3 +1,5 @@
+//! Tests for the candidate sources.
+
 use super::super::*;
 
 #[test]

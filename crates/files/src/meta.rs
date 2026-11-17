@@ -19,6 +19,7 @@ use ui::{Pane, Theme};
 /// Rows of the panel (without its border), the most it ever shows.
 pub const MAX_ROWS: u16 = 9;
 
+/// A snapshot of one path's properties, read once so drawing the panel never touches the disk.
 pub struct Meta {
     pub name: String,
     /// Where a symlink points, and whether that target is missing.
@@ -37,6 +38,7 @@ pub struct Meta {
 }
 
 impl Meta {
+    /// Read the properties of `path` (following a symlink for size and type, but noting the link).
     pub fn read(path: &Path) -> std::io::Result<Meta> {
         let sym = fs::symlink_metadata(path)?;
         let is_link = sym.file_type().is_symlink();
@@ -178,6 +180,7 @@ pub struct DirSize {
 }
 
 impl DirSize {
+    /// Start counting the bytes under `path` on a background thread.
     pub fn spawn(path: PathBuf) -> DirSize {
         let d = DirSize {
             path: path.clone(),
@@ -275,6 +278,7 @@ pub fn size_short(n: u64) -> String {
         format!("{:.0}{}", v, UNITS[i])
     }
 }
+
 /// How long ago, for a column: `now`, `5m ago`, `4h ago`, `3d ago`, `2mo ago`, `1y ago` (8 cells at most).
 pub fn time_relative(t: Option<SystemTime>) -> String {
     t.map(|t| ago(SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0)))
@@ -292,6 +296,7 @@ pub fn time_short(t: Option<SystemTime>) -> String {
     }
 }
 
+/// A size for the properties panel: `512 B`, `1.5 MiB`.
 pub fn human(n: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     let mut v = n as f64;
@@ -303,6 +308,7 @@ pub fn human(n: u64) -> String {
     if i == 0 { format!("{n} B") } else { format!("{v:.1} {}", UNITS[i]) }
 }
 
+/// A number of seconds as a short "how long ago" text; shared by the column and the panel.
 fn ago(secs: u64) -> String {
     match secs {
         0..60 => "now".into(),
@@ -314,6 +320,7 @@ fn ago(secs: u64) -> String {
     }
 }
 
+/// A time for the properties panel: the date plus how long ago, or `-` when unknown.
 fn time(t: Option<SystemTime>) -> String {
     let Some(t) = t else { return "-".into() };
     let local: DateTime<Local> = t.into();
@@ -326,6 +333,7 @@ fn time(t: Option<SystemTime>) -> String {
     format!("{abs} ({})", ago(secs))
 }
 
+/// The MIME type of a file: sniffed from its bytes, else from its extension, else text or binary.
 fn mime_of(path: &Path) -> String {
     if let Ok(Some(t)) = infer::get_from_path(path) {
         return t.mime_type().to_string();
@@ -340,6 +348,7 @@ fn mime_of(path: &Path) -> String {
     }
 }
 
+/// The type-specific extra row: image size, or row and column counts for CSV and TSV.
 fn extra_of(path: &Path, mime: &str) -> Option<(&'static str, String)> {
     if mime.starts_with("image/") {
         let s = imagesize::size(path).ok()?;
@@ -358,6 +367,7 @@ fn extra_of(path: &Path, mime: &str) -> Option<(&'static str, String)> {
     None
 }
 
+/// Permissions, owner and link count from the metadata (all `None` off Unix).
 #[cfg(unix)]
 fn unix(m: &fs::Metadata) -> (Option<String>, Option<String>, Option<u64>) {
     use std::os::unix::fs::MetadataExt;
@@ -366,6 +376,7 @@ fn unix(m: &fs::Metadata) -> (Option<String>, Option<String>, Option<u64>) {
     (Some(p), Some(owner), Some(m.nlink()))
 }
 
+/// Off Unix there is no mode, owner or link count to show.
 #[cfg(not(unix))]
 fn unix(_: &fs::Metadata) -> (Option<String>, Option<String>, Option<u64>) {
     (None, None, None)

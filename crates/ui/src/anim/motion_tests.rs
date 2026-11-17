@@ -1,5 +1,8 @@
+//! Tests for list motion in `anim`: glides, folds, flashes and overlays.
+
 use super::*;
 
+/// The default theme, whose background the faded colors blend toward.
 fn theme() -> Theme {
     Theme::default()
 }
@@ -21,6 +24,7 @@ fn frame(names: &[&str], rows: usize) -> Buffer {
     buf
 }
 
+/// The text of each row of `buf`, trimmed, to compare frames by what they show.
 fn names(buf: &Buffer) -> Vec<String> {
     (0..buf.area.height)
         .map(|y| {

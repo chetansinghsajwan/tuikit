@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
+/// The well-known bus name of NetworkManager.
 const DEST: &str = "org.freedesktop.NetworkManager";
 const ROOT: &str = "/org/freedesktop/NetworkManager";
 const IF_ROOT: &str = "org.freedesktop.NetworkManager";
@@ -23,9 +24,12 @@ const AP_FLAGS_PRIVACY: u32 = 0x1;
 /// `NM80211ApSecurityFlags`: 802.1X key management.
 const AP_SEC_KEY_MGMT_802_1X: u32 = 0x200;
 
+/// The settings of a new connection, as NetworkManager's `a{sa{sv}}` wants them.
 type Settings<'a> = HashMap<&'a str, HashMap<&'a str, Value<'a>>>;
+/// The settings of a saved connection, as `GetSettings` returns them.
 type SavedSettings = HashMap<String, HashMap<String, OwnedValue>>;
 
+/// The NetworkManager backend: a blocking D-Bus connection and the bus name to talk to.
 pub struct Nm {
     conn: Connection,
     dest: String,
@@ -61,6 +65,7 @@ impl Nm {
         Nm { conn, dest: dest.to_string() }
     }
 
+    /// A proxy for one object and interface on the NetworkManager bus name.
     fn proxy(&self, path: &str, interface: &str) -> Result<Proxy<'static>> {
         Ok(Proxy::new(&self.conn, self.dest.clone(), path.to_string(), interface.to_string())?)
     }
@@ -80,6 +85,7 @@ impl Nm {
         Ok(None)
     }
 
+    /// The first Wi-Fi device's path, or an error when the machine has none.
     fn need_wifi_device(&self) -> Result<OwnedObjectPath> {
         self.wifi_device()?.map(|(p, _)| p).ok_or_else(|| Error("no Wi-Fi device".into()))
     }
@@ -134,6 +140,7 @@ impl Nm {
         Ok(out)
     }
 
+    /// The access point of `ssid` with the best signal, the one worth connecting through.
     fn strongest_ap(&self, device: &OwnedObjectPath, ssid: &str) -> Result<OwnedObjectPath> {
         self.access_points(device)?
             .into_iter()

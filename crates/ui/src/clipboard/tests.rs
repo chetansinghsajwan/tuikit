@@ -1,3 +1,5 @@
+//! Tests for the OSC 52 clipboard sequence.
+
 use super::*;
 
 #[test]

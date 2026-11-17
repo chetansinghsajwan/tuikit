@@ -1,5 +1,8 @@
+//! Tests for reading and merging config files.
+
 use super::*;
 
+/// Write `text` to a temp file unique to this test run and return its path.
 fn write(name: &str, text: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!("ui-config-test-{}-{name}.toml", std::process::id()));
     std::fs::write(&p, text).unwrap();

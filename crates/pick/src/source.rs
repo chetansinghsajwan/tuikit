@@ -19,6 +19,7 @@ pub struct LineFormat {
     pub timestamps: bool,
 }
 
+/// Turn one input line into a candidate as `fmt` says: with a time, one field, or plain.
 fn candidate(line: String, fmt: &LineFormat) -> Candidate {
     if fmt.timestamps {
         let (stamp, text) = line.split_once('\t').unwrap_or(("-", line.as_str()));
@@ -67,6 +68,8 @@ pub fn spawn_dirs(inj: Injector<Candidate>, root: PathBuf) {
     walk(inj, root, false, true, None);
 }
 
+/// Walk `root` on its own thread and push its files and/or folders as candidates, so the list
+/// fills while the UI stays responsive. Hidden files are listed, `.git` is not.
 fn walk(
     inj: Injector<Candidate>,
     root: PathBuf,

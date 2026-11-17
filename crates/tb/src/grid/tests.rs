@@ -1,10 +1,14 @@
+//! Tests for the grid editor.
+
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 
+/// Builds an editor over comma-separated `text`, with no file.
 fn grid(text: &str) -> Grid {
     Grid::new(Table::parse(text, ','), None, "space")
 }
 
+/// Sends the characters of `keys` as key presses and returns the last action.
 fn press(g: &mut Grid, keys: &str) -> Action {
     let mut last = Action::None;
     for ch in keys.chars() {
@@ -13,6 +17,7 @@ fn press(g: &mut Grid, keys: &str) -> Action {
     last
 }
 
+/// Presses Enter.
 fn enter(g: &mut Grid) {
     g.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)));
 }

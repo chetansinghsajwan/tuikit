@@ -1,3 +1,5 @@
+//! Tests for the tab model, short titles and the tab strip.
+
 use super::*;
 
 #[test]
@@ -50,10 +52,12 @@ fn closing_remembers_for_reopen_and_the_last_tab_stays() {
     assert_eq!(back, CLOSED_KEPT);
 }
 
+/// Plain labels titled `names`.
 fn labels(names: &[&str]) -> Vec<Label> {
     names.iter().map(|n| Label::new(*n)).collect()
 }
 
+/// The first row of `buf` as text, without trailing blanks.
 fn row(buf: &Buffer, width: u16) -> String {
     (0..width).map(|x| buf[(x, 0)].symbol().to_string()).collect::<String>().trim_end().to_string()
 }

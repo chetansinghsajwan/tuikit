@@ -24,8 +24,10 @@ struct Cli {
     file: PathBuf,
 }
 
+/// The terminal we draw on, backed by `/dev/tty` so stdout stays free.
 type Term = Terminal<CrosstermBackend<std::fs::File>>;
 
+/// Opens the table file and runs the editor. Failures exit with code 2.
 fn main() -> ExitCode {
     for p in ui::config::init("tb") {
         eprintln!("tb: {p}");
@@ -47,6 +49,7 @@ fn main() -> ExitCode {
     }
 }
 
+/// Sets up the terminal, runs the event loop and always restores the terminal afterwards.
 fn run(mut grid: Grid) -> io::Result<()> {
     // Draw on the controlling terminal so stdout stays free.
     let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
@@ -60,6 +63,8 @@ fn run(mut grid: Grid) -> io::Result<()> {
     result
 }
 
+/// Draws the grid, menu and help, then handles input until the user quits. The command
+/// palette is shown over the screen in zellij, else in the terminal given up for it.
 fn event_loop(term: &mut Term, grid: &mut Grid) -> io::Result<()> {
     let theme = Theme::load();
     let mut help: Option<ui::keys::Help> = None;

@@ -1,3 +1,6 @@
+//! The file browser panel: owns the tree, cursor, marks, prompts and background jobs, and turns
+//! keys into `Action`s for the host. Drawing and paste live in the submodules.
+
 use crate::bookmarks::{self, Bookmarks};
 use crate::keys;
 use crate::meta;
@@ -18,8 +21,11 @@ use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 use ui::{Pane, Theme};
 
+/// Copy and move jobs that run in the background with progress.
 mod paste;
+/// Drawing of the tree, footer and prompts.
 mod render;
+/// The panel's small shared types (rows, modes, options, actions).
 mod types;
 use paste::*;
 use types::*;
@@ -28,6 +34,7 @@ pub use types::{Action, Linemode, PanelOptions, Search};
 #[cfg(test)]
 mod tests;
 
+/// The file browser state: one root folder shown as a tree, plus everything a key can change.
 pub struct Panel {
     root: PathBuf,
     opts: PanelOptions,
@@ -61,6 +68,7 @@ pub struct Panel {
 }
 
 impl Panel {
+    /// Build a panel rooted at `root` and read the folders once, so it is ready to draw.
     pub fn new(root: impl Into<PathBuf>, opts: PanelOptions) -> Self {
         let root = root.into();
         let root = root.canonicalize().unwrap_or(root);
@@ -95,6 +103,7 @@ impl Panel {
         p
     }
 
+    /// The folder the tree starts from.
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -125,6 +134,8 @@ impl Panel {
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
     }
 
+    /// The sorted, filtered entries of one folder: folders first, then by name, honoring the ignore
+    /// and hidden-file settings.
     fn children(&self, dir: &Path) -> Vec<Row> {
         let walk = WalkBuilder::new(dir)
             .max_depth(Some(1))
@@ -155,6 +166,9 @@ impl Panel {
         out
     }
 
+    /// Append the rows of `dir` and, for each expanded folder, its children,
+    /// so the list is the tree flattened.
+    /// Also counts how many entries the ignore files hide.
     fn build(&mut self, dir: &Path, depth: u16) {
         let rows = self.children(dir);
         if !self.show_ignored {
@@ -287,11 +301,13 @@ impl Panel {
         self.rows.get(self.cursor).map(|r| r.path.as_path())
     }
 
+    /// Move the cursor by `delta` rows, staying inside the list.
     fn move_by(&mut self, delta: isize) {
         let last = self.rows.len().saturating_sub(1) as isize;
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
     }
 
+    /// Open or close the folder under the cursor (`open` forces a state, `None` flips it).
     fn toggle(&mut self, open: Option<bool>) {
         let Some(row) = self.rows.get(self.cursor) else { return };
         if !row.is_dir {
@@ -328,6 +344,7 @@ impl Panel {
         }
     }
 
+    /// Set the footer message; `error` makes it show as a failure.
     fn say(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
@@ -342,12 +359,15 @@ impl Panel {
         matches!(self.mode, Mode::Prompt(..))
     }
 
+    /// Feed one terminal event to the panel and return what the host should do about it. Also
+    /// collects the end of a finished background paste.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         self.poll_job();
         let action = self.handle_key_event(ev);
         if action == Action::None { self.pending.take().unwrap_or(Action::None) } else { action }
     }
 
+    /// Route a key to the open prompt, confirmation or bookmark wait, else to the normal keymap.
     fn handle_key_event(&mut self, ev: &Event) -> Action {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
         if *kind == KeyEventKind::Release {
@@ -363,6 +383,8 @@ impl Panel {
         self.normal_key(key)
     }
 
+    /// A key in the normal mode: cancels or refuses things while a paste runs,
+    /// else the keymap decides.
     fn normal_key(&mut self, key: &KeyEvent) -> Action {
         if let Some(job) = &self.job {
             if key.code == KeyCode::Esc {
@@ -551,6 +573,7 @@ impl Panel {
         Action::None
     }
 
+    /// A key while a text prompt (new, rename, open with) is open: Enter submits, Esc drops it.
     fn prompt_key(
         &mut self,
         kind: PromptKind,
@@ -576,6 +599,8 @@ impl Panel {
         }
     }
 
+    /// The key typed after a bookmark command: it is the bookmark's name, and the open operation
+    /// saves, jumps to or deletes it.
     fn bookmark_key(&mut self, op: BookmarkOp, key: &KeyEvent) -> Action {
         let KeyCode::Char(c) = key.code else { return Action::None };
         match op {
@@ -600,6 +625,7 @@ impl Panel {
         Action::None
     }
 
+    /// A key at a delete confirmation: the confirm key or Enter deletes, anything else cancels.
     fn confirm_key(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>, key: &KeyEvent) -> Action {
         match key.code {
             KeyCode::Char(c) if c == kind.confirm_key() => self.delete(kind, targets),
@@ -608,6 +634,7 @@ impl Panel {
         }
     }
 
+    /// Create the file or folder typed in the new prompt and move the cursor onto it.
     fn create(&mut self, dir: &Path, name: &str) -> Action {
         match ops::create(dir, name) {
             Ok((path, is_dir)) => {
@@ -622,6 +649,8 @@ impl Panel {
         }
     }
 
+    /// Rename `from` to the typed name, keeping open folders open and
+    /// putting the cursor on the result.
     fn rename(&mut self, from: &Path, name: &str) -> Action {
         match ops::rename(from, name) {
             Ok(to) if to == from => Action::None,
@@ -651,6 +680,7 @@ impl Panel {
         }
     }
 
+    /// Trash or permanently delete the confirmed targets, then reread the tree either way.
     fn delete(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>) -> Action {
         let result = match kind {
             ConfirmKind::Trash => ops::trash(&targets),

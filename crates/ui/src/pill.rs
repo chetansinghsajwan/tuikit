@@ -34,11 +34,13 @@ pub fn word_spans(icons: &IconProvider, word: &str, style: Style) -> Vec<Span<'s
     spans
 }
 
+/// Tests for the pill words.
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
 
+    /// The default icon set, which has the pill caps the tests look for.
     fn icons() -> IconProvider {
         IconProvider::default()
     }

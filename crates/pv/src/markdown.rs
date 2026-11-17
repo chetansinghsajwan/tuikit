@@ -41,6 +41,7 @@ pub struct Rendered {
     pub headings: Vec<usize>,
 }
 
+/// Words with the style each is drawn in; the unit that text is wrapped by.
 type Words = Vec<(String, Style)>;
 
 /// A table being collected: the cells (as styled words) of every row, the head row apart.
@@ -52,6 +53,7 @@ struct Table {
     in_head: bool,
 }
 
+/// The state of a Markdown rendering: the lines made so far and the block being read.
 struct Out {
     width: usize,
     /// The glyphs drawn into the text (pill caps).
@@ -83,14 +85,17 @@ struct Out {
 }
 
 impl Out {
+    /// The style in force now: the innermost of the emphasis, strong and link styles.
     fn style(&self) -> Style {
         self.styles.last().copied().unwrap_or_default()
     }
 
+    /// The width in cells of the prefix every line of the block starts with.
     fn prefix_width(&self) -> usize {
         self.indent.iter().map(|s| s.content.width()).sum()
     }
 
+    /// End the block with an empty line, unless the output already ends in one.
     fn blank(&mut self) {
         if self.lines.last().is_some_and(|l| !l.spans.is_empty()) {
             self.lines.push(Line::default());
@@ -172,7 +177,12 @@ pub(crate) fn wrap_words(
     wrap(icons, words, avail)
 }
 
-fn wrap(icons: &ui::icons::IconProvider, words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
+/// The wrapping behind `wrap_words`: fill each line with words, a space between them.
+fn wrap(
+    icons: &ui::icons::IconProvider,
+    words: &[(String, Style)],
+    avail: usize,
+) -> Vec<Vec<Span<'static>>> {
     let mut lines = Vec::new();
     let mut line: Vec<Span<'static>> = Vec::new();
     let mut used = 0;
@@ -215,6 +225,7 @@ fn clip(s: &str, width: usize) -> String {
     out
 }
 
+/// The width in cells of a line of spans.
 fn line_width(spans: &[Span<'static>]) -> usize {
     spans.iter().map(|s| s.content.width()).sum()
 }
@@ -527,7 +538,10 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let content = total - 2;
                     let tint = Style::new().bg(ui::mix(c.fg.into(), c.bg.into(), 7));
                     let shade = Style::new().fg(tint.bg.unwrap_or(Color::Reset));
-                    out.push_line(vec![Span::styled(format!("▗{}▖", "▄".repeat(total - 2)), shade)]);
+                    out.push_line(vec![Span::styled(
+                        format!("▗{}▖", "▄".repeat(total - 2)),
+                        shade,
+                    )]);
                     // A margin of one column on both sides, the text padded out to the full width.
                     let row = |spans: Vec<Span<'static>>, used: usize| -> Vec<Span<'static>> {
                         let mut line = vec![Span::styled(" ", tint)];
@@ -572,7 +586,10 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     if code.is_empty() {
                         out.push_line(row(Vec::new(), 0));
                     }
-                    out.push_line(vec![Span::styled(format!("▝{}▘", "▀".repeat(total - 2)), shade)]);
+                    out.push_line(vec![Span::styled(
+                        format!("▝{}▘", "▀".repeat(total - 2)),
+                        shade,
+                    )]);
 
                     out.lines.push(Line::default());
                 }

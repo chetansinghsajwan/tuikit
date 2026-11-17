@@ -11,6 +11,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+/// The geometry of one list: where its row bars and row contents go, so every tool lines up alike.
 #[derive(Debug, Clone, Copy)]
 pub struct Rows {
     inner: Rect,
@@ -109,6 +110,7 @@ pub struct ListRow {
     pub focused: bool,
 }
 
+/// The plain text of `spans` with the styles dropped, for measuring and for default row identity.
 fn text_of(spans: &[Span]) -> String {
     spans.iter().map(|s| s.content.as_ref()).collect()
 }

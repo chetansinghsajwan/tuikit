@@ -1,3 +1,5 @@
+//! Tests for turning Markdown into Typst markup and a PDF.
+
 use super::*;
 
 #[test]

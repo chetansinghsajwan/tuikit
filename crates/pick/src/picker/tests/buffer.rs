@@ -1,7 +1,10 @@
+//! Tests for the open-buffer picker.
+
 use super::super::*;
 use crate::candidate::Buffer as BufferInfo;
 use ratatui::crossterm::event::KeyEvent;
 
+/// An open-buffer candidate: `value` is what accepting returns, shown by its path or `[scratch]`.
 fn buf(value: &str, flags: &str, path: Option<&str>, focus: Option<u32>, text: &str) -> Candidate {
     Candidate::buffer(
         path.unwrap_or("[scratch]"),
@@ -15,6 +18,7 @@ fn buf(value: &str, flags: &str, path: Option<&str>, focus: Option<u32>, text: &
     )
 }
 
+/// A picker over `items` rooted at `root`, with the preview on and the cursor on the first row.
 fn picker(root: std::path::PathBuf, items: Vec<Candidate>) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -38,6 +42,7 @@ fn picker(root: std::path::PathBuf, items: Vec<Candidate>) -> Picker {
     p
 }
 
+/// Render the picker into a 100 by 14 buffer and return its text, one line per row.
 fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 14);
     let mut b = Buffer::empty(area);

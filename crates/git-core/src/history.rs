@@ -7,6 +7,7 @@ use gix::bstr::ByteSlice;
 use gix::diff::blob::{Algorithm, Diff, InternedInput};
 use gix::object::tree::diff::ChangeDetached as Change;
 
+/// Which family a ref belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
     Branch,
@@ -14,6 +15,7 @@ pub enum RefKind {
     Tag,
 }
 
+/// A branch, remote branch or tag with the commit it points at.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RefInfo {
     /// Short name: `main`, `origin/main`, `v1.0`.
@@ -28,6 +30,7 @@ pub struct RefInfo {
     pub time: i64,
 }
 
+/// The facts about one commit that lists and panels show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitInfo {
     pub oid: String,
@@ -41,6 +44,7 @@ pub struct CommitInfo {
     pub parents: Vec<String>,
 }
 
+/// One stash entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StashInfo {
     /// `stash@{index}`, 0 is the newest.
@@ -60,6 +64,7 @@ pub struct FileChange {
     pub binary: bool,
 }
 
+/// Read the facts of a `gix` commit into a plain `CommitInfo`.
 pub(crate) fn commit_info(commit: &gix::Commit<'_>) -> Result<CommitInfo, Error> {
     let msg = commit.message_raw_sloppy().to_str_lossy().trim_end().to_string();
     let author = commit.author().map_err(err)?;
@@ -76,6 +81,7 @@ pub(crate) fn commit_info(commit: &gix::Commit<'_>) -> Result<CommitInfo, Error>
     })
 }
 
+/// Branches, remotes and tags, checked-out branch first, then by kind and newest first.
 pub(crate) fn refs(repo: &gix::Repository) -> Result<Vec<RefInfo>, Error> {
     use gix::reference::Category;
     let head = repo.head_name().ok().flatten().map(|n| n.as_bstr().to_string());
@@ -125,6 +131,8 @@ pub(crate) fn commits(repo: &gix::Repository, limit: usize) -> Result<Vec<Commit
     Ok(out)
 }
 
+/// Up to `limit` commits reachable from any branch, remote or tag (and `HEAD`),
+/// in topological order.
 pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<CommitInfo>, Error> {
     use gix::revision::walk::Sorting;
     use gix::traverse::commit::simple::CommitTimeOrder;
@@ -166,6 +174,7 @@ pub(crate) fn commits_all(repo: &gix::Repository, limit: usize) -> Result<Vec<Co
     Ok(crate::graph::topo_order(out))
 }
 
+/// Up to `limit` commits reachable from `rev`, newest first.
 pub(crate) fn commits_from(
     repo: &gix::Repository,
     rev: &str,
@@ -182,6 +191,7 @@ pub(crate) fn commits_from(
     Ok(out)
 }
 
+/// The stash entries read from the `refs/stash` reflog, newest first.
 pub(crate) fn stashes(repo: &gix::Repository) -> Result<Vec<StashInfo>, Error> {
     let Some(stash) = repo.try_find_reference("refs/stash").map_err(err)? else {
         return Ok(Vec::new());
@@ -200,17 +210,20 @@ pub(crate) fn stashes(repo: &gix::Repository) -> Result<Vec<StashInfo>, Error> {
     Ok(out)
 }
 
+/// One commit by hash, ref name or any rev-spec.
 pub(crate) fn commit(repo: &gix::Repository, rev: &str) -> Result<CommitInfo, Error> {
     let id = repo.rev_parse_single(rev).map_err(err)?;
     commit_info(&repo.find_commit(id).map_err(err)?)
 }
 
+/// How many lines were added and removed going from `before` to `after`.
 fn line_counts(before: &[u8], after: &[u8]) -> (u32, u32) {
     let input = InternedInput::new(before, after);
     let diff = Diff::compute(Algorithm::Histogram, &input);
     diff.hunks().fold((0, 0), |(a, r), h| (a + h.after.len() as u32, r + h.before.len() as u32))
 }
 
+/// The bytes of a blob, or nothing if it cannot be read, so one bad object does not fail a listing.
 fn blob(repo: &gix::Repository, id: gix::ObjectId) -> Vec<u8> {
     repo.find_blob(id).map(|b| b.detach().data).unwrap_or_default()
 }
@@ -311,6 +324,7 @@ fn sides(repo: &gix::Repository, base: Option<&str>, rev: &str) -> Result<Vec<Si
     Ok(out)
 }
 
+/// The files `rev` changed against `base` (or its first parent), with line counts.
 pub(crate) fn changes(
     repo: &gix::Repository,
     base: Option<&str>,
@@ -326,6 +340,7 @@ pub(crate) fn changes(
         .collect())
 }
 
+/// Whether a patch line is unchanged context, added or removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatchKind {
     Context,
@@ -333,6 +348,7 @@ pub enum PatchKind {
     Removed,
 }
 
+/// One line of a hunk with its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PatchLine {
     pub kind: PatchKind,
@@ -350,6 +366,7 @@ pub struct Hunk {
     pub lines: Vec<PatchLine>,
 }
 
+/// The patch of one file: its hunks plus the whole text on both sides for highlighting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilePatch {
     pub path: String,
@@ -380,10 +397,13 @@ pub(crate) fn full_text(bytes: &[u8]) -> String {
 /// Lines of context around each change.
 const CONTEXT: usize = 3;
 
+/// Split bytes into lines (lossy UTF-8) the way the diff counts them.
 fn split_lines(b: &[u8]) -> Vec<String> {
     b.lines().map(|l| l.to_str_lossy().into_owned()).collect()
 }
 
+/// Diff two versions and group the changes into hunks with `CONTEXT` lines around them, merging
+/// changes whose context overlaps.
 pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     let (old, new) = (split_lines(before), split_lines(after));
     let input = InternedInput::new(before, after);
@@ -442,6 +462,7 @@ pub(crate) fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
     out
 }
 
+/// The per-file patches of `rev` against `base` (or its first parent); binary files have no hunks.
 pub(crate) fn patch(
     repo: &gix::Repository,
     base: Option<&str>,

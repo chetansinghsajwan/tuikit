@@ -1,3 +1,5 @@
+//! Tests for the indent-guide scope of the cursor in code.
+
 use super::*;
 
 #[test]

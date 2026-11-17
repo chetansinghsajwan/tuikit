@@ -16,6 +16,7 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Maps BlueZ's icon name to a kind, so the UI can pick an icon.
     pub fn from_icon(icon: &str) -> Kind {
         match icon {
             i if i.starts_with("audio") => Kind::Audio,
@@ -28,6 +29,7 @@ impl Kind {
         }
     }
 
+    /// The short name shown in the list.
     pub fn label(self) -> &'static str {
         match self {
             Kind::Audio => "audio",
@@ -41,6 +43,7 @@ impl Kind {
     }
 }
 
+/// A Bluetooth device as seen from here, paired or just in range.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
     /// `AA:BB:CC:DD:EE:FF`: what identifies it.
@@ -64,17 +67,23 @@ pub struct BtStatus {
     pub discovering: bool,
 }
 
+/// A source of Bluetooth devices. Methods block for a D-Bus round trip or so; a UI runs the slow
+/// ones (`connect`) on a thread.
 pub trait Bluetooth: Send + Sync {
+    /// The adapter's state: which one, powered, and scanning.
     fn status(&self) -> Result<BtStatus>;
     /// Known and visible devices: connected first, then paired, then by signal.
     fn devices(&self) -> Result<Vec<Device>>;
     /// Start or stop looking for devices.
     fn scan(&self, on: bool) -> Result<()>;
+    /// Turn the adapter on or off.
     fn set_powered(&self, on: bool) -> Result<()>;
     /// Connect to a device. A device not paired yet is paired and trusted first (it works for
     /// devices that pair without a PIN: headphones, mice, most keyboards).
     fn connect(&self, address: &str) -> Result<()>;
+    /// Drop the connection to a device, keeping it paired.
     fn disconnect(&self, address: &str) -> Result<()>;
+    /// Let the device connect by itself (or stop letting it).
     fn set_trusted(&self, address: &str, on: bool) -> Result<()>;
     /// Forget the device: unpair it and delete what is known about it.
     fn remove(&self, address: &str) -> Result<()>;

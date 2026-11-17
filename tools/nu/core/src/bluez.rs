@@ -8,19 +8,25 @@ use std::collections::HashMap;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
+/// The well-known bus name of BlueZ.
 const DEST: &str = "org.bluez";
 const IF_ADAPTER: &str = "org.bluez.Adapter1";
 const IF_DEVICE: &str = "org.bluez.Device1";
 const IF_MANAGER: &str = "org.freedesktop.DBus.ObjectManager";
 
+/// The properties of one D-Bus interface, by name.
 type Props = HashMap<String, OwnedValue>;
+/// What `GetManagedObjects` returns: every object with its interfaces and their properties.
 type Managed = HashMap<OwnedObjectPath, HashMap<String, Props>>;
 
+/// The BlueZ backend: a blocking D-Bus connection and the bus name to talk to.
 pub struct BlueZ {
     conn: Connection,
     dest: String,
 }
 
+/// Reads one typed property: `None` when it is missing (BlueZ omits unset ones) or of another
+/// type.
 fn get<T: TryFrom<OwnedValue>>(props: &Props, key: &str) -> Option<T> {
     props.get(key).and_then(|v| v.try_clone().ok()).and_then(|v| T::try_from(v).ok())
 }
@@ -55,10 +61,12 @@ impl BlueZ {
         BlueZ { conn, dest: dest.to_string() }
     }
 
+    /// A proxy for one object and interface on the BlueZ bus name.
     fn proxy(&self, path: &str, interface: &str) -> Result<Proxy<'static>> {
         Ok(Proxy::new(&self.conn, self.dest.clone(), path.to_string(), interface.to_string())?)
     }
 
+    /// Every BlueZ object with its properties, from one ObjectManager call.
     fn managed(&self) -> Result<Managed> {
         Ok(self.proxy("/", IF_MANAGER)?.call("GetManagedObjects", &())?)
     }
@@ -74,6 +82,7 @@ impl BlueZ {
         Ok(found.into_iter().next())
     }
 
+    /// The first adapter's path, or an error when the machine has none.
     fn need_adapter(&self) -> Result<OwnedObjectPath> {
         self.adapter()?.map(|(p, _)| p).ok_or_else(|| Error("no Bluetooth adapter".into()))
     }

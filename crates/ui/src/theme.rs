@@ -7,6 +7,7 @@ use ratatui::widgets::BorderType;
 use serde::Deserialize;
 use std::path::PathBuf;
 
+/// The whole design: colors, chrome and layout tokens, plus the icons. Every tool reads one.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[derive(Default)]
@@ -19,6 +20,7 @@ pub struct Theme {
     pub icons: crate::icons::IconProvider,
 }
 
+/// The color tokens: base colors, status colors, git colors and syntax roles.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Colors {
@@ -37,6 +39,7 @@ pub struct Colors {
     pub syntax: SyntaxColors,
 }
 
+/// The colors of git states (added, modified, ...), so every tool shows a change the same way.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct GitColors {
@@ -48,6 +51,7 @@ pub struct GitColors {
     pub renamed: Hex,
 }
 
+/// The look of the frame around panes: border style, titles and background.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Chrome {
@@ -62,6 +66,7 @@ pub struct Chrome {
     pub editor_box: bool,
 }
 
+/// The sizes that arrange panes: gaps, padding, sidebar width and popup and preview shares.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Layout {
@@ -84,6 +89,7 @@ pub struct Layout {
 pub struct Hex(pub Color);
 
 impl<'de> Deserialize<'de> for Hex {
+    /// Read a `#rrggbb` string; anything else is an error, so a bad token is caught on load.
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let s = String::deserialize(d)?;
         let h = s.trim_start_matches('#');
@@ -102,6 +108,7 @@ impl From<Hex> for Color {
 }
 
 impl Chrome {
+    /// The border style the theme names; anything unknown gets the rounded one.
     pub fn border_type(&self) -> BorderType {
         match self.border.as_str() {
             "plain" => BorderType::Plain,
@@ -112,6 +119,7 @@ impl Chrome {
     }
 }
 
+/// A truecolor `Hex` from its parts, for the default palette.
 fn rgb(r: u8, g: u8, b: u8) -> Hex {
     Hex(Color::Rgb(r, g, b))
 }

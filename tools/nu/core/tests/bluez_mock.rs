@@ -3,6 +3,7 @@
 //! calls match BlueZ's D-Bus API as documented; it cannot check real BlueZ or real devices.
 //! Skipped without `dbus-daemon`.
 
+
 use nu_core::bluetooth::{Bluetooth, Kind};
 use nu_core::bluez::BlueZ;
 use std::io::{BufRead, BufReader};
@@ -11,9 +12,11 @@ use std::sync::{Arc, Mutex};
 use zbus::blocking::connection::Builder;
 use zbus::zvariant::OwnedObjectPath;
 
+// Bus name and adapter path of the pretend BlueZ.
 const NAME: &str = "org.bluez";
 const ADAPTER: &str = "/org/bluez/hci0";
 
+/// One pretend device with the properties BlueZ would report.
 #[derive(Clone)]
 struct Dev {
     address: &'static str,
@@ -25,6 +28,7 @@ struct Dev {
     rssi: i16,
 }
 
+/// What the pretend BlueZ remembers, including every call it got, for the test to read.
 #[derive(Default)]
 struct State {
     powered: bool,
@@ -34,24 +38,29 @@ struct State {
     removed: Vec<String>,
 }
 
+/// The state shared between the D-Bus objects and the test.
 type Shared = Arc<Mutex<State>>;
 
+/// The adapter object (`Adapter1`): discovery, power and device removal.
 struct Adapter(Shared);
 
 #[zbus::interface(name = "org.bluez.Adapter1")]
 impl Adapter {
+    /// Records the start of discovery.
     fn start_discovery(&self) {
         let mut s = self.0.lock().unwrap();
         s.calls.push("StartDiscovery".into());
         s.discovering = true;
     }
 
+    /// Records the end of discovery.
     fn stop_discovery(&self) {
         let mut s = self.0.lock().unwrap();
         s.calls.push("StopDiscovery".into());
         s.discovering = false;
     }
 
+    /// Records which device was removed.
     fn remove_device(&self, device: OwnedObjectPath) {
         let mut s = self.0.lock().unwrap();
         let tail = device.as_str().rsplit('/').next().unwrap_or("").to_string();
@@ -78,9 +87,11 @@ impl Adapter {
     }
 }
 
+/// One device object (`Device1`): the shared state and the device's index in it.
 struct Device(Shared, usize);
 
 impl Device {
+    /// Runs `f` on this object's device while holding the state lock.
     fn with<T>(&self, f: impl FnOnce(&mut Dev) -> T) -> T {
         f(&mut self.0.lock().unwrap().devices[self.1])
     }
@@ -88,6 +99,7 @@ impl Device {
 
 #[zbus::interface(name = "org.bluez.Device1")]
 impl Device {
+    /// Records the pairing and marks the device paired.
     fn pair(&self) {
         let mut s = self.0.lock().unwrap();
         let a = s.devices[self.1].address;
@@ -95,6 +107,7 @@ impl Device {
         s.devices[self.1].paired = true;
     }
 
+    /// Records the connection and marks the device connected.
     fn connect(&self) {
         let mut s = self.0.lock().unwrap();
         let a = s.devices[self.1].address;
@@ -102,6 +115,7 @@ impl Device {
         s.devices[self.1].connected = true;
     }
 
+    /// Records the disconnection and marks the device not connected.
     fn disconnect(&self) {
         let mut s = self.0.lock().unwrap();
         let a = s.devices[self.1].address;
@@ -158,6 +172,7 @@ impl Device {
     }
 }
 
+/// A private `dbus-daemon` that is killed when the test ends.
 struct Daemon(Child);
 
 impl Drop for Daemon {
@@ -167,6 +182,7 @@ impl Drop for Daemon {
     }
 }
 
+/// A private session bus, or `None` when there is no `dbus-daemon` to run.
 fn bus() -> Option<(Daemon, String)> {
     let mut child = Command::new("dbus-daemon")
         .args(["--session", "--nofork", "--print-address=1"])

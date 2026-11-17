@@ -29,6 +29,7 @@ pub struct Chord {
 }
 
 impl Chord {
+    /// Read one key name such as `j`, `ctrl-d` or `enter`; `None` if it is not a known key.
     pub fn parse(s: &str) -> Option<Chord> {
         let (mut ctrl, mut alt) = (false, false);
         let mut rest = s;
@@ -69,6 +70,7 @@ impl Chord {
         Some(Chord { code, ctrl, alt })
     }
 
+    /// The chord of a real key event, so pressed keys compare with the configured ones.
     pub fn from_event(key: &KeyEvent) -> Chord {
         Chord {
             code: key.code,
@@ -182,6 +184,7 @@ pub struct Menu {
     pub entries: Vec<MenuEntry>,
 }
 
+/// Resolves key presses to action ids, tracking a multi-key sequence that is under way.
 #[derive(Debug, Clone)]
 pub struct Keymap {
     leader: Chord,
@@ -236,6 +239,8 @@ impl Keymap {
         }
     }
 
+    /// Read a binding such as `leader v c` into its chords, with `leader` replaced by the
+    /// leader key.
     fn sequence(&self, s: &str) -> Option<Vec<Chord>> {
         s.split_whitespace()
             .map(|w| if w == "leader" { Some(self.leader) } else { Chord::parse(w) })
@@ -261,6 +266,7 @@ impl Keymap {
         }
     }
 
+    /// Every action the keymap was built with, for the palette and the help.
     pub fn actions(&self) -> &[Action] {
         &self.actions
     }
@@ -286,10 +292,13 @@ impl Keymap {
         !self.pending.is_empty()
     }
 
+    /// Drop a started sequence, for when the tool closes the menu another way.
     pub fn cancel(&mut self) {
         self.pending.clear();
     }
 
+    /// Take one key press: run a finished binding, continue or cancel a sequence, or return the
+    /// key to the caller.
     pub fn feed(&mut self, key: &KeyEvent) -> Feed {
         let chord = Chord::from_event(key);
         if !self.pending.is_empty() && chord.code == KeyCode::Esc && !chord.ctrl && !chord.alt {
@@ -503,6 +512,8 @@ impl Help {
             .collect()
     }
 
+    /// Draw the help popup over `area` with `rows` filtered by the search, dimming what is
+    /// behind it.
     pub fn render(
         &mut self,
         area: Rect,
@@ -588,6 +599,7 @@ impl Help {
 /// (at most 36 rows), the same at every level; smaller only on a small screen.
 pub const MENU_WIDTH: u16 = 44;
 
+/// Height of the Quick Keys popup for a screen of this height; see `MENU_WIDTH`.
 pub fn menu_height(screen_height: u16) -> u16 {
     (screen_height * 3 / 4).clamp(8, 36).min(screen_height.saturating_sub(1))
 }

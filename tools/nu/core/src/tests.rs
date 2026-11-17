@@ -1,5 +1,8 @@
+//! Tests for the Wi-Fi types and the `merge`/`sort` helpers.
+
 use super::*;
 
+/// Builds a test network with only the fields the tests care about.
 fn net(ssid: &str, strength: u8, active: bool) -> Network {
     Network {
         ssid: ssid.into(),

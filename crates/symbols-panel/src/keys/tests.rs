@@ -1,3 +1,5 @@
+//! Tests for the key table.
+
 use super::*;
 use ui::keys::Keymap;
 

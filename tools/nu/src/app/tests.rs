@@ -1,23 +1,30 @@
+//! Tests for the `nu` screen: keys, prompts, background jobs and what gets drawn, over the fake
+//! radios.
+
 use super::*;
 use nu_core::bluetooth::Kind;
 use nu_core::fake::{Fake, FakeBluetooth};
 use ratatui::crossterm::event::KeyModifiers;
 
+/// A plain key press event.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+/// Types each character of `keys` into the app, one key press apiece.
 fn press(app: &mut App, keys: &str) {
     for c in keys.chars() {
         app.handle_event(&key(KeyCode::Char(c)));
     }
 }
 
+/// An app over fresh fake radios, with the fakes handed back so tests can inspect them.
 fn app() -> (App, Arc<Fake>, Arc<FakeBluetooth>) {
     let (w, b) = (Arc::new(Fake::new()), Arc::new(FakeBluetooth::new()));
     (App::new(w.clone(), b.clone()), w, b)
 }
 
+/// Renders the app at a fixed size and returns the screen as text, for `contains` checks.
 fn screen(app: &mut App) -> String {
     let area = Rect::new(0, 0, 110, 26);
     let mut buf = Buffer::empty(area);
@@ -27,6 +34,7 @@ fn screen(app: &mut App) -> String {
         .collect()
 }
 
+/// Ticks until the running connection job finishes (up to about three seconds).
 fn wait(app: &mut App) {
     for _ in 0..300 {
         if app.job.is_none() {

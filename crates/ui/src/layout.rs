@@ -14,6 +14,7 @@ pub fn rows(theme: &Theme, area: Rect, constraints: &[Constraint]) -> Vec<Rect> 
     split(theme, area, Direction::Vertical, constraints)
 }
 
+/// The shared splitter behind `columns` and `rows`, so the theme's gap applies to every split.
 fn split(theme: &Theme, area: Rect, dir: Direction, constraints: &[Constraint]) -> Vec<Rect> {
     Layout::new(dir, constraints).spacing(theme.layout.gap).split(area).to_vec()
 }
@@ -81,7 +82,9 @@ pub struct Workbench {
 /// every dock. The side docks run from the top down to just above it, and the
 /// bottom dock sits under the editor between the side docks.
 pub fn workbench(main: Rect, left: u16, right: u16, bottom: u16) -> Workbench {
+    /// The least width the editor keeps when docks take space.
     const MIN_EDITOR_WIDTH: u16 = 20;
+    /// The least height the editor keeps when the bottom dock and the ribbon take space.
     const MIN_EDITOR_HEIGHT: u16 = 4;
     let ribbon_h = u16::from(main.height > MIN_EDITOR_HEIGHT);
     let body = Rect { height: main.height - ribbon_h, ..main };

@@ -1,3 +1,5 @@
+//! The screen: the keyboard drawn for the shown layer, the keys held now, and a history log.
+
 use crate::kbd::{self, Action, Config};
 use crate::link::{Event, State};
 use ratatui::buffer::Buffer;
@@ -8,15 +10,18 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use ui::{Pane, Theme, mix};
 
+/// Cap on the history log, so a long session does not grow memory without bound.
 const HISTORY_LIMIT: usize = 500;
 /// The widest row of the keyboard, in quarter keys (a 1u key is 4).
 const ROW_QUARTERS: usize = 60;
 
+/// One line of the history log: a key pressed or a layer entered.
 enum Item {
     Press(String),
     Layer(String),
 }
 
+/// Everything the screen needs: the parsed config, the latest daemon state and the history.
 pub struct App {
     cfg: Config,
     theme: Theme,
@@ -31,6 +36,7 @@ pub struct App {
 }
 
 impl App {
+    /// Starts on the first layer of the config, not connected, with an empty history.
     pub fn new(cfg: Config, addr: String) -> App {
         let base = cfg.layers[0].name.clone();
         App {
@@ -96,10 +102,12 @@ impl App {
         (false, true)
     }
 
+    /// Index of the layer kanata reports as active, if the config knows it.
     fn live_index(&self) -> Option<usize> {
         self.cfg.layers.iter().position(|l| l.name == self.state.layer)
     }
 
+    /// Index of the layer to draw: the browsed one, else the live one, else the base layer.
     fn shown_index(&self) -> usize {
         self.browsing.or(self.live_index()).unwrap_or_else(|| {
             self.cfg.layers.iter().position(|l| l.name == self.base).unwrap_or(0)
@@ -129,6 +137,7 @@ impl App {
             .collect()
     }
 
+    /// Draws the whole screen: layer banner, keyboard, history and the key hint line.
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         let l = &self.theme.layout;
         let keyboard_h = self.keys_height() + 2 + 2 + 2 * l.padding_y;
@@ -172,6 +181,7 @@ impl App {
         palette[i % palette.len()].into()
     }
 
+    /// Draws the centered layer name banner, marking when a layer is being browsed by hand.
     fn render_layer(&self, area: Rect, buf: &mut Buffer) {
         if area.is_empty() {
             return;
@@ -187,6 +197,8 @@ impl App {
         buf.set_stringn(area.x + (area.width - w) / 2, area.y, text, w as usize, style);
     }
 
+    /// Draws the keys of the shown layer in a bordered pane, lights the held ones and adds the
+    /// status line below.
     fn render_keyboard(&self, area: Rect, buf: &mut Buffer) {
         let c = &self.theme.colors;
         let layer = self.cfg.layers[self.shown_index()].name.clone();
@@ -260,6 +272,7 @@ impl App {
         }
     }
 
+    /// One line saying whether the daemon or kanata is unreachable and which keys are held.
     fn status_line(&self) -> Line<'static> {
         let c = &self.theme.colors;
         if !self.connected {
@@ -341,5 +354,6 @@ fn quarters(key: &str) -> usize {
     }
 }
 
+/// Tests for lighting keys, the history log and rendering.
 #[cfg(test)]
 mod tests;

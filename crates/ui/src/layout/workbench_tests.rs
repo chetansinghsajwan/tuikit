@@ -1,3 +1,5 @@
+//! Tests for the workbench split (docks, editor and ribbon).
+
 use super::*;
 
 #[test]

@@ -2,18 +2,22 @@
 
 use ui::keys::{Action, Group};
 
+/// Builds a basic action: movement and keys everyone knows. Kept out of the command palette.
 macro_rules! b {
     ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
         Action { id: $id, name: $name, desc: $desc, basic: true, keys: &[$($k),*] }
     };
 }
 
+/// Builds a non-basic action: one that shows in the command palette.
 macro_rules! a {
     ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
         Action { id: $id, name: $name, desc: $desc, basic: false, keys: &[$($k),*] }
     };
 }
 
+/// Every action of the explorer with its default keys. One table feeds the keymap, the palette
+/// and the help screen, so the three never disagree.
 pub const ACTIONS: &[Action] = &[
     b!("nav.up", "up", "move the cursor up", ["k", "up", "ctrl-p"]),
     b!("nav.down", "down", "move the cursor down", ["j", "down", "ctrl-n"]),
@@ -44,11 +48,14 @@ pub const ACTIONS: &[Action] = &[
     b!("quit", "back", "give the keyboard back to the editor", ["q", "esc", "ctrl-c"]),
 ];
 
+/// Names for the key prefixes, shown when a prefix is pending.
 pub const GROUPS: &[Group] = &[Group { prefix: "leader z", name: "fold" }];
 
+/// The ids of `ACTIONS`, to tell the explorer's own actions from a host's.
 pub fn owns(id: &str) -> bool {
     ACTIONS.iter().any(|a| a.id == id)
 }
 
+/// Tests for the key table.
 #[cfg(test)]
 mod tests;

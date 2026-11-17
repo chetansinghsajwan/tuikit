@@ -1,3 +1,5 @@
+//! Checks that the action tables are complete and conflict-free.
+
 use super::*;
 use ui::keys::Keymap;
 

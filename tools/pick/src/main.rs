@@ -1,3 +1,6 @@
+//! The `pick` binary: reads candidates from stdin or a built-in source, shows the picker on the
+//! //! terminal and prints the selection to stdout.
+
 use clap::Parser;
 use pick::source::GitSource;
 use pick::{Action, Mode, Picker, PickerOptions, source};
@@ -97,9 +100,12 @@ struct Cli {
     timestamps: bool,
 }
 
+/// Exit code when the picker was accepted with nothing selected.
 const EXIT_NO_SELECTION: u8 = 1;
+/// Exit code when the user cancelled; 130 is the shell's code for an interrupt.
 const EXIT_CANCEL: u8 = 130;
 
+/// The terminal the picker draws on. Dropping it restores the terminal, even on early return.
 struct Tty(Terminal<CrosstermBackend<std::fs::File>>);
 
 impl Drop for Tty {
@@ -109,6 +115,7 @@ impl Drop for Tty {
     }
 }
 
+/// Parses the command line, runs the picker and maps a failure to exit code 2.
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
@@ -120,6 +127,8 @@ fn main() -> ExitCode {
     }
 }
 
+/// Builds the picker from the options, feeds it candidates, runs the event loop on `/dev/tty`
+/// and prints the selection. It uses `/dev/tty` so stdin and stdout stay free for the pipe.
 fn run(cli: Cli) -> io::Result<u8> {
     let mode = if cli.grep.is_some() { Mode::Grep } else { Mode::Fuzzy };
     let (root, paths) = match (&cli.files, &cli.grep, &cli.paths) {
@@ -267,6 +276,7 @@ fn run(cli: Cli) -> io::Result<u8> {
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
+/// What `--git` lists: refs, commits or stashes.
 enum GitWhat {
     Refs,
     Commits,

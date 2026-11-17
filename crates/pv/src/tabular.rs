@@ -14,6 +14,7 @@ pub const ROW_CAP: usize = 200;
 /// How much of a text file is read.
 const MAX_BYTES: u64 = 1 << 20;
 
+/// The "show the raw text" switch; when on, table files are previewed as plain text.
 static RAW: AtomicBool = AtomicBool::new(false);
 
 /// Show tabular files as text instead of tables (a host's toggle).
@@ -21,10 +22,12 @@ pub fn set_raw(raw: bool) {
     RAW.store(raw, Ordering::Relaxed);
 }
 
+/// Whether tables are shown as raw text.
 pub fn raw() -> bool {
     RAW.load(Ordering::Relaxed)
 }
 
+/// The kind of table file: delimited text (with its separator, or sniffed) or a spreadsheet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// Delimited text; the delimiter is sniffed unless the extension says it.
@@ -32,6 +35,7 @@ pub enum Kind {
     Sheet,
 }
 
+/// What kind of table file `path` is by its extension, if any.
 pub fn kind(path: &Path) -> Option<Kind> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
@@ -58,6 +62,7 @@ pub(crate) fn sniff(text: &str) -> u8 {
     best.1
 }
 
+/// A number with commas between the thousands (`12,345`).
 fn commas(n: usize) -> String {
     let s = n.to_string();
     let mut out = String::new();
@@ -70,6 +75,7 @@ fn commas(n: usize) -> String {
     out
 }
 
+/// Preview of a table file as a grid, with a line of facts above it and a note for what is cut.
 pub fn render(
     path: &Path,
     kind: Kind,
@@ -122,8 +128,12 @@ pub fn render(
     Ok(out)
 }
 
+/// A parsed table: its label, header row, rows, total row count, whether the count is a lower
+/// bound, and an extra note.
 type Parsed = (String, Vec<String>, Vec<Vec<String>>, usize, bool, Option<String>);
 
+/// Read a delimited text file (the first `MAX_BYTES` only), sniffing the separator if none
+/// is given.
 fn delimited(path: &Path, delim: Option<u8>) -> Result<Parsed, Error> {
     use std::io::Read;
     let mut buf = Vec::new();
@@ -166,6 +176,7 @@ fn delimited(path: &Path, delim: Option<u8>) -> Result<Parsed, Error> {
     Ok((name.to_string(), head, rows, total, truncated, None))
 }
 
+/// Read the first sheet of a spreadsheet, and note the other sheets.
 fn sheet(path: &Path) -> Result<Parsed, Error> {
     use calamine::{Reader, open_workbook_auto};
     let mut book =

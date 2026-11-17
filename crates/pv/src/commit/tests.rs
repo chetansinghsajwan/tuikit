@@ -1,3 +1,5 @@
+//! Tests for commit previews.
+
 use super::utc;
 
 #[test]

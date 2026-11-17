@@ -19,6 +19,7 @@ pub enum SubmoduleState {
     Conflict,
 }
 
+/// One submodule as listed by `Repo::submodules`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubmoduleInfo {
     /// The name in `.gitmodules` (usually the path).

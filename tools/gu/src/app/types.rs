@@ -21,6 +21,7 @@ pub enum Quit {
     Palette,
 }
 
+/// The pane that has the keyboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Focus {
     Files,
@@ -35,6 +36,7 @@ pub(super) const STATUS_PANES: [Focus; 1] = [Focus::Files];
 pub(super) const COMMITS_PANES: [Focus; 1] = [Focus::Commits];
 pub(super) const REFS_PANES: [Focus; 3] = [Focus::Branches, Focus::Stashes, Focus::Submodules];
 
+/// What the one-line prompt in the status bar is asking for.
 pub(super) enum PromptKind {
     /// Search the commits.
     Search,
@@ -64,6 +66,7 @@ pub(super) enum PromptKind {
     Amend(String),
 }
 
+/// The change waiting for a yes or no in the status bar.
 pub(super) enum Confirm {
     DeleteBranch {
         name: String,
@@ -101,6 +104,7 @@ pub(super) enum Screen {
     Refs,
 }
 
+/// What the keys do right now: normal use, a prompt, a confirm question or the filter popup.
 pub(super) enum Mode {
     Normal,
     Prompt(PromptKind, Input),
@@ -171,12 +175,14 @@ pub(super) struct CommitFiles {
     pub(super) folded: std::collections::HashSet<String>,
 }
 
+/// A row of the commit's file tree: a folder or a changed file.
 pub(super) enum FileRow {
     Folder { path: String, label: String, depth: usize, count: usize, folded: bool },
     File { change: git_core::FileChange, depth: usize },
 }
 
 impl FileRow {
+    /// The path the row stands for, so the cursor can be kept on it after a rebuild.
     pub(super) fn path(&self) -> &str {
         match self {
             FileRow::Folder { path, .. } => path,
@@ -185,6 +191,7 @@ impl FileRow {
     }
 }
 
+/// A folder of the commit's file tree while it is being built.
 #[derive(Default)]
 pub(super) struct FileNode {
     pub(super) dirs: std::collections::BTreeMap<String, FileNode>,
@@ -192,12 +199,14 @@ pub(super) struct FileNode {
 }
 
 impl FileNode {
+    /// Every file below this folder, however deep.
     pub(super) fn count(&self) -> usize {
         self.files.len() + self.dirs.values().map(FileNode::count).sum::<usize>()
     }
 }
 
 impl CommitFiles {
+    /// Sort the changes by path and build the first tree.
     pub(super) fn new(
         oid: String,
         short: String,
@@ -219,6 +228,8 @@ impl CommitFiles {
         cf
     }
 
+    /// Rebuild the tree rows from the changes and the folded folders, keeping the cursor on its
+    /// row.
     pub(super) fn rebuild(&mut self) {
         let keep = self.rows.get(self.cursor).map(|r| r.path().to_string());
         let mut root = FileNode::default();
@@ -232,6 +243,8 @@ impl CommitFiles {
             node.files.push(c.clone());
         }
         let mut rows = Vec::new();
+        /// Add the folders and files of `node` as rows, joining single-folder chains and skipping
+        /// folded ones.
         fn push(
             node: &FileNode,
             prefix: &str,
@@ -276,6 +289,7 @@ impl CommitFiles {
             .min(self.rows.len().saturating_sub(1));
     }
 
+    /// Move the cursor by `delta` rows, staying inside the list.
     pub(super) fn move_by(&mut self, delta: isize) {
         let last = self.rows.len().saturating_sub(1) as isize;
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
@@ -302,6 +316,7 @@ pub(super) struct Filter {
 }
 
 impl Filter {
+    /// Whether any part of the filter is set.
     pub(super) fn active(&self) -> bool {
         !self.text.is_empty()
             || !self.authors.is_empty()
@@ -331,6 +346,7 @@ impl Filter {
         parts
     }
 
+    /// Whether commit `c` passes every part of the filter that is set.
     pub(super) fn keeps(&self, c: &CommitInfo) -> bool {
         (self.text.is_empty() || c.message.to_lowercase().contains(&self.text.to_lowercase()))
             && (self.authors.is_empty()
@@ -377,12 +393,15 @@ pub(super) fn parse_since(text: &str, now: i64) -> Option<i64> {
     Some((era * 146_097 + doe - 719_468) * 86_400)
 }
 
+/// The cursor and the first visible row of a list pane.
 #[derive(Default, Clone, Copy)]
 pub(super) struct ListState {
     pub(super) cursor: usize,
     pub(super) offset: usize,
 }
 
+/// The diff text drawn in the preview, kept until another entry is highlighted or the width
+/// changes.
 pub(super) struct Preview {
     pub(super) key: (Focus, String, u16),
     pub(super) lines: Vec<Line<'static>>,

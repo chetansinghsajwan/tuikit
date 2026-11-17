@@ -2,8 +2,11 @@
 
 use super::*;
 
+/// Drawing the list panes.
 mod list;
+/// Drawing the preview pane.
 mod preview;
+/// Drawing the status line.
 mod status;
 
 impl App {

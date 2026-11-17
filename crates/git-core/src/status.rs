@@ -1,8 +1,12 @@
+//! Git status: what changed per file, staged and unstaged, and the roll-up per folder that file
+//! trees and pickers draw as signs.
+
 use crate::{Error, err};
 use gix::bstr::ByteSlice;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// How one path changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Added,
@@ -55,6 +59,7 @@ pub struct Status {
 }
 
 impl Status {
+    /// The status of one repo-relative path, if it changed.
     pub fn get(&self, rela: &Path) -> Option<&FileStatus> {
         self.files.get(rela)
     }
@@ -92,20 +97,26 @@ impl Status {
         self.submodules.contains(rela)
     }
 
+    /// Every changed path with its status.
     pub fn iter(&self) -> impl Iterator<Item = (&Path, &FileStatus)> {
         self.files.iter().map(|(p, s)| (p.as_path(), s))
     }
 
+    /// Whether nothing changed.
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
 
+    /// The status slot for `path`, created empty on first use, so staged and unstaged parts can be
+    /// filled in separately.
     fn entry(&mut self, path: &gix::bstr::BStr) -> &mut FileStatus {
         let p = PathBuf::from(path.to_str_lossy().into_owned());
         self.files.entry(p).or_default()
     }
 }
 
+/// Ask `gix` for the whole repo's status (index vs `HEAD`, work tree vs index, untracked files)
+/// and fold it into a `Status`.
 pub(crate) fn compute(repo: &gix::Repository) -> Result<Status, Error> {
     use gix::status::Item;
     use gix::status::index_worktree::Item as Iw;

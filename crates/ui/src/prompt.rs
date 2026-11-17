@@ -40,6 +40,7 @@ pub struct Suggest {
 const SUGGEST_ROWS: usize = 8;
 
 impl Suggest {
+    /// A suggestion list over `items`, with nothing typed and the first one selected.
     pub fn new(items: Vec<String>) -> Suggest {
         Suggest { items, typed: String::new(), selected: 0 }
     }
@@ -65,6 +66,7 @@ impl Suggest {
         hits
     }
 
+    /// Whether there are no options at all, so the tool can skip the suggestion popup.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }

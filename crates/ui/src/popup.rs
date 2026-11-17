@@ -99,6 +99,7 @@ pub fn run(args: Vec<OsString>, percent: u16) -> io::Result<i32> {
     result
 }
 
+/// Do the work of `run` in `dir`: hand stdin over as a file, open the pane, relay output and code.
 fn run_in(dir: &Path, args: Vec<OsString>, percent: u16) -> io::Result<i32> {
     let (input, out, code) = (dir.join("in"), dir.join("out"), dir.join("code"));
 

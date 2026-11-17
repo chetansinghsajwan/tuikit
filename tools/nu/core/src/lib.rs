@@ -11,6 +11,7 @@ pub mod nm;
 
 use std::fmt;
 
+/// The error of every backend call: a short message fit to show to the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error(pub String);
 
@@ -36,6 +37,7 @@ impl From<zbus::fdo::Error> for Error {
     }
 }
 
+/// `Result` with this crate's `Error`.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// How a network is protected.
@@ -50,10 +52,12 @@ pub enum Security {
 }
 
 impl Security {
+    /// Whether it needs no password.
     pub fn is_open(self) -> bool {
         self == Security::Open
     }
 
+    /// The short name shown in the list.
     pub fn label(self) -> &'static str {
         match self {
             Security::Open => "open",
@@ -92,15 +96,18 @@ pub struct Status {
 /// A source of connections. Methods block for a D-Bus round trip or so; a UI runs the ones
 /// that wait for a network (`connect`) on a thread.
 pub trait Backend: Send + Sync {
+    /// The radio's state: interface, on or off, and the connected network.
     fn status(&self) -> Result<Status>;
     /// The networks in range, strongest first, the connected one on top.
     fn networks(&self) -> Result<Vec<Network>>;
     /// Ask the radio for a fresh scan; the result shows up in `networks` a few seconds later.
     fn scan(&self) -> Result<()>;
+    /// Turn the Wi-Fi radio on or off.
     fn set_enabled(&self, on: bool) -> Result<()>;
     /// Connect to `ssid`: with a saved connection if there is one, else with `password`
     /// (needed for protected networks) which is then saved.
     fn connect(&self, ssid: &str, password: Option<&str>) -> Result<()>;
+    /// Drop the current connection.
     fn disconnect(&self) -> Result<()>;
     /// Delete the saved connection(s) of `ssid`.
     fn forget(&self, ssid: &str) -> Result<()>;

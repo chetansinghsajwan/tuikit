@@ -1,3 +1,5 @@
+//! Tests for key name parsing.
+
 use super::*;
 
 #[test]

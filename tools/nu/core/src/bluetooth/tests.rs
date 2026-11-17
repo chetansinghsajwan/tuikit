@@ -1,5 +1,8 @@
+//! Tests for device kinds, ordering and the signal percentage.
+
 use super::*;
 
+/// Builds a test device with only the fields the tests care about.
 fn dev(name: &str, paired: bool, connected: bool, rssi: Option<i16>) -> Device {
     Device {
         address: name.into(),

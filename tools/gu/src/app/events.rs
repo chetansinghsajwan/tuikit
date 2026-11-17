@@ -3,6 +3,7 @@
 use super::*;
 
 impl App {
+    /// Handle one terminal event: route it by mode and focus, and tell the host what to do next.
     pub fn handle_event(&mut self, ev: &Event) -> Quit {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Quit::No };
         if *kind == KeyEventKind::Release {
@@ -223,6 +224,7 @@ impl App {
         }
     }
 
+    /// Focus `focus` and show its preview from the top.
     pub(super) fn set_focus(&mut self, focus: Focus) {
         self.focus = focus;
         self.pscroll = 0;
@@ -240,11 +242,13 @@ impl App {
         self.pscroll = 0;
     }
 
+    /// Pass an event to the Files panel and act on what it asks for.
     pub(super) fn files_event(&mut self, ev: &Event) -> Quit {
         let action = self.files.handle_event(ev);
         self.files_action(action)
     }
 
+    /// Turn what the Files panel asked for into a reload, a screen change or a `Quit` for the host.
     pub(super) fn files_action(&mut self, action: PanelAction) -> Quit {
         match action {
             PanelAction::Close => Quit::Yes,
@@ -506,6 +510,7 @@ impl App {
     pub(super) fn open_filter(&mut self) {
         use ui::multi::{Kind, Multi, Section};
         // The authors and categories of the history, the most frequent first.
+        /// How often each author or category appears, to list the common ones first.
         type Counts = Vec<(usize, String)>;
         let (mut authors, mut cats): (Counts, Counts) = (Vec::new(), Vec::new());
         let bump = |list: &mut Vec<(usize, String)>, name: String| match list
@@ -551,6 +556,7 @@ impl App {
         self.mode = Mode::Popup(Multi::new("Filter commits", sections));
     }
 
+    /// A key in the filter popup: keep it open, drop it, or apply the choices as the commit filter.
     pub(super) fn popup_key(&mut self, mut popup: ui::multi::Multi, key: &KeyEvent) {
         match popup.key(key) {
             ui::multi::Outcome::Open => self.mode = Mode::Popup(popup),
@@ -573,6 +579,7 @@ impl App {
         }
     }
 
+    /// A key in a prompt: edit the line, and on enter run what the prompt was asking for.
     pub(super) fn prompt_key(
         &mut self,
         kind: PromptKind,
@@ -749,6 +756,7 @@ impl App {
         }
     }
 
+    /// A key at a yes or no question; destructive ones need `d` again or `y`.
     pub(super) fn confirm_key(&mut self, c: Confirm, key: &KeyEvent) {
         let again = matches!(
             c,

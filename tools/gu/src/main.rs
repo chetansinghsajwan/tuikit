@@ -1,3 +1,5 @@
+//! The `gu` binary: sets up the terminal, runs the event loop and hands the keys to `App`.
+
 use clap::Parser;
 use gu::{App, Quit};
 use ratatui::Terminal;
@@ -21,19 +23,23 @@ struct Cli {
     dir: Option<PathBuf>,
 }
 
+/// The terminal the screen draws on, opened on `/dev/tty` so stdout stays free for the host.
 type Term = Terminal<CrosstermBackend<std::fs::File>>;
 
+/// Take over the terminal: raw mode and the alternate screen.
 fn enter(term: &mut Term) -> io::Result<()> {
     enable_raw_mode()?;
     execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
     term.clear()
 }
 
+/// Give the terminal back (before an editor, the palette or exit).
 fn leave(term: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(term.backend_mut(), LeaveAlternateScreen)
 }
 
+/// Start-up and exit code: 0 on a normal quit, 2 on an error or when `dir` is no repository.
 fn main() -> ExitCode {
     for p in ui::config::init("gu") {
         eprintln!("gu: {p}");
@@ -47,6 +53,7 @@ fn main() -> ExitCode {
     }
 }
 
+/// Open the repository, then draw and handle events until the screen asks to quit.
 fn run(cli: Cli) -> io::Result<u8> {
     let dir = cli.dir.map(Ok).unwrap_or_else(std::env::current_dir)?;
     let Some(mut app) = App::new(&dir) else {

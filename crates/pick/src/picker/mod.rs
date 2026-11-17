@@ -1,3 +1,6 @@
+//! The picker: its state, key handling and the glue between the sources, the matcher and the
+//! drawing in `render`.
+
 use crate::candidate::Candidate;
 use crate::grep;
 use git_core::{Repo, Status};
@@ -25,6 +28,8 @@ pub use types::{Action, LiveSource, Mode, PickerOptions, RowStyle};
 #[cfg(test)]
 mod tests;
 
+/// The picker: the query, the matched candidates, the cursor and the preview, driven by events
+/// and drawn by `render`.
 pub struct Picker {
     live: Option<LiveSource>,
     row_style: RowStyle,
@@ -137,11 +142,12 @@ impl Picker {
         self.nucleo.injector()
     }
 
-    /// Highlight the rows as code, number them (`RowStyle`); rows that carry a time show its age.
+    /// Show the age of rows that carry a time.
     pub fn set_timestamps(&mut self, on: bool) {
         self.timestamps = on;
     }
 
+    /// Set how text rows look: highlighted as code, numbered.
     pub fn set_row_style(&mut self, style: RowStyle) {
         self.row_style = style;
     }
@@ -163,15 +169,17 @@ impl Picker {
         self.separator = on;
     }
 
+    /// Set the fixed lines shown under the prompt.
     pub fn set_header(&mut self, lines: Vec<String>) {
         self.header = lines;
     }
 
-    /// Title of the list pane instead of `pick` / `grep`.
+    /// Show `icon` in the list pane title.
     pub fn set_icon(&mut self, icon: ui::icons::Icon) {
         self.icon = Some(icon);
     }
 
+    /// Set the title of the list pane.
     pub fn set_title(&mut self, title: impl Into<String>) {
         self.title = Some(title.into());
     }
@@ -262,10 +270,16 @@ impl Picker {
         let snap = self.nucleo.snapshot();
         // Candidates that name what they sit inside (symbols) build their own hierarchy.
         let hier: Option<Vec<crate::tree::HierEntry>> = (0..n)
-            .map(|idx| snap.get_matched_item(idx).and_then(|it| it.data.hier.clone()).map(|hier| crate::tree::HierEntry { idx, hier }))
+            .map(|idx| {
+                snap.get_matched_item(idx)
+                    .and_then(|it| it.data.hier.clone())
+                    .map(|hier| crate::tree::HierEntry { idx, hier })
+            })
             .collect();
         let built = match hier {
-            Some(entries) if n > 0 => Some(crate::tree::build_hier(entries, !self.input.value().is_empty())),
+            Some(entries) if n > 0 => {
+                Some(crate::tree::build_hier(entries, !self.input.value().is_empty()))
+            }
             _ => None,
         };
         if let Some(tree) = built {
@@ -302,6 +316,8 @@ impl Picker {
         }
     }
 
+    /// The query changed: restart the search (live source, fuzzy match or grep) and put the cursor
+    /// back at the top.
     fn reparse(&mut self) {
         let q = self.input.value().to_string();
         if let Some(live) = &self.live {
@@ -408,10 +424,12 @@ impl Picker {
         true
     }
 
+    /// How many candidates match the query now.
     fn matched(&self) -> u32 {
         self.nucleo.snapshot().matched_item_count()
     }
 
+    /// Keep the cursor inside the matched list, which may have shrunk.
     fn clamp(&mut self) {
         let n = self.matched();
         if n == 0 {
@@ -421,10 +439,12 @@ impl Picker {
         }
     }
 
+    /// The candidate under the cursor, if any.
     fn current(&self) -> Option<Candidate> {
         self.nucleo.snapshot().get_matched_item(self.cursor).map(|i| i.data.clone())
     }
 
+    /// Move the cursor by `delta` rows, following the drawn order in the hierarchy view.
     fn move_by(&mut self, delta: i64) {
         self.refresh_tree();
         // In the hierarchy, Up/Down walk the items in the order they are drawn.
@@ -443,6 +463,7 @@ impl Picker {
         self.cursor = (i64::from(self.cursor) + delta).clamp(0, n - 1) as u32;
     }
 
+    /// Handle one terminal event and tell the host what to do next (nothing, accept or cancel).
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(KeyEvent { code, modifiers, kind, .. }) = ev else {
             return Action::None;
@@ -513,6 +534,7 @@ impl Picker {
         Action::None
     }
 
+    /// The git status letter and kind of the file `cand`, for the sign beside its row.
     fn git_state(&self, cand: &str) -> Option<(char, git_core::Kind)> {
         let (repo, status) = self.git.as_ref()?;
         let rela = repo.relative(&self.opts.root.join(cand))?;
@@ -542,6 +564,7 @@ impl Picker {
         .into()
     }
 
+    /// The theme color of a git change kind.
     fn git_color(theme: &Theme, kind: git_core::Kind) -> Color {
         use git_core::Kind::*;
         let g = &theme.colors.git;

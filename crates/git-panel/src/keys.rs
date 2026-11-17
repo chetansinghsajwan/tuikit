@@ -2,6 +2,7 @@
 
 use ui::keys::{Action, Group};
 
+/// Builds a non-basic action: one that shows in the command palette.
 macro_rules! a {
     ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
         Action { id: $id, name: $name, desc: $desc, basic: false, keys: &[$($k),*] }
@@ -15,6 +16,8 @@ macro_rules! b {
     };
 }
 
+/// Every action of the panel with its default keys. One table feeds the keymap, the palette
+/// and the help screen, so the three never disagree.
 pub const ACTIONS: &[Action] = &[
     b!("nav.up", "up", "move the cursor up", ["k", "up", "ctrl-p"]),
     b!("nav.down", "down", "move the cursor down", ["j", "down", "ctrl-n"]),
@@ -77,6 +80,7 @@ pub const ACTIONS: &[Action] = &[
     b!("quit", "quit", "close the panel", ["q", "esc", "ctrl-c", "leader q"]),
 ];
 
+/// Names for the key prefixes (none here: the panel has no multi-key groups).
 pub const GROUPS: &[Group] = &[];
 
 /// The ids of `ACTIONS`, to tell the panel's own actions from a host's.

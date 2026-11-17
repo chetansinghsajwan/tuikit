@@ -3,6 +3,8 @@
 use super::*;
 
 impl App {
+    /// Reload refs, commits, stashes and submodules from the repository, keeping each cursor in
+    /// range.
     pub(super) fn reload_history(&mut self) {
         if let Some(repo) = Repo::discover(&self.root) {
             self.repo = repo;
@@ -64,7 +66,12 @@ impl App {
             .commits
             .iter()
             .filter_map(|k| self.labels.get(&k.oid))
-            .map(|l| pills(l).iter().map(|(r, remotes)| ref_width(&self.theme.icons, r, remotes)).sum::<usize>())
+            .map(|l| {
+                pills(l)
+                    .iter()
+                    .map(|(r, remotes)| ref_width(&self.theme.icons, r, remotes))
+                    .sum::<usize>()
+            })
             .max()
             .unwrap_or(0);
         self.refs_w = self.refs_need.min(REFS_COL);
@@ -81,6 +88,7 @@ impl App {
         self.preview = None;
     }
 
+    /// Reload the changed files and the history, after anything may have changed.
     pub(super) fn reload_all(&mut self) {
         self.files.refresh();
         self.reload_history();
@@ -94,10 +102,12 @@ impl App {
         }
     }
 
+    /// Show a message in the status line (an error when `error` is set).
     pub(super) fn say(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
+    /// The index of `focus` in `lists` and `maps`; `None` for the Files pane, which has its own.
     pub(super) fn list_index(focus: Focus) -> Option<usize> {
         match focus {
             Focus::Files => None,
@@ -108,6 +118,7 @@ impl App {
         }
     }
 
+    /// How many rows the pane `focus` has.
     pub(super) fn len(&self, focus: Focus) -> usize {
         match focus {
             Focus::Files => 0,

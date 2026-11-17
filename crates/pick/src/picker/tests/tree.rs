@@ -1,6 +1,9 @@
+//! Tests for the hierarchy (tree) view of the picker.
+
 use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
+/// A picker over `paths` with the tree view on and the cursor on the first row.
 fn files(paths: &[&str]) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -20,10 +23,12 @@ fn files(paths: &[&str]) -> Picker {
     p
 }
 
+/// A key press of `code` with no modifiers.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+/// Render the picker into a 60 by 14 buffer and return its lines, trailing blanks removed.
 fn lines(p: &mut Picker) -> Vec<String> {
     let area = Rect::new(0, 0, 60, 14);
     let mut b = Buffer::empty(area);
@@ -39,6 +44,7 @@ fn lines(p: &mut Picker) -> Vec<String> {
         .collect()
 }
 
+/// Press Enter and return what was accepted; anything else is a test failure.
 fn accept(p: &mut Picker) -> Vec<String> {
     match p.handle_event(&key(KeyCode::Enter)) {
         Action::Accept(v) => v,
@@ -46,6 +52,7 @@ fn accept(p: &mut Picker) -> Vec<String> {
     }
 }
 
+/// Paths of several folder depths for the tree tests.
 const SET: [&str; 4] = ["README.md", "src/ui/c.rs", "src/a.rs", "docs/guide/x.md"];
 
 #[test]

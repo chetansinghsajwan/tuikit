@@ -1,5 +1,8 @@
+//! Tests for the kanata config reader.
+
 use super::*;
 
+/// A config covering aliases, platform blocks, comments, layer switches and transparent keys.
 const SAMPLE: &str = r#"
 (defsrc
   q     w     e
@@ -29,6 +32,7 @@ const SAMPLE: &str = r#"
 )
 "#;
 
+/// Shorthand for the `Action::Keys` the tests expect.
 fn keys(label: &str, outputs: &[&str]) -> Action {
     Action::Keys { label: label.into(), outputs: outputs.iter().map(|s| s.to_string()).collect() }
 }

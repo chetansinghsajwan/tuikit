@@ -20,6 +20,7 @@ pub fn path() -> Option<PathBuf> {
     Some(state.join("ui/recent"))
 }
 
+/// Read every `(tool, id)` pair from the history file; a missing file is an empty history.
 fn read(path: &Path) -> Vec<(String, String)> {
     fs::read_to_string(path)
         .unwrap_or_default()
@@ -41,10 +42,12 @@ pub fn record(tool: &str, id: &str) {
     }
 }
 
+/// `load` against a given file, so tests do not touch the real history.
 pub fn load_from(path: &Path, tool: &str) -> Vec<String> {
     read(path).into_iter().rev().filter(|(t, _)| t == tool).map(|(_, i)| i).collect()
 }
 
+/// `record` against a given file, so tests do not touch the real history.
 pub fn record_to(path: &Path, tool: &str, id: &str) {
     let mut entries = read(path);
     entries.retain(|(t, i)| !(t == tool && i == id));

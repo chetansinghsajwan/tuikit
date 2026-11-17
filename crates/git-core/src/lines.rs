@@ -1,7 +1,11 @@
+//! Changed lines of a file in the work tree against `HEAD`, for the gutter
+//! marks of editors and viewers.
+
 use crate::{Error, err};
 use gix::diff::blob::{Algorithm, Diff, InternedInput};
 use std::path::Path;
 
+/// How a region of lines changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineKind {
     Added,
@@ -20,6 +24,7 @@ pub struct LineChange {
     pub end: u32,
 }
 
+/// Diff the work-tree file `rela` against its `HEAD` content and list the changed regions.
 pub(crate) fn compute(
     repo: &gix::Repository,
     root: &Path,
@@ -53,6 +58,7 @@ pub(crate) fn compute(
     Ok(out)
 }
 
+/// The bytes of `rela` at `HEAD`, or `None` for a new file or an unborn `HEAD`.
 pub(crate) fn head_blob(repo: &gix::Repository, rela: &Path) -> Option<Vec<u8>> {
     let tree = repo.head_commit().ok()?.tree().ok()?;
     let entry = tree.lookup_entry_by_path(rela).ok()??;

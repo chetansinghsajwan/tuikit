@@ -4,6 +4,7 @@
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
+/// Map an ANSI color number (0 to 7, plus the bright set) to a ratatui color.
 fn basic(n: u8, bright: bool) -> Color {
     match (n, bright) {
         (0, false) => Color::Black,
@@ -25,6 +26,7 @@ fn basic(n: u8, bright: bool) -> Color {
     }
 }
 
+/// Apply the numbers of one SGR escape (`ESC[...m`) to `style` and return the new style.
 fn apply(style: Style, params: &[u32]) -> Style {
     let mut s = style;
     let mut i = 0;

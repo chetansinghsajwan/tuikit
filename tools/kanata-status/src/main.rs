@@ -1,3 +1,5 @@
+//! The `kanata-status` binary: wires the config, the daemon link and the terminal into the loop.
+
 use clap::Parser;
 use kanata_status::kbd::Config;
 use kanata_status::{App, link};
@@ -33,8 +35,10 @@ enum Msg {
     Term(event::Event),
 }
 
+/// The terminal we draw on, backed by `/dev/tty` so stdout stays free.
 type Term = Terminal<CrosstermBackend<std::fs::File>>;
 
+/// Finds the kanata config when `--cfg` is not given, honouring `$KANATA_CFG` and XDG.
 fn default_cfg() -> PathBuf {
     if let Some(p) = std::env::var_os("KANATA_CFG") {
         return p.into();
@@ -46,6 +50,7 @@ fn default_cfg() -> PathBuf {
     config.join("kanata/kanata.kbd")
 }
 
+/// Entry point: loads the theme config, runs the app and maps a failure to exit code 2.
 fn main() -> ExitCode {
     for p in ui::config::init("kanata-status") {
         eprintln!("kanata-status: {p}");
@@ -59,6 +64,8 @@ fn main() -> ExitCode {
     }
 }
 
+/// Parses the config, starts the daemon and terminal readers, then redraws on every event
+/// until the user quits. It restores the terminal on the way out, even after an error.
 fn run(cli: Cli) -> Result<(), String> {
     let path = cli.cfg.unwrap_or_else(default_cfg);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;

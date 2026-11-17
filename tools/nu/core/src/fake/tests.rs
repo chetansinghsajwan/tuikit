@@ -1,3 +1,5 @@
+//! Tests for the fake radios, which the UI tests and `nu --fake` rely on.
+
 use super::*;
 
 #[test]

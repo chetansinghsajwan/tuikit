@@ -1,5 +1,8 @@
+//! Tests for ANSI text parsing.
+
 use super::*;
 
+/// The text of a line with its styles dropped.
 fn flat(l: &Line) -> String {
     l.spans.iter().map(|s| s.content.as_ref()).collect()
 }

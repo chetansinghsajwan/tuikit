@@ -4,14 +4,15 @@
 
 mod data;
 
-use data::{
-    BLUETOOTH, BRANCH, COMMIT, DIAGNOSTICS, DIR, DIR_OPEN, DIRS, EXEC, EXTS, FILE, FILES, GIT, STASH,
-    SUBMODULE, WIFI,
-};
 use crate::symbol::Kind;
+use data::{
+    BLUETOOTH, BRANCH, COMMIT, DIAGNOSTICS, DIR, DIR_OPEN, DIRS, EXEC, EXTS, FILE, FILES, GIT,
+    STASH, SUBMODULE, WIFI,
+};
 use ratatui::style::{Color, Style};
 use std::path::Path;
 
+/// A glyph and its optional color: the unit every icon lookup returns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Icon {
     pub glyph: &'static str,
@@ -29,6 +30,7 @@ impl Icon {
     }
 }
 
+/// Turn a `0xRRGGBB` number into a truecolor value; `const` so the tables can use it.
 const fn rgb(c: u32) -> Color {
     Color::Rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
@@ -38,6 +40,7 @@ const fn plain(glyph: &'static str) -> Icon {
     Icon { glyph, color: None }
 }
 
+/// Look up `key` in one of the sorted icon tables by binary search.
 fn find(table: &[(&'static str, &'static str, u32)], key: &str) -> Option<Icon> {
     let i = table.binary_search_by(|(n, _, _)| (*n).cmp(key)).ok()?;
     let (_, glyph, color) = table[i];

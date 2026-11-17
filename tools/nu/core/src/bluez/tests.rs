@@ -1,5 +1,8 @@
+//! Tests for reading a device out of BlueZ properties.
+
 use super::*;
 
+/// Builds a BlueZ property map from plain values.
 fn props(list: &[(&str, zbus::zvariant::Value<'_>)]) -> Props {
     list.iter().map(|(k, v)| (k.to_string(), OwnedValue::try_from(v.clone()).unwrap())).collect()
 }

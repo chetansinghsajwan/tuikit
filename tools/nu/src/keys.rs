@@ -22,6 +22,7 @@ const COMMON: &[Action] = &[
     basic("quit", "quit", "close nu", &["q", "esc", "ctrl-c", "leader q"]),
 ];
 
+/// The actions only the Wi-Fi pane has.
 const WIFI: &[Action] = &[
     action(
         "wifi.connect",
@@ -45,6 +46,7 @@ const WIFI: &[Action] = &[
     action("wifi.power", "toggle Wi-Fi", "turn the Wi-Fi radio on or off", &["leader p"]),
 ];
 
+/// The actions only the Bluetooth pane has.
 const BLUETOOTH: &[Action] = &[
     action(
         "bt.connect",

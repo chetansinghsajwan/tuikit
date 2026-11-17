@@ -11,6 +11,7 @@ use std::path::Path;
 use std::time::Duration;
 use ui::Theme;
 
+/// The kind of media a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Image,
@@ -32,6 +33,7 @@ pub fn kind(path: &Path) -> Option<Kind> {
     }
 }
 
+/// Preview of the media file `path` of the given `kind`.
 pub fn render(
     path: &Path,
     kind: Kind,
@@ -45,6 +47,7 @@ pub fn render(
     }
 }
 
+/// A byte count as text, with the unit that fits (`1.5 MiB`).
 fn size_text(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
     let (mut v, mut u) = (bytes as f64, 0);
@@ -79,10 +82,12 @@ fn facts(theme: &Theme, rows: &[(&str, String)]) -> Vec<Line<'static>> {
         .collect()
 }
 
+/// The error for a media file that could not be read, naming what it was.
 fn unreadable(what: &str, e: impl std::fmt::Display) -> Error {
     Error::Unsupported(format!("{what}: {e}"))
 }
 
+/// An image: its size, then the picture drawn with half blocks to fit the room.
 fn image(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let img = image::ImageReader::open(path)?
         .with_guessed_format()?
@@ -142,6 +147,7 @@ fn picture(img: &image::DynamicImage, theme: &Theme, cols: u32, rows: u32) -> Ve
     out
 }
 
+/// An audio file: its tags, length, bitrate, format and size, as `facts`.
 fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     use lofty::prelude::*;
     let bytes = std::fs::metadata(path)?.len();
@@ -181,6 +187,7 @@ fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     Ok(facts(theme, &rows))
 }
 
+/// A video file: what its container says (length, audio codec, format) and its size, as `facts`.
 fn video(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     let bytes = std::fs::metadata(path)?.len();
     let mut rows: Vec<(&str, String)> = Vec::new();

@@ -1,3 +1,5 @@
+//! Tests for the pure helpers of the macOS backends.
+
 use super::*;
 
 #[test]

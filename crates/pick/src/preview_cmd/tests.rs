@@ -1,5 +1,8 @@
+//! Tests for the preview command placeholders.
+
 use super::*;
 
+/// A preview command `c` with the delimiter `d`.
 fn cmd(c: &str, d: Option<&str>) -> PreviewCmd {
     PreviewCmd { cmd: c.into(), delimiter: d.map(Into::into) }
 }

@@ -1,3 +1,5 @@
+//! Tests for bookmark saving and loading.
+
 use super::*;
 
 #[test]

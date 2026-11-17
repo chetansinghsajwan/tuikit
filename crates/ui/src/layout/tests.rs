@@ -1,3 +1,5 @@
+//! Tests for the theme-driven splits of `layout`.
+
 use super::*;
 
 #[test]

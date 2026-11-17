@@ -1,3 +1,6 @@
+//! The `nu` screen: a Wi-Fi pane and a Bluetooth pane over the `nu-core` backends, with the state,
+//! key handling and background connection jobs. Drawing lives in `render`.
+
 use crate::keys;
 use nu_core::bluetooth::{Bluetooth, BtStatus, Device, rssi_percent};
 use nu_core::{Backend, Network, Security, Status};
@@ -27,14 +30,17 @@ pub enum Quit {
     Palette,
 }
 
+/// Which pane has the focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
     Wifi,
     Bluetooth,
 }
 
+/// The panes in the order `tab` visits them (and top to bottom on screen).
 const ORDER: [Focus; 2] = [Focus::Wifi, Focus::Bluetooth];
 
+/// What the keys mean right now: normal browsing, or answering a prompt.
 enum Mode {
     Normal,
     /// The password of this network.
@@ -51,12 +57,14 @@ struct Job {
     handle: std::thread::JoinHandle<nu_core::Result<()>>,
 }
 
+/// Where the cursor is in a list and how far the list is scrolled.
 #[derive(Default, Clone, Copy)]
 struct ListState {
     cursor: usize,
     offset: usize,
 }
 
+/// The whole screen: both radios, their lists, the focus and any prompt or running job.
 pub struct App {
     wifi: Arc<dyn Backend>,
     bt: Arc<dyn Bluetooth>,
@@ -79,6 +87,7 @@ pub struct App {
 }
 
 impl App {
+    /// Builds the screen over two backends and reads them once, so it opens with data.
     pub fn new(wifi: Arc<dyn Backend>, bt: Arc<dyn Bluetooth>) -> App {
         let mut app = App {
             wifi,
@@ -103,6 +112,7 @@ impl App {
         app
     }
 
+    /// The index of a pane, for the per-pane `lists` and `maps`.
     fn pane(focus: Focus) -> usize {
         match focus {
             Focus::Wifi => 0,
@@ -110,6 +120,7 @@ impl App {
         }
     }
 
+    /// How many entries the pane has.
     fn len(&self, focus: Focus) -> usize {
         match focus {
             Focus::Wifi => self.networks.len(),
@@ -159,14 +170,17 @@ impl App {
         self.refreshed = Instant::now();
     }
 
+    /// Shows a message on the status line until the next key; `error` colors it as an error.
     fn say(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
+    /// The Wi-Fi network under the cursor, if any.
     fn network(&self) -> Option<&Network> {
         self.networks.get(self.lists[0].cursor)
     }
 
+    /// The Bluetooth device under the cursor, if any.
     fn device(&self) -> Option<&Device> {
         self.devices.get(self.lists[1].cursor)
     }
@@ -194,6 +208,8 @@ impl App {
         self.job.is_some()
     }
 
+    /// Handles one terminal event: a prompt or the help takes the key first, else the focused
+    /// pane's keymap decides. Tells the host whether to quit or open the palette.
     pub fn handle_event(&mut self, ev: &Event) -> Quit {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Quit::No };
         if *kind == KeyEventKind::Release {
@@ -265,6 +281,7 @@ impl App {
         self.run(id)
     }
 
+    /// Whether a connection attempt is already running; says so, since only one runs at a time.
     fn busy(&mut self) -> bool {
         if self.job.is_some() {
             self.say("busy: wait for the current connection attempt", true);
@@ -273,6 +290,7 @@ impl App {
         false
     }
 
+    /// Connects to a network on a thread, so the screen stays alive while it waits.
     fn start_wifi(&mut self, ssid: String, password: Option<String>) {
         if self.busy() {
             return;
@@ -283,6 +301,7 @@ impl App {
         self.job = Some(Job { label, handle });
     }
 
+    /// Connects (pairing first if new) to a device on a thread, so the screen stays alive.
     fn start_bluetooth(&mut self, device: &Device) {
         if self.busy() {
             return;
@@ -300,15 +319,18 @@ impl App {
         self.job = Some(Job { label, handle });
     }
 
+    /// Moves the focus to a pane.
     fn set_focus(&mut self, focus: Focus) {
         self.focus = focus;
     }
 
+    /// Moves the focus by `delta` panes, wrapping around.
     fn focus_by(&mut self, delta: isize) {
         let at = ORDER.iter().position(|f| *f == self.focus).unwrap_or(0) as isize;
         self.focus = ORDER[(at + delta).rem_euclid(ORDER.len() as isize) as usize];
     }
 
+    /// Runs an action by id: the shared ones here, the per-pane ones in their own handlers.
     fn run(&mut self, id: &'static str) -> Quit {
         let focus = self.focus;
         let last = self.len(focus).saturating_sub(1);
@@ -337,6 +359,7 @@ impl App {
         Quit::No
     }
 
+    /// Runs a Wi-Fi action on the network under the cursor.
     fn wifi_action(&mut self, id: &str) {
         match id {
             "wifi.connect" => {
@@ -385,6 +408,7 @@ impl App {
         }
     }
 
+    /// Runs a Bluetooth action on the device under the cursor.
     fn bluetooth_action(&mut self, id: &str) {
         match id {
             "bt.connect" => {

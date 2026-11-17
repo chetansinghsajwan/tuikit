@@ -1,3 +1,5 @@
+//! Tests for the git panel, run against throwaway git repos.
+
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 use std::fs;
@@ -20,6 +22,7 @@ fn identity() {
     });
 }
 
+/// Runs `git` in `dir` with a fixed identity and no user config, and fails the test if it fails.
 fn git(dir: &Path, args: &[&str]) {
     assert!(
         Command::new("git")
@@ -52,10 +55,12 @@ fn repo(name: &str) -> PathBuf {
     d.canonicalize().unwrap()
 }
 
+/// Wraps a key code as a press event.
 fn key(c: KeyCode) -> Event {
     Event::Key(KeyEvent::new(c, KeyModifiers::NONE))
 }
 
+/// Sends the keys named by `s` to the panel and returns the last action.
 fn press(p: &mut Panel, s: &str) -> Action {
     let mut last = Action::None;
     for c in s.chars() {
@@ -64,6 +69,7 @@ fn press(p: &mut Panel, s: &str) -> Action {
     last
 }
 
+/// Renders the whole panel to lines of text so tests can look at what is shown.
 fn draw(p: &mut Panel) -> Vec<String> {
     let area = Rect::new(0, 0, 100, 16);
     let mut b = Buffer::empty(area);
@@ -71,6 +77,7 @@ fn draw(p: &mut Panel) -> Vec<String> {
     (0..16).map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>()).collect()
 }
 
+/// Moves the cursor onto the changed file `name`; fails the test if it is not listed.
 fn on(p: &mut Panel, name: &str) {
     let i = p
         .items

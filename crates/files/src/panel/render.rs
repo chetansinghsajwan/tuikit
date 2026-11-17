@@ -3,6 +3,7 @@
 use super::*;
 
 impl Panel {
+    /// The git letter and kind to show for a row, if it has a change.
     pub(super) fn git_state(&self, row: &Row) -> Option<(char, Kind)> {
         let (repo, status) = self.git.as_ref()?;
         let rela = repo.relative(&row.path)?;
@@ -65,6 +66,7 @@ impl Panel {
             || self.size_signature() != self.sizes_shown
     }
 
+    /// The text shown before the typed input for each kind of prompt.
     pub(super) fn prompt_label(kind: &PromptKind) -> &'static str {
         match kind {
             PromptKind::Create(_) => "new: ",

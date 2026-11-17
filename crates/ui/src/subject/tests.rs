@@ -1,3 +1,5 @@
+//! Tests for finding the category of a commit subject.
+
 use super::*;
 
 #[test]

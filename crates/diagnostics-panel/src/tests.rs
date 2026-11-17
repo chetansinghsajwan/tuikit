@@ -1,5 +1,8 @@
+//! Tests for the problems list.
+
 use super::*;
 
+/// Builds a problem in `path` under the fake workspace root `/ws`, at column 3.
 fn item(path: &str, line: u32, sev: Severity, msg: &str) -> Item {
     Item {
         path: PathBuf::from("/ws").join(path),
@@ -11,10 +14,12 @@ fn item(path: &str, line: u32, sev: Severity, msg: &str) -> Item {
     }
 }
 
+/// Wraps a key code as a press event.
 fn key(c: KeyCode) -> Event {
     Event::Key(KeyEvent::new(c, KeyModifiers::NONE))
 }
 
+/// A small mixed list over two files, for the tests to share.
 fn sample() -> Vec<Item> {
     vec![
         item("src/b.rs", 20, Severity::Warning, "unused variable `y`"),
@@ -25,6 +30,7 @@ fn sample() -> Vec<Item> {
     ]
 }
 
+/// Renders the panel to lines of text so tests can look at what is shown.
 fn draw(p: &mut Panel) -> Vec<String> {
     let area = Rect::new(0, 0, 70, 14);
     let mut b = Buffer::empty(area);

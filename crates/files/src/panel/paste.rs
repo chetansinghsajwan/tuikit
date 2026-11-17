@@ -11,6 +11,7 @@ pub(super) struct Progress {
     pub(super) cancel: AtomicBool,
 }
 
+/// What a finished paste did: the moves to tell the host, the count that worked and the failures.
 pub(super) struct PasteResult {
     pub(super) moved: Vec<(PathBuf, PathBuf)>,
     pub(super) done: usize,

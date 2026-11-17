@@ -1,3 +1,5 @@
+//! Tests for the ranked ordering of the hierarchy.
+
 use super::*;
 
 #[test]

@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// Settings a host chooses when it creates a panel.
 pub struct PanelOptions {
     /// Show hidden files (dot files). Toggle with `.`.
     pub hidden: bool,
@@ -48,6 +49,7 @@ pub enum Linemode {
 }
 
 impl Linemode {
+    /// The next column layout in the cycle, so one key steps through all of them.
     pub fn next(self) -> Linemode {
         match self {
             Linemode::Off => Linemode::Full,
@@ -57,6 +59,7 @@ impl Linemode {
         }
     }
 
+    /// A short description of the layout, shown in the footer when it changes.
     pub(super) fn label(self) -> &'static str {
         match self {
             Linemode::Off => "columns off",
@@ -131,6 +134,7 @@ pub enum Search {
     Grep,
 }
 
+/// One visible line of the tree: a path with its depth and the facts the columns need.
 pub(super) struct Row {
     pub(super) path: PathBuf,
     pub(super) name: String,
@@ -141,6 +145,7 @@ pub(super) struct Row {
     pub(super) mode: u32,
 }
 
+/// Which text prompt is open and what it works on.
 pub(super) enum PromptKind {
     /// Create inside this folder; a trailing `/` makes a folder.
     Create(PathBuf),
@@ -148,6 +153,7 @@ pub(super) enum PromptKind {
     OpenWith(PathBuf),
 }
 
+/// How a delete confirmation will remove things: to the trash or for good.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ConfirmKind {
     Trash,
@@ -172,6 +178,7 @@ pub(super) enum BookmarkOp {
     Delete,
 }
 
+/// What the panel is waiting for: a normal key, a bookmark key, typed text or a confirmation.
 pub(super) enum Mode {
     Normal,
     Bookmark(BookmarkOp),

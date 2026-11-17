@@ -9,6 +9,7 @@ use ui::Theme;
 /// How many pages are read for the preview at most.
 const PAGES: u32 = 6;
 
+/// Whether `path` is a PDF by its extension.
 pub fn is_pdf(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
 }
@@ -41,6 +42,7 @@ fn info(doc: &lopdf::Document, key: &[u8]) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+/// Preview of the PDF at `path`: title, author, page count and the text of the first pages.
 pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let size = std::fs::metadata(path)?.len();
     let doc = lopdf::Document::load(path).map_err(|e| Error::Unsupported(format!("pdf: {e}")))?;
@@ -84,7 +86,9 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
             format!("{d}{d} page {n} {}", d.repeat(width.saturating_sub(10).min(50))),
             muted,
         )));
-        out.extend(crate::markdown::wrap_words(&theme.icons, &words, width).into_iter().map(Line::from));
+        out.extend(
+            crate::markdown::wrap_words(&theme.icons, &words, width).into_iter().map(Line::from),
+        );
     }
     if text_pages == 0 {
         out.push(Line::default());

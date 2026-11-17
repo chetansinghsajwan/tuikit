@@ -12,16 +12,19 @@ const TIMEOUT: Duration = Duration::from_millis(1500);
 /// Output kept, in bytes.
 const MAX_OUTPUT: usize = 256 * 1024;
 
+/// An external preview command and the delimiter that splits a line into its fields.
 #[derive(Debug, Clone)]
 pub struct PreviewCmd {
     pub cmd: String,
     pub delimiter: Option<String>,
 }
 
+/// Wrap `s` in single quotes for the shell, so a line cannot inject commands.
 fn quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
+/// Split `line` on `delimiter`, or on whitespace when there is none.
 fn fields<'a>(line: &'a str, delimiter: Option<&str>) -> Vec<&'a str> {
     match delimiter {
         Some(d) if !d.is_empty() => line.split(d).collect(),

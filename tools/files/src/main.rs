@@ -1,6 +1,7 @@
 //! `files`: the standalone file explorer (tree, preview pane, tabs) on the same
 //! panel the editors embed.
 
+/// The explorer itself: terminal setup, tabs, preview and the actions around the shared panel.
 mod app;
 
 use clap::Parser;
@@ -31,6 +32,7 @@ struct Cli {
     no_git: bool,
 }
 
+/// Loads the theme config, parses the command line and runs the app. Failures exit with code 2.
 fn main() -> ExitCode {
     for p in ui::config::init("files") {
         eprintln!("files: {p}");

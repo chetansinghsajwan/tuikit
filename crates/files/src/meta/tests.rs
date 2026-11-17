@@ -1,3 +1,5 @@
+//! Tests for the properties panel text, sizes and times.
+
 use super::*;
 
 fn dir(name: &str) -> PathBuf {

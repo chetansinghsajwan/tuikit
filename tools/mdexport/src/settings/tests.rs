@@ -1,3 +1,5 @@
+//! Tests for reading `Settings` from a config file.
+
 use super::*;
 
 #[test]

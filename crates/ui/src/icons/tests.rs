@@ -1,5 +1,8 @@
+//! Tests for the icon tables and lookups.
+
 use super::*;
 
+/// The default icon provider.
 fn icons() -> IconProvider {
     IconProvider::default()
 }

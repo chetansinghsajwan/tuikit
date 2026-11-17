@@ -3,6 +3,7 @@
 
 use std::io::Write;
 
+/// The base64 alphabet used to encode the text for the OSC 52 sequence.
 const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /// Standard base64 with padding.

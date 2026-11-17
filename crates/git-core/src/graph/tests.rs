@@ -1,5 +1,8 @@
+//! Tests for the commit graph drawing and ordering.
+
 use super::*;
 
+/// A commit with only an id and parents, which is all the graph looks at.
 fn c(oid: &str, parents: &[&str]) -> CommitInfo {
     CommitInfo {
         oid: oid.into(),
@@ -13,6 +16,7 @@ fn c(oid: &str, parents: &[&str]) -> CommitInfo {
     }
 }
 
+/// The drawn graph as one text line per commit.
 fn drawn(commits: &[CommitInfo]) -> Vec<String> {
     graph(commits).iter().map(GraphRow::text).collect()
 }

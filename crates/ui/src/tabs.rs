@@ -27,14 +27,17 @@ pub struct Tabs<T> {
 }
 
 impl<T> Tabs<T> {
+    /// A set of tabs holding just `first`, which is active.
     pub fn new(first: T) -> Tabs<T> {
         Tabs { items: vec![first], active: 0, closed: Vec::new() }
     }
 
+    /// How many tabs are open.
     pub fn len(&self) -> usize {
         self.items.len()
     }
 
+    /// Whether no tab is open (always false in practice: the last tab cannot be closed).
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -44,14 +47,17 @@ impl<T> Tabs<T> {
         self.active
     }
 
+    /// The active tab.
     pub fn active(&self) -> &T {
         &self.items[self.active]
     }
 
+    /// The active tab, to change it.
     pub fn active_mut(&mut self) -> &mut T {
         &mut self.items[self.active]
     }
 
+    /// The tabs in order, left to right.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.items.iter()
     }
@@ -134,6 +140,7 @@ pub struct Label {
 }
 
 impl Label {
+    /// A label showing `title`, with no icon and no unsaved marker.
     pub fn new(title: impl Into<String>) -> Label {
         Label { title: title.into(), modified: false, icon: None }
     }
@@ -197,6 +204,7 @@ fn parts(i: usize, l: &Label, numbers: bool) -> Vec<(String, Part)> {
     v
 }
 
+/// The pieces a tab label is built from, so the strip can style each kind on its own.
 #[derive(Clone, Copy)]
 enum Part {
     Gap,
@@ -206,10 +214,12 @@ enum Part {
     Marker,
 }
 
+/// The width in cells of all the pieces together.
 fn width(parts: &[(String, Part)]) -> usize {
     parts.iter().map(|(s, _)| s.width()).sum()
 }
 
+/// Turn the pieces of one label into styled spans: accent and bold when active, muted otherwise.
 fn spans(parts: Vec<(String, Part)>, active: bool, theme: &Theme) -> Vec<Span<'static>> {
     let c = &theme.colors;
     let base = if active {

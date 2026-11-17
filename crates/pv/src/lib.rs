@@ -43,6 +43,7 @@ pub use diff::{
 };
 pub use tabular::{raw as raw_tables, set_raw as set_raw_tables};
 
+/// What a preview is asked for: the room it has, whether to show git, and the line to focus.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Preview width in cells (right-aligns directory metadata, pads row tints). `None` = unknown.
@@ -62,6 +63,7 @@ impl Default for Options {
     }
 }
 
+/// Why a preview could not be made.
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),

@@ -1,11 +1,16 @@
+//! Tests for `App`: which keys light up, the history log and rendering on tiny screens.
+
 use super::*;
 
+/// A small config with a remapped key, a chord and an insert layer, shared by the tests.
 const KBD: &str = "(defsrc\n a s x\n spc)\n(deflayermap main\n a lctl\n s lsft\n x C-x\n ___ XX)\n(deflayermap ins\n ___ _)\n";
 
+/// Builds an `App` from the sample config.
 fn app() -> App {
     App::new(Config::parse(KBD).unwrap(), "x".into())
 }
 
+/// Builds a daemon state event for a layer with the given keys held.
 fn state(layer: &str, keys: &[&str]) -> Event {
     Event::State(State {
         layer: layer.into(),

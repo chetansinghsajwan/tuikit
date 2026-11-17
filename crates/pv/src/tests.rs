@@ -1,6 +1,10 @@
+//! Tests for the preview entry points: text, folders, git marks, focus, commits, diffs and
+//! Markdown.
+
 use super::*;
 use std::fs;
 
+/// A fresh empty temp folder unique to `name`.
 fn tmp(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("pv-test-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&d);
@@ -161,6 +165,7 @@ fn a_huge_folder_is_cut_and_says_so() {
     assert!(text.last().unwrap().contains("more not shown"), "{:?}", text.last());
 }
 
+/// A temp repository on `main` with one commit holding `a.txt` and `sub/s.txt`.
 fn git_repo(name: &str) -> std::path::PathBuf {
     let d = tmp(name);
     let run = |args: &[&str]| {
@@ -184,6 +189,7 @@ fn git_repo(name: &str) -> std::path::PathBuf {
     d.canonicalize().unwrap()
 }
 
+/// The text of a line, with the styles dropped.
 fn flat(l: &Line) -> String {
     l.spans.iter().map(|s| s.content.as_ref()).collect()
 }

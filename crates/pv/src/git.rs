@@ -6,6 +6,7 @@ use ui::Theme;
 
 pub use git_core::{Kind, LineKind, PatchKind, Repo, Status};
 
+/// The theme color of a file change kind.
 pub fn kind_color(theme: &Theme, kind: Kind) -> Color {
     let g = &theme.colors.git;
     match kind {
@@ -19,6 +20,7 @@ pub fn kind_color(theme: &Theme, kind: Kind) -> Color {
     .into()
 }
 
+/// The theme color of a changed line kind (added, modified, deleted).
 pub fn line_color(theme: &Theme, kind: LineKind) -> Color {
     let g = &theme.colors.git;
     match kind {

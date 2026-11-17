@@ -2,6 +2,7 @@
 //! It checks that our calls match the methods, signatures and properties of NetworkManager's
 //! D-Bus API as documented; it cannot check real NetworkManager. Skipped without `dbus-daemon`.
 
+
 use nu_core::nm::Nm;
 use nu_core::{Backend, Security};
 use std::collections::HashMap;
@@ -11,6 +12,8 @@ use std::sync::{Arc, Mutex};
 use zbus::blocking::connection::Builder;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
+// Bus name and object paths of the pretend NetworkManager: one Wi-Fi device, three SSIDs (`home`
+// twice, a strong and a weak access point) and one saved connection.
 const NAME: &str = "org.freedesktop.NetworkManager";
 const DEVICE: &str = "/org/freedesktop/NetworkManager/Devices/1";
 const AP_HOME: &str = "/org/freedesktop/NetworkManager/AccessPoint/1";
@@ -19,6 +22,7 @@ const AP_CAFE: &str = "/org/freedesktop/NetworkManager/AccessPoint/3";
 const AP_OFFICE: &str = "/org/freedesktop/NetworkManager/AccessPoint/4";
 const SAVED_HOME: &str = "/org/freedesktop/NetworkManager/Settings/1";
 
+/// What the pretend NetworkManager remembers, including every call it got, for the test to read.
 #[derive(Default)]
 struct State {
     enabled: bool,
@@ -27,24 +31,30 @@ struct State {
     calls: Vec<String>,
 }
 
+/// The state shared between the D-Bus objects and the test.
 type Shared = Arc<Mutex<State>>;
 
+/// An object path from text; the paths here are all valid, so it panics on a typo.
 fn path(p: &str) -> OwnedObjectPath {
     OwnedObjectPath::try_from(p).expect("a valid object path")
 }
 
+/// A D-Bus value as text, or empty when it is not a string.
 fn text(v: &OwnedValue) -> String {
     String::try_from(v.clone()).unwrap_or_default()
 }
 
+/// The NetworkManager root object: device list, activation and the wireless switch.
 struct Root(Shared);
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager")]
 impl Root {
+    /// Lists a wired device first, so the backend has to look past it for the Wi-Fi one.
     fn get_devices(&self) -> Vec<OwnedObjectPath> {
         vec![path("/org/freedesktop/NetworkManager/Devices/0"), path(DEVICE)]
     }
 
+    /// Records the activation of a saved connection through an access point.
     fn activate_connection(
         &self,
         connection: OwnedObjectPath,
@@ -57,6 +67,7 @@ impl Root {
         path("/org/freedesktop/NetworkManager/ActiveConnection/1")
     }
 
+    /// Records a new connection (its SSID, type and security settings) and activates it.
     fn add_and_activate_connection(
         &self,
         settings: HashMap<String, HashMap<String, OwnedValue>>,
@@ -100,6 +111,7 @@ impl Root {
     }
 }
 
+/// A wired device, there to prove the backend skips non-Wi-Fi devices.
 struct Wired;
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager.Device")]
@@ -115,6 +127,7 @@ impl Wired {
     }
 }
 
+/// The Wi-Fi device (`Device` interface).
 struct Wifi(Shared);
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager.Device")]
@@ -129,6 +142,7 @@ impl Wifi {
         "wlan0".into()
     }
 
+    /// Records the disconnect and clears the active access point.
     fn disconnect(&self) {
         let mut s = self.0.lock().unwrap();
         s.calls.push("disconnect".into());
@@ -136,6 +150,7 @@ impl Wifi {
     }
 }
 
+/// The Wi-Fi device's `Wireless` interface: access points and scanning.
 struct Wireless(Shared);
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager.Device.Wireless")]
@@ -144,6 +159,7 @@ impl Wireless {
         [AP_HOME, AP_HOME_WEAK, AP_CAFE, AP_OFFICE].iter().map(|p| path(p)).collect()
     }
 
+    /// Records that a scan was asked for.
     fn request_scan(&self, _options: HashMap<String, OwnedValue>) {
         self.0.lock().unwrap().calls.push("scan".into());
     }
@@ -154,6 +170,7 @@ impl Wireless {
     }
 }
 
+/// One access point with the fields the backend reads.
 struct Ap {
     ssid: &'static str,
     strength: u8,
@@ -194,6 +211,7 @@ impl Ap {
     }
 }
 
+/// The NetworkManager settings object that lists saved connections.
 struct Settings(Shared);
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager.Settings")]
@@ -203,10 +221,12 @@ impl Settings {
     }
 }
 
+/// The saved `home` connection.
 struct Saved(Shared);
 
 #[zbus::interface(name = "org.freedesktop.NetworkManager.Settings.Connection")]
 impl Saved {
+    /// The settings of `home`, in the shape the backend reads its SSID from.
     fn get_settings(&self) -> HashMap<String, HashMap<String, OwnedValue>> {
         let v = |x: Value<'_>| OwnedValue::try_from(x).unwrap();
         HashMap::from([
@@ -224,6 +244,7 @@ impl Saved {
         ])
     }
 
+    /// Records the deletion and drops `home` from the saved list.
     fn delete(&self) {
         let mut s = self.0.lock().unwrap();
         s.calls.push("delete saved home".into());
@@ -231,6 +252,7 @@ impl Saved {
     }
 }
 
+/// A private `dbus-daemon` that is killed when the test ends.
 struct Daemon(Child);
 
 impl Drop for Daemon {
@@ -253,6 +275,7 @@ fn bus() -> Option<(Daemon, String)> {
     Some((Daemon(child), address.trim().to_string()))
 }
 
+/// Puts the pretend NetworkManager objects on the private bus under the real names and paths.
 fn serve(address: &str, state: &Shared) -> zbus::blocking::Connection {
     let ap = |ssid, strength, flags, wpa, rsn| Ap { ssid, strength, flags, wpa, rsn };
     Builder::address(address)

@@ -20,6 +20,7 @@ pub(super) enum Field {
     Exclude,
 }
 
+/// What a picker is built with: its mode, root and the preview and git switches.
 #[derive(Debug, Clone)]
 pub struct PickerOptions {
     pub mode: Mode,
@@ -45,6 +46,7 @@ pub enum Action {
     Cancel,
 }
 
+/// The rendered preview of the highlighted candidate, with the `key` it was rendered for.
 pub(super) struct Preview {
     pub(super) key: (String, u32, u16, u16),
     pub(super) lines: Vec<Line<'static>>,

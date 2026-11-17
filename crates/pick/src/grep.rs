@@ -151,6 +151,7 @@ pub fn spawn(
     });
 }
 
+/// Cut a line to `MAX_LINE` bytes, on a character boundary so the text stays valid.
 fn clip(s: &str) -> String {
     if s.len() <= MAX_LINE {
         return s.to_string();

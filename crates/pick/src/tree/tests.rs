@@ -1,5 +1,8 @@
+//! Tests for building the folder and symbol hierarchies.
+
 use super::*;
 
+/// An entry for the path `path`, ordered by file name.
 fn e(idx: u32, path: &str) -> Entry {
     let mut parts: Vec<String> = path.split('/').map(String::from).collect();
     let name = parts.pop().unwrap();
@@ -20,6 +23,7 @@ fn ancestors_are_the_enclosing_headers_outermost_first() {
     assert!(ancestors(&t.rows, 0).is_empty() && ancestors(&t.rows, 99).is_empty());
 }
 
+/// The rows of `t` as indented text, for comparing a tree by its shape.
 fn shape(t: &Tree) -> Vec<String> {
     t.rows
         .iter()
@@ -78,6 +82,7 @@ fn empty_and_flat_inputs() {
     assert_eq!(shape(&t), vec!["#1", "#0"]);
 }
 
+/// A hierarchy entry for match `idx` with id `id`, under the ancestors `parents` (id and label).
 fn hier(idx: u32, id: u32, order: u32, parents: &[(u32, &str)]) -> HierEntry {
     HierEntry {
         idx,
@@ -87,7 +92,12 @@ fn hier(idx: u32, id: u32, order: u32, parents: &[(u32, &str)]) -> HierEntry {
             order,
             ancestors: parents
                 .iter()
-                .map(|(id, label)| crate::candidate::Ancestor { id: *id, kind: None, label: label.to_string(), order: 0 })
+                .map(|(id, label)| crate::candidate::Ancestor {
+                    id: *id,
+                    kind: None,
+                    label: label.to_string(),
+                    order: 0,
+                })
                 .collect(),
         },
     }

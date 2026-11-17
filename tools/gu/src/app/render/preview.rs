@@ -3,6 +3,8 @@
 use super::super::*;
 
 impl App {
+    /// Draw the diff or summary of the highlighted entry, rebuilding it only when the entry or the
+    /// width changes.
     pub(in crate::app) fn render_preview(
         &mut self,
         which: Focus,

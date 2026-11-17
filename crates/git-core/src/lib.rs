@@ -2,12 +2,19 @@
 //! and per-line changes, on `gix`. Used by `pv`, `pick`, the files panel and
 //! `git-panel` so none of them talk to git themselves.
 
+/// The commit graph drawing and the history ordering helpers.
 mod graph;
+/// Commits, refs, stashes and patches.
 mod history;
+/// Changed lines of a file against `HEAD`.
 mod lines;
+/// Per-file and per-folder status.
 mod status;
+/// Submodule discovery and state.
 mod submodule;
+/// Word-level changes inside a changed line.
 mod words;
+/// Work tree actions: stage, commit, reset, branches and the like.
 mod worktree;
 
 pub use graph::{GraphRow, graph, simplify, topo_order};
@@ -27,6 +34,7 @@ pub use worktree::{Operation, ResetMode, Side};
 
 use std::path::{Path, PathBuf};
 
+/// The one error type of the crate: a message, so callers never depend on `gix` error types.
 #[derive(Debug)]
 pub struct Error(pub String);
 
@@ -38,6 +46,7 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Wrap any displayable error as this crate's `Error`.
 fn err(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }

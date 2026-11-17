@@ -1,3 +1,5 @@
+//! Tests for the action table: every action is described and no key is bound twice.
+
 use super::*;
 use ui::keys::Keymap;
 

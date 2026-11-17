@@ -1,3 +1,5 @@
+//! Tests for the per-folder roll-up of git status.
+
 use super::*;
 
 #[test]

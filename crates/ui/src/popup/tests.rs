@@ -1,3 +1,5 @@
+//! Tests for popup mode (the zellij floating pane).
+
 use super::*;
 
 #[test]

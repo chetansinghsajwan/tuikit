@@ -1,10 +1,14 @@
+//! Tests for the cursor-row fade, the spinner and the frame requests of `anim`.
+
 use super::*;
 use ratatui::layout::Rect;
 
+/// The color the cursor row is drawn in.
 fn lit(theme: &Theme) -> Color {
     mix(theme.colors.accent.into(), theme.colors.bg.into(), 28)
 }
 
+/// Draw the cursor-row highlight across row `y`, as a tool would.
 fn paint(buf: &mut Buffer, theme: &Theme, y: u16) {
     for x in 0..buf.area.width {
         buf[(x, y)].set_bg(lit(theme));

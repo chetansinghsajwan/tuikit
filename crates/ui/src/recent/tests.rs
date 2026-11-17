@@ -1,5 +1,8 @@
+//! Tests for the recent-commands history.
+
 use super::*;
 
+/// A fresh history file path unique to this test, with nothing in it yet.
 fn file(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("ui-recent-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&d);

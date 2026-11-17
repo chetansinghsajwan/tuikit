@@ -3,6 +3,7 @@
 use super::super::*;
 
 impl App {
+    /// Draw one list pane (refs, commits, stashes or submodules) with its title, rows and cursor.
     pub(in crate::app) fn render_list(
         &mut self,
         which: Focus,
@@ -93,6 +94,7 @@ impl App {
     /// refs on one commit need (as far as the message keeps room), and when the message is hidden the
     /// refs (or the author names) take what is left, so the row is always filled.
     pub(in crate::app) fn fit_columns(&mut self, width: u16) {
+        /// The least width the commit message keeps before the refs column has to shrink.
         const MIN_SUBJECT: usize = 24;
         let width = usize::from(width);
         let mut fixed = if self.graph { self.graph_w + 1 } else { 0 };

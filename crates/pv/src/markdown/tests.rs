@@ -1,5 +1,8 @@
+//! Tests for rendered Markdown.
+
 use super::*;
 
+/// The text of each of `lines`, with the styles dropped.
 fn text(lines: &[Line]) -> Vec<String> {
     lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect()
 }
@@ -48,7 +51,14 @@ fn h1_is_three_rows_of_blocks() {
 #[test]
 fn h1_that_does_not_fit_or_has_no_glyphs_stays_one_row() {
     let wide = text(&render("# A long heading that cannot fit\n", &Theme::default(), 20));
-    assert_eq!(wide[0], "█ A long heading that cannot fit".chars().take(wide[0].chars().count()).collect::<String>(), "{wide:#?}");
+    assert_eq!(
+        wide[0],
+        "█ A long heading that cannot fit"
+            .chars()
+            .take(wide[0].chars().count())
+            .collect::<String>(),
+        "{wide:#?}"
+    );
     let code = text(&render("# With `code`\n", &Theme::default(), 40));
     assert!(code[0].starts_with("█ With"), "{code:#?}");
 }
@@ -124,7 +134,10 @@ fn code_blocks_are_tinted_blocks_with_rounded_corners_and_the_language_inside() 
         lines[..5].iter().all(|l| l.width() == lines[0].width()),
         "every row is as wide as the top: {lines:#?}"
     );
-    assert!(!lines.iter().any(|l| l.contains('│') || l.contains('╭')), "no frame lines: {lines:#?}");
+    assert!(
+        !lines.iter().any(|l| l.contains('│') || l.contains('╭')),
+        "no frame lines: {lines:#?}"
+    );
     // The edge rows and corners are the tint drawn as a foreground, on the terminal background; only
     // the rows between carry it as a background, so no colour shows outside the rounded corners.
     let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
@@ -144,10 +157,7 @@ fn inline_code_is_a_pill_between_rounded_caps() {
     let r = render("use `a b` here, or `x`.\n", &Theme::default(), 60);
     let line = &r[0];
     let shown: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
-    assert!(
-        shown.windows(3).any(|w| w == ["", "a b", ""]),
-        "a cap, the code, a cap: {shown:?}"
-    );
+    assert!(shown.windows(3).any(|w| w == ["", "a b", ""]), "a cap, the code, a cap: {shown:?}");
     assert!(shown.contains(&"x"), "{shown:?}");
     let code = line.spans.iter().find(|s| s.content == "a b").unwrap();
     assert!(code.style.bg.is_some(), "the code sits on a tint");

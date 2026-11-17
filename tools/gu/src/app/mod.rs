@@ -1,3 +1,5 @@
+//! The `App` state of the screen; its behaviour is split over the submodules below.
+
 use git_core::{
     CommitInfo, Operation, RefInfo, RefKind, Repo, ResetMode, StashInfo, SubmoduleInfo,
 };
@@ -14,20 +16,29 @@ use tui_input::backend::crossterm::EventHandler;
 use ui::keys::{Feed, Keymap};
 use ui::{Pane, Theme};
 
+/// Loading history, status, refs and the commit list.
 mod data;
+/// Keys in each mode (normal, prompt, confirm, popup).
 mod events;
+/// Small drawing helpers: ref pills, author colors, widths.
 mod pills;
+/// The Refs tab's tree and the files of a commit.
 mod refs;
+/// Drawing the tabs and their panes.
 mod render;
+/// Tabs, focus and commit search.
 mod search;
+/// The kinds of things the screen holds: focus, modes, prompts, rows, filters.
 mod types;
 use pills::*;
 pub use types::Quit;
 use types::*;
 
+/// Tests of the screen.
 #[cfg(test)]
 mod tests;
 
+/// The whole git screen: the repository, what is loaded from it, and the UI state of every tab.
 pub struct App {
     root: PathBuf,
     repo: Repo,

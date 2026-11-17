@@ -1,3 +1,5 @@
+//! Tests for the folder watch.
+
 use super::*;
 use std::fs;
 

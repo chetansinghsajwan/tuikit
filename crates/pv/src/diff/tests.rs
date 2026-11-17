@@ -1,6 +1,9 @@
+//! Tests for the diff view.
+
 use super::*;
 use git_core::{Kind, PatchLine};
 
+/// A patch of `src/lib.rs` going from `old` to `new`.
 fn patch(old: &str, new: &str) -> FilePatch {
     let hunks = git_core::hunks_of(old.as_bytes(), new.as_bytes());
     FilePatch {
@@ -15,11 +18,14 @@ fn patch(old: &str, new: &str) -> FilePatch {
     }
 }
 
+/// The text of each of `lines`, with the styles dropped.
 fn text(lines: &[Line]) -> Vec<String> {
     lines.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect()
 }
 
+/// A small file before the change the tests make.
 const OLD: &str = "fn main() {\n    let total = count + 1;\n    println!(\"{total}\");\n}\n";
+/// The same file after the change: one word differs.
 const NEW: &str = "fn main() {\n    let total = count + step;\n    println!(\"{total}\");\n}\n";
 
 #[test]

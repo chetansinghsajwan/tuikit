@@ -17,6 +17,7 @@ use objc2_core_wlan::{CWInterface, CWNetwork, CWSecurity, CWWiFiClient};
 use objc2_foundation::{NSError, NSString};
 use objc2_io_bluetooth::{IOBluetoothDevice, IOBluetoothHostController};
 
+/// An Objective-C error as our `Error`, using the text macOS would show.
 fn ns_error(e: Retained<NSError>) -> Error {
     Error(e.localizedDescription().to_string())
 }
@@ -25,10 +26,12 @@ fn ns_error(e: Retained<NSError>) -> Error {
 pub struct MacWifi;
 
 impl MacWifi {
+    /// A handle on the Wi-Fi of this Mac; CoreWLAN is asked fresh on every call.
     pub fn new() -> MacWifi {
         MacWifi
     }
 
+    /// The Wi-Fi interface of this Mac, or an error when there is none.
     fn interface(&self) -> Result<Retained<CWInterface>> {
         let client = unsafe { CWWiFiClient::sharedWiFiClient() };
         unsafe { client.interface() }.ok_or_else(|| Error("no Wi-Fi interface on this Mac".into()))
@@ -44,6 +47,7 @@ impl MacWifi {
             .collect()
     }
 
+    /// The security of a scanned network, from what CoreWLAN says it supports.
     fn security_of(n: &CWNetwork) -> Security {
         let supports = |s: CWSecurity| unsafe { n.supportsSecurity(s) };
         if supports(CWSecurity::None) {
@@ -74,6 +78,7 @@ impl MacWifi {
         Ok(set.to_vec())
     }
 
+    /// A scanned CoreWLAN network as our `Network`.
     fn network_of(&self, n: &CWNetwork, active: Option<&str>, saved: &[String]) -> Network {
         let ssid = unsafe { n.ssid() }.map(|s| s.to_string()).unwrap_or_default();
         let rssi = unsafe { n.rssiValue() } as i16;
@@ -170,10 +175,12 @@ impl Backend for MacWifi {
 pub struct MacBluetooth;
 
 impl MacBluetooth {
+    /// A handle on the Bluetooth of this Mac; IOBluetooth is asked fresh on every call.
     pub fn new() -> MacBluetooth {
         MacBluetooth
     }
 
+    /// The paired devices, which is all IOBluetooth lets an app list.
     fn paired(&self) -> Vec<Retained<IOBluetoothDevice>> {
         let Some(list) = (unsafe { IOBluetoothDevice::pairedDevices() }) else { return Vec::new() };
         list.to_vec()
@@ -182,6 +189,7 @@ impl MacBluetooth {
             .collect()
     }
 
+    /// The paired device with this address, or an error when it is not paired.
     fn find(&self, address: &str) -> Result<Retained<IOBluetoothDevice>> {
         let wanted = normalize(address);
         self.paired()

@@ -19,8 +19,10 @@ use unicode_width::UnicodeWidthStr;
 
 /// Cap on bytes read, so a huge file never stalls a preview.
 const MAX_BYTES: u64 = 1 << 20;
+/// What a tab is drawn as, so columns line up whatever the terminal tab stops are.
 const TAB: &str = "    ";
 
+/// A truecolor design token as a syntect color; other colors become white.
 fn rgb(c: ui::theme::Hex) -> SColor {
     match c.0 {
         ratatui::style::Color::Rgb(r, g, b) => SColor { r, g, b, a: 255 },
@@ -93,6 +95,7 @@ pub(crate) fn syntax_theme(t: &Theme) -> SynTheme {
     }
 }
 
+/// Whether the bytes look like a binary file (a NUL byte in the first 8000).
 fn is_binary(buf: &[u8]) -> bool {
     buf.iter().take(8000).any(|&b| b == 0)
 }
@@ -128,6 +131,7 @@ fn line_marks(path: &Path, total: usize) -> Vec<Option<(LineKind, char)>> {
     marks
 }
 
+/// Preview of the text file at `path`, highlighted, with a line-number gutter and git marks.
 pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let mut buf = Vec::new();
     std::fs::File::open(path)?.take(MAX_BYTES).read_to_end(&mut buf)?;

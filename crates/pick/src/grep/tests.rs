@@ -1,3 +1,5 @@
+//! Tests for the content search.
+
 use super::*;
 
 #[test]

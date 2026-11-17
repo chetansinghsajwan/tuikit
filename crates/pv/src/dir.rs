@@ -12,6 +12,7 @@ use std::path::Path;
 use std::time::SystemTime;
 use ui::Theme;
 
+/// One entry of a folder, with what the row needs to show.
 struct Entry {
     name: String,
     is_dir: bool,
@@ -51,6 +52,7 @@ fn entries(dir: &Path) -> Vec<Entry> {
     v
 }
 
+/// How long ago `t` was, or `-` when the time is unknown.
 fn relative(t: Option<SystemTime>) -> String {
     let Some(t) = t else { return "-".into() };
     let secs = SystemTime::now().duration_since(t).map(|d| d.as_secs()).unwrap_or(0);
@@ -63,6 +65,7 @@ fn relative(t: Option<SystemTime>) -> String {
     }
 }
 
+/// The `rwx` permission string in three groups; the owner bits are colored, the others muted.
 fn perm_spans(mode: u32, theme: &Theme) -> Vec<Span<'static>> {
     let c = &theme.colors;
     let mut out = Vec::new();
@@ -157,6 +160,7 @@ struct Node {
     run: usize,
 }
 
+/// Whether `path` is a folder with nothing in it (false when it cannot be read).
 fn is_empty_dir(path: &Path) -> bool {
     fs::read_dir(path).map(|mut d| d.next().is_none()).unwrap_or(false)
 }
@@ -219,6 +223,7 @@ fn weight(n: &Node) -> usize {
     if n.run > 0 { n.run } else { 1 }
 }
 
+/// What the folder renderer passes along: the theme, the options and the git status.
 struct Ctx<'a> {
     theme: &'a Theme,
     opts: &'a Options,
@@ -280,6 +285,7 @@ fn flatten(
     }
 }
 
+/// Preview of the folder at `path`: its entries as a tree, with git state and metadata.
 pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let limit = opts.height.map(usize::from).unwrap_or(usize::MAX);
     let git = if opts.git { git::load(path) } else { None };

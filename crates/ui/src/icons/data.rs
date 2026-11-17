@@ -1,3 +1,6 @@
+//! Icon tables: the named icons and the folder, file name and extension lookups.
+//! Generated from yazi's preset theme (MIT); `IconProvider` is the way to reach them.
+
 // Generated from yazi's preset theme (MIT, github.com/sxyazi/yazi, yazi-config/preset/theme-dark.toml).
 // Sorted by name, lowercase; looked up by binary search.
 
@@ -16,6 +19,7 @@ pub const DIR_OPEN: Icon = Icon { glyph: "", color: Some(rgb(0x03a9f4)) };
 pub const EXEC: Icon = Icon { glyph: "", color: Some(rgb(0x8bc34a)) };
 pub const FILE: Icon = Icon { glyph: "", color: Some(rgb(0xffffff)) };
 
+/// Icons by folder name (lowercase, sorted for binary search): `(name, glyph, rgb color)`.
 pub static DIRS: &[(&str, &str, u32)] = &[
     (".config", "", 0xff9800),
     (".git", "", 0x00bcd4),
@@ -33,6 +37,7 @@ pub static DIRS: &[(&str, &str, u32)] = &[
     ("videos", "", 0x00bcd4),
 ];
 
+/// Icons by exact file name (lowercase, sorted for binary search): `(name, glyph, rgb color)`.
 pub static FILES: &[(&str, &str, u32)] = &[
     (".babelrc", "", 0xcbcb41),
     (".bash_profile", "", 0x89e051),
@@ -250,6 +255,7 @@ pub static FILES: &[(&str, &str, u32)] = &[
     ("xsettingsd.conf", "", 0xe54d18),
 ];
 
+/// Icons by file extension (lowercase, sorted for binary search): `(extension, glyph, rgb color)`.
 pub static EXTS: &[(&str, &str, u32)] = &[
     ("3gp", "", 0xfd971f),
     ("3mf", "󰆧", 0x888888),

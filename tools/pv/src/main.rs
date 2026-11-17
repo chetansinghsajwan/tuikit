@@ -1,11 +1,16 @@
+//! `pv <path>`: prints a colored preview of a file to stdout, for file managers and shell use.
+
 use pv::{Config, Options, preview, to_ansi};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// Reads a number from an environment variable, or `None` when unset or not a number.
 fn env_num(name: &str) -> Option<u16> {
     std::env::var(name).ok()?.parse().ok()
 }
 
+/// Reads the flags and the path, renders the preview and prints it as ANSI text. Exit code 1 on
+/// a usage error or when the preview fails.
 fn main() -> ExitCode {
     let mut git = Config::load().git;
     let mut paths = Vec::new();

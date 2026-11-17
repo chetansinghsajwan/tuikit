@@ -24,12 +24,14 @@ impl Panel {
         &self.branch
     }
 
+    /// Draws the whole panel: the change list on one side and the diff on the other.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let [list_area, preview_area] = layout::main_preview(theme, area);
         self.render_list(list_area, buf, theme, true);
         self.render_preview(preview_area, buf, theme);
     }
 
+    /// Draws the change list pane with its footer (prompt or message).
     pub(super) fn render_list(
         &mut self,
         area: Rect,
@@ -187,6 +189,7 @@ impl Panel {
         text.lines().map(|l| Line::from(Span::styled(l.to_string(), style))).collect()
     }
 
+    /// Draws the diff of the highlighted file, reusing the cached one while nothing changed.
     pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone(), c.submodule));
         let title = current.as_ref().map(|(_, p, _)| p.display().to_string()).unwrap_or_default();

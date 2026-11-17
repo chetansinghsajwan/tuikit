@@ -1,3 +1,5 @@
+//! Tests for the centered popup rect.
+
 use super::*;
 
 #[test]

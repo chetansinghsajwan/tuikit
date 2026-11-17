@@ -26,6 +26,7 @@ pub fn utc(secs: i64) -> String {
     format!("{year:04}-{month:02}-{day:02} {:02}:{:02}", rem / 3600, rem % 3600 / 60)
 }
 
+/// How long ago `secs` (seconds since the epoch) was, for the commit header.
 fn age(secs: i64) -> String {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -40,6 +41,7 @@ fn age(secs: i64) -> String {
     }
 }
 
+/// The one-letter sign of a file change: `A`, `D`, `R`, `?`, `U`, and `M` for the rest.
 pub(crate) fn sign(kind: Kind) -> char {
     match kind {
         Kind::Added => 'A',
@@ -171,7 +173,9 @@ pub fn render_range_marked(
 
     // The files: one row each, the folder muted and the name in the colour of its state, the counts in two
     // right-aligned columns and a bar showing how big the change is next to the others.
+    /// The most changed-file rows shown before a "more" line.
     const MAX_ROWS: usize = 14;
+    /// The width in cells of the bar that shows how big a file change is.
     const BAR: usize = 8;
     let (added, removed): (u32, u32) =
         changes.iter().fold((0, 0), |(a, r), f| (a + f.added, r + f.removed));

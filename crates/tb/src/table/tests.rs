@@ -1,5 +1,8 @@
+//! Tests for the table model.
+
 use super::*;
 
+/// A small csv with a quoted comma, escaped quotes and an empty last cell.
 const SAMPLE: &str = "id,name,note\n1,\"a,b\",x\n22,\"say \"\"hi\"\"\",\n";
 
 #[test]

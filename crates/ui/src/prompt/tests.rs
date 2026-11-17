@@ -1,3 +1,5 @@
+//! Tests for the prompt line and its suggestions.
+
 use super::*;
 
 #[test]

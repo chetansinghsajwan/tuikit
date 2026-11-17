@@ -1,3 +1,5 @@
+//! Tests for PDF previews.
+
 use super::*;
 
 #[test]

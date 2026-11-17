@@ -1,6 +1,9 @@
+//! Tests for the grep mode of the picker.
+
 use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
+/// A temp folder unique to `name` with three small files, two of which contain "needle".
 fn dir(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("pick-grep-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -11,6 +14,7 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
+/// A grep-mode picker over `root` starting with `query`.
 fn grep_picker(root: PathBuf, query: &str) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Grep,
@@ -38,6 +42,7 @@ fn wait_items(p: &mut Picker, want: u32) {
     }
 }
 
+/// Type `s` into the picker, one key at a time.
 fn type_str(p: &mut Picker, s: &str) {
     for ch in s.chars() {
         p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)));

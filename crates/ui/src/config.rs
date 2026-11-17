@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+/// The merged configuration of a tool: the shared file overlaid by the tool's own.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Config {
     pub leader: Option<String>,
@@ -30,6 +31,7 @@ pub struct Config {
     pub keys: BTreeMap<String, Vec<String>>,
 }
 
+/// How a binding may be written in the file: one key or a list of keys.
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum Keys {
@@ -37,6 +39,7 @@ enum Keys {
     Many(Vec<String>),
 }
 
+/// The shape of one config file as parsed from TOML, before files are merged.
 #[derive(Deserialize, Default)]
 struct File {
     leader: Option<String>,
@@ -45,8 +48,10 @@ struct File {
     keys: BTreeMap<String, Keys>,
 }
 
+/// The configuration loaded by `init`, kept for the whole process so `get` is cheap.
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
+/// The config directory: `$XDG_CONFIG_HOME`, else `~/.config`.
 fn base() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -79,6 +84,8 @@ impl Config {
         (cfg, problems)
     }
 
+    /// Read and parse one file. A missing file is fine (`None`); an unreadable or invalid one
+    /// is an error.
     fn read_file(path: &Path) -> Result<Option<File>, String> {
         let text = match std::fs::read_to_string(path) {
             Ok(t) => t,
@@ -90,6 +97,7 @@ impl Config {
             .map_err(|e| format!("{}: {}", path.display(), e.message()))
     }
 
+    /// Fold one file into the configuration; what the file sets replaces what was there.
     fn merge(&mut self, f: File) {
         if f.leader.is_some() {
             self.leader = f.leader;

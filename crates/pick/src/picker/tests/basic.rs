@@ -1,6 +1,9 @@
+//! Tests for the picker basics: filtering, navigation, marks, live sources and rendering.
+
 use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
+/// A key press of `code` with no modifiers.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
@@ -57,6 +60,7 @@ fn grep_toggles_and_file_filters_narrow_the_search() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// A fuzzy picker over `items`, with `paths` on for file-like rows, already settled.
 fn picker(items: &[&str], paths: bool, root: PathBuf) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -74,6 +78,7 @@ fn picker(items: &[&str], paths: bool, root: PathBuf) -> Picker {
     settle(p)
 }
 
+/// Let the matcher finish so the list reflects what was pushed.
 fn settle(mut p: Picker) -> Picker {
     for _ in 0..200 {
         if !p.nucleo.tick(20).running {
@@ -83,6 +88,7 @@ fn settle(mut p: Picker) -> Picker {
     p
 }
 
+/// Type `s` into the picker, then wait for the matcher to settle.
 fn type_str(p: &mut Picker, s: &str) {
     for ch in s.chars() {
         p.handle_event(&key(KeyCode::Char(ch)));

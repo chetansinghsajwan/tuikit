@@ -13,6 +13,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph, Widget};
 
+/// What kind of answer a section takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// Any number of the items.
@@ -23,6 +24,7 @@ pub enum Kind {
     Text,
 }
 
+/// One part of the popup: a title, the items to choose from and what is chosen so far.
 #[derive(Debug, Clone)]
 pub struct Section {
     pub title: String,
@@ -33,11 +35,13 @@ pub struct Section {
 }
 
 impl Section {
+    /// A section with `items` to choose from and `chosen` already picked.
     pub fn new(title: &str, kind: Kind, items: Vec<String>, chosen: Vec<String>) -> Section {
         Section { title: title.to_string(), kind, items, chosen }
     }
 }
 
+/// What a key press did to the popup: left it open, applied the choice, or cancelled.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     Open,
@@ -45,6 +49,7 @@ pub enum Outcome {
     Cancel,
 }
 
+/// The multi-choice popup: its sections, which one is current and the cursor and search inside it.
 #[derive(Debug)]
 pub struct Multi {
     title: String,
@@ -56,6 +61,7 @@ pub struct Multi {
 }
 
 impl Multi {
+    /// A popup titled `title` with `sections`, starting on the first section.
     pub fn new(title: &str, sections: Vec<Section>) -> Multi {
         Multi { title: title.to_string(), sections, current: 0, cursor: 0, query: String::new() }
     }
@@ -71,6 +77,7 @@ impl Multi {
             .collect()
     }
 
+    /// Move to another section by `d` (wrapping), starting it with a clean cursor and search.
     fn switch(&mut self, d: isize) {
         self.current =
             (self.current as isize + d).rem_euclid(self.sections.len() as isize) as usize;
@@ -78,6 +85,7 @@ impl Multi {
         self.query.clear();
     }
 
+    /// Handle a key press and say whether the popup stays open, applies or cancels.
     pub fn key(&mut self, key: &KeyEvent) -> Outcome {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let kind = self.sections[self.current].kind;

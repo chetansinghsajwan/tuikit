@@ -1,3 +1,6 @@
+//! The `nu` binary: picks the real or fake radios, owns the terminal, and runs the event loop that
+//! feeds `nu::App`.
+
 use clap::Parser;
 use nu::{App, Quit};
 use nu_core::Backend;
@@ -24,19 +27,23 @@ struct Cli {
     fake: bool,
 }
 
+/// The terminal `nu` draws on: the controlling tty, so it works even when stdout is piped.
 type Term = Terminal<CrosstermBackend<std::fs::File>>;
 
+/// Puts the terminal in raw mode on the alternate screen, so the app can draw and read keys.
 fn enter(term: &mut Term) -> io::Result<()> {
     enable_raw_mode()?;
     execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
     term.clear()
 }
 
+/// Undoes `enter`, so the shell gets its terminal back (also for the palette and on exit).
 fn leave(term: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(term.backend_mut(), LeaveAlternateScreen)
 }
 
+/// Loads the shared config, runs the app and turns its result into an exit code.
 fn main() -> ExitCode {
     for p in ui::config::init("nu") {
         eprintln!("nu: {p}");
@@ -67,11 +74,14 @@ fn real_backends() -> (Arc<dyn Backend>, Arc<dyn Bluetooth>) {
     (wifi, bt)
 }
 
+/// The real radios on macOS: CoreWLAN for Wi-Fi and IOBluetooth for Bluetooth.
 #[cfg(target_os = "macos")]
 fn real_backends() -> (Arc<dyn Backend>, Arc<dyn Bluetooth>) {
     (Arc::new(nu_core::macos::MacWifi::new()), Arc::new(nu_core::macos::MacBluetooth::new()))
 }
 
+/// Sets up the backends and terminal, then loops: draw when something changed, wait for a key or
+/// a tick, and hand the key to the app. Returns the exit code.
 fn run(cli: Cli) -> io::Result<u8> {
     // Each radio that cannot be reached shows why in its own pane.
     let (wifi, bt): (Arc<dyn Backend>, Arc<dyn Bluetooth>) = if cli.fake {

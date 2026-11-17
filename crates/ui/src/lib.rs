@@ -3,8 +3,8 @@
 //! their own borders, colors or gaps.
 
 pub mod anim;
-pub mod bigtext;
 pub mod ansi;
+pub mod bigtext;
 pub mod clipboard;
 pub mod config;
 pub mod dim;

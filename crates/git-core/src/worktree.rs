@@ -41,6 +41,7 @@ pub enum Side {
 }
 
 impl Repo {
+    /// The bytes of `rela` as staged in the index, or `None` if it is not staged.
     fn index_blob(&self, rela: &Path) -> Option<Vec<u8>> {
         let index = self.repo.index_or_empty().ok()?;
         let entry = index.entry_by_path(rela.to_str()?.into())?;
@@ -90,6 +91,8 @@ impl Repo {
         Some(name.shorten().to_str_lossy().into_owned())
     }
 
+    /// Run `git` in the work tree (never prompting, never opening an editor) and return its stdout,
+    /// or the last line of its error as an `Error`.
     pub(crate) fn git(&self, args: &[&str], paths: &[PathBuf]) -> Result<String, Error> {
         let mut cmd = Command::new("git");
         cmd.current_dir(&self.root).args(["--no-pager", "-c", "core.quotepath=off"]).args(args);
@@ -110,6 +113,7 @@ impl Repo {
         Err(Error(msg.lines().last().unwrap_or("git failed").to_string()))
     }
 
+    /// Whether the repo has a commit yet, since a fresh repo needs other commands to unstage.
     fn has_head(&self) -> bool {
         self.repo.head_commit().is_ok()
     }
@@ -134,6 +138,7 @@ impl Repo {
         }
     }
 
+    /// Unstage everything (keeps the work tree as is).
     pub fn unstage_all(&self) -> Result<(), Error> {
         if self.has_head() {
             self.git(&["reset", "-q"], &[]).map(|_| ())
@@ -296,6 +301,7 @@ impl Repo {
         self.git(&["switch", "-c", name, oid], &[]).map(|_| ())
     }
 
+    /// Rename a local branch after checking the new name is valid.
     pub fn rename_branch(&self, old: &str, new: &str) -> Result<(), Error> {
         self.check_branch_name(new)?;
         self.git(&["branch", "-m", old, new], &[]).map(|_| ())
@@ -576,6 +582,7 @@ impl Repo {
         }
     }
 
+    /// The absolute path of the `.git` directory, where the in-progress operation files live.
     fn git_dir(&self) -> Option<PathBuf> {
         let out = Command::new("git")
             .current_dir(&self.root)

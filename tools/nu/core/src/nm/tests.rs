@@ -1,3 +1,5 @@
+//! Tests for the pure helpers of the NetworkManager backend.
+
 use super::*;
 
 #[test]

@@ -1,6 +1,9 @@
+//! Tests for the external preview command.
+
 use super::super::*;
 use ratatui::crossterm::event::KeyEvent;
 
+/// A picker over the plain text `lines`, with the cursor on the first row.
 fn picker(lines: &[&str]) -> Picker {
     let opts = PickerOptions {
         mode: Mode::Fuzzy,
@@ -19,6 +22,7 @@ fn picker(lines: &[&str]) -> Picker {
     p
 }
 
+/// Render the picker into a 100 by 12 buffer and return its text, one line per row.
 fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 12);
     let mut b = Buffer::empty(area);

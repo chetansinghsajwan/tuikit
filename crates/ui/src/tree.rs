@@ -18,7 +18,10 @@ use unicode_width::UnicodeWidthStr;
 
 /// The indent guides: a thin line at each level.
 pub fn guides(theme: &Theme, depth: usize) -> Span<'static> {
-    Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(depth), Style::new().fg(theme.colors.muted.into()))
+    Span::styled(
+        format!("{} ", theme.icons.guide.glyph).repeat(depth),
+        Style::new().fg(theme.colors.muted.into()),
+    )
 }
 
 /// The scope the cursor is in, for the highlighted indent guide: the rows `from < row < to` share the guide at
@@ -98,7 +101,10 @@ pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<
     let muted = Style::new().fg(theme.colors.muted.into());
     vec![
         Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(col), muted),
-        Span::styled(format!("{} ", theme.icons.guide.glyph), Style::new().fg(theme.colors.accent.into())),
+        Span::styled(
+            format!("{} ", theme.icons.guide.glyph),
+            Style::new().fg(theme.colors.accent.into()),
+        ),
         Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(depth - col - 1), muted),
     ]
 }
@@ -180,7 +186,10 @@ pub fn mark_indent(
                 if !plain.is_empty() {
                     out.push(Span::styled(std::mem::take(&mut plain), span.style));
                 }
-                out.push(Span::styled(theme.icons.guide.glyph, guide.bg(span.style.bg.unwrap_or(Color::Reset))));
+                out.push(Span::styled(
+                    theme.icons.guide.glyph,
+                    guide.bg(span.style.bg.unwrap_or(Color::Reset)),
+                ));
             } else {
                 plain.push(ch);
             }

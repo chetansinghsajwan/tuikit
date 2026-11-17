@@ -1,3 +1,6 @@
+//! Integration tests against real throwaway git repos:
+//! status, history, patches and the git actions.
+
 use super::*;
 use std::fs;
 use std::process::Command;
@@ -19,6 +22,7 @@ fn identity() {
     });
 }
 
+/// Run `git` in `dir` with a fixed identity and no user config, failing the test on error.
 fn git(dir: &Path, args: &[&str]) {
     let ok = Command::new("git")
         .args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"])
@@ -32,6 +36,7 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(ok, "git {args:?} failed");
 }
 
+/// Make a repo with one commit (`a.txt`, `b.txt`, `sub/c.txt`) and return its real path.
 fn repo(name: &str) -> PathBuf {
     identity();
     let d = std::env::temp_dir().join(format!("git-core-test-{}-{name}", std::process::id()));

@@ -3,6 +3,7 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
+/// The settings of `pv`, read from its config file.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -17,6 +18,7 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Where the config file lives, if the config or home folder is known.
     pub fn path() -> Option<PathBuf> {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)

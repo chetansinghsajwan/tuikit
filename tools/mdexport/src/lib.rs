@@ -2,7 +2,9 @@
 //! other program is run). The fonts are the ones `typst-assets` embeds, so the result is the same on
 //! every machine.
 
+/// How the PDF looks: paper, margins, fonts and size, and where the defaults come from.
 mod settings;
+/// The Typst world that lays out the markup and writes the PDF, with the font loading.
 mod world;
 
 pub use settings::Settings;
@@ -13,6 +15,7 @@ use pulldown_cmark::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// What one export needs besides the Markdown: where images live and how the page looks.
 #[derive(Debug, Default, Clone)]
 pub struct Export {
     /// The folder relative image paths start from (the Markdown file's folder).
@@ -84,6 +87,8 @@ fn preamble(s: &Settings) -> String {
     )
 }
 
+/// The fixed Typst `show` rules (code blocks, links, headings) added after the settings-driven
+/// part of the preamble.
 const REST: &str = r##"#show raw.where(block: true): block.with(fill: luma(244), inset: 8pt, radius: 3pt, width: 100%)
 #show raw.where(block: false): box.with(fill: luma(240), inset: (x: 3pt), outset: (y: 3pt), radius: 2pt)
 #show link: set text(fill: rgb("#1a5fb4"))
@@ -94,6 +99,7 @@ const REST: &str = r##"#show raw.where(block: true): block.with(fill: luma(244),
 
 "##;
 
+/// The converter state while it reads Markdown events and writes Typst markup.
 struct Typst<'a> {
     out: String,
     base: Option<&'a Path>,
@@ -140,6 +146,7 @@ fn string(s: &str) -> String {
     out
 }
 
+/// Maps a GitHub alert kind (`[!NOTE]`, ...) to its title and accent color.
 fn alert(kind: BlockQuoteKind) -> (&'static str, &'static str) {
     match kind {
         BlockQuoteKind::Note => ("Note", "#1a5fb4"),
@@ -150,6 +157,7 @@ fn alert(kind: BlockQuoteKind) -> (&'static str, &'static str) {
     }
 }
 
+/// Maps a Markdown table column alignment to the Typst word for it.
 fn align(a: &Alignment) -> &'static str {
     match a {
         Alignment::Right => "right",
@@ -159,6 +167,7 @@ fn align(a: &Alignment) -> &'static str {
 }
 
 impl Typst<'_> {
+    /// Converts the whole Markdown text to Typst, then puts each footnote body where it is named.
     fn run(&mut self, markdown: &str) {
         let opts = Options::ENABLE_STRIKETHROUGH
             | Options::ENABLE_TABLES
@@ -197,6 +206,8 @@ impl Typst<'_> {
         .then(|| format!("/{}", rel.to_string_lossy()))
     }
 
+    /// Handles one Markdown event by writing its Typst markup, or by collecting text for a
+    /// footnote, an image alt text or a code block.
     fn event(&mut self, event: Event) {
         if self.skip > 0 {
             if let Event::End(TagEnd::MetadataBlock(_)) = event {
@@ -377,8 +388,10 @@ impl Typst<'_> {
     }
 }
 
+/// Tests for the Markdown to Typst conversion.
 #[cfg(test)]
 mod tests;
 
+/// Tests for how the settings change the output.
 #[cfg(test)]
 mod settings_tests;

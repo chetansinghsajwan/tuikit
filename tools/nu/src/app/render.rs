@@ -3,6 +3,8 @@
 use super::*;
 
 impl App {
+    /// Draws the whole screen: both panes, the details of the focused one, the status line and
+    /// any leader menu or help over them.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
         let body = Rect { height: area.height.saturating_sub(1), ..area };
@@ -92,6 +94,7 @@ impl App {
         }
     }
 
+    /// The Wi-Fi pane: its networks, or the reason there are none to show.
     pub(super) fn render_wifi(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let note = if let Some(e) = &self.wifi_error {
@@ -135,6 +138,7 @@ impl App {
         self.render_list(Focus::Wifi, "Wi-Fi", area, buf, theme, note, rows);
     }
 
+    /// The Bluetooth pane: its devices, or the reason there are none to show.
     pub(super) fn render_bluetooth(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let note = if let Some(e) = &self.bt_error {
@@ -185,6 +189,7 @@ impl App {
         self.render_list(Focus::Bluetooth, title, area, buf, theme, note, rows);
     }
 
+    /// The details of the selected network, on the right.
     pub(super) fn details_wifi(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let pane = Pane::new(theme)
@@ -220,6 +225,7 @@ impl App {
         Paragraph::new(lines).render(inner, buf);
     }
 
+    /// The details of the selected device, on the right.
     pub(super) fn details_bluetooth(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let pane = Pane::new(theme)
@@ -258,6 +264,7 @@ impl App {
         Paragraph::new(lines).render(inner, buf);
     }
 
+    /// The bottom line: a prompt, a running job, the last message, or else the key hints.
     pub(super) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         let c = &theme.colors;
         let line = match &self.mode {
@@ -290,6 +297,7 @@ impl App {
             .render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
     }
 
+    /// The short key hints of the focused pane.
     pub(super) fn hints(&self) -> &'static str {
         match self.focus {
             Focus::Wifi => {
@@ -302,6 +310,7 @@ impl App {
     }
 }
 
+/// `yes` or `no`, for the details panes.
 pub(super) fn yes(b: bool) -> String {
     if b { "yes" } else { "no" }.to_string()
 }
@@ -321,6 +330,7 @@ pub(super) fn bars(strength: u8) -> String {
         .collect()
 }
 
+/// Red for a weak signal, yellow for a middling one, green for a good one.
 pub(super) fn strength_color(theme: &Theme, strength: u8) -> ratatui::style::Color {
     let c = &theme.colors;
     match strength {

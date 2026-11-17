@@ -1,8 +1,11 @@
+//! Tests for the panel: tree building, navigation, prompts, paste and drawing.
+
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 use std::fs;
 use std::process::Command;
 
+/// Make a throwaway folder with a few files and subfolders and return its real path.
 fn tree(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("files-test-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&d);
@@ -15,6 +18,7 @@ fn tree(name: &str) -> PathBuf {
     d.canonicalize().unwrap()
 }
 
+/// A plain key press with no modifiers, as the panel receives it.
 fn key(c: KeyCode) -> Event {
     Event::Key(KeyEvent::new(c, KeyModifiers::NONE))
 }
@@ -27,10 +31,12 @@ fn leader(p: &mut Panel, seq: &str) {
     }
 }
 
+/// The row names as an indented list, to compare whole trees at a glance.
 fn names(p: &Panel) -> Vec<String> {
     p.rows.iter().map(|r| format!("{}{}", "  ".repeat(r.depth.into()), r.name)).collect()
 }
 
+/// A panel over `d` with git, bookmarks and background pastes off, so tests are predictable.
 fn panel(d: &Path) -> Panel {
     Panel::new(
         d,
@@ -261,12 +267,14 @@ fn renders_a_pane_with_the_root_name_and_scrolls() {
     assert!(all.contains("file29.txt") && !all.contains("docs"), "{all}");
 }
 
+/// Type `s` into an open prompt, one key at a time.
 fn type_text(p: &mut Panel, s: &str) {
     for c in s.chars() {
         p.handle_event(&key(KeyCode::Char(c)));
     }
 }
 
+/// Move the cursor to the row named `name`.
 fn cursor_on(p: &mut Panel, name: &str) {
     let i = p
         .rows

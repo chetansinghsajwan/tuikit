@@ -13,6 +13,7 @@ pub struct Entry {
     pub sort: String,
 }
 
+/// One row of the hierarchy view.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Row {
     /// A folder header at `depth`; `label` may span several folders (`a/b`).
@@ -23,6 +24,7 @@ pub enum Row {
     Item { idx: u32, depth: u16 },
 }
 
+/// The rows to draw and the lookups between them and the matched list.
 #[derive(Debug, Default)]
 pub struct Tree {
     pub rows: Vec<Row>,
@@ -34,6 +36,7 @@ pub struct Tree {
     pub pos_of: HashMap<u32, usize>,
 }
 
+/// A folder in the tree being built: its subfolders, its items and its best match.
 #[derive(Default)]
 struct Node {
     dirs: BTreeMap<(String, String), Node>,
@@ -63,6 +66,7 @@ pub fn build(entries: Vec<Entry>, ranked: bool) -> Tree {
     tree
 }
 
+/// Add the folders and items under `node` to `tree`, merging folders that hold only one folder.
 fn emit(node: &Node, depth: u16, ranked: bool, tree: &mut Tree) {
     // Folders first, then the items of this folder.
     let mut dirs: Vec<(&(String, String), &Node)> = node.dirs.iter().collect();
@@ -95,7 +99,6 @@ fn emit(node: &Node, depth: u16, ranked: bool, tree: &mut Tree) {
     }
 }
 
-
 /// One candidate for the hierarchy built by `build_hier`.
 #[derive(Debug, Clone)]
 pub struct HierEntry {
@@ -103,6 +106,7 @@ pub struct HierEntry {
     pub hier: crate::candidate::Hier,
 }
 
+/// A node of the hierarchy being built: a header or a candidate, with its children.
 struct HNode {
     label: String,
     kind: Option<ui::symbol::Kind>,
@@ -129,7 +133,14 @@ pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
             .chain([(e.hier.id, e.hier.kind, "", e.hier.order, Some(e.idx))]);
         for (id, kind, label, order, idx) in chain {
             let at = *by_id.entry(id).or_insert_with(|| {
-                nodes.push(HNode { label: label.to_string(), kind, idx: None, order, best: u32::MAX, children: Vec::new() });
+                nodes.push(HNode {
+                    label: label.to_string(),
+                    kind,
+                    idx: None,
+                    order,
+                    best: u32::MAX,
+                    children: Vec::new(),
+                });
                 let at = nodes.len() - 1;
                 match parent {
                     Some(p) => nodes[p].children.push(at),
@@ -147,7 +158,14 @@ pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
     }
     let mut tree = Tree::default();
     let key = |nodes: &[HNode], i: usize| if ranked { nodes[i].best } else { nodes[i].order };
-    fn emit(nodes: &[HNode], at: &[usize], depth: u16, tree: &mut Tree, key: &dyn Fn(&[HNode], usize) -> u32) {
+    /// Add the nodes `at` and everything below them to `tree`, siblings in `key` order.
+    fn emit(
+        nodes: &[HNode],
+        at: &[usize],
+        depth: u16,
+        tree: &mut Tree,
+        key: &dyn Fn(&[HNode], usize) -> u32,
+    ) {
         let mut at = at.to_vec();
         at.sort_by_key(|&i| key(nodes, i));
         for i in at {
@@ -167,6 +185,7 @@ pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
     emit(&nodes, &roots, 0, &mut tree, &key);
     tree
 }
+/// The indent depth of a row.
 fn row_depth(row: &Row) -> u16 {
     match row {
         Row::Dir { depth, .. } | Row::Head { depth, .. } | Row::Item { depth, .. } => *depth,
@@ -185,8 +204,7 @@ pub fn ancestors(rows: &[Row], at: usize) -> Vec<usize> {
             break;
         }
         let d = &row_depth(&rows[i]);
-        if *d < need
-        {
+        if *d < need {
             found.push(i);
             need = *d;
         }

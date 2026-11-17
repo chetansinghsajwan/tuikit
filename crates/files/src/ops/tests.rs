@@ -1,3 +1,5 @@
+//! Tests for the file operations, run against throwaway folders under the temp dir.
+
 use super::*;
 use std::fs;
 

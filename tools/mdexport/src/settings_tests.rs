@@ -1,3 +1,5 @@
+//! Tests that the settings reach the Typst markup and still produce a PDF.
+
 use super::*;
 
 #[test]

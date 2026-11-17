@@ -3,6 +3,7 @@
 
 use ui::keys::{Action, Group};
 
+/// A regular action: shown in the command palette, unlike the basic ones from `b!`.
 macro_rules! a {
     ($id:literal, $name:literal, $desc:literal, [$($k:literal),*]) => {
         Action { id: $id, name: $name, desc: $desc, basic: false, keys: &[$($k),*] }
@@ -113,6 +114,7 @@ pub const ACTIONS: &[Action] = &[
     b!("quit", "quit", "close the explorer", ["q", "ctrl-c", "leader q"]),
 ];
 
+/// Names for the leader-menu prefixes, so the menu can label each submenu.
 pub const GROUPS: &[Group] = &[
     Group { prefix: "leader v", name: "view" },
     Group { prefix: "leader c", name: "cd" },

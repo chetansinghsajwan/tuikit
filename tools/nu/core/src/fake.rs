@@ -4,10 +4,12 @@ use crate::bluetooth::{Bluetooth, BtStatus, Device, Kind};
 use crate::{Backend, Error, Network, Result, Security, Status, merge};
 use std::sync::Mutex;
 
+/// A pretend Wi-Fi radio that remembers its state and logs every call.
 pub struct Fake {
     state: Mutex<State>,
 }
 
+/// What the fake Wi-Fi radio remembers between calls.
 struct State {
     enabled: bool,
     networks: Vec<Network>,
@@ -41,6 +43,7 @@ impl Fake {
         }
     }
 
+    /// The calls made so far, in order, so tests can check what a UI asked for.
     pub fn log(&self) -> Vec<String> {
         self.state.lock().expect("fake state").log.clone()
     }
@@ -138,6 +141,7 @@ pub struct FakeBluetooth {
     state: Mutex<BtState>,
 }
 
+/// What the fake Bluetooth adapter remembers between calls.
 struct BtState {
     powered: bool,
     discovering: bool,
@@ -174,6 +178,7 @@ impl FakeBluetooth {
         }
     }
 
+    /// The calls made so far, in order, so tests can check what a UI asked for.
     pub fn log(&self) -> Vec<String> {
         self.state.lock().expect("fake state").log.clone()
     }

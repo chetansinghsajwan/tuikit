@@ -11,6 +11,7 @@ enum Node {
 }
 
 impl Node {
+    /// The text of a word node, or `None` for a list.
     fn atom(&self) -> Option<&str> {
         match self {
             Node::Atom(a, _) => Some(a),
@@ -19,6 +20,8 @@ impl Node {
     }
 }
 
+/// Reads s-expressions from kanata config text, dropping `;;` comments. It keeps each word's
+/// line so `defsrc` rows can follow the source layout.
 fn parse(text: &str) -> Vec<Node> {
     let mut stack: Vec<Vec<Node>> = vec![Vec::new()];
     let mut line = 1;
@@ -65,6 +68,7 @@ pub enum Action {
     Other(String),
 }
 
+/// One `deflayermap`: its name and what each key does. `default` is the `___` catch-all.
 #[derive(Debug, Default)]
 pub struct Layer {
     pub name: String,
@@ -72,6 +76,7 @@ pub struct Layer {
     default: Option<Action>,
 }
 
+/// The layout and the layers read from a kanata config.
 #[derive(Debug, Default)]
 pub struct Config {
     /// Physical rows from `defsrc`, one per source line.
@@ -80,6 +85,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Reads a kanata config, failing when it has no `defsrc` or no `deflayermap`.
     pub fn parse(text: &str) -> Result<Config, String> {
         let nodes = parse(text);
         let mut cfg = Config::default();
@@ -106,6 +112,7 @@ impl Config {
         Ok(cfg)
     }
 
+    /// Finds a layer by name.
     pub fn layer(&self, name: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.name == name)
     }
@@ -130,6 +137,7 @@ impl Config {
 }
 
 impl Layer {
+    /// What `key` does in this layer, falling back to the `___` default and then to transparent.
     fn action(&self, key: &str) -> Action {
         self.keys.get(key).or(self.default.as_ref()).cloned().unwrap_or(Action::Transparent)
     }
@@ -140,6 +148,7 @@ fn pass(key: &str) -> Action {
     Action::Keys { label: key.to_owned(), outputs: vec![key.to_owned()] }
 }
 
+/// Gathers `defalias` names and bodies, including those inside `platform` blocks.
 fn collect_aliases(nodes: &[Node], out: &mut HashMap<String, Node>) {
     for node in nodes {
         let Node::List(items) = node else { continue };
@@ -188,6 +197,7 @@ fn expand_templates(items: &[Node], templates: &HashMap<String, Vec<Node>>) -> V
     out
 }
 
+/// Groups the `defsrc` keys into physical rows, one row per source line.
 fn rows_of(items: &[Node]) -> Vec<Vec<String>> {
     let mut rows: Vec<(usize, Vec<String>)> = Vec::new();
     for item in items {
@@ -201,6 +211,7 @@ fn rows_of(items: &[Node]) -> Vec<Vec<String>> {
     rows.into_iter().map(|(_, r)| r).collect()
 }
 
+/// Builds a layer from a `deflayermap` body, expanding templates and resolving aliases.
 fn layer_of(
     items: &[Node],
     aliases: &HashMap<String, Node>,
@@ -230,6 +241,7 @@ fn layer_of(
     Ok(layer)
 }
 
+/// Works out what a key's body does: an alias, a layer switch, plain keys or something else.
 fn action_of(node: &Node, aliases: &HashMap<String, Node>) -> Action {
     match node {
         Node::Atom(a, _) => match a.as_str() {
@@ -282,6 +294,7 @@ fn keys_of(atom: &str) -> Action {
     Action::Keys { label, outputs }
 }
 
+/// Maps a kanata modifier prefix such as `C` or `RS` to the key name it presses.
 fn prefix_mod(prefix: &str) -> Option<&'static str> {
     match prefix {
         "C" | "LC" => Some("lctl"),
@@ -345,5 +358,6 @@ pub fn short(key: &str) -> String {
     .to_owned()
 }
 
+/// Tests for the kanata config reader.
 #[cfg(test)]
 mod tests;

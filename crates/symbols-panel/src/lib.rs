@@ -3,6 +3,7 @@
 //! symbols, from a language server, and says which line the cursor is on; the panel draws them and
 //! reports where to jump.
 
+/// The explorer's actions and default keys.
 pub mod keys;
 
 use ratatui::buffer::Buffer;
@@ -33,6 +34,7 @@ pub struct Symbol {
     pub children: Vec<Symbol>,
 }
 
+/// What the host must do after the panel handled an event.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
     None,
@@ -61,11 +63,13 @@ struct Row {
     folded: Option<bool>,
 }
 
+/// Whether keys move the cursor (`Normal`) or type into the filter box (`Filter`).
 enum Mode {
     Normal,
     Filter(Input),
 }
 
+/// The symbol explorer: holds the symbols, the fold state, the filter and the cursor.
 pub struct Panel {
     symbols: Vec<Symbol>,
     rows: Vec<Row>,
@@ -89,6 +93,7 @@ impl Default for Panel {
 }
 
 impl Panel {
+    /// Makes an empty panel whose key prefixes start with `leader`.
     pub fn new(leader: &str) -> Panel {
         Panel {
             symbols: Vec::new(),
@@ -118,22 +123,29 @@ impl Panel {
         self.following = line;
     }
 
+    /// Tells the host that keys go to the filter box, so it must not treat them as its own.
     pub fn is_typing(&self) -> bool {
         matches!(self.mode, Mode::Filter(_))
     }
 
+    /// The pending key-prefix menu, for the host to draw.
     pub fn menu(&self) -> Option<ui::keys::Menu> {
         self.keymap.menu()
     }
 
+    /// Every action with its keys, for the host's help screen.
     pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
         self.keymap.rows()
     }
 
+    /// Recomputes the visible rows from the symbols, folds and filter, keeping the cursor on the
+    /// same symbol.
     fn rebuild(&mut self) {
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         let q = self.filter.to_lowercase();
         let mut rows = Vec::new();
+        /// Adds the rows of `list` and its open members; with a filter, drops symbols that neither
+        /// match nor hold a match.
         fn walk(
             list: &[Symbol],
             path: &mut Vec<usize>,
@@ -189,6 +201,7 @@ impl Panel {
             .map(|(i, _)| i)
     }
 
+    /// Folds or unfolds one symbol and redraws the rows.
     fn set_fold(&mut self, path: Vec<usize>, fold: bool) {
         if fold {
             self.folded.insert(path);
@@ -198,9 +211,11 @@ impl Panel {
         self.rebuild();
     }
 
+    /// Folds every symbol that has members, or unfolds them all.
     fn fold_all(&mut self, fold: bool) {
         self.folded.clear();
         if fold {
+            /// Gathers the tree position of every symbol that has members.
             fn collect(list: &[Symbol], path: &mut Vec<usize>, out: &mut HashSet<Vec<usize>>) {
                 for (i, s) in list.iter().enumerate() {
                     path.push(i);
@@ -218,11 +233,13 @@ impl Panel {
         self.rebuild();
     }
 
+    /// Moves the cursor by `delta` rows, stopping at the first and last row.
     fn move_by(&mut self, delta: isize) {
         let last = self.rows.len().saturating_sub(1) as isize;
         self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
     }
 
+    /// Feeds a terminal event to the filter box or the keymap and returns what the host must do.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
         if *kind == KeyEventKind::Release {
@@ -257,6 +274,7 @@ impl Panel {
         }
     }
 
+    /// Runs one action by id. Also lets the host run an action picked from its palette.
     pub fn run(&mut self, id: &'static str) -> Action {
         match id {
             "nav.up" => self.move_by(-1),
@@ -310,6 +328,7 @@ impl Panel {
         Action::None
     }
 
+    /// Draws the panel. Without the focus the cursor follows the editor's line.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
         let pane = Pane::new(theme).title("Symbols").icon(theme.icons.branch).focused(focused);
@@ -406,5 +425,6 @@ impl Panel {
     }
 }
 
+/// Tests for the panel.
 #[cfg(test)]
 mod tests;

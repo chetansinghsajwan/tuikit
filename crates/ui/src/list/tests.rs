@@ -1,3 +1,5 @@
+//! Tests for list rows: bars, text fitting and clipping.
+
 use super::*;
 
 #[test]

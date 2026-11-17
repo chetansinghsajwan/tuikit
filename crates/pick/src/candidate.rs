@@ -4,6 +4,7 @@
 
 use std::ops::Range;
 
+/// One line of the picker: what it shows and matches, plus where it points, if anywhere.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate {
     /// Text shown in the list and matched against the query.
@@ -20,6 +21,7 @@ pub struct Candidate {
     pub hier: Option<Hier>,
 }
 
+/// Where a grep match is in the files, for the preview and the output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Loc {
     /// Path relative to the search root.
@@ -32,6 +34,7 @@ pub struct Loc {
     pub hit: Range<usize>,
 }
 
+/// The kind of git thing a candidate is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitKind {
     Branch,
@@ -73,10 +76,20 @@ pub struct Buffer {
 }
 
 impl Candidate {
+    /// A candidate that is just text.
     pub fn plain(s: impl Into<String>) -> Self {
-        Candidate { display: s.into(), loc: None, git: None, buffer: None, raw: None, time: None, hier: None }
+        Candidate {
+            display: s.into(),
+            loc: None,
+            git: None,
+            buffer: None,
+            raw: None,
+            time: None,
+            hier: None,
+        }
     }
 
+    /// A grep match, shown as `path:line: text`.
     pub fn grep(loc: Loc) -> Self {
         Candidate {
             display: format!("{}:{}: {}", loc.path, loc.line, loc.text),
@@ -115,6 +128,7 @@ impl Candidate {
         }
     }
 
+    /// An open editor buffer, shown as `display`.
     pub fn buffer(display: impl Into<String>, buffer: Buffer) -> Self {
         Candidate {
             display: display.into(),
@@ -169,6 +183,7 @@ pub struct Hier {
     pub ancestors: Vec<Ancestor>,
 }
 
+/// A thing that holds a candidate in the hierarchy view: a file or a symbol above it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ancestor {
     pub id: u32,

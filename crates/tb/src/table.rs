@@ -5,6 +5,8 @@
 use std::cmp::Ordering;
 use std::path::Path;
 
+/// A csv, tsv or psv file as rows of raw cell text, with the line ending kept so it can be written
+/// back unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Table {
     pub delim: char,
@@ -42,6 +44,7 @@ pub fn quote(value: &str, delim: char) -> String {
 }
 
 impl Table {
+    /// Reads `text` into rows and cells; quoted cells may hold the delimiter and line breaks.
     pub fn parse(text: &str, delim: char) -> Table {
         let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
         let final_eol = text.ends_with('\n');
@@ -74,6 +77,7 @@ impl Table {
         Table { delim, rows, eol, final_eol }
     }
 
+    /// Writes the table back as text, using the file's own line ending and final newline.
     pub fn to_text(&self) -> String {
         let mut out = String::new();
         let d = self.delim.to_string();
@@ -86,10 +90,12 @@ impl Table {
         out
     }
 
+    /// The number of rows.
     pub fn row_count(&self) -> usize {
         self.rows.len()
     }
 
+    /// The number of columns: the widest row, since rows may be ragged.
     pub fn col_count(&self) -> usize {
         self.rows.iter().map(Vec::len).max().unwrap_or(0)
     }
@@ -99,10 +105,13 @@ impl Table {
         self.rows.get(r).and_then(|row| row.get(c)).map(String::as_str).unwrap_or("")
     }
 
+    /// The text a cell shows (quotes taken off).
     pub fn value(&self, r: usize, c: usize) -> String {
         unquote(self.raw(r, c))
     }
 
+    /// Sets a cell to `value`, adding rows and columns when it is outside the table, and quotes it
+    /// if needed.
     pub fn set(&mut self, r: usize, c: usize, value: &str) {
         while self.rows.len() <= r {
             self.rows.push(Vec::new());
@@ -114,18 +123,21 @@ impl Table {
         row[c] = quote(value, self.delim);
     }
 
+    /// Inserts an empty row at `at` (or at the end when `at` is past it).
     pub fn insert_row(&mut self, at: usize) {
         let at = at.min(self.rows.len());
         let cols = self.col_count().max(1);
         self.rows.insert(at, vec![String::new(); cols]);
     }
 
+    /// Removes row `r`; does nothing outside the table.
     pub fn delete_row(&mut self, r: usize) {
         if r < self.rows.len() {
             self.rows.remove(r);
         }
     }
 
+    /// Moves row `from` to position `to`; does nothing outside the table.
     pub fn move_row(&mut self, from: usize, to: usize) {
         if from < self.rows.len() && to < self.rows.len() {
             let row = self.rows.remove(from);
@@ -133,6 +145,7 @@ impl Table {
         }
     }
 
+    /// Inserts an empty column at `at` in every row, first padding short rows.
     pub fn insert_col(&mut self, at: usize) {
         let cols = self.col_count();
         for row in &mut self.rows {
@@ -141,6 +154,7 @@ impl Table {
         }
     }
 
+    /// Removes column `c` from every row that has it.
     pub fn delete_col(&mut self, c: usize) {
         for row in &mut self.rows {
             if c < row.len() {
@@ -149,6 +163,7 @@ impl Table {
         }
     }
 
+    /// Moves column `from` to position `to` in every row; does nothing outside the table.
     pub fn move_col(&mut self, from: usize, to: usize) {
         let cols = self.col_count();
         if from >= cols || to >= cols {
@@ -222,5 +237,6 @@ impl Table {
     }
 }
 
+/// Tests for the table.
 #[cfg(test)]
 mod tests;

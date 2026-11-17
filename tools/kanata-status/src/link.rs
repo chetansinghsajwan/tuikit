@@ -6,6 +6,8 @@ use std::net::TcpStream;
 use std::thread;
 use std::time::Duration;
 
+/// One snapshot of the keyboard as `kb daemon` reports it. Missing fields fall back to empty, so
+/// older daemons that omit a field still parse.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct State {
@@ -19,6 +21,7 @@ pub struct State {
     pub kanata: bool,
 }
 
+/// What the link tells the app: a new state, or that the daemon is gone.
 pub enum Event {
     State(State),
     /// The daemon went away; the link keeps retrying.
@@ -48,6 +51,7 @@ pub fn follow(addr: String, send: impl Fn(Event) -> bool + Send + 'static) {
     });
 }
 
+/// Tests for reading the daemon's JSON lines.
 #[cfg(test)]
 mod tests {
     use super::State;

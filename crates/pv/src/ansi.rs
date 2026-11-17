@@ -4,6 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use std::fmt::Write;
 
+/// The SGR escape sequence that switches on `style`, or an empty string when it has none.
 fn sgr(style: Style) -> String {
     let mut codes: Vec<String> = Vec::new();
     let m = style.add_modifier;

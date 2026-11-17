@@ -8,6 +8,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Widget};
 
+/// A bordered, titled and padded region, built with the theme so every pane looks alike.
 pub struct Pane<'a> {
     theme: &'a Theme,
     title: Option<&'a str>,
@@ -16,10 +17,12 @@ pub struct Pane<'a> {
 }
 
 impl<'a> Pane<'a> {
+    /// A pane drawn with `theme`, with no title or icon and not focused.
     pub fn new(theme: &'a Theme) -> Self {
         Pane { theme, title: None, icon: None, focused: false }
     }
 
+    /// Set the title shown in the border (only when the theme has titles on).
     pub fn title(mut self, title: &'a str) -> Self {
         self.title = Some(title);
         self
@@ -31,11 +34,13 @@ impl<'a> Pane<'a> {
         self
     }
 
+    /// Mark the pane as focused, which gives it the focused border color and an accent title.
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
         self
     }
 
+    /// The ratatui block for this pane, with the theme's border, colors, padding and title.
     fn block(&self) -> Block<'a> {
         let c = &self.theme.colors;
         let l = &self.theme.layout;

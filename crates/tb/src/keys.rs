@@ -2,6 +2,8 @@
 
 use ui::keys::{Action, Group, action, basic};
 
+/// Every action of the editor with its default keys. One table feeds the keymap, the palette
+/// and the help screen, so the three never disagree.
 pub const ACTIONS: &[Action] = &[
     basic("nav.up", "up", "move to the cell above", &["k", "up", "ctrl-p"]),
     basic("nav.down", "down", "move to the cell below", &["j", "down", "ctrl-n"]),
@@ -57,8 +59,10 @@ pub const ACTIONS: &[Action] = &[
     ),
 ];
 
+/// Names for the key prefixes, shown when a prefix is pending.
 pub const GROUPS: &[Group] =
     &[Group { prefix: "leader c", name: "column" }, Group { prefix: "leader t", name: "table" }];
 
+/// Tests for the key table.
 #[cfg(test)]
 mod tests;

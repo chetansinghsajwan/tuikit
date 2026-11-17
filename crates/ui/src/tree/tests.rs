@@ -1,5 +1,8 @@
+//! Tests for tree rows: guides, folds, counts and file rows.
+
 use super::*;
 
+/// The text of `spans` with the styles dropped.
 fn text(spans: &[Span]) -> String {
     spans.iter().map(|s| s.content.as_ref()).collect()
 }
@@ -14,6 +17,7 @@ fn a_dir_has_guides_and_a_folder_icon_a_group_has_an_arrow() {
     assert_eq!(text(&[count(&theme, 3)]), " 3");
 }
 
+/// Draw `row` into a one-row buffer `width` cells wide and return what it shows.
 fn row_text(row: &FileRow, width: u16) -> String {
     let theme = Theme::load();
     let area = Rect::new(0, 0, width, 1);

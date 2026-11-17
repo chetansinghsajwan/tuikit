@@ -53,6 +53,7 @@ impl Anchors {
 thread_local! {
     /// Files the reader folded or unfolded by hand (a file that folds by itself, a lockfile say, is in here when opened).
     static TOGGLED: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+    /// Whether whitespace-only changes are drawn as unchanged lines (see `set_ignore_whitespace`).
     static IGNORE_WHITESPACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -76,6 +77,7 @@ pub fn set_ignore_whitespace(on: bool) {
     IGNORE_WHITESPACE.with(|w| w.set(on));
 }
 
+/// Whether whitespace-only changes are currently drawn as unchanged lines.
 pub fn ignoring_whitespace() -> bool {
     IGNORE_WHITESPACE.with(|w| w.get())
 }
@@ -83,6 +85,7 @@ pub fn ignoring_whitespace() -> bool {
 /// Files nobody reads line by line: lockfiles, minified and generated output, and anything that changes this much.
 const BIG_FILE: usize = 400;
 
+/// Whether a file starts folded: lockfiles, minified or generated output, or a huge change.
 fn folds_by_itself(f: &FilePatch, changed: usize) -> bool {
     let name = f.path.rsplit('/').next().unwrap_or(&f.path);
     let generated = [
@@ -142,6 +145,7 @@ const LONG_LINE: usize = 240;
 const HIGHLIGHT_BUDGET: usize = 1500;
 
 thread_local! {
+    /// How many lines are still allowed to be highlighted in the rendering under way.
     static BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(HIGHLIGHT_BUDGET) };
 }
 
@@ -230,6 +234,7 @@ fn is_conflict_marker(line: &str) -> bool {
 /// The line a hunk sits in, like git's `@@ ... @@ fn name`: the nearest line above `from` (0-based) that starts a
 /// function, a type, a section, or any line starting at column 0 with a letter, `_` or `$`.
 fn context_of(lines: &[&str], from: usize) -> Option<String> {
+    /// Line starts that open a function, type or section, for `context_of`.
     const KEYWORDS: [&str; 14] = [
         "fn ",
         "pub fn ",
@@ -395,6 +400,7 @@ fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
     let (mut old_no, mut new_no) = (h.old_start, h.new_start);
 
     // Word-level marks for each run of removed lines followed by added lines, paired in order.
+    /// The word-level marks of one line: the ranges to emphasize on the old and the new side.
     type Marks = (Vec<Range<usize>>, Vec<Range<usize>>);
     let mut marks: Vec<Marks> = vec![Default::default(); h.lines.len()];
     // Pairs that differ only in whitespace: dimmed, and folded into context when whitespace is ignored.
@@ -623,7 +629,10 @@ pub(crate) fn file_bar(
         None => (String::new(), f.path.clone()),
     };
     let mut spans = vec![
-        Span::styled(if folded { theme.icons.fold_closed.glyph } else { theme.icons.fold_open.glyph }, muted),
+        Span::styled(
+            if folded { theme.icons.fold_closed.glyph } else { theme.icons.fold_open.glyph },
+            muted,
+        ),
         Span::styled(
             format!("{} ", crate::commit::sign(f.kind)),
             Style::new().fg(kind_color).add_modifier(Modifier::BOLD),
