@@ -18,7 +18,7 @@ use unicode_width::UnicodeWidthStr;
 
 /// The indent guides: a thin line at each level.
 pub fn guides(theme: &Theme, depth: usize) -> Span<'static> {
-    Span::styled("│ ".repeat(depth), Style::new().fg(theme.colors.muted.into()))
+    Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(depth), Style::new().fg(theme.colors.muted.into()))
 }
 
 /// The scope the cursor is in, for the highlighted indent guide: the rows `from < row < to` share the guide at
@@ -97,9 +97,9 @@ pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<
     let Some(col) = active.filter(|c| *c < depth) else { return vec![guides(theme, depth)] };
     let muted = Style::new().fg(theme.colors.muted.into());
     vec![
-        Span::styled("│ ".repeat(col), muted),
-        Span::styled("│ ", Style::new().fg(theme.colors.accent.into())),
-        Span::styled("│ ".repeat(depth - col - 1), muted),
+        Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(col), muted),
+        Span::styled(format!("{} ", theme.icons.guide.glyph), Style::new().fg(theme.colors.accent.into())),
+        Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(depth - col - 1), muted),
     ]
 }
 
@@ -108,7 +108,7 @@ pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'sta
     let icon = theme.icons.dir(name.rsplit('/').next().unwrap_or(name), open);
     vec![
         guides(theme, depth),
-        Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
+        Span::styled(format!("{} ", icon.glyph), icon.style()),
         Span::styled(
             name.to_string(),
             Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD),
@@ -119,8 +119,8 @@ pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'sta
 /// The fold arrow of a row that can fold (`Some(true)` folded), or blank space of the same width for one that cannot.
 pub fn fold_mark(theme: &Theme, folded: Option<bool>) -> Span<'static> {
     let text = match folded {
-        Some(true) => "▸ ",
-        Some(false) => "▾ ",
+        Some(true) => theme.icons.fold_closed.glyph,
+        Some(false) => theme.icons.fold_open.glyph,
         None => "  ",
     };
     Span::styled(text, Style::new().fg(theme.colors.muted.into()))
@@ -137,7 +137,7 @@ pub fn group(
 ) -> Vec<Span<'static>> {
     let mut spans = vec![guides(theme, depth), fold_mark(theme, Some(folded))];
     if let Some(icon) = icon {
-        spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+        spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
     }
     spans.push(Span::styled(label.to_string(), style));
     spans
@@ -180,7 +180,7 @@ pub fn mark_indent(
                 if !plain.is_empty() {
                     out.push(Span::styled(std::mem::take(&mut plain), span.style));
                 }
-                out.push(Span::styled("│", guide.bg(span.style.bg.unwrap_or(Color::Reset))));
+                out.push(Span::styled(theme.icons.guide.glyph, guide.bg(span.style.bg.unwrap_or(Color::Reset))));
             } else {
                 plain.push(ch);
             }
@@ -336,7 +336,7 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         }
     });
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
-    spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+    spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
     let name_at = spans.len();
     spans.push(Span::raw(""));
     if let Some(n) = row.count {
@@ -401,7 +401,7 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
                 theme.icons.file(base_name, row.executable)
             }
         });
-        spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+        spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
         let c = &theme.colors;
         let style = if row.is_dir {
             Style::new().fg(row.tint.unwrap_or(c.accent.into())).add_modifier(Modifier::BOLD)

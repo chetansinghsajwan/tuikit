@@ -376,7 +376,7 @@ impl Panel {
                 ui::tree::guides(theme, row.depth),
                 ui::tree::fold_mark(theme, row.folded),
                 Span::styled(
-                    format!("{} ", theme.icons.symbol(row.kind)),
+                    format!("{} ", theme.icons.symbol(row.kind).glyph),
                     Style::new().fg(row.kind.color(theme)),
                 ),
                 Span::styled(
@@ -395,7 +395,7 @@ impl Panel {
                 ));
             }
             ui::list::ListRow {
-                id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind))),
+                id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind).glyph)),
                 left: spans,
                 selected: at,
                 focused,

@@ -68,7 +68,7 @@ impl<'a> Pane<'a> {
         };
         let mut spans = vec![Span::styled(bar, Style::new().fg(border)), Span::raw(" ")];
         if let Some(i) = self.icon {
-            spans.push(Span::styled(format!("{} ", i.glyph), Style::new().fg(i.color)));
+            spans.push(Span::styled(format!("{} ", i.glyph), i.style()));
         }
         spans.push(Span::styled(title.to_string(), style));
         spans.push(Span::raw(" "));

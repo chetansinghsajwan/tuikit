@@ -30,7 +30,7 @@ fn headings_lists_quotes_and_code_lose_their_markup() {
     // A level one heading is big text (see `h1_is_three_rows_of_blocks`), not the words.
     assert!(lines[0].contains('▀') || lines[0].contains('█'), "{all}");
     // Inline code is a pill: the code between rounded caps.
-    assert!(all.contains("Some emphasis and \u{e0b6}code\u{e0b4} here."), "{all}");
+    assert!(all.contains("Some emphasis and code here."), "{all}");
     assert!(all.contains("• one") && all.contains("• two") && all.contains("1. first"), "{all}");
     assert!(all.contains("▏ quoted"), "{all}");
     assert!(all.contains("let x = 1;") && !all.contains("```"), "{all}");
@@ -145,7 +145,7 @@ fn inline_code_is_a_pill_between_rounded_caps() {
     let line = &r[0];
     let shown: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
     assert!(
-        shown.windows(3).any(|w| w == ["\u{e0b6}", "a b", "\u{e0b4}"]),
+        shown.windows(3).any(|w| w == ["", "a b", ""]),
         "a cap, the code, a cap: {shown:?}"
     );
     assert!(shown.contains(&"x"), "{shown:?}");

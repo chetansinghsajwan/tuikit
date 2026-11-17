@@ -52,12 +52,12 @@ impl Picker {
                 Some(dir) => theme.icons.dir(dir.rsplit('/').next().unwrap_or(dir), false),
                 None => theme.icons.file(path.rsplit('/').next().unwrap_or(path), false),
             };
-            spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
+            spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
         }
         // Symbols: the icon of their kind, in its color.
         if let Some(h) = &cand.hier {
             if let Some(k) = h.kind {
-                spans.push(Span::styled(format!("{} ", theme.icons.symbol(k)), Style::new().fg(k.color(theme))));
+                spans.push(Span::styled(format!("{} ", theme.icons.symbol(k).glyph), Style::new().fg(k.color(theme))));
             }
         }
         spans.extend(self.row_spans_inner(cand, name_fg, theme, snap_index, leaf));
@@ -410,7 +410,7 @@ impl Picker {
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     spans.push(Span::styled(
                         format!("{} ", icon.glyph),
-                        Style::new().fg(icon.color),
+                        icon.style(),
                     ));
                     spans.push(Span::styled(
                         label.clone(),
@@ -427,14 +427,17 @@ impl Picker {
                 crate::tree::Row::Head { depth, label, kind } => {
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    let (glyph, color) = match kind {
-                        Some(k) => (theme.icons.symbol(*k).to_string(), k.color(theme)),
+                    let (glyph, style) = match kind {
+                        Some(k) => {
+                            (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme)))
+                        }
                         None => {
-                            let icon = theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
-                            (icon.glyph.to_string(), icon.color)
+                            let icon =
+                                theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
+                            (icon.glyph, icon.style())
                         }
                     };
-                    spans.push(Span::styled(format!("{glyph} "), Style::new().fg(color)));
+                    spans.push(Span::styled(format!("{glyph} "), style));
                     spans.push(Span::styled(label.clone(), Style::new().fg(c.muted.into())));
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&(depth, label)),

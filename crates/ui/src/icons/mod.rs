@@ -9,26 +9,46 @@ use data::{
     SUBMODULE, WIFI,
 };
 use crate::symbol::Kind;
-use ratatui::style::Color;
+use ratatui::style::{Color, Style};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Icon {
     pub glyph: &'static str,
-    pub color: Color,
+    /// `None` for a glyph that takes the colour of the style it is drawn in (guides, folds, rules).
+    pub color: Option<Color>,
+}
+
+impl Icon {
+    /// The style to draw it in: its own colour, or none (so the surrounding style shows through).
+    pub fn style(self) -> Style {
+        match self.color {
+            Some(c) => Style::new().fg(c),
+            None => Style::new(),
+        }
+    }
 }
 
 const fn rgb(c: u32) -> Color {
     Color::Rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
+/// A glyph with no colour of its own: it takes the colour of the style it is drawn in.
+const fn plain(glyph: &'static str) -> Icon {
+    Icon { glyph, color: None }
+}
+
 fn find(table: &[(&'static str, &'static str, u32)], key: &str) -> Option<Icon> {
     let i = table.binary_search_by(|(n, _, _)| (*n).cmp(key)).ok()?;
     let (_, glyph, color) = table[i];
-    Some(Icon { glyph, color: rgb(color) })
+    Some(Icon { glyph, color: Some(rgb(color)) })
 }
 
 /// Where every icon comes from, so a thing looks the same in every tool. Owned by the `Theme`.
+///
+/// Every field and method hands out an `Icon` (a glyph and an optional colour; `None` takes the colour
+/// of the style it is drawn in), never a bare string or char. Glyphs are written as literal characters,
+/// not `\u{...}` codes.
 #[derive(Debug, Clone, Copy)]
 pub struct IconProvider {
     /// The Bluetooth rune, for the Bluetooth pane.
@@ -47,6 +67,20 @@ pub struct IconProvider {
     pub git: Icon,
     /// A warning triangle, for the diagnostics pane.
     pub diagnostics: Icon,
+    /// The arrow of a folded row (with the space after it).
+    pub fold_closed: Icon,
+    /// The arrow of an unfolded row (with the space after it).
+    pub fold_open: Icon,
+    /// The vertical line of tree guides and table borders.
+    pub guide: Icon,
+    /// The horizontal rule.
+    pub divider: Icon,
+    /// The left and right ends of a horizontal rule that cuts across a frame.
+    pub divider_left: Icon,
+    pub divider_right: Icon,
+    /// The rounded caps of a pill (Powerline glyphs, so they need a Nerd Font like the icons).
+    pub pill_left: Icon,
+    pub pill_right: Icon,
 }
 
 impl Default for IconProvider {
@@ -60,25 +94,33 @@ impl Default for IconProvider {
             submodule: SUBMODULE,
             git: GIT,
             diagnostics: DIAGNOSTICS,
+            fold_closed: plain("▸ "),
+            fold_open: plain("▾ "),
+            guide: plain("│"),
+            divider: plain("─"),
+            divider_left: plain("├"),
+            divider_right: plain("┤"),
+            pill_left: plain(""),
+            pill_right: plain(""),
         }
     }
 }
 
 impl IconProvider {
-    /// The glyph for a kind of code symbol; its color is the kind's own (`Kind::color`).
-    pub fn symbol(&self, kind: Kind) -> &'static str {
-        match kind {
-            Kind::Module => "\u{f0169}",
-            Kind::Class | Kind::Struct => "\u{f0831}",
-            Kind::Interface => "\u{f0b6f}",
-            Kind::Enum => "\u{f12a7}",
-            Kind::Function | Kind::Method | Kind::Constructor => "\u{f0295}",
-            Kind::Field => "\u{f0e69}",
-            Kind::Variable => "\u{f0ae7}",
-            Kind::Constant => "\u{f03ff}",
-            Kind::TypeParameter => "\u{f0b68}",
-            Kind::Other => "\u{f0a7a}",
-        }
+    /// The icon for a kind of code symbol. It has no colour of its own: `Kind::color` gives it.
+    pub fn symbol(&self, kind: Kind) -> Icon {
+        plain(match kind {
+            Kind::Module => "󰅩",
+            Kind::Class | Kind::Struct => "󰠱",
+            Kind::Interface => "󰭯",
+            Kind::Enum => "󱊧",
+            Kind::Function | Kind::Method | Kind::Constructor => "󰊕",
+            Kind::Field => "󰹩",
+            Kind::Variable => "󰫧",
+            Kind::Constant => "󰏿",
+            Kind::TypeParameter => "󰭨",
+            Kind::Other => "󰩺",
+        })
     }
 
     /// An icon for a well-known pane title (`Files`, `Shell History`, `Branches`, `Buffers`, ...), so
@@ -86,43 +128,43 @@ impl IconProvider {
     pub fn title(&self, title: &str) -> Option<Icon> {
         let t = title.to_lowercase();
         let has = |words: &[&str]| words.iter().any(|w| t.contains(w));
-        let icon = |glyph: &'static str, color: u32| Some(Icon { glyph, color: rgb(color) });
+        let icon = |glyph: &'static str, color: u32| Some(Icon { glyph, color: Some(rgb(color)) });
         if has(&["bluetooth"]) {
             Some(BLUETOOTH)
         } else if has(&["wi-fi", "wifi"]) {
             Some(WIFI)
         } else if has(&["propert"]) {
-            icon("\u{f05a}", 0x59c2ff)
+            icon("", 0x59c2ff)
         } else if has(&["branch", "refs", "tags"]) {
             Some(BRANCH)
         } else if has(&["shell", "command history"]) {
-            icon("\u{f120}", 0x89e051)
+            icon("", 0x89e051)
         } else if has(&["clipboard"]) {
-            icon("\u{f0ea}", 0x6d8086)
+            icon("", 0x6d8086)
         } else if has(&["history"]) {
-            icon("\u{f1da}", 0xe8a838)
+            icon("", 0xe8a838)
         } else if has(&["commit", "stash", "log", "changes", "changed", "status"]) {
             Some(GIT)
         } else if has(&["diagnostic", "problem"]) {
             Some(DIAGNOSTICS)
         } else if has(&["buffer"]) {
-            icon("\u{f0c5}", 0x6d8086)
+            icon("", 0x6d8086)
         } else if has(&["jump"]) {
-            icon("\u{f0e2}", 0x6d8086)
+            icon("", 0x6d8086)
         } else if has(&["symbol"]) {
-            icon("\u{f1b2}", 0xa074c4)
+            icon("", 0xa074c4)
         } else if has(&["theme"]) {
-            icon("\u{f1fc}", 0xf245fb)
+            icon("", 0xf245fb)
         } else if has(&["action"]) {
-            icon("\u{f0eb}", 0xffc107)
+            icon("", 0xffc107)
         } else if has(&["command"]) {
-            icon("\u{f120}", 0x89e051)
+            icon("", 0x89e051)
         } else if has(&["register"]) {
-            icon("\u{f0ea}", 0x6d8086)
+            icon("", 0x6d8086)
         } else if has(&["file", "find", "open"]) {
             Some(DIR_OPEN)
         } else if has(&["grep", "search", "pick"]) {
-            icon("\u{f002}", 0x59c2ff)
+            icon("", 0x59c2ff)
         } else {
             None
         }

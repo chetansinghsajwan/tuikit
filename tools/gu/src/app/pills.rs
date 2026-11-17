@@ -9,14 +9,14 @@ pub(super) const HASH_W: usize = 8;
 pub(super) const AUTHOR_COL: usize = 18;
 
 /// Cells a ref takes as a pill (the caps, the name, the branch icon of the checked-out one, a space).
-pub(super) fn ref_width(r: &RefInfo, remotes: &[String]) -> usize {
-    pill_text(r, remotes).chars().count() + 3
+pub(super) fn ref_width(icons: &ui::icons::IconProvider, r: &RefInfo, remotes: &[String]) -> usize {
+    pill_text(icons, r, remotes).chars().count() + 3
 }
 
 /// The text of a pill: the name, with the remotes that point at the same commit under the same name
 /// (`main · origin`), and the branch icon on the checked-out branch.
-pub(super) fn pill_text(r: &RefInfo, remotes: &[String]) -> String {
-    let mut text = if r.is_head { format!("\u{e0a0} {}", r.name) } else { r.name.clone() };
+pub(super) fn pill_text(icons: &ui::icons::IconProvider, r: &RefInfo, remotes: &[String]) -> String {
+    let mut text = if r.is_head { format!("{} {}", icons.branch.glyph, r.name) } else { r.name.clone() };
     if !remotes.is_empty() {
         text.push_str(&format!(" · {}", remotes.join(", ")));
     }
@@ -64,9 +64,9 @@ pub(super) fn ref_pill(theme: &Theme, r: &RefInfo, remotes: &[String]) -> Vec<Sp
         (_, RefKind::Tag) => Color::from(c.warning),
     };
     let (bg, fg, text) = if r.is_head {
-        (color, Color::from(c.bg), pill_text(r, remotes))
+        (color, Color::from(c.bg), pill_text(&theme.icons, r, remotes))
     } else {
-        (ui::mix(color, Color::from(c.bg), 30), color, pill_text(r, remotes))
+        (ui::mix(color, Color::from(c.bg), 30), color, pill_text(&theme.icons, r, remotes))
     };
     let mut body = Style::new().fg(fg).bg(bg);
     if r.is_head {
@@ -74,9 +74,9 @@ pub(super) fn ref_pill(theme: &Theme, r: &RefInfo, remotes: &[String]) -> Vec<Sp
     }
     let cap = Style::new().fg(bg);
     vec![
-        Span::styled("\u{e0b6}", cap),
+        Span::styled(theme.icons.pill_left.glyph, cap),
         Span::styled(text, body),
-        Span::styled("\u{e0b4}", cap),
+        Span::styled(theme.icons.pill_right.glyph, cap),
         Span::raw(" "),
     ]
 }

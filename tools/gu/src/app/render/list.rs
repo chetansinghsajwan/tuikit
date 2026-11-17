@@ -219,7 +219,7 @@ impl App {
                     let refs =
                         pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default());
                     for (n, (r, remotes)) in refs.iter().enumerate() {
-                        let w = ref_width(r, remotes);
+                        let w = ref_width(&theme.icons, r, remotes);
                         if used + w > self.refs_w {
                             // The rest does not fit: say how many are left.
                             let more = format!("+{}", refs.len() - n);

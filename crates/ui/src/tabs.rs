@@ -224,7 +224,7 @@ fn spans(parts: Vec<(String, Part)>, active: bool, theme: &Theme) -> Vec<Span<'s
                 Part::Gap => Style::new(),
                 Part::Number => base,
                 Part::Icon(i) => {
-                    let s = Style::new().fg(i.color);
+                    let s = i.style();
                     if active { s } else { s.add_modifier(Modifier::DIM) }
                 }
                 Part::Title => base,

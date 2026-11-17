@@ -64,7 +64,7 @@ impl App {
             .commits
             .iter()
             .filter_map(|k| self.labels.get(&k.oid))
-            .map(|l| pills(l).iter().map(|(r, remotes)| ref_width(r, remotes)).sum::<usize>())
+            .map(|l| pills(l).iter().map(|(r, remotes)| ref_width(&self.theme.icons, r, remotes)).sum::<usize>())
             .max()
             .unwrap_or(0);
         self.refs_w = self.refs_need.min(REFS_COL);

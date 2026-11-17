@@ -79,11 +79,12 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
         }
         text_pages += 1;
         out.push(Line::default());
+        let d = theme.icons.divider.glyph;
         out.push(Line::from(Span::styled(
-            format!("── page {n} {}", "─".repeat(width.saturating_sub(10).min(50))),
+            format!("{d}{d} page {n} {}", d.repeat(width.saturating_sub(10).min(50))),
             muted,
         )));
-        out.extend(crate::markdown::wrap_words(&words, width).into_iter().map(Line::from));
+        out.extend(crate::markdown::wrap_words(&theme.icons, &words, width).into_iter().map(Line::from));
     }
     if text_pages == 0 {
         out.push(Line::default());

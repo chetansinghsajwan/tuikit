@@ -54,6 +54,8 @@ struct Table {
 
 struct Out {
     width: usize,
+    /// The glyphs drawn into the text (pill caps).
+    icons: ui::icons::IconProvider,
     lines: Vec<Line<'static>>,
     headings: Vec<usize>,
     /// The words of the paragraph being built, with their styles.
@@ -110,7 +112,7 @@ impl Out {
         let avail = self.width.saturating_sub(self.prefix_width() + 2).max(10);
         let words = std::mem::take(&mut self.words);
         let mut first = true;
-        for spans in wrap(&words, avail) {
+        for spans in wrap(&self.icons, &words, avail) {
             let mut full = Vec::new();
             if first {
                 full.extend(self.indent.iter().take(self.indent.len().saturating_sub(1)).cloned());
@@ -162,11 +164,15 @@ fn big_heading(out: &Out) -> Option<[String; ui::bigtext::HEIGHT]> {
 }
 
 /// `words` wrapped to lines of at most `avail` columns (a word longer than that gets a line of its own).
-pub(crate) fn wrap_words(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
-    wrap(words, avail)
+pub(crate) fn wrap_words(
+    icons: &ui::icons::IconProvider,
+    words: &[(String, Style)],
+    avail: usize,
+) -> Vec<Vec<Span<'static>>> {
+    wrap(icons, words, avail)
 }
 
-fn wrap(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
+fn wrap(icons: &ui::icons::IconProvider, words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
     let mut lines = Vec::new();
     let mut line: Vec<Span<'static>> = Vec::new();
     let mut used = 0;
@@ -184,7 +190,7 @@ fn wrap(words: &[(String, Style)], avail: usize) -> Vec<Vec<Span<'static>>> {
             line.push(Span::raw(" "));
             used += 1;
         }
-        line.extend(ui::pill::word_spans(word, *style));
+        line.extend(ui::pill::word_spans(icons, word, *style));
         used += w;
     }
     if !line.is_empty() {
@@ -308,7 +314,7 @@ fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>>
                         },
                     )
                     .collect();
-                let lines = wrap(&words, widths[i]);
+                let lines = wrap(&theme.icons, &words, widths[i]);
                 if lines.is_empty() { vec![Vec::new()] } else { lines }
             })
             .collect();
@@ -365,6 +371,7 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
     let muted = Color::from(c.muted);
     let mut out = Out {
         width: usize::from(width.max(20)),
+        icons: theme.icons,
         lines: Vec::new(),
         headings: Vec::new(),
         words: Vec::new(),
@@ -697,7 +704,7 @@ pub fn render_in(text: &str, theme: &Theme, width: u16, base: Option<&Path>) -> 
                     let style =
                         Style::new().fg(Color::from(c.syntax.string)).bg(Color::from(c.selection));
                     // A pill: the text on its tint between rounded caps.
-                    out.words.push((ui::pill::word(&t), style));
+                    out.words.push((ui::pill::word(&theme.icons, &t), style));
                 }
             }
             Event::InlineMath(t) => out.words.push((

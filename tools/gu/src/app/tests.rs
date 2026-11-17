@@ -543,7 +543,7 @@ fn a_branch_and_its_remote_branch_share_a_pill() {
             ("origin/other".to_string(), vec![])
         ]
     );
-    assert_eq!(pill_text(&refs[0], &["origin".to_string()]), "main · origin");
+    assert_eq!(pill_text(&ui::icons::IconProvider::default(), &refs[0], &["origin".to_string()]), "main · origin");
 }
 
 #[test]

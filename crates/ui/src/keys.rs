@@ -547,7 +547,12 @@ impl Help {
         buf.set_string(
             rect.x,
             inner.y + 1,
-            format!("├{}┤", "─".repeat(usize::from(rect.width).saturating_sub(2))),
+            format!(
+                "{}{}{}",
+                theme.icons.divider_left.glyph,
+                theme.icons.divider.glyph.repeat(usize::from(rect.width).saturating_sub(2)),
+                theme.icons.divider_right.glyph,
+            ),
             Style::new().fg(c.border_focused.into()),
         );
         let list = Rect { y: inner.y + 2, height: inner.height.saturating_sub(2), ..inner };

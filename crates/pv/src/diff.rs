@@ -623,7 +623,7 @@ pub(crate) fn file_bar(
         None => (String::new(), f.path.clone()),
     };
     let mut spans = vec![
-        Span::styled(if folded { "▸ " } else { "▾ " }, muted),
+        Span::styled(if folded { theme.icons.fold_closed.glyph } else { theme.icons.fold_open.glyph }, muted),
         Span::styled(
             format!("{} ", crate::commit::sign(f.kind)),
             Style::new().fg(kind_color).add_modifier(Modifier::BOLD),

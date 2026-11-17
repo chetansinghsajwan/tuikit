@@ -278,7 +278,7 @@ impl Panel {
             match row {
                 Row::File(path, n) => {
                     let line = Line::from(vec![
-                        Span::styled("▾ ", Style::new().fg(c.muted.into())),
+                        Span::styled(theme.icons.fold_open.glyph, Style::new().fg(c.muted.into())),
                         Span::styled(
                             self.rel(path).display().to_string(),
                             Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),

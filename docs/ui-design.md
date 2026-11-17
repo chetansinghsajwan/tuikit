@@ -95,6 +95,8 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 ## Icons
 
 - Nerd Font glyphs from `ui::icons`, colored per type.
+- Every icon, structural glyphs included (tree guides, fold arrows, rules, pill caps), comes from the `IconProvider` the `Theme` owns (`theme.icons`) and is an `Icon`: a glyph and an optional color. A glyph with no color of its own has `color: None` and takes the color of the style it is drawn in. Tools never hard-code a glyph, and never use a bare string or char for one.
+- Glyphs are written as the literal characters, not `\u{...}` codes, so the source shows what is drawn.
 - On pane titles, previews and list rows whose icon varies (files, folders, symbols). Not on rows that are all the same kind.
 
 ## Column padding
