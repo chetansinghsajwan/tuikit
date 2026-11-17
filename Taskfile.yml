@@ -1,0 +1,44 @@
+# Repeatable tasks. Hooks and CI call these, never the raw tools. Run inside the dev shell
+# (`nix develop`).
+version: "3"
+tasks:
+  default:
+    desc: List the available tasks.
+    silent: true
+    cmds:
+      - task --list
+  setup:
+    desc: Install the git hooks and fetch the Rust dependencies.
+    cmds:
+      - lefthook install
+      - cargo fetch --locked
+  fmt:
+    desc: Format every file.
+    cmds:
+      - treefmt
+  lint:
+    desc: Run the linters.
+    cmds:
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+      - statix check .
+      - deadnix --fail .
+      - rumdl check .
+      - actionlint
+      - typos
+  test:
+    desc: Run the tests.
+    cmds:
+      - cargo nextest run --workspace --locked --no-tests=pass
+  scan:
+    desc: Run the vulnerability scanners.
+    cmds:
+      - cargo deny check
+      - osv-scanner scan source --lockfile Cargo.lock
+      - gitleaks git --no-banner
+      - semgrep scan --config auto --metrics off --error --quiet
+  check:
+    desc: Check formatting, lint and test. CI and pre-push call this.
+    cmds:
+      - treefmt --fail-on-change
+      - task: lint
+      - task: test

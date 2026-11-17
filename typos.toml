@@ -1,0 +1,22 @@
+[files]
+# icons/data.rs is a table of file extensions and short names, many of which look like typos.
+extend-exclude = [
+  "target/**",
+  ".tmp/**",
+  "Cargo.lock",
+  "crates/ui/src/icons/data.rs",
+]
+
+[default.extend-words]
+# "relative path" in the git code, not a typo for "real".
+rela = "rela"
+# Valid library name; typos reads it as a misspelling.
+ratatui = "ratatui"
+# Partial words used as test inputs and substring matches.
+siz = "siz"
+propert = "propert"
+fo = "fo"
+
+[default.extend-identifiers]
+# Hex digits of a powerline glyph code point in plan.md.
+e0ba = "e0ba"

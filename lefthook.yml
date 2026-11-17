@@ -1,0 +1,17 @@
+# Git hooks. They call Taskfile tasks so there is one source of truth.
+pre-commit:
+  parallel: false
+  commands:
+    fmt:
+      run: task fmt
+      stage_fixed: true
+    lint:
+      run: task lint
+commit-msg:
+  commands:
+    conventional-commits:
+      run: cog verify --file {1}
+pre-push:
+  commands:
+    check:
+      run: task check

@@ -1,0 +1,25 @@
+# One formatter command for every language (`task fmt`).
+excludes = ["target/**", ".tmp/**", "Cargo.lock", "flake.lock"]
+
+[formatter.rustfmt]
+command = "rustfmt"
+options = ["--edition", "2024"]
+includes = ["*.rs"]
+
+[formatter.alejandra]
+command = "alejandra"
+includes = ["*.nix"]
+
+[formatter.taplo]
+command = "taplo"
+options = ["format"]
+includes = ["*.toml"]
+
+[formatter.dprint]
+command = "dprint"
+options = ["fmt"]
+includes = ["*.md"]
+
+[formatter.yamlfmt]
+command = "yamlfmt"
+includes = ["*.yml", "*.yaml"]

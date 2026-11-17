@@ -1,13 +1,10 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   rust:
     name: fmt, clippy, test (${{ matrix.os }})
@@ -18,18 +15,20 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - uses: cachix/install-nix-action@v31
       - uses: Swatinem/rust-cache@v2
-      - name: Format
-        if: matrix.os == 'ubuntu-latest'
-        run: cargo fmt --all --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Test
-        run: cargo test --workspace --locked
-
+      - name: Check
+        run: nix develop --command task check
+  scan:
+    name: scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+      - name: Scan
+        run: nix develop --command task scan
   # Builds every tool with Nix and, on pushes to main, pushes the results (and their
   # dependencies) to the binary cache, so other machines download instead of compile.
   # Needs the repository variable CACHIX_CACHE (the cache name) and the secret
