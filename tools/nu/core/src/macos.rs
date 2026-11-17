@@ -67,12 +67,11 @@ impl MacWifi {
 
     /// The scanned networks: the last scan if there is one, else a new (blocking) scan.
     fn scanned(&self, iface: &CWInterface, fresh: bool) -> Result<Vec<Retained<CWNetwork>>> {
-        if !fresh {
-            if let Some(cached) = unsafe { iface.cachedScanResults() } {
-                if cached.len() > 0 {
-                    return Ok(cached.to_vec());
-                }
-            }
+        if !fresh
+            && let Some(cached) = unsafe { iface.cachedScanResults() }
+            && !cached.is_empty()
+        {
+            return Ok(cached.to_vec());
         }
         let set = unsafe { iface.scanForNetworksWithName_error(None) }.map_err(ns_error)?;
         Ok(set.to_vec())
@@ -256,10 +255,7 @@ impl Bluetooth for MacBluetooth {
                         .map(|a| a.to_string())
                         .unwrap_or_default(),
                     name: unsafe { d.nameOrAddress() }.map(|n| n.to_string()).unwrap_or_default(),
-                    kind: kind_of(unsafe { d.deviceClassMajor() } as u32, unsafe {
-                        d.deviceClassMinor()
-                    }
-                        as u32),
+                    kind: kind_of(unsafe { d.deviceClassMajor() }, unsafe { d.deviceClassMinor() }),
                     paired: true,
                     trusted: unsafe { d.isFavorite() },
                     connected,
