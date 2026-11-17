@@ -51,7 +51,7 @@ impl App {
         let c = &theme.colors;
         let focused = self.focus == focus;
         let mut pane = Pane::new(theme).title(title).focused(focused);
-        if let Some(icon) = ui::icons::for_title(title) {
+        if let Some(icon) = theme.icons.title(title) {
             pane = pane.icon(icon);
         }
         let inner = pane.inner(area);
@@ -189,7 +189,7 @@ impl App {
         let c = &theme.colors;
         let pane = Pane::new(theme)
             .title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details"))
-            .icon(ui::icons::WIFI);
+            .icon(theme.icons.wifi());
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(n) = self.network() else { return };
@@ -224,7 +224,7 @@ impl App {
         let c = &theme.colors;
         let pane = Pane::new(theme)
             .title(self.device().map(|d| d.name.as_str()).unwrap_or("Details"))
-            .icon(ui::icons::BLUETOOTH);
+            .icon(theme.icons.bluetooth());
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some(d) = self.device() else { return };

@@ -25,6 +25,7 @@ fn shape(t: &Tree) -> Vec<String> {
         .iter()
         .map(|r| match r {
             Row::Dir { depth, label } => format!("{}{label}/", "  ".repeat(*depth as usize)),
+            Row::Head { depth, label, .. } => format!("{}{label}/", "  ".repeat(*depth as usize)),
             Row::Item { idx, depth } => format!("{}#{idx}", "  ".repeat(*depth as usize)),
         })
         .collect()
@@ -75,4 +76,37 @@ fn empty_and_flat_inputs() {
     assert!(build(vec![], false).rows.is_empty());
     let t = build(vec![e(0, "b.txt"), e(1, "a.txt")], false);
     assert_eq!(shape(&t), vec!["#1", "#0"]);
+}
+
+fn hier(idx: u32, id: u32, order: u32, parents: &[(u32, &str)]) -> HierEntry {
+    HierEntry {
+        idx,
+        hier: crate::candidate::Hier {
+            id,
+            kind: None,
+            order,
+            ancestors: parents
+                .iter()
+                .map(|(id, label)| crate::candidate::Ancestor { id: *id, kind: None, label: label.to_string(), order: 0 })
+                .collect(),
+        },
+    }
+}
+
+#[test]
+fn symbols_nest_under_shared_parents() {
+    // `S` is matched itself, `T` is only there as the header of `t`.
+    let t = build_hier(
+        vec![hier(0, 1, 0, &[]), hier(1, 2, 1, &[(1, "S")]), hier(2, 4, 5, &[(3, "T")])],
+        false,
+    );
+    assert_eq!(shape(&t), ["#0", "  #1", "T/", "  #2"]);
+    assert_eq!(t.order, [0, 1, 2]);
+}
+
+#[test]
+fn a_matched_parent_is_one_row() {
+    // The child arrives first and names its parent; the parent's own entry fills that row in.
+    let t = build_hier(vec![hier(0, 2, 1, &[(1, "S")]), hier(1, 1, 0, &[])], false);
+    assert_eq!(shape(&t), ["#1", "  #0"]);
 }

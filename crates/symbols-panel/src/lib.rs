@@ -312,7 +312,7 @@ impl Panel {
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
         let c = &theme.colors;
-        let pane = Pane::new(theme).title("Symbols").icon(ui::icons::BRANCH).focused(focused);
+        let pane = Pane::new(theme).title("Symbols").icon(theme.icons.branch()).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {
@@ -376,7 +376,7 @@ impl Panel {
                 ui::tree::guides(theme, row.depth),
                 ui::tree::fold_mark(theme, row.folded),
                 Span::styled(
-                    format!("{} ", row.kind.glyph()),
+                    format!("{} ", theme.icons.symbol(row.kind)),
                     Style::new().fg(row.kind.color(theme)),
                 ),
                 Span::styled(
@@ -395,7 +395,7 @@ impl Panel {
                 ));
             }
             ui::list::ListRow {
-                id: ui::anim::hash_of(&(row.depth, &row.name, row.kind.glyph())),
+                id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind))),
                 left: spans,
                 selected: at,
                 focused,

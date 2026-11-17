@@ -251,7 +251,7 @@ impl Panel {
                 self.filter.label()
             )
         };
-        let pane = Pane::new(theme).title(&title).icon(ui::icons::DIAGNOSTICS).focused(focused);
+        let pane = Pane::new(theme).title(&title).icon(theme.icons.diagnostics()).focused(focused);
         let inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {

@@ -14,6 +14,9 @@ pub struct Theme {
     pub colors: Colors,
     pub chrome: Chrome,
     pub layout: Layout,
+    /// Where the icons come from; not part of the theme file.
+    #[serde(skip)]
+    pub icons: crate::icons::IconProvider,
 }
 
 #[derive(Debug, Clone, Deserialize)]

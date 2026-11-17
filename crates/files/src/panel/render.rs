@@ -132,7 +132,7 @@ impl Panel {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "/".into());
-        let icon = ui::icons::dir(&title, true);
+        let icon = theme.icons.dir(&title, true);
         let shown = if self.ignored_hidden > 0 {
             format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden)
         } else {
@@ -239,7 +239,7 @@ impl Panel {
                     is_dir: row.is_dir,
                     open: self.expanded.contains(&row.path),
                     executable: !row.is_dir && is_executable(&row.path),
-                    icon: submodule.then_some(ui::icons::SUBMODULE),
+                    icon: submodule.then_some(theme.icons.submodule()),
                     tint,
                     selected,
                     focused,

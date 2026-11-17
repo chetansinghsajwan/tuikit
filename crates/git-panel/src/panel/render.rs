@@ -39,7 +39,7 @@ impl Panel {
     ) {
         let c = &theme.colors;
         let title = self.title.clone().unwrap_or_else(|| format!("git: {}", self.branch));
-        let pane = Pane::new(theme).title(&title).icon(ui::icons::GIT).focused(focused);
+        let pane = Pane::new(theme).title(&title).icon(theme.icons.git()).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 6 {
@@ -152,7 +152,7 @@ impl Panel {
                             depth: *depth,
                             name: &name,
                             tint: Some(pv::kind_color(theme, change.kind())),
-                            icon: change.submodule.then_some(ui::icons::SUBMODULE),
+                            icon: change.submodule.then_some(theme.icons.submodule()),
                             selected,
                             focused: true,
                             signs: vec![staged(change.staged), unstaged(change.unstaged)],
@@ -191,7 +191,7 @@ impl Panel {
         let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone(), c.submodule));
         let title = current.as_ref().map(|(_, p, _)| p.display().to_string()).unwrap_or_default();
         let name = title.trim_end_matches('/').rsplit('/').next().unwrap_or(&title).to_string();
-        let pane = Pane::new(theme).title(&title).icon(ui::icons::file(&name, false));
+        let pane = Pane::new(theme).title(&title).icon(theme.icons.file(&name, false));
         let inner = pane.inner(area);
         pane.render(area, buf);
         let Some((staged, rela, submodule)) = current else {

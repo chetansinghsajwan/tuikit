@@ -105,7 +105,7 @@ pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<
 
 /// The start of a folder row: guides, the open or closed folder icon, and the name (accent, bold).
 pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'static>> {
-    let icon = crate::icons::dir(name.rsplit('/').next().unwrap_or(name), open);
+    let icon = theme.icons.dir(name.rsplit('/').next().unwrap_or(name), open);
     vec![
         guides(theme, depth),
         Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)),
@@ -330,9 +330,9 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
     let icon = row.icon.unwrap_or_else(|| {
         if row.is_dir {
-            crate::icons::dir(base_name, row.open)
+            theme.icons.dir(base_name, row.open)
         } else {
-            crate::icons::file(base_name, row.executable)
+            theme.icons.file(base_name, row.executable)
         }
     });
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
@@ -396,9 +396,9 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
         let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
         let icon = row.icon.unwrap_or_else(|| {
             if row.is_dir {
-                crate::icons::dir(base_name, row.open)
+                theme.icons.dir(base_name, row.open)
             } else {
-                crate::icons::file(base_name, row.executable)
+                theme.icons.file(base_name, row.executable)
             }
         });
         spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));

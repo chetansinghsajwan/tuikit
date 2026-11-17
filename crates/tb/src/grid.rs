@@ -400,7 +400,7 @@ impl Grid {
             .unwrap_or_else(|| "table".into());
         let title = if self.modified() { format!("{name} [+]") } else { name.clone() };
         let pane =
-            Pane::new(theme).title(&title).icon(ui::icons::file(&name, false)).focused(focused);
+            Pane::new(theme).title(&title).icon(theme.icons.file(&name, false)).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height < 3 || inner.width < 8 {

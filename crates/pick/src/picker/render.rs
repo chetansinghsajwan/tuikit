@@ -49,15 +49,15 @@ impl Picker {
         if self.opts.paths && !(leaf && cand.loc.is_some()) {
             let path = cand.path();
             let icon = match path.strip_suffix('/') {
-                Some(dir) => ui::icons::dir(dir.rsplit('/').next().unwrap_or(dir), false),
-                None => ui::icons::file(path.rsplit('/').next().unwrap_or(path), false),
+                Some(dir) => theme.icons.dir(dir.rsplit('/').next().unwrap_or(dir), false),
+                None => theme.icons.file(path.rsplit('/').next().unwrap_or(path), false),
             };
             spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
         }
         // Symbols: the icon of their kind, in its color.
         if let Some(h) = &cand.hier {
             if let Some(k) = h.kind {
-                spans.push(Span::styled(format!("{} ", k.glyph()), Style::new().fg(k.color(theme))));
+                spans.push(Span::styled(format!("{} ", theme.icons.symbol(k)), Style::new().fg(k.color(theme))));
             }
         }
         spans.extend(self.row_spans_inner(cand, name_fg, theme, snap_index, leaf));
@@ -229,7 +229,7 @@ impl Picker {
         });
         let mut pane = Pane::new(theme).title(title).focused(true);
         // An explicit icon, else one that fits the title (`Files`, `History`, `Branches`, ...).
-        if let Some(icon) = self.icon.or_else(|| ui::icons::for_title(title)) {
+        if let Some(icon) = self.icon.or_else(|| theme.icons.title(title)) {
             pane = pane.icon(icon);
         }
         let inner = pane.inner(area);
@@ -402,9 +402,9 @@ impl Picker {
                     // In grep mode the header is a file, otherwise a folder.
                     let last = label.rsplit('/').next().unwrap_or(label);
                     let icon = if self.opts.mode == Mode::Grep {
-                        ui::icons::file(last, false)
+                        theme.icons.file(last, false)
                     } else {
-                        ui::icons::dir(last, true)
+                        theme.icons.dir(last, true)
                     };
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
@@ -428,9 +428,9 @@ impl Picker {
                     let mut spans = vec![Span::raw("  ")];
                     spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
                     let (glyph, color) = match kind {
-                        Some(k) => (k.glyph().to_string(), k.color(theme)),
+                        Some(k) => (theme.icons.symbol(*k).to_string(), k.color(theme)),
                         None => {
-                            let icon = ui::icons::file(label.rsplit('/').next().unwrap_or(label), false);
+                            let icon = theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
                             (icon.glyph.to_string(), icon.color)
                         }
                     };
@@ -494,7 +494,7 @@ impl Picker {
         let mut pane = Pane::new(theme);
         if let Some(c) = cand.as_ref() {
             if c.git.is_some() {
-                pane = pane.title(&title).icon(ui::icons::GIT);
+                pane = pane.title(&title).icon(theme.icons.git());
             } else if !self.opts.paths {
                 pane = pane.title(&title);
             }

@@ -158,7 +158,7 @@ pub fn render(
     dir_size: Option<(u64, bool)>,
 ) {
     let mut pane = Pane::new(theme).title("properties");
-    if let Some(icon) = ui::icons::for_title("properties") {
+    if let Some(icon) = theme.icons.title("properties") {
         pane = pane.icon(icon);
     }
     let inner = pane.inner(area);

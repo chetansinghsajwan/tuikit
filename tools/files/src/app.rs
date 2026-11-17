@@ -362,9 +362,9 @@ impl App {
             .unwrap_or_default();
         let pane = match current.as_deref() {
             Some(p) if p.is_dir() => {
-                Pane::new(&theme).title(&title).icon(ui::icons::dir(&title, false))
+                Pane::new(&theme).title(&title).icon(theme.icons.dir(&title, false))
             }
-            Some(_) => Pane::new(&theme).title(&title).icon(ui::icons::file(&title, false)),
+            Some(_) => Pane::new(&theme).title(&title).icon(theme.icons.file(&title, false)),
             None => Pane::new(&theme).title(&title),
         };
         let inner = pane.inner(area);
