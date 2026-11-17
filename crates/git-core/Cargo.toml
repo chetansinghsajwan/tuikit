@@ -16,4 +16,11 @@ workspace = true
 name = "git_core"
 
 [dependencies]
-gix = { version = "0.90.0", default-features = false, features = ["status", "blob-diff", "index", "sha1", "parallel", "revision"] }
+gix = { version = "0.90.0", default-features = false, features = [
+  "status",
+  "blob-diff",
+  "index",
+  "sha1",
+  "parallel",
+  "revision",
+] }

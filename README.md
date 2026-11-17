@@ -14,18 +14,18 @@ A terminal UI toolkit in Rust (on [ratatui](https://ratatui.rs)) and the tools b
 
 ## Crates
 
-| Crate                        | What it is                                                   |
-| ---------------------------- | ------------------------------------------------------------ |
-| `tuikit-diagnostics-panel`   | Editor-independent diagnostics panel                         |
-| `tuikit-files`               | File explorer panel                                          |
-| `tuikit-git-core`            | Git status, diffs and history on gix                         |
-| `tuikit-git-panel`           | Git changes panel with diff preview                          |
-| `tuikit-nu-core`             | Connection backends for `nu`                                 |
-| `tuikit-pick`                | Picker library (sources, matching, preview)                  |
-| `tuikit-pv`                  | Preview and rendering library                                |
-| `tuikit-symbols-panel`       | Editor-independent symbols panel                             |
-| `tuikit-tb`                  | Table editing library                                        |
-| `tuikit-ui`                  | Shared design: theme, keys, config, lists, prompts, animation |
+| Crate                      | What it is                                                    |
+| -------------------------- | ------------------------------------------------------------- |
+| `tuikit-diagnostics-panel` | Editor-independent diagnostics panel                          |
+| `tuikit-files`             | File explorer panel                                           |
+| `tuikit-git-core`          | Git status, diffs and history on gix                          |
+| `tuikit-git-panel`         | Git changes panel with diff preview                           |
+| `tuikit-nu-core`           | Connection backends for `nu`                                  |
+| `tuikit-pick`              | Picker library (sources, matching, preview)                   |
+| `tuikit-pv`                | Preview and rendering library                                 |
+| `tuikit-symbols-panel`     | Editor-independent symbols panel                              |
+| `tuikit-tb`                | Table editing library                                         |
+| `tuikit-ui`                | Shared design: theme, keys, config, lists, prompts, animation |
 
 Libraries live in `crates/`, the tools (`tuikit-<tool>` packages, binaries with the short names above) in `tools/`. In code the libraries keep their short names (`use ui::...`, `use pv::...`).
 

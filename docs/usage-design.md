@@ -15,12 +15,12 @@ Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu`,
 
 ## Finding actions
 
-| What | Key | Notes |
-|---|---|---|
-| Quick Keys | `Space` | the leader popup: the tool's grouped actions, fixed size |
-| Palette | `Space Space` | every action by name, with description and key; recently used first (20 kept per tool, `~/.local/state/ui/recent`, `UI_RECENT_FILE` moves it) |
-| Keys help | `?` | the keys of the current pane, searchable |
-| Unbound key | any | named in the footer (`space z is not bound`), the popup stays open |
+| What        | Key           | Notes                                                                                                                                         |
+| ----------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quick Keys  | `Space`       | the leader popup: the tool's grouped actions, fixed size                                                                                      |
+| Palette     | `Space Space` | every action by name, with description and key; recently used first (20 kept per tool, `~/.local/state/ui/recent`, `UI_RECENT_FILE` moves it) |
+| Keys help   | `?`           | the keys of the current pane, searchable                                                                                                      |
+| Unbound key | any           | named in the footer (`space z is not bound`), the popup stays open                                                                            |
 
 - Single letters are for the shared verbs. Anything else tool-specific goes under the leader, so tools cannot clash.
 - Helix keeps `:` as its own command line.
@@ -28,26 +28,26 @@ Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu`,
 
 ## Shared keys
 
-| Key | Meaning | Where |
-|---|---|---|
-| `j` `k`, arrows, `ctrl-n` `ctrl-p` | move one | every list |
-| `ctrl-j` `ctrl-k` | move five | everywhere `j` `k` move |
-| `g` `G`, `home` `end` | top, bottom | every list |
-| `ctrl-d` `ctrl-u` | scroll the preview half a page | wherever a preview shows |
-| `Enter` | the primary action: open, accept, check out | all |
-| `l` `h` | go in or expand, go out or collapse | trees (files, symbols, commit files, status) |
-| `Tab` | mark for multi-select | files, pick |
-| `/` | filter or search this list | all lists |
-| `a` | add, new | files, branches, stashes |
-| `d` | delete or discard (asks, `d` again confirms; `y` and `Enter` too) | all |
-| `r` | rename | files, refs; reword in the commit list |
-| `y` | copy (hash, path) | files, commits |
-| `s` `u` `a` | stage or unstage (toggle), unstage, stage or unstage all | git |
-| `1`-`9` | jump to a pane or tab | tools with tabs |
-| `[` `]` | previous or next tab or panel | tools with tabs, docks |
-| `Esc` | back out one level: prompt, confirmation, filter, focus to the list, marks | all |
-| `q` | close the tool | standalone tools |
-| `?` | keys of this pane | all |
+| Key                                | Meaning                                                                    | Where                                        |
+| ---------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------- |
+| `j` `k`, arrows, `ctrl-n` `ctrl-p` | move one                                                                   | every list                                   |
+| `ctrl-j` `ctrl-k`                  | move five                                                                  | everywhere `j` `k` move                      |
+| `g` `G`, `home` `end`              | top, bottom                                                                | every list                                   |
+| `ctrl-d` `ctrl-u`                  | scroll the preview half a page                                             | wherever a preview shows                     |
+| `Enter`                            | the primary action: open, accept, check out                                | all                                          |
+| `l` `h`                            | go in or expand, go out or collapse                                        | trees (files, symbols, commit files, status) |
+| `Tab`                              | mark for multi-select                                                      | files, pick                                  |
+| `/`                                | filter or search this list                                                 | all lists                                    |
+| `a`                                | add, new                                                                   | files, branches, stashes                     |
+| `d`                                | delete or discard (asks, `d` again confirms; `y` and `Enter` too)          | all                                          |
+| `r`                                | rename                                                                     | files, refs; reword in the commit list       |
+| `y`                                | copy (hash, path)                                                          | files, commits                               |
+| `s` `u` `a`                        | stage or unstage (toggle), unstage, stage or unstage all                   | git                                          |
+| `1`-`9`                            | jump to a pane or tab                                                      | tools with tabs                              |
+| `[` `]`                            | previous or next tab or panel                                              | tools with tabs, docks                       |
+| `Esc`                              | back out one level: prompt, confirmation, filter, focus to the list, marks | all                                          |
+| `q`                                | close the tool                                                             | standalone tools                             |
+| `?`                                | keys of this pane                                                          | all                                          |
 
 In text, `ctrl-h` `ctrl-l` jump by words and stop at the end of a line first.
 
@@ -61,13 +61,13 @@ In text, `ctrl-h` `ctrl-l` jump by words and stop at the end of a line first.
 
 One system for every tool (`ui::tabs`): open next to the active tab, close (the last tab stays), reopen (10 kept), next and previous with wrap, jump, move, duplicate.
 
-| Key | Action |
-|---|---|
-| `Space t` `n` `c` | new, close |
-| `Space t` `l` `h` | next, previous |
-| `Space t` `r` `d` | reopen, duplicate |
-| `Space t` `[` `]` | move left, right |
-| `[` `]`, `1`-`9` | switch, jump (no numbers where buffers are the tabs: helix) |
+| Key               | Action                                                      |
+| ----------------- | ----------------------------------------------------------- |
+| `Space t` `n` `c` | new, close                                                  |
+| `Space t` `l` `h` | next, previous                                              |
+| `Space t` `r` `d` | reopen, duplicate                                           |
+| `Space t` `[` `]` | move left, right                                            |
+| `[` `]`, `1`-`9`  | switch, jump (no numbers where buffers are the tabs: helix) |
 
 When the labels do not fit, a window around the active tab shows, with `‹N` and `N›` for the tabs out of view.
 
@@ -102,16 +102,16 @@ Tool names: `gu`, `files`, `tb`, `nu`, `hx-ui` (the helix docks; not `helix`, wh
 
 ## Tool specifics
 
-| Tool | Where | Keys |
-|---|---|---|
-| `gu` | tabs | `1` Status, `2` Commits, `3` Refs, `4` stashes; `[` `]` |
-| `gu` | Commits | `/` search, `f` filter popup, `F` clear, `v` view menu (`g` graph, `h` hash, `a` author, `n` name, `r` refs, `m` message, `t` time, `d` date, `b` all branches, `p` diff), `l` files of the commit, `m` mark a commit to compare (the preview then shows the diff from it to the highlighted commit; `m` again or `Esc` clears), `M` diff from the highlighted commit to the work tree (tracked files, uncommitted changes included), `enter` check out, `y` copy hash, `z` fold or unfold a file of the diff, `w` ignore whitespace-only changes, `r` reword, `A` amend, `R` revert, `leader S` switch to |
-| `gu` | Status | tree of changes, `s` toggle stage, `a` all, `d` discard, `t` tree or list, `c` commit, `C` amend |
-| `files` | all | `.` hidden, `I` ignored, `leader v t` tables as text, `leader f` find, `/` find in this folder |
-| `tb` | grid | `h j k l` cell, `0` `$` first, last column, `enter` edit, `a` `O` add row, `d` delete row (asks), `J` `K` move row, `H` `L` move column, `leader c a` `leader c d` add, delete column, `s` `S` sort, `/` `n` `N` find, `y` `p` copy, paste, `u` `ctrl-r` undo, redo, `ctrl-s` save, `leader t h` header |
-| `pick` | preview | `ctrl-t` tables as text |
-| `pick` | grep (also helix `Space /`) | `alt-c` match case, `alt-w` whole word, `alt-r` regex or plain text (lit when on); `alt-i` include and `alt-e` exclude files by comma-separated globs (`*.rs, src/` and `target/, *.lock`), `enter` or `esc` back to the query; the search restarts on every change |
-| helix | Space | `e` files, `l` fuzzy-find a line of the buffer, `n` search (`a` select all matches, `c` toggle case, `w` whole word, `l` matches list, `h` history, `j` jump labels), `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `T` table (`l` `h` `j` `k` cell, `s` `S` sort, `a` `d` add, delete column, `[` `]` move column; `Alt` `h` `j` `k` `l` move by cell), `1` `2` `3` docks |
+| Tool    | Where                       | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gu`    | tabs                        | `1` Status, `2` Commits, `3` Refs, `4` stashes; `[` `]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `gu`    | Commits                     | `/` search, `f` filter popup, `F` clear, `v` view menu (`g` graph, `h` hash, `a` author, `n` name, `r` refs, `m` message, `t` time, `d` date, `b` all branches, `p` diff), `l` files of the commit, `m` mark a commit to compare (the preview then shows the diff from it to the highlighted commit; `m` again or `Esc` clears), `M` diff from the highlighted commit to the work tree (tracked files, uncommitted changes included), `enter` check out, `y` copy hash, `z` fold or unfold a file of the diff, `w` ignore whitespace-only changes, `r` reword, `A` amend, `R` revert, `leader S` switch to |
+| `gu`    | Status                      | tree of changes, `s` toggle stage, `a` all, `d` discard, `t` tree or list, `c` commit, `C` amend                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `files` | all                         | `.` hidden, `I` ignored, `leader v t` tables as text, `leader f` find, `/` find in this folder                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `tb`    | grid                        | `h j k l` cell, `0` `$` first, last column, `enter` edit, `a` `O` add row, `d` delete row (asks), `J` `K` move row, `H` `L` move column, `leader c a` `leader c d` add, delete column, `s` `S` sort, `/` `n` `N` find, `y` `p` copy, paste, `u` `ctrl-r` undo, redo, `ctrl-s` save, `leader t h` header                                                                                                                                                                                                                                                                                                    |
+| `pick`  | preview                     | `ctrl-t` tables as text                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `pick`  | grep (also helix `Space /`) | `alt-c` match case, `alt-w` whole word, `alt-r` regex or plain text (lit when on); `alt-i` include and `alt-e` exclude files by comma-separated globs (`*.rs, src/` and `target/, *.lock`), `enter` or `esc` back to the query; the search restarts on every change                                                                                                                                                                                                                                                                                                                                        |
+| helix   | Space                       | `e` files, `l` fuzzy-find a line of the buffer, `n` search (`a` select all matches, `c` toggle case, `w` whole word, `l` matches list, `h` history, `j` jump labels), `m` Markdown and tables (`p` preview, `l` live, `s` source, `e` PDF; csv, tsv and psv are aligned in live mode, the default), `M` minimap, `V` dock preview, `T` table (`l` `h` `j` `k` cell, `s` `S` sort, `a` `d` add, delete column, `[` `]` move column; `Alt` `h` `j` `k` `l` move by cell), `1` `2` `3` docks                                                                                                                  |
 
 ## Checklist for a new tool
 
@@ -121,15 +121,15 @@ Tool names: `gu`, `files`, `tb`, `nu`, `hx-ui` (the helix docks; not `helix`, wh
 4. Passes the host's leader through when embedded; reports typing.
 5. Uses `ui` for rows, prompts, panes, popups and icons.
 6. Standard flags and exit codes if standalone.
-7. Add its row to *Tool specifics*.
+7. Add its row to _Tool specifics_.
 
 ## Code
 
-| What | Where |
-|---|---|
-| keys engine, popup, palette, help | `ui::keys` |
-| config | `ui::config` |
-| tabs | `ui::tabs` |
-| recent commands | `ui::recent` |
-| file watching | `ui::watch` |
-| choose-many popup, suggestions | `ui::multi`, `ui::prompt::Suggest` |
+| What                              | Where                              |
+| --------------------------------- | ---------------------------------- |
+| keys engine, popup, palette, help | `ui::keys`                         |
+| config                            | `ui::config`                       |
+| tabs                              | `ui::tabs`                         |
+| recent commands                   | `ui::recent`                       |
+| file watching                     | `ui::watch`                        |
+| choose-many popup, suggestions    | `ui::multi`, `ui::prompt::Suggest` |

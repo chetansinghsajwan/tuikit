@@ -11,14 +11,14 @@ How every terminal tool looks. Keys and behaviour are in `usage-design.md`. If a
 
 ## Colors (roles, not hues)
 
-| Role | Used for |
-|---|---|
-| `bg` `fg` | background and text |
-| `muted` | secondary text: hints, units, line numbers, inactive borders |
-| `accent` | focus, the current item, section names, links in the UI |
-| `selection` | tinted backgrounds (code blocks, inline code) |
-| `error` `warning` `success` `info` | messages, diagnostics, alerts. Never decoration. |
-| `border` `border_focused` | pane borders: `muted` / `accent` |
+| Role                               | Used for                                                     |
+| ---------------------------------- | ------------------------------------------------------------ |
+| `bg` `fg`                          | background and text                                          |
+| `muted`                            | secondary text: hints, units, line numbers, inactive borders |
+| `accent`                           | focus, the current item, section names, links in the UI      |
+| `selection`                        | tinted backgrounds (code blocks, inline code)                |
+| `error` `warning` `success` `info` | messages, diagnostics, alerts. Never decoration.             |
+| `border` `border_focused`          | pane borders: `muted` / `accent`                             |
 
 Git: `added` green, `modified` yellow, `deleted` red, `renamed` blue, `untracked` cyan, `conflict` orange. One kind, one color, everywhere (rows, marks, diffs, minimap).
 
@@ -26,25 +26,25 @@ Syntax: `comment keyword function string number type constant variable operator`
 
 ## Chrome
 
-| Token | Default | Meaning |
-|---|---|---|
-| `chrome.border` | `rounded` | border glyphs (`rounded` `plain` `double` `thick`) |
-| `chrome.titles` | on | pane titles |
-| `chrome.transparent` | on | no solid background: the terminal's shows |
-| `chrome.editor_box` | on | the editor sits in a bordered box like the docks |
-| `layout.padding_x` / `padding_y` | 1 / 0 | inside a pane |
-| `layout.gap` | 0 | between panes |
+| Token                            | Default   | Meaning                                            |
+| -------------------------------- | --------- | -------------------------------------------------- |
+| `chrome.border`                  | `rounded` | border glyphs (`rounded` `plain` `double` `thick`) |
+| `chrome.titles`                  | on        | pane titles                                        |
+| `chrome.transparent`             | on        | no solid background: the terminal's shows          |
+| `chrome.editor_box`              | on        | the editor sits in a bordered box like the docks   |
+| `layout.padding_x` / `padding_y` | 1 / 0     | inside a pane                                      |
+| `layout.gap`                     | 0         | between panes                                      |
 
 Every pane has a border and, when titles are on, a title with an icon. The focused pane's border is `border_focused`.
 
 ## Layout
 
-| Token | Default | Meaning |
-|---|---|---|
-| `layout.sidebar_width` | 30 | left and right docks |
-| `layout.bottom_height` | 12 | bottom dock |
-| `layout.preview_percent` | 65 | the preview next to a list |
-| `layout.popup_percent` | 90 | pickers and previews over the editor |
+| Token                    | Default | Meaning                              |
+| ------------------------ | ------- | ------------------------------------ |
+| `layout.sidebar_width`   | 30      | left and right docks                 |
+| `layout.bottom_height`   | 12      | bottom dock                          |
+| `layout.preview_percent` | 65      | the preview next to a list           |
+| `layout.popup_percent`   | 90      | pickers and previews over the editor |
 
 - A side dock is at most two fifths of the width; the editor keeps at least 20 columns.
 - A focused files pane widens to fit its longest name (up to twice its width) and returns when it loses focus.
@@ -54,31 +54,31 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 
 ## Focus and dimming
 
-| State | Look |
-|---|---|
-| focused pane | `border_focused` border, full brightness |
-| other panes | dimmed to 62% (`dim::KEEP_INACTIVE`) |
-| behind a popup | dimmed to 28% (`dim::KEEP`) |
-| current row, pane focused | accent 28% over `bg`, bold |
+| State                         | Look                                                     |
+| ----------------------------- | -------------------------------------------------------- |
+| focused pane                  | `border_focused` border, full brightness                 |
+| other panes                   | dimmed to 62% (`dim::KEEP_INACTIVE`)                     |
+| behind a popup                | dimmed to 28% (`dim::KEEP`)                              |
+| current row, pane focused     | accent 28% over `bg`, bold                               |
 | current row, pane not focused | accent 14% over `bg`, bold (the file open in the editor) |
-| row with a git state | that color at 14% over `bg` |
+| row with a git state          | that color at 14% over `bg`                              |
 
 ## Components
 
-| Component | Rule |
-|---|---|
-| Pane | border, title with icon, `padding_x` inside |
-| List row | one line; icon only where it varies (file types), not on uniform rows; an indent guide `│` per level; marks and times on the right |
-| Tabs | one strip on top, active tab accent and bold |
-| Footer | one line: a prompt (`label value`), a question (`d again`), or the last message (`error` or `muted`) |
-| Quick Keys | the leader popup: fixed 44 columns, centered, dims what is behind; an unknown key is named and the popup stays |
-| Multi-select popup | tab strip of sections with counts, a list of `[x]` / `(•)` items, a `chosen` line, a key line |
-| Table | bordered grid, header bold in `accent`, numbers right aligned, wide cells wrap, columns that do not fit are counted, never drawn |
-| Code block | rounded box on a `selection`-tinted ground, the language as its first line inside |
-| Alert | colored left bar and a title (`Note` `Tip` `Important` `Warning` `Caution`) |
-| Diff | a tinted bar per file (fold mark, state letter, folder muted, name bold, counts at the right), a hunk line naming where it is (`⋯ line 48  fn name`), both line numbers, syntax colors, word-level marks, added and removed rows tinted, whitespace-only changes dimmed; lockfiles and huge files start folded; a line that does not fit ends in `…` |
-| Commit preview | the subject first, the message under it, one muted line (author, age, hash, refs), then the files: folder muted, name in its state color, counts in columns, a bar for the size of the change |
-| Minimap | braille dots, lines on screen tinted, cursor line, diagnostics and git changes in the edge column |
+| Component          | Rule                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pane               | border, title with icon, `padding_x` inside                                                                                                                                                                                                                                                                                                          |
+| List row           | one line; icon only where it varies (file types), not on uniform rows; an indent guide `│` per level; marks and times on the right                                                                                                                                                                                                                   |
+| Tabs               | one strip on top, active tab accent and bold                                                                                                                                                                                                                                                                                                         |
+| Footer             | one line: a prompt (`label value`), a question (`d again`), or the last message (`error` or `muted`)                                                                                                                                                                                                                                                 |
+| Quick Keys         | the leader popup: fixed 44 columns, centered, dims what is behind; an unknown key is named and the popup stays                                                                                                                                                                                                                                       |
+| Multi-select popup | tab strip of sections with counts, a list of `[x]` / `(•)` items, a `chosen` line, a key line                                                                                                                                                                                                                                                        |
+| Table              | bordered grid, header bold in `accent`, numbers right aligned, wide cells wrap, columns that do not fit are counted, never drawn                                                                                                                                                                                                                     |
+| Code block         | rounded box on a `selection`-tinted ground, the language as its first line inside                                                                                                                                                                                                                                                                    |
+| Alert              | colored left bar and a title (`Note` `Tip` `Important` `Warning` `Caution`)                                                                                                                                                                                                                                                                          |
+| Diff               | a tinted bar per file (fold mark, state letter, folder muted, name bold, counts at the right), a hunk line naming where it is (`⋯ line 48  fn name`), both line numbers, syntax colors, word-level marks, added and removed rows tinted, whitespace-only changes dimmed; lockfiles and huge files start folded; a line that does not fit ends in `…` |
+| Commit preview     | the subject first, the message under it, one muted line (author, age, hash, refs), then the files: folder muted, name in its state color, counts in columns, a bar for the size of the change                                                                                                                                                        |
+| Minimap            | braille dots, lines on screen tinted, cursor line, diagnostics and git changes in the edge column                                                                                                                                                                                                                                                    |
 
 ## Text
 
