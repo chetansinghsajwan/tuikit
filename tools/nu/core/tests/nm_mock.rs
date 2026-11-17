@@ -2,6 +2,8 @@
 //! It checks that our calls match the methods, signatures and properties of NetworkManager's
 //! D-Bus API as documented; it cannot check real NetworkManager. Skipped without `dbus-daemon`.
 
+// Test-only code: a failed unwrap is a test failure, which is what we want.
+#![allow(clippy::unwrap_used)]
 
 use nu_core::nm::Nm;
 use nu_core::{Backend, Security};

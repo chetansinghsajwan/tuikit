@@ -562,7 +562,7 @@ impl Repo {
             }
             done.insert(c.clone(), String::from_utf8_lossy(&out.stdout).trim().to_string());
         }
-        let new = &done[chain.last().unwrap()];
+        let new = &done[chain.last().expect("the chain starts with the target")];
         self.git(&["update-ref", "-m", "reword", "HEAD", new, &head], &[]).map(|_| ())
     }
 

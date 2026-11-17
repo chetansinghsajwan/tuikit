@@ -3,6 +3,8 @@
 //! calls match BlueZ's D-Bus API as documented; it cannot check real BlueZ or real devices.
 //! Skipped without `dbus-daemon`.
 
+// Test-only code: a failed unwrap is a test failure, which is what we want.
+#![allow(clippy::unwrap_used)]
 
 use nu_core::bluetooth::{Bluetooth, Kind};
 use nu_core::bluez::BlueZ;
