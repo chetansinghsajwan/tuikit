@@ -16,7 +16,7 @@ workspace = true
 name = "pv"
 
 [dependencies]
-calamine = "0.30"
+calamine = "0.38"
 csv = "1"
 ignore.workspace = true
 image = { version = "0.25", default-features = false, features = [
@@ -27,9 +27,7 @@ image = { version = "0.25", default-features = false, features = [
   "bmp",
 ] }
 lofty = "0.22"
-lopdf = { version = "0.34", default-features = false, features = [
-  "nom_parser",
-] }
+lopdf = { version = "0.47", default-features = false }
 mp4 = "0.14"
 pulldown-cmark.workspace = true
 ratatui.workspace = true
