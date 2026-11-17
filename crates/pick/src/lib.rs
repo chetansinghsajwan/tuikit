@@ -9,5 +9,5 @@ mod preview_cmd;
 pub mod source;
 mod tree;
 
-pub use candidate::{Buffer, Candidate, GitItem, GitKind, Loc};
+pub use candidate::{Ancestor, Buffer, Hier, Candidate, GitItem, GitKind, Loc};
 pub use picker::{Action, LiveSource, Mode, Picker, PickerOptions, RowStyle};

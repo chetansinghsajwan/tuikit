@@ -17,6 +17,8 @@ pub struct Entry {
 pub enum Row {
     /// A folder header at `depth`; `label` may span several folders (`a/b`).
     Dir { depth: u16, label: String },
+    /// A header for something that is not a candidate itself (a symbol's container, a file); `kind` is `None` for a file.
+    Head { depth: u16, label: String, kind: Option<ui::symbol::Kind> },
     /// A candidate (its matched-list index) at `depth`.
     Item { idx: u32, depth: u16 },
 }
@@ -93,21 +95,97 @@ fn emit(node: &Node, depth: u16, ranked: bool, tree: &mut Tree) {
     }
 }
 
-/// The folder header rows that enclose the row at `at`, outermost first (what stays
+
+/// One candidate for the hierarchy built by `build_hier`.
+#[derive(Debug, Clone)]
+pub struct HierEntry {
+    pub idx: u32,
+    pub hier: crate::candidate::Hier,
+}
+
+struct HNode {
+    label: String,
+    kind: Option<ui::symbol::Kind>,
+    idx: Option<u32>,
+    order: u32,
+    best: u32,
+    children: Vec<usize>,
+}
+
+/// Things inside things: every candidate under the ancestors it names, which are shared. An ancestor that
+/// is a candidate itself is an item row (it can be picked); one that is not is a header row. `ranked`
+/// orders siblings by match quality instead of position.
+pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
+    let mut nodes: Vec<HNode> = Vec::new();
+    let mut roots: Vec<usize> = Vec::new();
+    let mut by_id: HashMap<u32, usize> = HashMap::new();
+    for e in entries {
+        let mut parent: Option<usize> = None;
+        let chain = e
+            .hier
+            .ancestors
+            .iter()
+            .map(|a| (a.id, a.kind, a.label.as_str(), a.order, None))
+            .chain([(e.hier.id, e.hier.kind, "", e.hier.order, Some(e.idx))]);
+        for (id, kind, label, order, idx) in chain {
+            let at = *by_id.entry(id).or_insert_with(|| {
+                nodes.push(HNode { label: label.to_string(), kind, idx: None, order, best: u32::MAX, children: Vec::new() });
+                let at = nodes.len() - 1;
+                match parent {
+                    Some(p) => nodes[p].children.push(at),
+                    None => roots.push(at),
+                }
+                at
+            });
+            nodes[at].best = nodes[at].best.min(e.idx);
+            if idx.is_some() {
+                nodes[at].idx = idx;
+                nodes[at].order = order;
+            }
+            parent = Some(at);
+        }
+    }
+    let mut tree = Tree::default();
+    let key = |nodes: &[HNode], i: usize| if ranked { nodes[i].best } else { nodes[i].order };
+    fn emit(nodes: &[HNode], at: &[usize], depth: u16, tree: &mut Tree, key: &dyn Fn(&[HNode], usize) -> u32) {
+        let mut at = at.to_vec();
+        at.sort_by_key(|&i| key(nodes, i));
+        for i in at {
+            let n = &nodes[i];
+            match n.idx {
+                Some(idx) => {
+                    tree.row_of.insert(idx, tree.rows.len());
+                    tree.pos_of.insert(idx, tree.order.len());
+                    tree.order.push(idx);
+                    tree.rows.push(Row::Item { idx, depth });
+                }
+                None => tree.rows.push(Row::Head { depth, label: n.label.clone(), kind: n.kind }),
+            }
+            emit(nodes, &n.children, depth + 1, tree, key);
+        }
+    }
+    emit(&nodes, &roots, 0, &mut tree, &key);
+    tree
+}
+fn row_depth(row: &Row) -> u16 {
+    match row {
+        Row::Dir { depth, .. } | Row::Head { depth, .. } | Row::Item { depth, .. } => *depth,
+    }
+}
+
+/// The header rows (and items with others inside them) that enclose the row at `at`, outermost first (what stays
 /// pinned at the top of the list while that row is the first one shown).
 pub fn ancestors(rows: &[Row], at: usize) -> Vec<usize> {
-    let depth = match rows.get(at) {
-        Some(Row::Dir { depth, .. }) | Some(Row::Item { depth, .. }) => *depth,
-        None => return Vec::new(),
-    };
+    let Some(row) = rows.get(at) else { return Vec::new() };
+    let depth = row_depth(row);
     let mut need = depth;
     let mut found = Vec::new();
     for i in (0..at).rev() {
         if need == 0 {
             break;
         }
-        if let Row::Dir { depth: d, .. } = &rows[i]
-            && *d < need
+        let d = &row_depth(&rows[i]);
+        if *d < need
         {
             found.push(i);
             need = *d;

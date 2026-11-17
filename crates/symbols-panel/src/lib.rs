@@ -8,7 +8,7 @@ pub mod keys;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::collections::HashSet;
@@ -16,55 +16,7 @@ use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
 use ui::{Pane, Theme};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
-    Module,
-    Class,
-    Struct,
-    Interface,
-    Enum,
-    Function,
-    Method,
-    Constructor,
-    Field,
-    Variable,
-    Constant,
-    TypeParameter,
-    Other,
-}
-
-impl Kind {
-    fn glyph(self) -> &'static str {
-        match self {
-            Kind::Module => "\u{f0169}",
-            Kind::Class | Kind::Struct => "\u{f0831}",
-            Kind::Interface => "\u{f0b6f}",
-            Kind::Enum => "\u{f12a7}",
-            Kind::Function | Kind::Method | Kind::Constructor => "\u{f0295}",
-            Kind::Field => "\u{f0e69}",
-            Kind::Variable => "\u{f0ae7}",
-            Kind::Constant => "\u{f03ff}",
-            Kind::TypeParameter => "\u{f0b68}",
-            Kind::Other => "\u{f0a7a}",
-        }
-    }
-
-    fn color(self, theme: &Theme) -> Color {
-        let s = &theme.colors.syntax;
-        match self {
-            Kind::Module
-            | Kind::Class
-            | Kind::Struct
-            | Kind::Interface
-            | Kind::Enum
-            | Kind::TypeParameter => s.type_.into(),
-            Kind::Function | Kind::Method | Kind::Constructor => s.function.into(),
-            Kind::Field | Kind::Variable => s.variable.into(),
-            Kind::Constant => s.constant.into(),
-            Kind::Other => theme.colors.muted.into(),
-        }
-    }
-}
+pub use ui::symbol::Kind;
 
 /// A symbol and the symbols inside it.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -20,6 +20,7 @@ pub mod popup;
 pub mod prompt;
 pub mod recent;
 pub mod subject;
+pub mod symbol;
 pub mod tabs;
 pub mod theme;
 pub mod time;

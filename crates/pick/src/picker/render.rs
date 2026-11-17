@@ -54,6 +54,12 @@ impl Picker {
             };
             spans.push(Span::styled(format!("{} ", icon.glyph), Style::new().fg(icon.color)));
         }
+        // Symbols: the icon of their kind, in its color.
+        if let Some(h) = &cand.hier {
+            if let Some(k) = h.kind {
+                spans.push(Span::styled(format!("{} ", k.glyph()), Style::new().fg(k.color(theme))));
+            }
+        }
         spans.extend(self.row_spans_inner(cand, name_fg, theme, snap_index, leaf));
         spans
     }
@@ -118,7 +124,7 @@ impl Picker {
             spans.push(Span::styled(format!("{:<2} ", b.flags), Style::new().fg(c.warning.into())));
         }
         // In the hierarchy only the file name is drawn; match positions still refer to the full path.
-        let skip = if leaf {
+        let skip = if leaf && cand.hier.is_none() {
             cand.display.rfind('/').map(|i| cand.display[..=i].chars().count()).unwrap_or(0)
         } else {
             0
@@ -373,6 +379,7 @@ impl Picker {
                     .iter()
                     .map(|r| match r {
                         crate::tree::Row::Dir { depth, .. }
+                        | crate::tree::Row::Head { depth, .. }
                         | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
                     })
                     .collect();
@@ -409,6 +416,26 @@ impl Picker {
                         label.clone(),
                         Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
                     ));
+                    ui::list::ListRow {
+                        id: ui::anim::hash_of(&(depth, label)),
+                        left: spans,
+                        focused: true,
+                        ..Default::default()
+                    }
+                    .draw(theme, buf, &rows_geo, y);
+                }
+                crate::tree::Row::Head { depth, label, kind } => {
+                    let mut spans = vec![Span::raw("  ")];
+                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
+                    let (glyph, color) = match kind {
+                        Some(k) => (k.glyph().to_string(), k.color(theme)),
+                        None => {
+                            let icon = ui::icons::file(label.rsplit('/').next().unwrap_or(label), false);
+                            (icon.glyph.to_string(), icon.color)
+                        }
+                    };
+                    spans.push(Span::styled(format!("{glyph} "), Style::new().fg(color)));
+                    spans.push(Span::styled(label.clone(), Style::new().fg(c.muted.into())));
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&(depth, label)),
                         left: spans,

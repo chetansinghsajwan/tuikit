@@ -260,6 +260,18 @@ impl Picker {
             return;
         }
         let snap = self.nucleo.snapshot();
+        // Candidates that name what they sit inside (symbols) build their own hierarchy.
+        let hier: Option<Vec<crate::tree::HierEntry>> = (0..n)
+            .map(|idx| snap.get_matched_item(idx).and_then(|it| it.data.hier.clone()).map(|hier| crate::tree::HierEntry { idx, hier }))
+            .collect();
+        let built = match hier {
+            Some(entries) if n > 0 => Some(crate::tree::build_hier(entries, !self.input.value().is_empty())),
+            _ => None,
+        };
+        if let Some(tree) = built {
+            self.install_tree(tree);
+            return;
+        }
         let mut entries = Vec::with_capacity(n as usize);
         for idx in 0..n {
             let Some(item) = snap.get_matched_item(idx) else { continue };
@@ -271,8 +283,13 @@ impl Picker {
                 }
             }
         }
+        self.install_tree(crate::tree::build(entries, !self.input.value().is_empty()));
+    }
+
+    /// Take a freshly built hierarchy; the first one resets the scroll and puts the cursor on the first row.
+    fn install_tree(&mut self, tree: crate::tree::Tree) {
         let was_tree = self.tree.is_some();
-        self.tree = Some(crate::tree::build(entries, !self.input.value().is_empty()));
+        self.tree = Some(tree);
         if !was_tree {
             self.offset = 0;
             // With nothing typed the list starts at its top: the cursor takes the first row

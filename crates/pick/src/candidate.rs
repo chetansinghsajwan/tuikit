@@ -16,6 +16,8 @@ pub struct Candidate {
     pub raw: Option<String>,
     /// When it happened (seconds since the epoch), for input that carries times (`--timestamps`).
     pub time: Option<i64>,
+    /// Where it sits in a hierarchy, for lists of things inside other things (symbols).
+    pub hier: Option<Hier>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +74,7 @@ pub struct Buffer {
 
 impl Candidate {
     pub fn plain(s: impl Into<String>) -> Self {
-        Candidate { display: s.into(), loc: None, git: None, buffer: None, raw: None, time: None }
+        Candidate { display: s.into(), loc: None, git: None, buffer: None, raw: None, time: None, hier: None }
     }
 
     pub fn grep(loc: Loc) -> Self {
@@ -83,6 +85,7 @@ impl Candidate {
             buffer: None,
             raw: None,
             time: None,
+            hier: None,
         }
     }
 
@@ -95,6 +98,7 @@ impl Candidate {
             buffer: None,
             raw: None,
             time: None,
+            hier: None,
         }
     }
 
@@ -107,6 +111,7 @@ impl Candidate {
             buffer: None,
             raw: Some(line.into()),
             time: None,
+            hier: None,
         }
     }
 
@@ -118,6 +123,7 @@ impl Candidate {
             buffer: Some(buffer),
             raw: None,
             time: None,
+            hier: None,
         }
     }
 
@@ -147,5 +153,34 @@ impl Candidate {
             Some(g) => g.name.clone(),
             None => self.display.clone(),
         }
+    }
+}
+
+/// What a candidate sits inside, for the hierarchy view: a symbol under its struct, under its file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hier {
+    /// Identifies this candidate among the others, so ancestors shared by several candidates merge.
+    pub id: u32,
+    /// `None` draws the candidate with no symbol icon.
+    pub kind: Option<ui::symbol::Kind>,
+    /// Orders siblings when nothing is typed (the line in the file).
+    pub order: u32,
+    /// The things above it, outermost first. One that is not a candidate itself is drawn as a header row.
+    pub ancestors: Vec<Ancestor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ancestor {
+    pub id: u32,
+    /// `None` is a file: its label is a path and it takes a file icon.
+    pub kind: Option<ui::symbol::Kind>,
+    pub label: String,
+    pub order: u32,
+}
+
+impl Candidate {
+    /// A candidate drawn in the hierarchy view; `display` is what the query matches.
+    pub fn hier(display: impl Into<String>, raw: impl Into<String>, hier: Hier) -> Self {
+        Candidate { hier: Some(hier), ..Candidate::with_raw(display, raw) }
     }
 }
