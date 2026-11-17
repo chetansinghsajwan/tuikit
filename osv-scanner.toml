@@ -42,3 +42,7 @@ reason = "see deny.toml"
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0195"
 reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0543"
+reason = "see deny.toml"

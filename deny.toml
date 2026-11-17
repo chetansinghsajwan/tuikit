@@ -13,6 +13,7 @@ ignore = [
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser: via fontdb and krilla, used by mdexport" },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz: via krilla, used by mdexport" },
   { id = "RUSTSEC-2026-0370", reason = "zvariant: via zbus, used by nu" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono: unmaintained; used by files for mtime formatting and by trash, move to jiff or time later" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names: via zbus, used by nu" },
   { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: via zbus, used by nu" },
   # Vulnerabilities in parsers of files the user opens themselves; fixed in 0.41 but typst pins 0.38.
