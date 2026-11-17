@@ -196,11 +196,14 @@ fn grep_results_are_grouped_under_their_file() {
     let l = lines(&mut p);
     let pos =
         |s: &str| l.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s} in {l:#?}"));
-    // `src/one.rs` is a header (merged chain), its two matches are rows beneath it.
+    // `src/one.rs` is a header (merged chain), its two matches are rows right beneath it. The
+    // order of the two files depends on the file system walk, so only the grouping is checked.
+    let one = pos(" src/one.rs");
+    let top = pos(" top.txt");
     assert!(
-        pos(" src/one.rs") < pos("1: needle a")
-            && pos("1: needle a") < pos("3: needle b")
-            && pos("3: needle b") < pos(" top.txt"),
+        pos("1: needle a") == one + 1
+            && pos("3: needle b") == one + 2
+            && pos("1: needle c") == top + 1,
         "{l:#?}"
     );
     // Accepting a match still prints path:line:col:text.
