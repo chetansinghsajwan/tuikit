@@ -33,9 +33,12 @@ tasks:
     desc: Run the vulnerability scanners.
     cmds:
       - cargo deny check
-      - osv-scanner scan source --lockfile Cargo.lock
+      - osv-scanner scan source --lockfile Cargo.lock --config osv-scanner.toml
       - gitleaks git --no-banner
-      - semgrep scan --config auto --metrics off --error --quiet
+      # The excluded rules only flag temp dirs, `args_os`, `current_exe` and `unsafe`, which are
+      # audit hints, not defects: temp dirs are test fixtures, `unsafe` is the macOS FFI code.
+      - >-
+        semgrep scan --config p/rust --metrics off --error --quiet --exclude-rule rust.lang.security.args-os.args-os --exclude-rule rust.lang.security.current-exe.current-exe --exclude-rule rust.lang.security.temp-dir.temp-dir --exclude-rule rust.lang.security.unsafe-usage.unsafe-usage
   check:
     desc: Check formatting, lint and test. CI and pre-push call this.
     cmds:

@@ -1,6 +1,24 @@
 # cargo-deny: licence, advisory and source checks (`task scan`).
 [advisories]
 version = 2
+# Every entry is a transitive dependency we cannot upgrade from this workspace: the crate that
+# pulls it in has no release that fixes it. Revisit when those crates update (`cargo update`,
+# then remove the entry that no longer fires).
+ignore = [
+  # Unmaintained, no replacement in the dependency tree.
+  { id = "RUSTSEC-2024-0320", reason = "yaml-rust: via syntect, used by pv for highlighting" },
+  { id = "RUSTSEC-2024-0436", reason = "paste: via hayagriva (typst), used by mdexport" },
+  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: via serde_yaml in typst, used by mdexport" },
+  { id = "RUSTSEC-2025-0141", reason = "bincode: via syntect, used by pv" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser: via fontdb and krilla, used by mdexport" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz: via krilla, used by mdexport" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant: via zbus, used by nu" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names: via zbus, used by nu" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: via zbus, used by nu" },
+  # Vulnerabilities in parsers of files the user opens themselves; fixed in 0.41 but typst pins 0.38.
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml: via typst (mdexport); fixed in 0.41 but typst pins 0.38" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml: via typst (mdexport); fixed in 0.41 but typst pins 0.38" },
+]
 
 [licenses]
 version = 2
@@ -22,3 +40,7 @@ allow = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+
+[bans]
+# Duplicate versions come from third-party crates we cannot unify.
+multiple-versions = "allow"
