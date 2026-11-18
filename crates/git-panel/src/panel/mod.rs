@@ -201,7 +201,8 @@ impl Panel {
     pub fn refresh(&mut self) {
         let keep = self.row_key(self.cursor);
         self.branch = self.repo.branch().unwrap_or_else(|| "(detached)".into());
-        let status = self.repo.status().unwrap_or_default();
+        // Deep: files changed inside a submodule are rows too; the repo routes their actions.
+        let status = self.repo.status_deep().unwrap_or_default();
         self.all = status
             .iter()
             .filter_map(|(path, st)| {
@@ -224,6 +225,16 @@ impl Panel {
         if self.tree {
             let mut root = Node::default();
             for change in &self.all {
+                // A submodule with changes inside is the folder of those files, not a second row
+                // (staging the folder stages its recorded commit too).
+                if change.submodule
+                    && self
+                        .all
+                        .iter()
+                        .any(|c| c.rela != change.rela && c.rela.starts_with(&change.rela))
+                {
+                    continue;
+                }
                 let mut node = &mut root;
                 if let Some(dir) = change.rela.parent() {
                     for part in dir.components() {

@@ -48,8 +48,12 @@ impl Repo {
         Some(self.repo.find_blob(entry.id).ok()?.detach().data)
     }
 
-    /// The diff of one file (path relative to the work tree) on `side`.
+    /// The diff of one file (path relative to the work tree) on `side`; inside a submodule it is
+    /// the submodule's own diff.
     pub fn diff_file(&self, rela: &Path, side: Side) -> Result<FilePatch, Error> {
+        if let Some((repo, inner)) = self.owner(rela) {
+            return repo.diff_file(&inner, side);
+        }
         let (before, after, kind) = match side {
             Side::Staged => {
                 let before = head_blob(&self.repo, rela);
@@ -118,9 +122,57 @@ impl Repo {
         self.repo.head_commit().is_ok()
     }
 
-    /// Stage changes (new, modified and deleted files) for `paths`.
+    /// The repo that owns `rela` when it lies inside a submodule (nested ones followed), with the
+    /// path inside that repo. `None` when this repo owns it, which includes the submodule's own
+    /// path: that is the recorded commit, a change of this repo.
+    pub fn owner(&self, rela: &Path) -> Option<(Repo, PathBuf)> {
+        let subs = self.repo.submodules().ok()??;
+        for sub in subs {
+            let Ok(path) = sub.path() else { continue };
+            let sub_rela = PathBuf::from(path.to_str_lossy().into_owned());
+            let Ok(inner) = rela.strip_prefix(&sub_rela) else { continue };
+            if inner.as_os_str().is_empty() {
+                continue;
+            }
+            // Not cloned: discovery would walk up to this repo, so check the root is the submodule's.
+            let dir = self.root.join(&sub_rela);
+            let Some(repo) =
+                Repo::discover(&dir).filter(|r| Some(&r.root) == dir.canonicalize().ok().as_ref())
+            else {
+                continue;
+            };
+            return Some(match repo.owner(inner) {
+                Some(deeper) => deeper,
+                None => (repo, inner.to_path_buf()),
+            });
+        }
+        None
+    }
+
+    /// Split `paths` into the ones this repo owns and, per submodule repo, the ones inside it.
+    fn by_owner(&self, paths: &[PathBuf]) -> (Vec<PathBuf>, Vec<(Repo, Vec<PathBuf>)>) {
+        let mut own = Vec::new();
+        let mut groups: Vec<(Repo, Vec<PathBuf>)> = Vec::new();
+        for path in paths {
+            match self.owner(path) {
+                None => own.push(path.clone()),
+                Some((repo, inner)) => match groups.iter_mut().find(|(r, _)| r.root == repo.root) {
+                    Some((_, list)) => list.push(inner),
+                    None => groups.push((repo, vec![inner])),
+                },
+            }
+        }
+        (own, groups)
+    }
+
+    /// Stage changes (new, modified and deleted files) for `paths`; a path inside a submodule is
+    /// staged in the submodule's own repo.
     pub fn stage(&self, paths: &[PathBuf]) -> Result<(), Error> {
-        self.git(&["add", "-A"], paths).map(|_| ())
+        let (own, groups) = self.by_owner(paths);
+        if !own.is_empty() {
+            self.git(&["add", "-A"], &own)?;
+        }
+        groups.iter().try_for_each(|(repo, inner)| repo.stage(inner))
     }
 
     /// Stage everything.
@@ -128,14 +180,19 @@ impl Repo {
         self.git(&["add", "-A"], &[]).map(|_| ())
     }
 
-    /// Unstage `paths` (keeps the work tree as is).
+    /// Unstage `paths` (keeps the work tree as is); a path inside a submodule is unstaged in the
+    /// submodule's own repo.
     pub fn unstage(&self, paths: &[PathBuf]) -> Result<(), Error> {
-        if self.has_head() {
-            self.git(&["restore", "--staged"], paths).map(|_| ())
-        } else {
-            // No commit yet: unstaging means removing the files from the index.
-            self.git(&["rm", "-r", "--cached", "-q"], paths).map(|_| ())
+        let (own, groups) = self.by_owner(paths);
+        if !own.is_empty() {
+            if self.has_head() {
+                self.git(&["restore", "--staged"], &own)?;
+            } else {
+                // No commit yet: unstaging means removing the files from the index.
+                self.git(&["rm", "-r", "--cached", "-q"], &own)?;
+            }
         }
+        groups.iter().try_for_each(|(repo, inner)| repo.unstage(inner))
     }
 
     /// Unstage everything (keeps the work tree as is).
@@ -150,6 +207,9 @@ impl Repo {
     /// Throw away work-tree changes: tracked files are restored from the index,
     /// untracked files are deleted. Not recoverable.
     pub fn discard(&self, rela: &Path, untracked: bool) -> Result<(), Error> {
+        if let Some((repo, inner)) = self.owner(rela) {
+            return repo.discard(&inner, untracked);
+        }
         if untracked {
             let path = self.root.join(rela);
             let meta = path.symlink_metadata().map_err(err)?;

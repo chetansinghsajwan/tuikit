@@ -683,6 +683,30 @@ fn submodules_are_listed_and_show_in_status() {
     assert!(deep.get(Path::new("mod/new.txt")).is_some());
     // A folder view asks for the kinds beneath it: the submodule's own change counts.
     assert_eq!(st.dir_kinds(Path::new("mod")), vec![Kind::Modified]);
+    // Actions on a file inside the submodule run in the submodule's own repo.
+    let inner = Path::new("mod/new.txt").to_path_buf();
+    assert!(r.owner(&inner).is_some() && r.owner(Path::new("mod")).is_none());
+    r.stage(std::slice::from_ref(&inner)).unwrap();
+    let patch = r.diff_file(&inner, Side::Staged).unwrap();
+    assert!(!patch.hunks.is_empty());
+    let sub_repo = Repo::discover(&dir.join("mod")).unwrap();
+    assert_eq!(
+        sub_repo.status().unwrap().get(Path::new("new.txt")).unwrap().staged,
+        Some(Kind::Added)
+    );
+    r.unstage(std::slice::from_ref(&inner)).unwrap();
+    assert!(
+        Repo::discover(&dir.join("mod"))
+            .unwrap()
+            .status()
+            .unwrap()
+            .get(Path::new("new.txt"))
+            .unwrap()
+            .staged
+            .is_none()
+    );
+    r.discard(&inner, true).unwrap();
+    assert!(!dir.join("mod/new.txt").exists());
     // Removing it leaves no trace in the index or `.gitmodules`.
     r.submodule_remove("mod").unwrap();
     assert!(r.submodules().unwrap().is_empty());
