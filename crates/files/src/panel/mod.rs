@@ -63,8 +63,6 @@ pub struct Panel {
     redraw: bool,
     /// Show the entries that .gitignore and the other ignore files hide (toggle with `I`).
     show_ignored: bool,
-    /// How many entries of the shown folders the ignore files hide now (the title says so).
-    ignored_hidden: usize,
 }
 
 impl Panel {
@@ -96,7 +94,6 @@ impl Panel {
             job: None,
             pending: None,
             show_ignored: false,
-            ignored_hidden: 0,
             redraw: false,
         };
         p.refresh();
@@ -123,7 +120,6 @@ impl Panel {
         };
         let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
         self.rows.clear();
-        self.ignored_hidden = 0;
         let root = self.root.clone();
         self.build(&root, 0);
         if let Some(path) = keep
@@ -137,6 +133,18 @@ impl Panel {
     /// The sorted, filtered entries of one folder: folders first, then by name, honoring the ignore
     /// and hidden-file settings.
     fn children(&self, dir: &Path) -> Vec<Row> {
+        // With ignored files shown, the entries the ignore files would hide are marked `ignored`.
+        let kept: Option<BTreeSet<std::ffi::OsString>> = self.show_ignored.then(|| {
+            WalkBuilder::new(dir)
+                .max_depth(Some(1))
+                .hidden(!self.opts.hidden)
+                .filter_entry(|e| e.file_name() != ".git")
+                .build()
+                .flatten()
+                .filter(|e| e.depth() == 1)
+                .map(|e| e.file_name().to_owned())
+                .collect()
+        });
         let walk = WalkBuilder::new(dir)
             .max_depth(Some(1))
             .hidden(!self.opts.hidden)
@@ -151,6 +159,7 @@ impl Panel {
             .flatten()
             .filter(|e| e.depth() == 1)
             .map(|e| Row {
+                ignored: kept.as_ref().is_some_and(|k| !k.contains(e.file_name())),
                 name: e.file_name().to_string_lossy().into_owned(),
                 is_dir: e.file_type().is_some_and(|t| t.is_dir()),
                 size: e.metadata().map(|m| m.len()).unwrap_or(0),
@@ -168,23 +177,8 @@ impl Panel {
 
     /// Append the rows of `dir` and, for each expanded folder, its children,
     /// so the list is the tree flattened.
-    /// Also counts how many entries the ignore files hide.
     fn build(&mut self, dir: &Path, depth: u16) {
         let rows = self.children(dir);
-        if !self.show_ignored {
-            let all = std::fs::read_dir(dir)
-                .map(|d| {
-                    d.flatten()
-                        .filter(|e| {
-                            e.file_name() != ".git"
-                                && (self.opts.hidden
-                                    || !e.file_name().to_string_lossy().starts_with('.'))
-                        })
-                        .count()
-                })
-                .unwrap_or(0);
-            self.ignored_hidden += all.saturating_sub(rows.len());
-        }
         for mut row in rows {
             row.depth = depth;
             let open = row.is_dir && self.expanded.contains(&row.path);

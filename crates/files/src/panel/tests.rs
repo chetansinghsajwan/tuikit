@@ -223,10 +223,9 @@ fn respects_gitignore_and_shows_git_state() {
         "gitignored folder is hidden: {:?}",
         names(&p)
     );
-    assert_eq!(p.ignored_hidden, 1);
     p.handle_event(&key(KeyCode::Char('I')));
     assert!(names(&p).contains(&"docs".to_string()));
-    assert_eq!(p.ignored_hidden, 0);
+    assert!(p.rows.iter().find(|r| r.name == "docs").unwrap().ignored);
     p.handle_event(&key(KeyCode::Char('I')));
 
     let area = Rect::new(0, 0, 30, 8);

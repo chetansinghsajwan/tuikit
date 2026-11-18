@@ -90,6 +90,7 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 - Line counts (`+12 −3`) are aligned in columns: `ui::tree::CountWidths` sizes them from the whole list and `ui::tree::line_counts` lays out each row, so a tool only passes the numbers (gu's commit files and the commit preview use it).
 - The name is the part that gives way: when a row is too narrow, the name of a file, folder or ref is cut with `…` and the columns, counts and signs beside it keep their place and alignment. A column that would leave the name under four cells is dropped instead. Widths are in cells (wide characters count double). This is built into `ui::tree::file_row`; a tool never trims by hand.
 - What a cut column hides is shown whole elsewhere (the commit preview lists every ref).
+- Dot files and git-ignored files are marked by the name alone, no column: a dot file is muted, an ignored file (shown with `I`) is muted, dimmed and italic, both when it is both. A row with a git color keeps that color. `FileRow::hidden` / `ignored`, drawn in `ui::tree::file_row`. The title carries no hidden or ignored status.
 - Empty state: one muted line saying why (`clean: nothing to commit`, `nothing matches`).
 
 ## Icons

@@ -297,6 +297,11 @@ pub struct FileRow<'a> {
     pub marked: bool,
     /// Cut to the clipboard: dimmed.
     pub cut: bool,
+    /// A dot file: the name is muted.
+    pub hidden: bool,
+    /// Git ignores it (shown only when the tool asks for ignored files): muted, dimmed and italic, so it reads
+    /// fainter than a dot file; a dot file that is also ignored gets both.
+    pub ignored: bool,
 
     // Options, all off by default.
     /// The number of entries beneath a folder, after its name.
@@ -329,6 +334,12 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         Style::new().fg(row.tint.unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() }));
     if row.is_dir {
         name_style = name_style.add_modifier(Modifier::BOLD);
+    }
+    if (row.hidden || row.ignored) && row.tint.is_none() {
+        name_style = name_style.fg(c.muted.into());
+    }
+    if row.ignored {
+        name_style = name_style.add_modifier(Modifier::DIM | Modifier::ITALIC);
     }
     if row.marked {
         name_style = name_style.fg(c.warning.into()).add_modifier(Modifier::UNDERLINED);
@@ -381,6 +392,8 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
             row.executable,
             row.marked,
             row.cut,
+            row.hidden,
+            row.ignored,
             row.count,
             row.note,
             row.signs.clone(),

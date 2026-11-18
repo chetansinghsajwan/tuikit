@@ -135,12 +135,7 @@ impl Panel {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "/".into());
         let icon = theme.icons.dir(&title, true);
-        let shown = if self.ignored_hidden > 0 {
-            format!("{title}  ({} ignored hidden, I shows)", self.ignored_hidden)
-        } else {
-            title.clone()
-        };
-        let pane = Pane::new(theme).title(&shown).icon(icon).focused(focused);
+        let pane = Pane::new(theme).title(&title).icon(icon).focused(focused);
         let mut inner = pane.inner(area);
         pane.render(area, buf);
         if inner.height == 0 || inner.width < 4 {
@@ -248,6 +243,8 @@ impl Panel {
                     // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
                     marked: self.marked.contains(&row.path),
                     cut: self.clip.as_ref().is_some_and(|k| k.cut && k.paths.contains(&row.path)),
+                    hidden: row.name.starts_with('.'),
+                    ignored: row.ignored,
                     trailing,
                     signs,
                     ..Default::default()

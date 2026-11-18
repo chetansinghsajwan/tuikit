@@ -143,6 +143,8 @@ pub(super) struct Row {
     pub(super) size: u64,
     pub(super) modified: Option<std::time::SystemTime>,
     pub(super) mode: u32,
+    /// Git ignores it (only set while ignored files are shown).
+    pub(super) ignored: bool,
 }
 
 /// Which text prompt is open and what it works on.
