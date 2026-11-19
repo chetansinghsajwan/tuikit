@@ -1,6 +1,5 @@
 //! The grid: state, keys and drawing.
 
-use crate::keys;
 use crate::table::{self, Table};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
@@ -11,6 +10,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use std::path::PathBuf;
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
+use ui::app::{Navigable, Request};
 use ui::{Pane, Theme};
 use unicode_width::UnicodeWidthStr;
 
@@ -22,15 +22,6 @@ const MIN_COL: usize = 3;
 const MEASURE_ROWS: usize = 2000;
 /// How many changes undo remembers, to bound memory on big tables.
 const UNDO_DEPTH: usize = 100;
-
-/// What the host must do after the grid handled an event.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Action {
-    None,
-    Quit,
-    Palette,
-    Help,
-}
 
 /// What the keys do now: move around, type into a cell or the find box, or answer a question.
 enum Mode {
@@ -48,7 +39,7 @@ enum Confirm {
     Quit,
 }
 
-/// The table editor: the table, the cursor, the scroll position, undo history and keymap.
+/// The table editor: the table, the cursor, the scroll position, undo history and mode.
 pub struct Grid {
     table: Table,
     path: Option<PathBuf>,
@@ -66,13 +57,11 @@ pub struct Grid {
     find: String,
     copied: String,
     message: Option<(String, bool)>,
-    keymap: ui::keys::Keymap,
 }
 
 impl Grid {
-    /// Makes an editor for `table`, saved to `path` (if any), with key prefixes starting at
-    /// `leader`.
-    pub fn new(table: Table, path: Option<PathBuf>, leader: &str) -> Grid {
+    /// Makes an editor for `table`, saved to `path` (if any).
+    pub fn new(table: Table, path: Option<PathBuf>) -> Grid {
         Grid {
             saved: table.clone(),
             table,
@@ -88,12 +77,11 @@ impl Grid {
             find: String::new(),
             copied: String::new(),
             message: None,
-            keymap: ui::keys::Keymap::new(leader, keys::ACTIONS, keys::GROUPS),
         }
     }
 
     /// Reads a csv, tsv or psv file into an editor; a missing file starts as an empty table.
-    pub fn open(path: &std::path::Path, leader: &str) -> Result<Grid, String> {
+    pub fn open(path: &std::path::Path) -> Result<Grid, String> {
         let delim = table::delimiter(path)
             .ok_or_else(|| format!("{}: not a csv, tsv or psv file", path.display()))?;
         let text = match std::fs::read_to_string(path) {
@@ -101,7 +89,7 @@ impl Grid {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
             Err(e) => return Err(format!("{}: {e}", path.display())),
         };
-        Ok(Grid::new(Table::parse(&text, delim), Some(path.to_path_buf()), leader))
+        Ok(Grid::new(Table::parse(&text, delim), Some(path.to_path_buf())))
     }
 
     /// The table being edited.
@@ -122,16 +110,6 @@ impl Grid {
     /// Tells the host that keys go to a text prompt, so it must not treat them as its own.
     pub fn is_typing(&self) -> bool {
         matches!(self.mode, Mode::Edit(_) | Mode::Find(_))
-    }
-
-    /// The pending key-prefix menu, for the host to draw.
-    pub fn menu(&self) -> Option<ui::keys::Menu> {
-        self.keymap.menu()
-    }
-
-    /// Every action with its keys, for the host's help screen.
-    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
-        self.keymap.rows()
     }
 
     /// Shows a message in the footer; `error` colours it as a failure.
@@ -174,11 +152,11 @@ impl Grid {
         self.cur.1 = (self.cur.1 as isize + delta).clamp(0, self.cols() as isize - 1) as usize;
     }
 
-    /// Handles a key press: first any open prompt or question, else the keymap.
-    pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+    /// Handles a key press for the open prompt or question; in normal mode it does nothing.
+    fn typing(&mut self, ev: &Event) -> Request {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Request::None };
         if *kind == KeyEventKind::Release {
-            return Action::None;
+            return Request::None;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Edit(mut input) => {
@@ -193,7 +171,7 @@ impl Grid {
                         self.mode = Mode::Edit(input);
                     }
                 }
-                return Action::None;
+                return Request::None;
             }
             Mode::Find(mut input) => {
                 match key.code {
@@ -207,7 +185,7 @@ impl Grid {
                         self.mode = Mode::Find(input);
                     }
                 }
-                return Action::None;
+                return Request::None;
             }
             Mode::Confirm(what) => {
                 let yes = matches!(key.code, KeyCode::Char('d' | 'y') | KeyCode::Enter)
@@ -216,26 +194,15 @@ impl Grid {
                 if yes || quit_again {
                     return self.confirmed(what);
                 }
-                return Action::None;
+                return Request::None;
             }
             Mode::Normal => {}
         }
-        self.message = None;
-        match self.keymap.feed(key) {
-            ui::keys::Feed::Run(id) => self.run(id),
-            ui::keys::Feed::NoBinding => {
-                let m = format!("{} is not bound", self.keymap.rejected());
-                self.say(m, true);
-                Action::None
-            }
-            ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
-                Action::None
-            }
-        }
+        Request::None
     }
 
     /// Carries out a risky action after the user pressed the key a second time.
-    fn confirmed(&mut self, what: Confirm) -> Action {
+    fn confirmed(&mut self, what: Confirm) -> Request {
         match what {
             Confirm::DeleteRow => {
                 self.change();
@@ -249,25 +216,17 @@ impl Grid {
                 self.clamp();
                 self.say("deleted the column", false);
             }
-            Confirm::Quit => return Action::Quit,
+            Confirm::Quit => return Request::Quit,
         }
-        Action::None
+        Request::None
     }
 
-    /// Runs one action by id. Also lets the host run an action picked from its palette.
-    pub fn run(&mut self, id: &'static str) -> Action {
-        let half = (self.page / 2).max(1) as isize;
+    /// Runs one of the editor's own actions by id.
+    fn act(&mut self, id: &'static str) -> Request {
+        self.message = None;
         match id {
-            "nav.up" => self.go_rows(-1),
-            "nav.down" => self.go_rows(1),
             "nav.left" => self.go_cols(-1),
             "nav.right" => self.go_cols(1),
-            "nav.up5" => self.go_rows(-5),
-            "nav.down5" => self.go_rows(5),
-            "nav.page_up" => self.go_rows(-half),
-            "nav.page_down" => self.go_rows(half),
-            "nav.top" => self.cur.0 = 0,
-            "nav.bottom" => self.cur.0 = self.rows() - 1,
             "nav.first_col" => self.cur.1 = 0,
             "nav.last_col" => self.cur.1 = self.cols() - 1,
             "cell.edit" => {
@@ -352,19 +311,17 @@ impl Grid {
                 None => self.say("nothing to redo", true),
             },
             "file.save" => self.save(),
-            "palette" => return Action::Palette,
-            "help" => return Action::Help,
             "quit" => {
                 if self.modified() {
                     self.mode = Mode::Confirm(Confirm::Quit);
                 } else {
-                    return Action::Quit;
+                    return Request::Quit;
                 }
             }
             _ => {}
         }
         self.clamp();
-        Action::None
+        Request::None
     }
 
     /// Writes the table to its file and marks it as saved.
@@ -593,6 +550,56 @@ fn fit(text: &str, width: usize, right: bool) -> String {
     }
     let pad = " ".repeat(width.saturating_sub(w));
     if right { format!("{pad}{out}") } else { format!("{out}{pad}") }
+}
+
+/// Lets the shared app shell host the grid: it owns the keymap and the overlays, the grid draws
+/// and runs its own actions.
+impl ui::app::Screen for Grid {
+    /// Draws the table, always focused since it is the only pane.
+    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+        Grid::render(self, area, buf, theme, true);
+    }
+
+    /// A cell, the find box or a question is open: the keys are theirs.
+    fn captures(&self, _ev: &Event) -> bool {
+        !matches!(self.mode, Mode::Normal)
+    }
+
+    fn event(&mut self, ev: &Event, _host: &mut dyn ui::app::Host) -> Request {
+        self.typing(ev)
+    }
+
+    fn run(&mut self, id: &'static str, _host: &mut dyn ui::app::Host) -> Request {
+        self.act(id)
+    }
+
+    /// Tells the user the key sequence they typed does nothing.
+    fn unbound(&mut self, keys: &str) {
+        self.say(format!("{keys} is not bound"), true);
+    }
+
+    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+        Some(self)
+    }
+}
+
+/// The rows are what the shared movement walks.
+impl Navigable for Grid {
+    fn move_by(&mut self, delta: isize) {
+        self.go_rows(delta);
+    }
+
+    fn page(&self) -> usize {
+        self.page
+    }
+
+    fn top(&mut self) {
+        self.cur.0 = 0;
+    }
+
+    fn bottom(&mut self) {
+        self.cur.0 = self.rows() - 1;
+    }
 }
 
 /// Tests for the grid.

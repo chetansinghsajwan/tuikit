@@ -5844,7 +5844,6 @@ name = "tuikit-tb-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
- "ratatui",
  "tuikit-tb",
  "tuikit-ui",
 ]

@@ -4,6 +4,7 @@
 
 pub mod anim;
 pub mod ansi;
+pub mod app;
 pub mod bigtext;
 pub mod clipboard;
 pub mod config;

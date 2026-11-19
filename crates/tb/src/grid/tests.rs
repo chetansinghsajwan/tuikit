@@ -3,14 +3,45 @@
 use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 
-/// Builds an editor over comma-separated `text`, with no file.
-fn grid(text: &str) -> Grid {
-    Grid::new(Table::parse(text, ','), None, "space")
+/// A grid with the shell's dispatcher in front of it, so keys reach it the way they do in the
+/// app.
+struct Rig {
+    grid: Grid,
+    dispatcher: ui::app::Dispatcher,
 }
 
-/// Sends the characters of `keys` as key presses and returns the last action.
-fn press(g: &mut Grid, keys: &str) -> Action {
-    let mut last = Action::None;
+impl Rig {
+    /// Puts `grid` behind a dispatcher built the way `tb` builds its app.
+    fn new(mut grid: Grid) -> Rig {
+        let dispatcher = ui::app::App::new("tb")
+            .actions(crate::keys::ACTIONS)
+            .groups(crate::keys::GROUPS)
+            .dispatcher(&mut grid);
+        Rig { grid, dispatcher }
+    }
+
+    /// Sends one event through the dispatcher.
+    fn handle_event(&mut self, ev: &Event) -> Request {
+        self.dispatcher.event(&mut self.grid, ev, &mut ui::app::NoHost)
+    }
+}
+
+impl std::ops::Deref for Rig {
+    type Target = Grid;
+
+    fn deref(&self) -> &Grid {
+        &self.grid
+    }
+}
+
+/// Builds an editor over comma-separated `text`, with no file.
+fn grid(text: &str) -> Rig {
+    Rig::new(Grid::new(Table::parse(text, ','), None))
+}
+
+/// Sends the characters of `keys` as key presses and returns the last request.
+fn press(g: &mut Rig, keys: &str) -> Request {
+    let mut last = Request::None;
     for ch in keys.chars() {
         last = g.handle_event(&Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::NONE)));
     }
@@ -18,7 +49,7 @@ fn press(g: &mut Grid, keys: &str) -> Action {
 }
 
 /// Presses Enter.
-fn enter(g: &mut Grid) {
+fn enter(g: &mut Rig) {
     g.handle_event(&Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)));
 }
 
@@ -72,11 +103,11 @@ fn quit_asks_when_modified_and_save_writes_the_file() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("t.csv");
     std::fs::write(&path, "a,b\n1,2\n").unwrap();
-    let mut g = Grid::open(&path, "space").unwrap();
+    let mut g = Rig::new(Grid::open(&path).unwrap());
     press(&mut g, "x");
-    assert_eq!(press(&mut g, "q"), Action::None, "asks about the unsaved change");
-    assert_eq!(press(&mut g, "q"), Action::Quit);
-    let mut g = Grid::open(&path, "space").unwrap();
+    assert_eq!(press(&mut g, "q"), Request::None, "asks about the unsaved change");
+    assert_eq!(press(&mut g, "q"), Request::Quit);
+    let mut g = Rig::new(Grid::open(&path).unwrap());
     press(&mut g, "x");
     g.handle_event(&Event::Key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), ",b\n1,2\n");
@@ -97,7 +128,7 @@ fn it_draws_the_header_the_cursor_and_the_footer() {
     let theme = Theme::load();
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
-    g.render(area, &mut buf, &theme, true);
+    g.grid.render(area, &mut buf, &theme, true);
     let text: String = (0..8)
         .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();

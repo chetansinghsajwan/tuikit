@@ -16,6 +16,5 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-ratatui.workspace = true
 tuikit-tb.workspace = true
 tuikit-ui.workspace = true

@@ -5,16 +5,8 @@ use ui::keys::{Action, Group, action, basic};
 /// Every action of the editor with its default keys. One table feeds the keymap, the palette
 /// and the help screen, so the three never disagree.
 pub const ACTIONS: &[Action] = &[
-    basic("nav.up", "up", "move to the cell above", &["k", "up", "ctrl-p"]),
-    basic("nav.down", "down", "move to the cell below", &["j", "down", "ctrl-n"]),
     basic("nav.left", "left", "move to the cell on the left", &["h", "left"]),
     basic("nav.right", "right", "move to the cell on the right", &["l", "right"]),
-    basic("nav.up5", "up 5", "move five rows up", &["ctrl-k"]),
-    basic("nav.down5", "down 5", "move five rows down", &["ctrl-j"]),
-    basic("nav.page_up", "page up", "move half a page up", &["ctrl-u", "pageup"]),
-    basic("nav.page_down", "page down", "move half a page down", &["ctrl-d", "pagedown"]),
-    basic("nav.top", "top", "go to the first row", &["g", "home"]),
-    basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
     basic("nav.first_col", "first column", "go to the first column", &["0"]),
     basic("nav.last_col", "last column", "go to the last column", &["$"]),
     action("cell.edit", "edit cell", "edit the text of the cell", &["enter", "e"]),
@@ -49,8 +41,6 @@ pub const ACTIONS: &[Action] = &[
     action("undo", "undo", "undo the last change", &["u"]),
     action("redo", "redo", "redo the change undone", &["ctrl-r"]),
     action("file.save", "save", "write the table to its file", &["ctrl-s", "leader w"]),
-    basic("palette", "commands", "search every action by name and run it", &["leader space"]),
-    basic("help", "keys", "list every action with its keys", &["?"]),
     basic(
         "quit",
         "quit",
