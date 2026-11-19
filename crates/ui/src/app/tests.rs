@@ -12,6 +12,7 @@ struct Fake {
     cursor: isize,
     typing: bool,
     ran: Vec<&'static str>,
+    presses: usize,
     got: Vec<char>,
     unbound: Vec<String>,
     no_nav: bool,
@@ -35,6 +36,10 @@ impl Screen for Fake {
     fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
         self.ran.push(id);
         Request::None
+    }
+
+    fn keypress(&mut self) {
+        self.presses += 1;
     }
 
     fn unbound(&mut self, keys: &str) {
@@ -190,4 +195,16 @@ fn each_context_has_its_own_keymap() {
     let ids = |rows: Vec<Row>| rows.iter().map(|r| r.id).collect::<Vec<_>>();
     assert!(ids(d.rows(0)).contains(&"one.do") && !ids(d.rows(0)).contains(&"two.do"));
     assert!(ids(d.rows(1)).contains(&"two.do") && !ids(d.rows(1)).contains(&"one.do"));
+}
+
+#[test]
+fn the_screen_hears_of_each_key_the_keymap_decides_on_but_not_captured_ones() {
+    let mut s = Fake::default();
+    let mut d = app().dispatcher(&mut s);
+    press(&mut d, &mut s, "j");
+    press(&mut d, &mut s, "?");
+    assert_eq!(s.presses, 2);
+    s.typing = true;
+    press(&mut d, &mut s, "j");
+    assert_eq!(s.presses, 2);
 }

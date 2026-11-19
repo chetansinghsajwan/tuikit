@@ -223,7 +223,6 @@ impl Grid {
 
     /// Runs one of the editor's own actions by id.
     fn act(&mut self, id: &'static str) -> Request {
-        self.message = None;
         match id {
             "nav.left" => self.go_cols(-1),
             "nav.right" => self.go_cols(1),
@@ -571,6 +570,10 @@ impl ui::app::Screen for Grid {
 
     fn run(&mut self, id: &'static str, _host: &mut dyn ui::app::Host) -> Request {
         self.act(id)
+    }
+
+    fn keypress(&mut self) {
+        self.message = None;
     }
 
     /// Tells the user the key sequence they typed does nothing.

@@ -135,6 +135,10 @@ pub trait Screen {
     /// Runs one of the tool's own actions by id (also what a palette pick resolves to).
     fn run(&mut self, id: &'static str, host: &mut dyn Host) -> Request;
 
+    /// Called for each key press the keymap is about to decide on (not for keys the screen
+    /// captures): a place to clear a message left by the last action.
+    fn keypress(&mut self) {}
+
     /// A key sequence ended on a key nothing is bound to; `keys` names the sequence.
     fn unbound(&mut self, _keys: &str) {}
 
@@ -298,6 +302,7 @@ impl Dispatcher {
         if screen.captures(ev) {
             return screen.event(ev, host);
         }
+        screen.keypress();
         let ctx = self.index(screen.context());
         match self.keymaps[ctx].feed(key) {
             Feed::Run(id) => self.run(screen, id, host),

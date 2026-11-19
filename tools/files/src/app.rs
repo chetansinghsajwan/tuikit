@@ -130,6 +130,10 @@ impl ui::app::Screen for Explorer {
         }
     }
 
+    fn keypress(&mut self) {
+        self.panel().clear_message();
+    }
+
     fn unbound(&mut self, keys: &str) {
         self.panel().notify(format!("{keys} is not bound"), true);
     }

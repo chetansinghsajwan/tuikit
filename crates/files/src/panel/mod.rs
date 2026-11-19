@@ -338,6 +338,11 @@ impl Panel {
         }
     }
 
+    /// Drops the footer message, as the next key press does.
+    pub fn clear_message(&mut self) {
+        self.message = None;
+    }
+
     /// Set the footer message; `error` makes it show as a failure.
     fn say(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));

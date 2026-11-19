@@ -197,20 +197,17 @@ impl App {
     fn typing(&mut self, ev: &Event) {
         let Event::Key(key) = ev else { return };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Password(ssid, mut input) => {
-                match key.code {
-                    KeyCode::Esc => {}
-                    KeyCode::Enter => {
-                        let password = input.value().to_string();
-                        self.start_wifi(ssid, Some(password));
-                    }
-                    _ => {
-                        input.handle_event(ev);
-                        self.mode = Mode::Password(ssid, input);
-                    }
+            Mode::Password(ssid, mut input) => match key.code {
+                KeyCode::Esc => {}
+                KeyCode::Enter => {
+                    let password = input.value().to_string();
+                    self.start_wifi(ssid, Some(password));
                 }
-                return;
-            }
+                _ => {
+                    input.handle_event(ev);
+                    self.mode = Mode::Password(ssid, input);
+                }
+            },
             Mode::ForgetWifi(ssid) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
                     match self.wifi.forget(&ssid) {
@@ -219,7 +216,6 @@ impl App {
                     }
                     self.refresh();
                 }
-                return;
             }
             Mode::ForgetDevice(address, name) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
@@ -229,7 +225,6 @@ impl App {
                     }
                     self.refresh();
                 }
-                return;
             }
             Mode::Normal => {}
         }
@@ -286,7 +281,6 @@ impl App {
 
     /// Runs an action by id: the focus ones here, the per-pane ones in their own handlers.
     fn act(&mut self, id: &'static str) -> Request {
-        self.message = None;
         match id {
             "focus.next" => self.focus_by(1),
             "focus.prev" => self.focus_by(-1),
@@ -444,6 +438,10 @@ impl ui::app::Screen for App {
 
     fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
         self.act(id)
+    }
+
+    fn keypress(&mut self) {
+        self.message = None;
     }
 
     fn unbound(&mut self, keys: &str) {
