@@ -1,0 +1,93 @@
+name: Release
+# A version tag (`v0.2.0`) publishes a GitHub Release with every tool built for each platform.
+on:
+  push:
+    tags: ["v*"]
+env:
+  CARGO_TERM_COLOR: always
+permissions:
+  contents: read
+# Never cancel a release halfway. The group name differs from CI's (`github.workflow` is this
+# workflow's name inside the called CI too), or the called CI would wait on this run forever.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  # Nothing is published unless the tag passes the same checks as a pull request.
+  # zizmor prefers `$/` (GitHub's self-repository syntax, 2026-07), but actionlint rejects it.
+  ci:
+    uses: ./.github/workflows/ci.yml # zizmor: ignore[self-repository]
+  # A tag must name the version in Cargo.toml and sit on main, so a stray tag cannot ship.
+  verify:
+    name: verify tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag matches the workspace version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$TAG" != "v$version" ]; then
+            echo "tag $TAG does not match the workspace version $version" >&2
+            exit 1
+          fi
+      - name: Tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+  # One archive holding all the tools, built static against musl so it runs on any Linux
+  # distribution, with a checksum file beside it.
+  build:
+    name: build (x86_64 linux musl)
+    needs: [ci, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+      - name: Build
+        run: nix build .#pick-static .#pv-static .#files-static .#gu-static .#tb-static .#nu-static .#mdexport-static --print-build-logs --no-link --print-out-paths > out-paths.txt
+      - name: Package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          name="tuikit-$TAG-x86_64-linux-musl"
+          mkdir -p "dist/$name"
+          while read -r out; do cp "$out"/bin/* "dist/$name/"; done < out-paths.txt
+          # A dynamic binary would need the Nix store, so refuse to ship one.
+          for bin in "dist/$name"/*; do
+            file "$bin" | grep -q "statically linked" || { echo "$bin is not static" >&2; exit 1; }
+          done
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+  # The only job that can write to the repository.
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --verify-tag --generate-notes --title "$TAG"
