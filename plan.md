@@ -587,9 +587,10 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 
 - `files`: dot files (muted name) and ignored files (muted, dim, italic; `Panel` marks them while `I` shows them) are marked per row by `ui::tree::FileRow::hidden/ignored`; the title no longer shows the "ignored hidden" count.
 
-## App shell (`ui::app`), in progress
+## App shell (`ui::app`)
 
-- `ui::app` owns the terminal, the keymap, the loop and the overlays (leader menu, help, palette). A tool implements `Screen` (render, captures, event, run, unbound, optional `nav`) and runs `App::new(tool).actions(..).groups(..).run(&mut screen)`.
-- The shell registers `nav.*` (up, down, up5, down5, page, top, bottom; the screen implements `Navigable`) plus `palette` and `help`. Nav is on by default and `.no_nav()` turns it off. `ctrl-d` and `ctrl-u` are not movement: they scroll the preview.
-- `Screen::captures` is the modal hook: while a prompt takes text the keymap, leader included, stays out. A duplicate action id panics at startup.
-- Done: `tb` (pilot). Next: `files` (tabs become a shell feature), then `gu`, `nu`, `kanata-status`. Open: the step size of `nav.up5` and `nav.down5` ("dynamic with the count"): `Navigable::step` defaults to 5 until that is decided.
+- `ui::app` owns the terminal, the keymaps, the loop and the overlays (leader menu, help, palette). A tool implements `Screen` and runs `App::new(tool).actions(..).contexts(..).groups(..).run(&mut screen)`; `Dispatcher` is the part tests drive without a terminal (`NoHost`).
+- Shared actions: `nav.*` (up, down, up5, down5, page, top, bottom; the screen implements `Navigable`; `nav.up5` and `nav.down5` are plain commands of 5 rows, bound like any other), `tab.*` (the screen implements `Tabbed`; fixed tabs get next and prev, dynamic ones also new, reopen, duplicate, move and close; unbound `1`-`9` go to a tab), `palette` and `help`. Each is on by default (`.no_nav()`, `.no_tabs()`). `ctrl-d` and `ctrl-u` are not movement: they scroll the preview.
+- `Screen::captures` is the modal hook: while a prompt takes text the keymap, leader included, stays out. `Screen::keypress` runs before the keymap decides (clear the stale message there). `Screen::context` picks the keymap of the focused pane (`App::contexts`). `Screen::tick` does background work. A duplicate action id panics at startup.
+- Converted: `tb`, `files`, `nu`, `gu`. `Panel` (files) and `git_panel::Panel` keep their own keymap for editors that embed them and add `captures`, `handle_captured`, `Navigable` and `keys::hosted` for a host that owns the keymap.
+- Not converted: `kanata-status`. It has no keymap, help, palette or movement on purpose (every key typed there also reaches kanata, so it binds only `ctrl` chords), and the shell would claim `?`, the leader and `j`/`k`.
