@@ -2,3 +2,4 @@ target/
 
 .tmp/
 .agents-local/
+.claude/worktrees/
