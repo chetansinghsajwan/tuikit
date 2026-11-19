@@ -39,7 +39,7 @@ fn main() -> ExitCode {
     }
     let cli = Cli::parse();
     match app::run(cli.into()) {
-        Ok(code) => ExitCode::from(code),
+        Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("files: {e}");
             ExitCode::from(2)

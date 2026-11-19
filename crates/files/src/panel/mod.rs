@@ -377,19 +377,53 @@ impl Panel {
         self.normal_key(key)
     }
 
+    /// While a paste runs, Esc cancels it and the delete keys are refused: the action to return
+    /// for such a key, `None` for any other.
+    fn job_key(&mut self, key: &KeyEvent) -> Option<Action> {
+        let job = self.job.as_ref()?;
+        if key.code == KeyCode::Esc {
+            job.progress.cancel.store(true, Ordering::Relaxed);
+            self.say("cancelling the paste", false);
+            return Some(Action::None);
+        }
+        if matches!(key.code, KeyCode::Char('d' | 'D')) {
+            self.say("busy: a paste is running (Esc cancels it)", true);
+            return Some(Action::None);
+        }
+        None
+    }
+
+    /// Whether this event is the panel's own even though the host owns the keymap: a prompt, a
+    /// question or a bookmark wait is open, or a paste runs and the key cancels or refuses it.
+    pub fn captures(&self, ev: &Event) -> bool {
+        if self.is_busy() {
+            return true;
+        }
+        let Event::Key(key) = ev else { return false };
+        self.job.is_some() && matches!(key.code, KeyCode::Esc | KeyCode::Char('d' | 'D'))
+    }
+
+    /// Feeds an event the panel claimed (see `captures`) when the host owns the keymap, and returns
+    /// what the host should do about it.
+    pub fn handle_captured(&mut self, ev: &Event) -> Action {
+        self.poll_job();
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+        if *kind == KeyEventKind::Release {
+            return Action::None;
+        }
+        match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Prompt(kind, input) => self.prompt_key(kind, input, ev, key),
+            Mode::Confirm(kind, targets) => self.confirm_key(kind, targets, key),
+            Mode::Bookmark(op) => self.bookmark_key(op, key),
+            Mode::Normal => self.job_key(key).unwrap_or(Action::None),
+        }
+    }
+
     /// A key in the normal mode: cancels or refuses things while a paste runs,
     /// else the keymap decides.
     fn normal_key(&mut self, key: &KeyEvent) -> Action {
-        if let Some(job) = &self.job {
-            if key.code == KeyCode::Esc {
-                job.progress.cancel.store(true, Ordering::Relaxed);
-                self.say("cancelling the paste", false);
-                return Action::None;
-            }
-            if matches!(key.code, KeyCode::Char('d' | 'D')) {
-                self.say("busy: a paste is running (Esc cancels it)", true);
-                return Action::None;
-            }
+        if let Some(action) = self.job_key(key) {
+            return action;
         }
         match self.keymap.feed(key) {
             ui::keys::Feed::Run(id) => self.run(id),
@@ -703,5 +737,24 @@ impl Panel {
                 Action::None
             }
         }
+    }
+}
+
+/// The rows are what the shared movement walks.
+impl ui::app::Navigable for Panel {
+    fn move_by(&mut self, delta: isize) {
+        Panel::move_by(self, delta);
+    }
+
+    fn page(&self) -> usize {
+        self.page
+    }
+
+    fn top(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn bottom(&mut self) {
+        self.cursor = self.rows.len().saturating_sub(1);
     }
 }

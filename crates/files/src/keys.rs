@@ -122,6 +122,16 @@ pub const GROUPS: &[Group] = &[
     Group { prefix: "leader t", name: "tabs" },
 ];
 
+/// The actions for a host that owns the keymap (the shared app shell): all of `ACTIONS` except
+/// the movement, the palette and the help, which the shell registers itself.
+pub fn hosted() -> Vec<Action> {
+    ACTIONS
+        .iter()
+        .filter(|a| !a.id.starts_with("nav.") && !matches!(a.id, "palette" | "help"))
+        .cloned()
+        .collect()
+}
+
 /// The ids of `ACTIONS`, to tell the panel's own actions from a host's.
 pub fn owns(id: &str) -> bool {
     ACTIONS.iter().any(|a| a.id == id)
