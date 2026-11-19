@@ -15,6 +15,7 @@ struct Fake {
     got: Vec<char>,
     unbound: Vec<String>,
     no_nav: bool,
+    ctx: usize,
 }
 
 impl Screen for Fake {
@@ -42,6 +43,10 @@ impl Screen for Fake {
 
     fn nav(&mut self) -> Option<&mut dyn Navigable> {
         if self.no_nav { None } else { Some(self) }
+    }
+
+    fn context(&self) -> usize {
+        self.ctx
     }
 }
 
@@ -128,7 +133,7 @@ fn the_tools_own_actions_reach_the_screen_and_the_shell_ones_the_loop() {
     assert_eq!(s.ran, vec!["thing.do"]);
     assert_eq!(press(&mut d, &mut s, "?"), Request::Help);
     assert_eq!(press(&mut d, &mut s, "space"), Request::None, "the leader opens the menu");
-    assert!(d.menu().is_some());
+    assert!(d.menu(0).is_some());
     assert_eq!(press(&mut d, &mut s, "space"), Request::Palette);
 }
 
@@ -140,7 +145,7 @@ fn a_screen_that_takes_text_gets_every_key_the_leader_included() {
         press(&mut d, &mut s, k);
     }
     assert_eq!(s.got, vec!['j', ' ', '?']);
-    assert!(d.menu().is_none());
+    assert!(d.menu(0).is_none());
     assert_eq!(s.cursor, 0);
 }
 
@@ -157,7 +162,7 @@ fn a_sequence_nothing_is_bound_to_is_reported_to_the_screen() {
 fn the_help_lists_the_shared_and_the_own_actions() {
     let mut s = Fake::default();
     let d = app().dispatcher(&mut s);
-    let rows = d.rows();
+    let rows = d.rows(0);
     let text = format!("{rows:?}");
     for want in ["up", "page down", "commands", "keys", "do"] {
         assert!(text.contains(want), "{want} is missing from the help");
@@ -170,4 +175,19 @@ fn an_action_id_registered_twice_fails_at_startup() {
     const CLASH: &[Action] = &[crate::keys::action("nav.up", "up", "again", &["x"])];
     let mut s = Fake::default();
     let _ = App::new("fake").actions(CLASH).dispatcher(&mut s);
+}
+
+#[test]
+fn each_context_has_its_own_keymap() {
+    const ONE: &[Action] = &[crate::keys::action("one.do", "one", "in the first", &["x"])];
+    const TWO: &[Action] = &[crate::keys::action("two.do", "two", "in the second", &["x"])];
+    let mut s = Fake::default();
+    let mut d = App::new("fake").contexts(vec![ONE.to_vec(), TWO.to_vec()]).dispatcher(&mut s);
+    press(&mut d, &mut s, "x");
+    s.ctx = 1;
+    press(&mut d, &mut s, "x");
+    assert_eq!(s.ran, vec!["one.do", "two.do"]);
+    let ids = |rows: Vec<Row>| rows.iter().map(|r| r.id).collect::<Vec<_>>();
+    assert!(ids(d.rows(0)).contains(&"one.do") && !ids(d.rows(0)).contains(&"two.do"));
+    assert!(ids(d.rows(1)).contains(&"two.do") && !ids(d.rows(1)).contains(&"one.do"));
 }

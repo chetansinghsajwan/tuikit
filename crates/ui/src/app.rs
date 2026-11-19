@@ -148,6 +148,11 @@ pub trait Screen {
     fn nav(&mut self) -> Option<&mut dyn Navigable> {
         None
     }
+
+    /// Which set of `App::contexts` is active (the focused pane): its actions and keys apply now.
+    fn context(&self) -> usize {
+        0
+    }
 }
 
 /// The shared movement actions, registered when the screen is `Navigable`. The keys follow
@@ -174,6 +179,7 @@ pub struct App {
     tool: &'static str,
     leader: &'static str,
     actions: Vec<Action>,
+    contexts: Vec<Vec<Action>>,
     groups: &'static [Group],
     nav: bool,
     tick: Duration,
@@ -187,6 +193,7 @@ impl App {
             tool,
             leader: "space",
             actions: Vec::new(),
+            contexts: Vec::new(),
             groups: &[],
             nav: true,
             tick: Duration::from_millis(250),
@@ -202,6 +209,14 @@ impl App {
     /// The tool's own actions.
     pub fn actions(mut self, actions: impl Into<Vec<Action>>) -> App {
         self.actions = actions.into();
+        self
+    }
+
+    /// Extra actions that apply only while a context is active (a focused pane), one set each;
+    /// `Screen::context` picks the set. Each context gets its own keymap, so the same key may mean
+    /// different things in different contexts.
+    pub fn contexts(mut self, contexts: impl Into<Vec<Vec<Action>>>) -> App {
+        self.contexts = contexts.into();
         self
     }
 
@@ -223,8 +238,9 @@ impl App {
         self
     }
 
-    /// Builds the keymap from the shared actions, the tool's and the user's configuration.
-    /// Panics when two actions share an id, so a clash shows up at startup, not as a dead key.
+    /// Builds the keymaps (one per context) from the shared actions, the tool's and the user's
+    /// configuration. Panics when two actions of a keymap share an id, so a clash shows up at
+    /// startup, not as a dead key.
     pub fn dispatcher<S: Screen>(&self, screen: &mut S) -> Dispatcher {
         let nav = self.nav && screen.nav().is_some();
         let mut all: Vec<Action> = Vec::new();
@@ -233,10 +249,24 @@ impl App {
         }
         all.extend_from_slice(SHELL);
         all.extend(self.actions.iter().cloned());
-        for (i, a) in all.iter().enumerate() {
-            assert!(all[..i].iter().all(|b| b.id != a.id), "action {} is registered twice", a.id);
-        }
-        Dispatcher { keymap: Keymap::new(self.leader, &all, self.groups), nav }
+        let none = [Vec::new()];
+        let contexts = if self.contexts.is_empty() { &none[..] } else { &self.contexts };
+        let keymaps = contexts
+            .iter()
+            .map(|own| {
+                let mut all = all.clone();
+                all.extend(own.iter().cloned());
+                for (i, a) in all.iter().enumerate() {
+                    assert!(
+                        all[..i].iter().all(|b| b.id != a.id),
+                        "action {} is registered twice",
+                        a.id
+                    );
+                }
+                Keymap::new(self.leader, &all, self.groups)
+            })
+            .collect();
+        Dispatcher { keymaps, nav }
     }
 
     /// Runs the screen until it quits and always restores the terminal afterwards.
@@ -253,7 +283,8 @@ impl App {
 /// Turns events into actions: the keymap decides, the shell runs the shared actions and the
 /// screen the rest.
 pub struct Dispatcher {
-    keymap: Keymap,
+    /// One per context, the first alone when the tool has none.
+    keymaps: Vec<Keymap>,
     nav: bool,
 }
 
@@ -267,10 +298,11 @@ impl Dispatcher {
         if screen.captures(ev) {
             return screen.event(ev, host);
         }
-        match self.keymap.feed(key) {
+        let ctx = self.index(screen.context());
+        match self.keymaps[ctx].feed(key) {
             Feed::Run(id) => self.run(screen, id, host),
             Feed::NoBinding => {
-                screen.unbound(self.keymap.rejected());
+                screen.unbound(self.keymaps[ctx].rejected());
                 Request::None
             }
             Feed::Unbound => screen.event(ev, host),
@@ -298,14 +330,20 @@ impl Dispatcher {
         }
     }
 
-    /// The pending key-prefix menu, to draw over the screen.
-    pub fn menu(&self) -> Option<Menu> {
-        self.keymap.menu()
+    /// The keymap of a context, clamped so a screen reporting a context it did not register still
+    /// gets one.
+    fn index(&self, ctx: usize) -> usize {
+        ctx.min(self.keymaps.len() - 1)
     }
 
-    /// Every action with its keys, for the help and the palette.
-    pub fn rows(&self) -> Vec<Row> {
-        self.keymap.rows()
+    /// The pending key-prefix menu of a context, to draw over the screen.
+    pub fn menu(&self, ctx: usize) -> Option<Menu> {
+        self.keymaps[self.index(ctx)].menu()
+    }
+
+    /// Every action of a context with its keys, for the help and the palette.
+    pub fn rows(&self, ctx: usize) -> Vec<Row> {
+        self.keymaps[self.index(ctx)].rows()
     }
 }
 
@@ -358,14 +396,15 @@ fn event_loop<S: Screen>(
     let mut dirty = true;
     loop {
         if dirty {
+            let ctx = screen.context();
             term.draw(|f| {
                 let area = f.area();
                 screen.render(area, f.buffer_mut(), &theme);
-                if let Some(menu) = dispatcher.menu() {
+                if let Some(menu) = dispatcher.menu(ctx) {
                     render_menu(area, f.buffer_mut(), &theme, &menu);
                 }
                 if let Some(h) = help.as_mut() {
-                    h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.rows());
+                    h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.rows(ctx));
                 }
                 crate::anim::finish(f.buffer_mut(), &theme);
             })?;
@@ -390,7 +429,7 @@ fn event_loop<S: Screen>(
             Request::Quit => return Ok(()),
             Request::Help => help = Some(Help::default()),
             Request::Palette => {
-                let rows = dispatcher.rows();
+                let rows = dispatcher.rows(screen.context());
                 if let Some(id) = overlay(term, || choose(app.tool, &rows, "Commands"))?
                     && dispatcher.run(screen, id, term) == Request::Quit
                 {
