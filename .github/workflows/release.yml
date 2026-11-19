@@ -8,9 +8,10 @@ env:
 permissions:
   contents: read
 # Never cancel a release halfway. The group name differs from CI's (`github.workflow` is this
-# workflow's name inside the called CI too), or the called CI would wait on this run forever.
+# workflow's name inside the called CI too, and group names ignore case), or the called CI would
+# wait on this run forever.
 concurrency:
-  group: release-${{ github.ref }}
+  group: publish-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   # Nothing is published unless the tag passes the same checks as a pull request.

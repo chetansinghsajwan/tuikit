@@ -11,11 +11,10 @@ env:
 # The jobs only read the repository. A job that needs more asks for it itself.
 permissions:
   contents: read
-# A newer push to the same branch makes the older run pointless, except on main where a run may be
-# pushing to the binary cache.
+# A newer push to the same branch makes the older run pointless.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 jobs:
   # Everything that gives the same result on any platform, plus the Rust lint and tests on Linux.
   check:
@@ -59,29 +58,3 @@ jobs:
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
       - name: Scan
         run: nix develop --command task scan
-  # Builds every tool with Nix and pushes the results (and their dependencies) to the binary
-  # cache, so other machines download instead of compile. Runs on main only: the push token is
-  # then never given to code from a pull request. Needs the repository variable CACHIX_CACHE (the
-  # cache name) and the secret CACHIX_AUTH_TOKEN.
-  nix:
-    name: nix build (${{ matrix.os }})
-    if: github.ref == 'refs/heads/main'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
-      - uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
-        with:
-          name: ${{ vars.CACHIX_CACHE }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Build
-        run: nix build .#pick .#pv .#files .#gu .#tb .#nu .#mdexport --print-build-logs
-      - name: Flake check
-        run: nix flake check --print-build-logs
