@@ -64,30 +64,41 @@
       src = sourceOf pkgs.lib;
       strictDeps = true;
     };
+
+    # Every tool built against the given package set.
+    toolsFor = pkgs: let
+      craneLib = crane.mkLib pkgs;
+      common = commonFor pkgs;
+
+      # Every dependency of the whole workspace, built once from the manifests alone:
+      # editing our code does not rebuild them.
+      cargoArtifacts = craneLib.buildDepsOnly (common // {cargoExtraArgs = "--locked --workspace";});
+
+      # Tests run in the dev loop and in `checks`, not here.
+      mkTool = name: crate:
+        craneLib.buildPackage (
+          common
+          // {
+            inherit cargoArtifacts;
+            pname = name;
+            cargoExtraArgs = "--locked -p ${crate}";
+            doCheck = false;
+          }
+        );
+    in
+      builtins.mapAttrs mkTool tools;
   in {
+    # On Linux every tool also has a `<tool>-static` build against musl: one self-contained
+    # binary with no `/nix/store` references, which is what the GitHub Release ships.
     packages = forEachSystem (
       sys: let
         pkgs = nixpkgs.legacyPackages.${sys};
-        craneLib = crane.mkLib pkgs;
-        common = commonFor pkgs;
-
-        # Every dependency of the whole workspace, built once from the manifests alone:
-        # editing our code does not rebuild them.
-        cargoArtifacts = craneLib.buildDepsOnly (common // {cargoExtraArgs = "--locked --workspace";});
-
-        # Tests run in the dev loop and in `checks`, not here.
-        mkTool = name: crate:
-          craneLib.buildPackage (
-            common
-            // {
-              inherit cargoArtifacts;
-              pname = name;
-              cargoExtraArgs = "--locked -p ${crate}";
-              doCheck = false;
-            }
-          );
+        inherit (nixpkgs) lib;
       in
-        builtins.mapAttrs mkTool tools
+        toolsFor pkgs
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
+          lib.mapAttrs' (name: lib.nameValuePair "${name}-static") (toolsFor pkgs.pkgsStatic)
+        )
     );
 
     # `nix flake check`: the workspace's own tests.
