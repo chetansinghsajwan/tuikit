@@ -13,6 +13,10 @@ struct Fake {
     typing: bool,
     ran: Vec<&'static str>,
     presses: usize,
+    tab: usize,
+    tabs: bool,
+    dynamic: bool,
+    opened: usize,
     got: Vec<char>,
     unbound: Vec<String>,
     no_nav: bool,
@@ -52,6 +56,32 @@ impl Screen for Fake {
 
     fn context(&self) -> usize {
         self.ctx
+    }
+
+    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+        if self.tabs { Some(self) } else { None }
+    }
+}
+
+impl Tabbed for Fake {
+    fn tab_next(&mut self) {
+        self.tab += 1;
+    }
+
+    fn tab_prev(&mut self) {
+        self.tab = self.tab.saturating_sub(1);
+    }
+
+    fn tab_goto(&mut self, index: usize) {
+        self.tab = index;
+    }
+
+    fn dynamic(&self) -> bool {
+        self.dynamic
+    }
+
+    fn tab_new(&mut self) {
+        self.opened += 1;
     }
 }
 
@@ -207,4 +237,46 @@ fn the_screen_hears_of_each_key_the_keymap_decides_on_but_not_captured_ones() {
     s.typing = true;
     press(&mut d, &mut s, "j");
     assert_eq!(s.presses, 2);
+}
+
+#[test]
+fn tabs_get_the_shared_keys_and_the_number_keys() {
+    let mut s = Fake { tabs: true, ..Fake::default() };
+    let mut d = app().dispatcher(&mut s);
+    press(&mut d, &mut s, "]");
+    press(&mut d, &mut s, "]");
+    assert_eq!(s.tab, 2);
+    press(&mut d, &mut s, "[");
+    assert_eq!(s.tab, 1);
+    press(&mut d, &mut s, "4");
+    assert_eq!(s.tab, 3, "an unbound number key goes to that tab");
+    assert!(s.got.is_empty(), "the screen never saw it");
+    let ids: Vec<_> = d.rows(0).iter().map(|r| r.id).collect();
+    assert!(!ids.contains(&"tab.new"), "fixed tabs cannot be opened: {ids:?}");
+}
+
+#[test]
+fn dynamic_tabs_can_be_opened_and_a_bound_number_key_stays_the_screens() {
+    const ONE: &[Action] = &[crate::keys::action("focus.one", "one", "focus one", &["1"])];
+    let mut s = Fake { tabs: true, dynamic: true, ..Fake::default() };
+    let mut d = App::new("fake").actions(ONE).dispatcher(&mut s);
+    press(&mut d, &mut s, "space");
+    press(&mut d, &mut s, "t");
+    press(&mut d, &mut s, "n");
+    assert_eq!(s.opened, 1);
+    press(&mut d, &mut s, "1");
+    assert_eq!((s.tab, s.ran.as_slice()), (0, &["focus.one"][..]), "the bound key wins");
+}
+
+#[test]
+fn a_screen_without_tabs_or_with_no_tabs_gets_no_tab_keys() {
+    let mut s = Fake::default();
+    let mut d = app().dispatcher(&mut s);
+    press(&mut d, &mut s, "]");
+    assert_eq!(s.got, vec![']']);
+
+    let mut s = Fake { tabs: true, ..Fake::default() };
+    let mut d = app().no_tabs().dispatcher(&mut s);
+    press(&mut d, &mut s, "]");
+    assert_eq!((s.tab, s.got.as_slice()), (0, &[']'][..]));
 }

@@ -5,11 +5,13 @@
 //! help and the palette look the same everywhere.
 
 use crate::Theme;
-use crate::keys::{Action, Feed, Group, Help, Keymap, Menu, Row, basic, choose, render_menu};
+use crate::keys::{
+    Action, Feed, Group, Help, Keymap, Menu, Row, action, basic, choose, render_menu,
+};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{self, Event, KeyEventKind};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -114,6 +116,41 @@ pub trait Navigable {
     }
 }
 
+/// Tabs of a screen. A screen that offers them gets the shared `tab.*` actions (and their keys)
+/// without declaring them, and the number keys `1` to `9` go to a tab when nothing else is bound
+/// to them.
+pub trait Tabbed {
+    /// Switches to the next tab, wrapping around.
+    fn tab_next(&mut self);
+
+    /// Switches to the previous tab, wrapping around.
+    fn tab_prev(&mut self);
+
+    /// Switches to the tab at `index` (0 for the first); out of range does nothing.
+    fn tab_goto(&mut self, index: usize);
+
+    /// Whether the user opens and closes tabs (a file explorer) or the tabs are fixed (the Status,
+    /// Commits and Refs tabs of a git screen). Only dynamic tabs get the actions below.
+    fn dynamic(&self) -> bool {
+        false
+    }
+
+    /// Opens a new tab where this one is.
+    fn tab_new(&mut self) {}
+
+    /// Brings back the tab closed last.
+    fn tab_reopen(&mut self) {}
+
+    /// Opens a copy of this tab next to it.
+    fn tab_duplicate(&mut self) {}
+
+    /// Moves this tab by `delta` places.
+    fn tab_move(&mut self, _delta: isize) {}
+
+    /// Closes this tab.
+    fn tab_close(&mut self) {}
+}
+
 /// What a tool provides to the shell: how it draws and how it runs its own actions. The shell
 /// owns the keymap, so it decides which key means which action.
 pub trait Screen {
@@ -153,6 +190,11 @@ pub trait Screen {
         None
     }
 
+    /// The tabs the screen offers, if any.
+    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+        None
+    }
+
     /// Which set of `App::contexts` is active (the focused pane): its actions and keys apply now.
     fn context(&self) -> usize {
         0
@@ -172,6 +214,25 @@ const NAV: &[Action] = &[
     basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
 ];
 
+/// The tab actions of every screen with tabs.
+const TABS: &[Action] = &[
+    basic("tab.next", "next tab", "switch to the next tab", &["]", "leader t l"]),
+    basic("tab.prev", "previous tab", "switch to the previous tab", &["[", "leader t h"]),
+];
+
+/// The extra tab actions of a screen whose tabs the user opens and closes.
+const DYNAMIC_TABS: &[Action] = &[
+    action("tab.new", "new tab", "open a new tab in the same place", &["leader t n"]),
+    action("tab.reopen", "reopen tab", "bring back the tab closed last", &["leader t r"]),
+    action("tab.duplicate", "duplicate tab", "open a copy of this tab next to it", &["leader t d"]),
+    action("tab.move_left", "move tab left", "move this tab one place left", &["leader t ["]),
+    action("tab.move_right", "move tab right", "move this tab one place right", &["leader t ]"]),
+    action("tab.close", "close tab", "close this tab", &["leader t c"]),
+];
+
+/// The name of the leader menu behind `leader t`.
+const TAB_GROUP: Group = Group { prefix: "leader t", name: "tabs" };
+
 /// The actions of the shell itself, on every screen.
 const SHELL: &[Action] = &[
     basic("palette", "commands", "search every action by name and run it", &["leader space"]),
@@ -186,6 +247,7 @@ pub struct App {
     contexts: Vec<Vec<Action>>,
     groups: &'static [Group],
     nav: bool,
+    tabs: bool,
     tick: Duration,
 }
 
@@ -200,6 +262,7 @@ impl App {
             contexts: Vec::new(),
             groups: &[],
             nav: true,
+            tabs: true,
             tick: Duration::from_millis(250),
         }
     }
@@ -236,6 +299,12 @@ impl App {
         self
     }
 
+    /// Leaves the shared tab actions out, even for a screen that offers tabs.
+    pub fn no_tabs(mut self) -> App {
+        self.tabs = false;
+        self
+    }
+
     /// How long the loop waits for input before it calls `Screen::tick`.
     pub fn tick(mut self, tick: Duration) -> App {
         self.tick = tick;
@@ -247,9 +316,20 @@ impl App {
     /// startup, not as a dead key.
     pub fn dispatcher<S: Screen>(&self, screen: &mut S) -> Dispatcher {
         let nav = self.nav && screen.nav().is_some();
+        let tabs = self.tabs && screen.tabs().is_some();
         let mut all: Vec<Action> = Vec::new();
         if nav {
             all.extend_from_slice(NAV);
+        }
+        if tabs {
+            all.extend_from_slice(TABS);
+            if screen.tabs().is_some_and(|t| t.dynamic()) {
+                all.extend_from_slice(DYNAMIC_TABS);
+            }
+        }
+        let mut groups = self.groups.to_vec();
+        if tabs && groups.iter().all(|g| g.prefix != TAB_GROUP.prefix) {
+            groups.push(TAB_GROUP);
         }
         all.extend_from_slice(SHELL);
         all.extend(self.actions.iter().cloned());
@@ -267,10 +347,10 @@ impl App {
                         a.id
                     );
                 }
-                Keymap::new(self.leader, &all, self.groups)
+                Keymap::new(self.leader, &all, &groups)
             })
             .collect();
-        Dispatcher { keymaps, nav }
+        Dispatcher { keymaps, nav, tabs }
     }
 
     /// Runs the screen until it quits and always restores the terminal afterwards.
@@ -290,6 +370,7 @@ pub struct Dispatcher {
     /// One per context, the first alone when the tool has none.
     keymaps: Vec<Keymap>,
     nav: bool,
+    tabs: bool,
 }
 
 impl Dispatcher {
@@ -310,7 +391,17 @@ impl Dispatcher {
                 screen.unbound(self.keymaps[ctx].rejected());
                 Request::None
             }
-            Feed::Unbound => screen.event(ev, host),
+            Feed::Unbound => {
+                if self.tabs
+                    && let KeyCode::Char(c @ '1'..='9') = key.code
+                    && !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                    && let Some(tabs) = screen.tabs()
+                {
+                    tabs.tab_goto(c as usize - '1' as usize);
+                    return Request::None;
+                }
+                screen.event(ev, host)
+            }
             Feed::Pending | Feed::Cancelled => Request::None,
         }
     }
@@ -328,6 +419,12 @@ impl Dispatcher {
             _ if self.nav && NAV.iter().any(|a| a.id == id) => {
                 if let Some(nav) = screen.nav() {
                     navigate(nav, id);
+                }
+                Request::None
+            }
+            _ if self.tabs && id.starts_with("tab.") => {
+                if let Some(tabs) = screen.tabs() {
+                    switch(tabs, id);
                 }
                 Request::None
             }
@@ -349,6 +446,21 @@ impl Dispatcher {
     /// Every action of a context with its keys, for the help and the palette.
     pub fn rows(&self, ctx: usize) -> Vec<Row> {
         self.keymaps[self.index(ctx)].rows()
+    }
+}
+
+/// Carries out one shared tab action on the screen.
+fn switch(tabs: &mut dyn Tabbed, id: &str) {
+    match id {
+        "tab.next" => tabs.tab_next(),
+        "tab.prev" => tabs.tab_prev(),
+        "tab.new" => tabs.tab_new(),
+        "tab.reopen" => tabs.tab_reopen(),
+        "tab.duplicate" => tabs.tab_duplicate(),
+        "tab.move_left" => tabs.tab_move(-1),
+        "tab.move_right" => tabs.tab_move(1),
+        "tab.close" => tabs.tab_close(),
+        _ => {}
     }
 }
 
