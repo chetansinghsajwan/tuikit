@@ -4,4 +4,5 @@
 mod app;
 mod keys;
 
-pub use app::{App, Quit};
+pub use app::App;
+pub use keys::{common, panes};

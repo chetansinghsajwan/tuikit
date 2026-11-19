@@ -1,18 +1,9 @@
-//! The `nu` binary: picks the real or fake radios, owns the terminal, and runs the event loop that
-//! feeds `nu::App`.
+//! The `nu` binary: picks the real or fake radios and runs `nu::App` on the shared app shell.
 
 use clap::Parser;
-use nu::{App, Quit};
+use nu::App;
 use nu_core::Backend;
 use nu_core::bluetooth::Bluetooth;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event::{self, Event};
-use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{
-    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use std::fs::OpenOptions;
 use std::io;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -25,22 +16,6 @@ struct Cli {
     /// Use pretend radios (a few networks and devices) instead of NetworkManager and BlueZ, to try the screen.
     #[arg(long)]
     fake: bool,
-}
-
-/// The terminal `nu` draws on: the controlling tty, so it works even when stdout is piped.
-type Term = Terminal<CrosstermBackend<std::fs::File>>;
-
-/// Puts the terminal in raw mode on the alternate screen, so the app can draw and read keys.
-fn enter(term: &mut Term) -> io::Result<()> {
-    enable_raw_mode()?;
-    execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
-    term.clear()
-}
-
-/// Undoes `enter`, so the shell gets its terminal back (also for the palette and on exit).
-fn leave(term: &mut Term) -> io::Result<()> {
-    disable_raw_mode()?;
-    execute!(term.backend_mut(), LeaveAlternateScreen)
 }
 
 /// Loads the shared config, runs the app and turns its result into an exit code.
@@ -80,8 +55,7 @@ fn real_backends() -> (Arc<dyn Backend>, Arc<dyn Bluetooth>) {
     (Arc::new(nu_core::macos::MacWifi::new()), Arc::new(nu_core::macos::MacBluetooth::new()))
 }
 
-/// Sets up the backends and terminal, then loops: draw when something changed, wait for a key or
-/// a tick, and hand the key to the app. Returns the exit code.
+/// Sets up the backends and runs the app on the shell. Returns the exit code.
 fn run(cli: Cli) -> io::Result<u8> {
     // Each radio that cannot be reached shows why in its own pane.
     let (wifi, bt): (Arc<dyn Backend>, Arc<dyn Bluetooth>) = if cli.fake {
@@ -90,52 +64,10 @@ fn run(cli: Cli) -> io::Result<u8> {
         real_backends()
     };
     let mut app = App::new(wifi, bt);
-    let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
-    let mut term: Term = Terminal::new(CrosstermBackend::new(tty))?;
-    enter(&mut term)?;
-    let result = (|| -> io::Result<()> {
-        let theme = ui::Theme::load();
-        let mut dirty = true;
-        loop {
-            if dirty {
-                term.draw(|f| {
-                    let area = f.area();
-                    app.render(area, f.buffer_mut());
-                    ui::anim::finish(f.buffer_mut(), &theme);
-                })?;
-            }
-            if !event::poll(ui::anim::poll_timeout(Duration::from_millis(200)))? {
-                dirty = app.tick() | ui::anim::take_redraw();
-                continue;
-            }
-            let ev = event::read()?;
-            dirty = true;
-            if matches!(ev, Event::Resize(..)) {
-                continue;
-            }
-            let mut quit = app.handle_event(&ev);
-            // The palette: inside zellij `pick` is a floating pane over this screen; elsewhere it
-            // takes the terminal for a moment.
-            while quit == Quit::Palette {
-                let popup = ui::popup::wanted(false);
-                if !popup {
-                    leave(&mut term)?;
-                }
-                let picked = ui::keys::choose("nu", &app.keys_rows(), "Commands");
-                if !popup {
-                    enter(&mut term)?;
-                }
-                quit = match picked {
-                    Some(id) => app.run_palette(id),
-                    None => Quit::No,
-                };
-            }
-            if quit == Quit::Yes {
-                return Ok(());
-            }
-        }
-    })();
-    let _ = leave(&mut term);
-    result?;
+    ui::app::App::new("nu")
+        .actions(nu::common())
+        .contexts(nu::panes())
+        .tick(Duration::from_millis(200))
+        .run(&mut app)?;
     Ok(0)
 }

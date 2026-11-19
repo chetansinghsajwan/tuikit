@@ -3,8 +3,7 @@
 use super::*;
 
 impl App {
-    /// Draws the whole screen: both panes, the details of the focused one, the status line and
-    /// any leader menu or help over them.
+    /// Draws the whole screen: both panes, the details of the focused one and the status line.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let theme = self.theme.clone();
         let body = Rect { height: area.height.saturating_sub(1), ..area };
@@ -27,15 +26,6 @@ impl App {
             Focus::Bluetooth => self.details_bluetooth(right, buf, &theme),
         }
         self.render_status(status, buf, &theme);
-        if let Some(menu) = self.maps[Self::pane(self.focus)].menu() {
-            ui::keys::render_menu(area, buf, &theme, &menu);
-        }
-        if self.help.is_some() {
-            let rows = self.keys_rows();
-            if let Some(h) = self.help.as_mut() {
-                h.render(area, buf, &theme, "Keys", &rows);
-            }
-        }
     }
 
     /// A pane with the list `rows` drawn in it: each entry is `(left, right, highlighted tint)`.

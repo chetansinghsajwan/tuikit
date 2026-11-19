@@ -1,11 +1,10 @@
 //! The `nu` screen: a Wi-Fi pane and a Bluetooth pane over the `nu-core` backends, with the state,
 //! key handling and background connection jobs. Drawing lives in `render`.
 
-use crate::keys;
 use nu_core::bluetooth::{Bluetooth, BtStatus, Device, rssi_percent};
 use nu_core::{Backend, Network, Security, Status};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -14,21 +13,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
-use ui::keys::{Feed, Keymap};
+use ui::app::{Host, Navigable, Request};
 use ui::{Pane, Theme};
 
 /// How often the lists are reread while the screen is open.
 const REFRESH: Duration = Duration::from_secs(4);
-
-/// What the host should do after an event.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Quit {
-    No,
-    Yes,
-    /// The user asked for the command palette: the host runs `ui::keys::choose` over
-    /// `App::keys_rows` and passes the pick to `App::run_palette`.
-    Palette,
-}
 
 /// Which pane has the focus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,8 +69,6 @@ pub struct App {
     focus: Focus,
     mode: Mode,
     message: Option<(String, bool)>,
-    maps: [Keymap; 2],
-    help: Option<ui::keys::Help>,
     job: Option<Job>,
     refreshed: Instant,
 }
@@ -103,8 +90,6 @@ impl App {
             focus: Focus::Wifi,
             mode: Mode::Normal,
             message: None,
-            maps: [0, 1].map(|i| Keymap::new("space", &keys::pane_actions(i), &[])),
-            help: None,
             job: None,
             refreshed: Instant::now(),
         };
@@ -112,7 +97,7 @@ impl App {
         app
     }
 
-    /// The index of a pane, for the per-pane `lists` and `maps`.
+    /// The index of a pane, for the per-pane `lists` and keymaps.
     fn pane(focus: Focus) -> usize {
         match focus {
             Focus::Wifi => 0,
@@ -208,19 +193,9 @@ impl App {
         self.job.is_some()
     }
 
-    /// Handles one terminal event: a prompt or the help takes the key first, else the focused
-    /// pane's keymap decides. Tells the host whether to quit or open the palette.
-    pub fn handle_event(&mut self, ev: &Event) -> Quit {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Quit::No };
-        if *kind == KeyEventKind::Release {
-            return Quit::No;
-        }
-        if let Some(help) = self.help.as_mut() {
-            if !help.key(key) {
-                self.help = None;
-            }
-            return Quit::No;
-        }
+    /// Handles a key for the open prompt or question; in normal mode it does nothing.
+    fn typing(&mut self, ev: &Event) {
+        let Event::Key(key) = ev else { return };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Password(ssid, mut input) => {
                 match key.code {
@@ -234,7 +209,7 @@ impl App {
                         self.mode = Mode::Password(ssid, input);
                     }
                 }
-                return Quit::No;
+                return;
             }
             Mode::ForgetWifi(ssid) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
@@ -244,7 +219,7 @@ impl App {
                     }
                     self.refresh();
                 }
-                return Quit::No;
+                return;
             }
             Mode::ForgetDevice(address, name) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
@@ -254,31 +229,10 @@ impl App {
                     }
                     self.refresh();
                 }
-                return Quit::No;
+                return;
             }
             Mode::Normal => {}
         }
-        self.message = None;
-        let pane = Self::pane(self.focus);
-        match self.maps[pane].feed(key) {
-            Feed::Run(id) => self.run(id),
-            Feed::NoBinding => {
-                let seq = self.maps[pane].rejected().to_string();
-                self.say(format!("{seq} is not bound"), true);
-                Quit::No
-            }
-            Feed::Pending | Feed::Cancelled | Feed::Unbound => Quit::No,
-        }
-    }
-
-    /// Every action of the focused pane with its keys, for the palette and the help.
-    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
-        self.maps[Self::pane(self.focus)].rows()
-    }
-
-    /// Run the action the palette picked.
-    pub fn run_palette(&mut self, id: &'static str) -> Quit {
-        self.run(id)
     }
 
     /// Whether a connection attempt is already running; says so, since only one runs at a time.
@@ -330,33 +284,21 @@ impl App {
         self.focus = ORDER[(at + delta).rem_euclid(ORDER.len() as isize) as usize];
     }
 
-    /// Runs an action by id: the shared ones here, the per-pane ones in their own handlers.
-    fn run(&mut self, id: &'static str) -> Quit {
-        let focus = self.focus;
-        let last = self.len(focus).saturating_sub(1);
-        let st = &mut self.lists[Self::pane(focus)];
+    /// Runs an action by id: the focus ones here, the per-pane ones in their own handlers.
+    fn act(&mut self, id: &'static str) -> Request {
+        self.message = None;
         match id {
-            "nav.up" => st.cursor = st.cursor.saturating_sub(1),
-            "nav.down" => st.cursor = (st.cursor + 1).min(last),
-            "nav.up5" => st.cursor = st.cursor.saturating_sub(5),
-            "nav.down5" => st.cursor = (st.cursor + 5).min(last),
-            "nav.page_up" => st.cursor = st.cursor.saturating_sub(10),
-            "nav.page_down" => st.cursor = (st.cursor + 10).min(last),
-            "nav.top" => st.cursor = 0,
-            "nav.bottom" => st.cursor = last,
             "focus.next" => self.focus_by(1),
             "focus.prev" => self.focus_by(-1),
             "focus.wifi" => self.set_focus(Focus::Wifi),
             "focus.bluetooth" => self.set_focus(Focus::Bluetooth),
-            "palette" => return Quit::Palette,
-            "help" => self.help = Some(ui::keys::Help::default()),
-            "quit" => return Quit::Yes,
-            _ => match focus {
+            "quit" => return Request::Quit,
+            _ => match self.focus {
                 Focus::Wifi => self.wifi_action(id),
                 Focus::Bluetooth => self.bluetooth_action(id),
             },
         }
-        Quit::No
+        Request::None
     }
 
     /// Runs a Wi-Fi action on the network under the cursor.
@@ -482,3 +424,64 @@ use render::*;
 
 #[cfg(test)]
 mod tests;
+
+/// Lets the shared app shell host the screen: it owns the keymaps, the help and the palette; the
+/// screen draws and runs its own actions.
+impl ui::app::Screen for App {
+    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
+        App::render(self, area, buf);
+    }
+
+    /// A password prompt or a forget question is open: the keys are theirs.
+    fn captures(&self, _ev: &Event) -> bool {
+        !matches!(self.mode, Mode::Normal)
+    }
+
+    fn event(&mut self, ev: &Event, _host: &mut dyn Host) -> Request {
+        self.typing(ev);
+        Request::None
+    }
+
+    fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
+        self.act(id)
+    }
+
+    fn unbound(&mut self, keys: &str) {
+        self.say(format!("{keys} is not bound"), true);
+    }
+
+    fn tick(&mut self) -> bool {
+        App::tick(self)
+    }
+
+    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+        Some(self)
+    }
+
+    /// The focused pane: Wi-Fi and Bluetooth have different actions.
+    fn context(&self) -> usize {
+        Self::pane(self.focus)
+    }
+}
+
+/// The cursor of the focused list is what the shared movement walks.
+impl Navigable for App {
+    fn move_by(&mut self, delta: isize) {
+        let last = self.len(self.focus).saturating_sub(1) as isize;
+        let st = &mut self.lists[Self::pane(self.focus)];
+        st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
+    }
+
+    fn page(&self) -> usize {
+        10
+    }
+
+    fn top(&mut self) {
+        self.lists[Self::pane(self.focus)].cursor = 0;
+    }
+
+    fn bottom(&mut self) {
+        let last = self.len(self.focus).saturating_sub(1);
+        self.lists[Self::pane(self.focus)].cursor = last;
+    }
+}

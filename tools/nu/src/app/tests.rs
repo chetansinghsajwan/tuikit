@@ -4,24 +4,58 @@
 use super::*;
 use nu_core::bluetooth::Kind;
 use nu_core::fake::{Fake, FakeBluetooth};
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
+use ui::app::Screen;
 
 /// A plain key press event.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
+/// The screen with the shell's dispatcher in front of it, so keys reach it the way they do in
+/// the app.
+struct Rig {
+    app: App,
+    dispatcher: ui::app::Dispatcher,
+}
+
+impl Rig {
+    /// Sends one event through the dispatcher.
+    fn handle_event(&mut self, ev: &Event) -> Request {
+        self.dispatcher.event(&mut self.app, ev, &mut ui::app::NoHost)
+    }
+}
+
+impl std::ops::Deref for Rig {
+    type Target = App;
+
+    fn deref(&self) -> &App {
+        &self.app
+    }
+}
+
+impl std::ops::DerefMut for Rig {
+    fn deref_mut(&mut self) -> &mut App {
+        &mut self.app
+    }
+}
+
 /// Types each character of `keys` into the app, one key press apiece.
-fn press(app: &mut App, keys: &str) {
+fn press(app: &mut Rig, keys: &str) {
     for c in keys.chars() {
         app.handle_event(&key(KeyCode::Char(c)));
     }
 }
 
 /// An app over fresh fake radios, with the fakes handed back so tests can inspect them.
-fn app() -> (App, Arc<Fake>, Arc<FakeBluetooth>) {
+fn app() -> (Rig, Arc<Fake>, Arc<FakeBluetooth>) {
     let (w, b) = (Arc::new(Fake::new()), Arc::new(FakeBluetooth::new()));
-    (App::new(w.clone(), b.clone()), w, b)
+    let mut app = App::new(w.clone(), b.clone());
+    let dispatcher = ui::app::App::new("nu")
+        .actions(crate::keys::common())
+        .contexts(crate::keys::panes())
+        .dispatcher(&mut app);
+    (Rig { app, dispatcher }, w, b)
 }
 
 /// Renders the app at a fixed size and returns the screen as text, for `contains` checks.
@@ -195,23 +229,20 @@ fn focus_leader_menu_palette_help_and_quit() {
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Wifi);
     press(&mut app, " ");
-    let menu = app.maps[0].menu().unwrap();
+    let menu = app.dispatcher.menu(0).unwrap();
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
     for want in ["connect", "disconnect", "forget", "scan", "toggle Wi-Fi", "commands"] {
         assert!(names.contains(&want), "{want} in {names:?}");
     }
-    assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Quit::Palette);
+    assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Request::Palette);
     // The palette lists the focused pane's actions.
-    let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
+    let ids: Vec<&str> = app.dispatcher.rows(app.context()).iter().map(|r| r.id).collect();
     assert!(ids.contains(&"wifi.scan") && !ids.contains(&"bt.scan"), "{ids:?}");
     press(&mut app, "2");
-    let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
+    let ids: Vec<&str> = app.dispatcher.rows(app.context()).iter().map(|r| r.id).collect();
     assert!(ids.contains(&"bt.trust") && !ids.contains(&"wifi.scan"), "{ids:?}");
-    press(&mut app, "?");
-    assert!(app.help.is_some());
-    app.handle_event(&key(KeyCode::Esc));
-    assert!(app.help.is_none());
-    assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
+    assert_eq!(app.handle_event(&key(KeyCode::Char('?'))), Request::Help);
+    assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Request::Quit);
 }
 
 #[test]

@@ -6,7 +6,7 @@ use ui::keys::Keymap;
 #[test]
 fn every_pane_has_described_actions_and_no_shared_keys() {
     for pane in 0..2 {
-        let actions = pane_actions(pane);
+        let actions: Vec<Action> = panes()[pane].iter().chain(COMMON).cloned().collect();
         let mut ids = std::collections::HashSet::new();
         let mut keys = std::collections::HashSet::new();
         for a in &actions {
