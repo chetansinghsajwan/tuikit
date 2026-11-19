@@ -13,7 +13,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
-use ui::app::{Host, Navigable, Request};
+use ui::app::{Host, Navigable, Request, Tabbed};
 use ui::{Pane, Theme};
 
 /// Loading history, status, refs and the commit list.
@@ -204,6 +204,10 @@ impl ui::app::Screen for App {
         Some(self)
     }
 
+    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+        Some(self)
+    }
+
     /// The focused pane: Files is context 0, the list panes follow.
     fn context(&self) -> usize {
         Self::list_index(self.focus).map_or(0, |i| i + 1)
@@ -235,6 +239,34 @@ impl App {
                 self.edited(ok);
                 Request::None
             }
+        }
+    }
+}
+
+/// The Status, Commits and Refs tabs are fixed: they are visited, never opened or closed.
+impl Tabbed for App {
+    fn tab_next(&mut self) {
+        self.set_screen(match self.screen {
+            Screen::Status => Screen::Commits,
+            Screen::Commits => Screen::Refs,
+            Screen::Refs => Screen::Status,
+        });
+    }
+
+    fn tab_prev(&mut self) {
+        self.set_screen(match self.screen {
+            Screen::Status => Screen::Refs,
+            Screen::Commits => Screen::Status,
+            Screen::Refs => Screen::Commits,
+        });
+    }
+
+    fn tab_goto(&mut self, index: usize) {
+        match index {
+            0 => self.set_screen(Screen::Status),
+            1 => self.set_screen(Screen::Commits),
+            2 => self.set_screen(Screen::Refs),
+            _ => {}
         }
     }
 }

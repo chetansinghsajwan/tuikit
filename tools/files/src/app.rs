@@ -4,7 +4,7 @@
 use files::meta::{self, DirSize, Meta};
 use files::{Action, Panel, PanelOptions, Search, ops};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -14,27 +14,13 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use ui::app::{Host, Navigable, Request, overlay, suspended};
+use ui::app::{Host, Navigable, Request, Tabbed, overlay, suspended};
 use ui::keys::{Action as Key, action};
 use ui::{Pane, Theme};
 
-/// The standalone app's own actions, registered next to the panel's.
-const ACTIONS: &[Key] = &[
-    action("tab.new", "new tab", "open a new tab in the same folder", &["leader t n"]),
-    action("tab.reopen", "reopen tab", "bring back the tab closed last", &["leader t r"]),
-    action("tab.duplicate", "duplicate tab", "open a copy of this tab next to it", &["leader t d"]),
-    action("tab.move_left", "move tab left", "move this tab one place left", &["leader t ["]),
-    action("tab.move_right", "move tab right", "move this tab one place right", &["leader t ]"]),
-    action(
-        "tab.close",
-        "close tab",
-        "close this tab (q closes it too, and quits on the last)",
-        &["leader t c"],
-    ),
-    action("tab.next", "next tab", "switch to the next tab", &["]", "leader t l"]),
-    action("tab.prev", "previous tab", "switch to the previous tab", &["[", "leader t h"]),
-    action("view.properties", "properties", "show or hide the properties pane", &["leader v i"]),
-];
+/// The standalone app's own actions, registered next to the panel's. The tabs come from the shell.
+const ACTIONS: &[Key] =
+    &[action("view.properties", "properties", "show or hide the properties pane", &["leader v i"])];
 
 /// What the command line asked for, passed from `main` so this module does not parse arguments.
 pub struct Options {
@@ -104,17 +90,11 @@ impl ui::app::Screen for Explorer {
         self.tabs.active().captures(ev)
     }
 
-    /// The panel's own keys while it captures them; else the tab numbers, the one raw key the app
-    /// keeps.
+    /// The panel's own keys while it captures them.
     fn event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
         if self.tabs.active().captures(ev) {
             let action = self.panel().handle_captured(ev);
             return self.act(action, host);
-        }
-        if let Event::Key(KeyEvent { code: KeyCode::Char(c @ '1'..='9'), modifiers, .. }) = ev
-            && !modifiers.contains(KeyModifiers::CONTROL)
-        {
-            self.tabs.goto(*c as usize - '1' as usize);
         }
         Request::None
     }
@@ -146,6 +126,54 @@ impl ui::app::Screen for Explorer {
 
     fn nav(&mut self) -> Option<&mut dyn Navigable> {
         Some(self.tabs.active_mut())
+    }
+
+    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+        Some(self)
+    }
+}
+
+/// The explorer's tabs are panels the user opens and closes.
+impl Tabbed for Explorer {
+    fn tab_next(&mut self) {
+        self.tabs.next();
+    }
+
+    fn tab_prev(&mut self) {
+        self.tabs.prev();
+    }
+
+    fn tab_goto(&mut self, index: usize) {
+        self.tabs.goto(index);
+    }
+
+    fn dynamic(&self) -> bool {
+        true
+    }
+
+    fn tab_new(&mut self) {
+        let root = self.panel().root().to_path_buf();
+        self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
+    }
+
+    fn tab_reopen(&mut self) {
+        if !self.tabs.reopen() {
+            self.panel().notify("no closed tab to reopen", false);
+        }
+    }
+
+    fn tab_duplicate(&mut self) {
+        self.tab_new();
+    }
+
+    fn tab_move(&mut self, delta: isize) {
+        self.tabs.move_active(delta);
+    }
+
+    fn tab_close(&mut self) {
+        if self.tabs.close().is_none() {
+            self.panel().notify("this is the last tab (q quits)", false);
+        }
     }
 }
 
@@ -209,33 +237,10 @@ impl Explorer {
         Request::None
     }
 
-    /// An action of the app itself (tabs, the properties pane).
+    /// An action of the app itself (the properties pane).
     fn command(&mut self, id: &str) {
-        match id {
-            "tab.new" => {
-                let root = self.panel().root().to_path_buf();
-                self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
-            }
-            "tab.reopen" => {
-                if !self.tabs.reopen() {
-                    self.panel().notify("no closed tab to reopen", false);
-                }
-            }
-            "tab.duplicate" => {
-                let root = self.panel().root().to_path_buf();
-                self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
-            }
-            "tab.move_left" => self.tabs.move_active(-1),
-            "tab.move_right" => self.tabs.move_active(1),
-            "tab.close" => {
-                if self.tabs.close().is_none() {
-                    self.panel().notify("this is the last tab (q quits)", false);
-                }
-            }
-            "tab.next" => self.tabs.next(),
-            "tab.prev" => self.tabs.prev(),
-            "view.properties" => self.show_meta = !self.show_meta,
-            _ => {}
+        if id == "view.properties" {
+            self.show_meta = !self.show_meta;
         }
     }
 

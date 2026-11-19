@@ -6,8 +6,6 @@ use ui::keys::{Action, Group, action, basic};
 
 /// Switching panes and the like: given to the Files panel too.
 pub const GLOBAL: &[Action] = &[
-    basic("tab.next", "next tab", "go to the next tab (Status, Commits, Refs)", &["]"]),
-    basic("tab.prev", "previous tab", "go to the previous tab", &["["]),
     basic(
         "focus.next",
         "next pane",

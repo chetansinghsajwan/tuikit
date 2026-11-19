@@ -47,16 +47,6 @@ impl App {
     pub fn run_id(&mut self, id: &'static str) -> Quit {
         let mut moved = true;
         match id {
-            "tab.next" => self.set_screen(match self.screen {
-                Screen::Status => Screen::Commits,
-                Screen::Commits => Screen::Refs,
-                Screen::Refs => Screen::Status,
-            }),
-            "tab.prev" => self.set_screen(match self.screen {
-                Screen::Status => Screen::Refs,
-                Screen::Commits => Screen::Status,
-                Screen::Refs => Screen::Commits,
-            }),
             "search.start" => {
                 self.mode = Mode::Prompt(
                     PromptKind::Search,
