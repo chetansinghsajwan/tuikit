@@ -1,0 +1,2 @@
+# Keep taplo out of generated dirs (the direnv cache holds copies of flake inputs, some deliberately invalid).
+exclude = [".direnv/**", "target/**", ".tmp/**"]

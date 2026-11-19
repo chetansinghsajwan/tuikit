@@ -1,5 +1,4 @@
-# One formatter command for every language (`task fmt`).
-excludes = ["target/**", ".tmp/**", "Cargo.lock", "flake.lock"]
+excludes = ["target/**", ".tmp/**", "Cargo.lock", "flake.lock", ".direnv/**"]
 
 [formatter.rustfmt]
 command = "rustfmt"
