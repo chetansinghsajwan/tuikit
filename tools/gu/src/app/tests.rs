@@ -54,13 +54,72 @@ fn ref_row(app: &App, name: &str) -> usize {
         .unwrap_or_else(|| panic!("no ref {name}"))
 }
 
+/// The screen with the shell's dispatcher in front of it, so keys reach it the way they do in
+/// the app.
+struct Rig {
+    app: App,
+    dispatcher: ui::app::Dispatcher,
+}
+
+impl Rig {
+    /// Turns what the shell would do into the `Quit` the tests were written against.
+    fn quit(request: Request) -> Quit {
+        match request {
+            Request::None => Quit::No,
+            Request::Quit => Quit::Yes,
+            Request::Palette => Quit::Palette,
+            Request::Help => Quit::Help,
+        }
+    }
+
+    /// Sends one event through the dispatcher.
+    fn handle_event(&mut self, ev: &Event) -> Quit {
+        Self::quit(self.dispatcher.event(&mut self.app, ev, &mut ui::app::NoHost))
+    }
+
+    /// Runs the action the palette picked.
+    fn run_palette(&mut self, id: &'static str) -> Quit {
+        Self::quit(self.dispatcher.run(&mut self.app, id, &mut ui::app::NoHost))
+    }
+
+    /// Every action of the focused pane with its keys, as the palette and the help list them.
+    fn keys_rows(&self) -> Vec<ui::keys::Row> {
+        use ui::app::Screen;
+        self.dispatcher.rows(self.app.context())
+    }
+}
+
+impl std::ops::Deref for Rig {
+    type Target = App;
+
+    fn deref(&self) -> &App {
+        &self.app
+    }
+}
+
+impl std::ops::DerefMut for Rig {
+    fn deref_mut(&mut self) -> &mut App {
+        &mut self.app
+    }
+}
+
+/// The screen on a repository, behind a dispatcher built the way `gu` builds its app.
+fn rig(dir: &Path) -> Rig {
+    let mut app = App::new(dir).unwrap();
+    let dispatcher = ui::app::App::new("gu")
+        .contexts(crate::keys::contexts())
+        .groups(crate::keys::GROUPS)
+        .dispatcher(&mut app);
+    Rig { app, dispatcher }
+}
+
 /// A plain key press event.
 fn key(code: KeyCode) -> Event {
     Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
 }
 
 /// Press each character of `keys` as a key and check none of them quits.
-fn press(app: &mut App, keys: &str) {
+fn press(app: &mut Rig, keys: &str) {
     for c in keys.chars() {
         assert_eq!(app.handle_event(&key(KeyCode::Char(c))), Quit::No);
     }
@@ -95,7 +154,7 @@ fn the_commits_tab_shows_every_branch_and_searches() {
     git(&d, &["add", "."]);
     git(&d, &["commit", "-qm", "needle on a side branch"]);
     git(&d, &["checkout", "-q", "main"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     // The Status tab lists the checked-out branch only.
     assert!(!screen(&mut app).join("\n").contains("needle"));
     // `]` opens the Commits tab: every branch, with the graph and the ref labels.
@@ -126,7 +185,7 @@ fn switch_to_takes_a_ref_a_chosen_option_or_a_commit_hash() {
     let d = repo("switch");
     git(&d, &["branch", "topic-one"]);
     git(&d, &["branch", "side-two"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     let root = app.repo.commits(5).unwrap()[0].oid.clone();
     press(&mut app, " ");
     press(&mut app, "S");
@@ -152,7 +211,7 @@ fn switch_to_takes_a_ref_a_chosen_option_or_a_commit_hash() {
 #[test]
 fn amend_adds_the_staged_file_and_enter_keeps_the_message() {
     let d = repo("amend");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     fs::write(d.join("more.txt"), "x\n").unwrap();
     git(&d, &["add", "more.txt"]);
     let before = app.repo.commits(5).unwrap().len();
@@ -164,7 +223,7 @@ fn amend_adds_the_staged_file_and_enter_keeps_the_message() {
 }
 
 /// Press the Tab key.
-fn tab(app: &mut App) {
+fn tab(app: &mut Rig) {
     app.handle_event(&key(KeyCode::Tab));
 }
 
@@ -177,7 +236,7 @@ fn l_on_a_commit_shows_its_files_as_a_tree_with_the_diff_of_each() {
     fs::write(d.join("top.txt"), "t\n").unwrap();
     git(&d, &["add", "."]);
     git(&d, &["commit", "-q", "-m", "add files"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     press(&mut app, "l");
     let text = screen(&mut app).join("\n");
@@ -216,7 +275,7 @@ fn the_filter_popup_chooses_several_things_and_the_bar_shows_them() {
     commit_file(&d, "b.txt", "b\n", "add feature alpha");
     commit_file(&d, "c.txt", "c\n", "fix: bug beta");
     commit_file(&d, "d.txt", "d\n", "feat(ui): gamma");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     assert_eq!(app.commits.len(), 4);
     // By message: the text section is the first.
@@ -271,7 +330,7 @@ fn since_understands_units_and_dates() {
 #[test]
 fn shows_the_files_page_and_the_commits_and_refs_tabs() {
     let d = repo("panes");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     // The first page is the changed files only, under the tab strip.
     let all = screen(&mut app).join("\n");
     for want in ["Status", "Commits", "Refs", "Files"] {
@@ -291,7 +350,7 @@ fn shows_the_files_page_and_the_commits_and_refs_tabs() {
 #[test]
 fn focus_moves_with_tab_and_digits_and_q_quits() {
     let d = repo("focus");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     assert_eq!((app.screen, app.focus), (Screen::Commits, Focus::Commits));
     // Commits has one pane: Tab stays. Refs has three: Tab and Shift-Tab move between them.
@@ -320,7 +379,7 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     git(&d, &["branch", "Feature/a"]);
     git(&d, &["branch", "feature/b"]);
     git(&d, &["branch", "Feature/c"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "3");
     // `Feature/` and `feature/` are two folders, each once.
     let folders: Vec<String> = app
@@ -388,7 +447,7 @@ fn tags_and_folders_of_refs_can_be_renamed() {
     git(&d, &["branch", "feature/login"]);
     git(&d, &["branch", "feature/signup"]);
     git(&d, &["tag", "v1"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "3");
     // A tag.
     app.lists[0].cursor = ref_row(&app, "v1");
@@ -433,7 +492,7 @@ fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
     git(&d, &["branch", "feature/login"]);
     git(&d, &["branch", "feature/signup/form"]);
     git(&d, &["tag", "v1"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     let shape = |app: &App| -> Vec<String> {
         app.ref_rows
             .iter()
@@ -479,7 +538,7 @@ fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
 #[test]
 fn branches_checkout_create_and_delete() {
     let d = repo("branches");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "3");
     // main (checked out) is first, `other` second: j then Enter switches.
     press(&mut app, "j");
@@ -505,7 +564,7 @@ fn branches_checkout_create_and_delete() {
 #[test]
 fn stash_new_apply_pop_and_drop() {
     let d = repo("stash");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     fs::write(d.join("a.txt"), "changed\n").unwrap();
     press(&mut app, "4");
     press(&mut app, "n");
@@ -574,7 +633,7 @@ fn initials_and_author_colors() {
 #[test]
 fn the_files_pane_still_stages_and_commits() {
     let d = repo("files");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     fs::write(d.join("a.txt"), "1\n2\n3\n").unwrap();
     app.reload_all();
     press(&mut app, "s"); // stage the highlighted file
@@ -589,10 +648,10 @@ fn the_files_pane_still_stages_and_commits() {
 #[test]
 fn the_leader_menu_palette_and_help_work_in_every_pane() {
     let d = repo("leader");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     // Files pane: its own table; Space then Space asks the host for the palette.
     press_raw(&mut app, ' ');
-    assert!(app.files.menu().is_some());
+    assert!(app.dispatcher.menu(0).is_some());
     assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Quit::Palette);
     let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
     assert!(ids.contains(&"commit.new") && ids.contains(&"focus.branches"), "{ids:?}");
@@ -600,7 +659,7 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     press(&mut app, "3");
     press_raw(&mut app, ' ');
     let menu = match app.focus {
-        Focus::Branches => app.maps[0].menu().unwrap(),
+        Focus::Branches => app.dispatcher.menu(1).unwrap(),
         _ => panic!(),
     };
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
@@ -621,10 +680,7 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     assert_eq!(app.run_palette("branch.new"), Quit::No);
     assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));
     app.handle_event(&key(KeyCode::Esc));
-    press(&mut app, "?");
-    assert!(app.help.is_some());
-    app.handle_event(&key(KeyCode::Esc));
-    assert!(app.help.is_none());
+    assert_eq!(app.handle_event(&key(KeyCode::Char('?'))), Quit::Help);
     // Stash pane has its own actions.
     press(&mut app, "4");
     let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
@@ -632,12 +688,12 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
 }
 
 /// Press one character without checking the result.
-fn press_raw(app: &mut App, c: char) {
+fn press_raw(app: &mut Rig, c: char) {
     app.handle_event(&key(KeyCode::Char(c)));
 }
 
 /// Type `text` and press enter, as into a prompt.
-fn type_text(app: &mut App, text: &str) {
+fn type_text(app: &mut Rig, text: &str) {
     for c in text.chars() {
         app.handle_event(&key(KeyCode::Char(c)));
     }
@@ -656,7 +712,7 @@ fn capital_m_shows_the_diff_from_a_commit_to_the_work_tree() {
     let d = repo("workdiff");
     commit_file(&d, "b.txt", "two\n", "second");
     fs::write(d.join("b.txt"), "two changed\n").unwrap();
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     press(&mut app, "G");
     press(&mut app, "M");
@@ -675,7 +731,7 @@ fn the_refs_column_fits_the_widest_commit_and_the_free_space_goes_to_what_is_lef
     commit_file(&d, "b.txt", "two\n", "second");
     git(&d, &["tag", "a-rather-long-tag-name"]);
     git(&d, &["tag", "another-long-tag-name"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     app.fit_columns(120);
     assert!(app.refs_w > 24, "the refs of the widest commit all fit: {}", app.refs_w);
@@ -693,7 +749,7 @@ fn the_refs_column_fits_the_widest_commit_and_the_free_space_goes_to_what_is_lef
 fn z_folds_the_file_at_the_top_of_the_diff_and_w_ignores_whitespace() {
     let d = repo("fold");
     commit_file(&d, "b.txt", "two\n", "second");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     press(&mut app, "p");
     let before = screen(&mut app).join("\n");
@@ -714,7 +770,7 @@ fn m_marks_a_commit_and_the_preview_shows_the_diff_to_the_highlighted_one() {
     let d = repo("compare");
     commit_file(&d, "b.txt", "two\n", "second");
     commit_file(&d, "c.txt", "three\n", "third");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     // Newest first: mark the oldest, then move back to the newest.
     press(&mut app, "G");
@@ -738,7 +794,7 @@ fn m_marks_a_commit_and_the_preview_shows_the_diff_to_the_highlighted_one() {
 fn commit_actions_check_out_tag_branch_reword_reset_and_revert() {
     let d = repo("commits");
     commit_file(&d, "b.txt", "two\n", "second");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "2");
     // Reword the last commit.
     press(&mut app, "r");
@@ -784,7 +840,7 @@ fn branches_rebase_rename_and_delete_tags() {
     commit_file(&d, "m.txt", "m\n", "main moves");
     git(&d, &["tag", "v9"]);
     git(&d, &["switch", "-q", "feat"]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "3");
     let at = |app: &App, name: &str| ref_row(app, name);
     // Rebase feat onto main.
@@ -817,7 +873,7 @@ fn remote_commands_run_in_the_background_and_report() {
     fs::create_dir_all(&remote).unwrap();
     git(&remote, &["init", "-q", "--bare", "-b", "main"]);
     git(&d, &["remote", "add", "origin", remote.to_str().unwrap()]);
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     let wait = |app: &mut App| {
         for _ in 0..500 {
             if !app.tick() {
@@ -862,7 +918,7 @@ fn a_stopped_operation_shows_in_the_status_line_and_can_be_aborted() {
     commit_file(&d, "b.txt", "other\n", "other");
     git(&d, &["switch", "-q", "main"]);
     commit_file(&d, "b.txt", "main\n", "main");
-    let mut app = App::new(&d).unwrap();
+    let mut app = rig(&d);
     press(&mut app, "3");
     app.lists[0].cursor = ref_row(&app, "other");
     press(&mut app, "M");

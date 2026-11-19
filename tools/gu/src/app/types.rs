@@ -16,9 +16,10 @@ pub enum Quit {
     Yes,
     /// Open this file in the editor (the host suspends the screen), then call `edited`.
     Edit(PathBuf),
-    /// The user asked for the command palette: the host runs `ui::keys::choose` over
-    /// `App::keys_rows` and passes the pick to `App::run_palette`.
+    /// The user asked for the command palette: the shell lists the focused pane's actions.
     Palette,
+    /// The user asked for the keys help.
+    Help,
 }
 
 /// The pane that has the keyboard.

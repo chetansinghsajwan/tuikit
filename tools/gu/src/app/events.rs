@@ -3,16 +3,11 @@
 use super::*;
 
 impl App {
-    /// Handle one terminal event: route it by mode and focus, and tell the host what to do next.
-    pub fn handle_event(&mut self, ev: &Event) -> Quit {
+    /// Handles an event the screen claimed (see `captures`): a prompt, a question, a popup, the
+    /// files of a commit or the Files panel's own prompts. Tells the host what to do next.
+    pub(super) fn typing(&mut self, ev: &Event) -> Quit {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Quit::No };
         if *kind == KeyEventKind::Release {
-            return Quit::No;
-        }
-        if let Some(help) = self.help.as_mut() {
-            if !help.key(key) {
-                self.help = None;
-            }
             return Quit::No;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
@@ -33,28 +28,23 @@ impl App {
         if self.screen == Screen::Commits && self.commit_files.is_some() {
             return self.commit_files_key(key);
         }
-        // The Files pane is the git panel: it has its own keys (and the global ones as commands).
-        if self.focus == Focus::Files {
-            return self.files_event(ev);
+        if self.focus == Focus::Files && self.files.captures(ev) {
+            let action = self.files.handle_captured(ev);
+            return self.files_action(action);
         }
-        self.message = None;
-        let li = Self::list_index(self.focus).expect("a list pane");
-        match self.maps[li].feed(key) {
-            Feed::Run(id) => self.run_id(id),
-            Feed::NoBinding => {
-                let seq = self.maps[li].rejected().to_string();
-                self.say(format!("{seq} is not bound"), true);
-                Quit::No
-            }
-            Feed::Pending | Feed::Cancelled | Feed::Unbound => Quit::No,
-        }
+        Quit::No
+    }
+
+    /// Whether the screen takes this event itself: a prompt, a question or a popup is open, the
+    /// files of a commit show, or the Files panel is asking something.
+    pub(super) fn takes(&self, ev: &Event) -> bool {
+        !matches!(self.mode, Mode::Normal)
+            || (self.screen == Screen::Commits && self.commit_files.is_some())
+            || (self.focus == Focus::Files && self.files.captures(ev))
     }
 
     /// Run an action by id: what a key, the leader menu or the palette resolves to.
     pub fn run_id(&mut self, id: &'static str) -> Quit {
-        let focus = self.focus;
-        let last = self.len(focus).saturating_sub(1);
-        let li = Self::list_index(focus);
         let mut moved = true;
         match id {
             "tab.next" => self.set_screen(match self.screen {
@@ -102,8 +92,6 @@ impl App {
                 }
             }
             "quit" => return Quit::Yes,
-            "help" => self.help = Some(ui::keys::Help::default()),
-            "palette" => return Quit::Palette,
             "switch.to" => {
                 let names = self.branches.iter().map(|b| b.name.clone()).collect();
                 self.suggest = ui::prompt::Suggest::new(names);
@@ -149,23 +137,6 @@ impl App {
                     if on { "ignoring whitespace changes" } else { "showing whitespace changes" },
                     false,
                 );
-            }
-            "nav.up" | "nav.down" | "nav.up5" | "nav.down5" | "nav.page_up" | "nav.page_down"
-            | "nav.top" | "nav.bottom" => {
-                if let Some(li) = li {
-                    let st = &mut self.lists[li];
-                    st.cursor = match id {
-                        "nav.up" => st.cursor.saturating_sub(1),
-                        "nav.down" => (st.cursor + 1).min(last),
-                        "nav.up5" => st.cursor.saturating_sub(5),
-                        "nav.down5" => (st.cursor + 5).min(last),
-                        "nav.page_up" => st.cursor.saturating_sub(10),
-                        "nav.page_down" => (st.cursor + 10).min(last),
-                        "nav.top" => 0,
-                        _ => last,
-                    };
-                    self.pscroll = 0;
-                }
             }
             _ => moved = false,
         }
@@ -242,12 +213,6 @@ impl App {
         self.pscroll = 0;
     }
 
-    /// Pass an event to the Files panel and act on what it asks for.
-    pub(super) fn files_event(&mut self, ev: &Event) -> Quit {
-        let action = self.files.handle_event(ev);
-        self.files_action(action)
-    }
-
     /// Turn what the Files panel asked for into a reload, a screen change or a `Quit` for the host.
     pub(super) fn files_action(&mut self, action: PanelAction) -> Quit {
         match action {
@@ -258,31 +223,9 @@ impl App {
                 Quit::No
             }
             PanelAction::Palette => Quit::Palette,
-            PanelAction::Help => {
-                self.help = Some(ui::keys::Help::default());
-                Quit::No
-            }
+            PanelAction::Help => Quit::Help,
             PanelAction::Command(id) => self.run_id(id),
             PanelAction::None => Quit::No,
-        }
-    }
-
-    /// Every action of the focused pane with its keys, for the palette and the help.
-    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
-        match Self::list_index(self.focus) {
-            Some(li) => self.maps[li].rows(),
-            None => self.files.keys_rows(),
-        }
-    }
-
-    /// Run the action the palette picked.
-    pub fn run_palette(&mut self, id: &'static str) -> Quit {
-        match self.focus {
-            Focus::Files => {
-                let action = self.files.run(id);
-                self.files_action(action)
-            }
-            _ => self.run_id(id),
         }
     }
 

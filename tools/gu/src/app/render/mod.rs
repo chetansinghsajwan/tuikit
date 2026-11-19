@@ -174,23 +174,10 @@ impl App {
         self.render_overlays(area, buf, &theme);
     }
 
-    /// The which-key menu and the keys help, over everything else.
+    /// The popup over everything else (the shell draws the menu and the help above it).
     pub(super) fn render_overlays(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        let menu = match self.focus {
-            Focus::Files => self.files.menu(),
-            f => Self::list_index(f).and_then(|i| self.maps[i].menu()),
-        };
-        if let Some(menu) = menu {
-            ui::keys::render_menu(area, buf, theme, &menu);
-        }
         if let Mode::Popup(p) = &self.mode {
             p.render(area, buf, theme);
-        }
-        if self.help.is_some() {
-            let rows = self.keys_rows();
-            if let Some(h) = self.help.as_mut() {
-                h.render(area, buf, theme, "Keys", &rows);
-            }
         }
     }
 }

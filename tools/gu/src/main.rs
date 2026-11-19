@@ -1,15 +1,7 @@
-//! The `gu` binary: sets up the terminal, runs the event loop and hands the keys to `App`.
+//! The `gu` binary: opens the repository and runs `gu::App` on the shared app shell.
 
 use clap::Parser;
-use gu::{App, Quit};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event::{self, Event};
-use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{
-    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use std::fs::OpenOptions;
+use gu::App;
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -21,22 +13,6 @@ use std::time::Duration;
 struct Cli {
     /// A path inside the repository (default: the current directory).
     dir: Option<PathBuf>,
-}
-
-/// The terminal the screen draws on, opened on `/dev/tty` so stdout stays free for the host.
-type Term = Terminal<CrosstermBackend<std::fs::File>>;
-
-/// Take over the terminal: raw mode and the alternate screen.
-fn enter(term: &mut Term) -> io::Result<()> {
-    enable_raw_mode()?;
-    execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
-    term.clear()
-}
-
-/// Give the terminal back (before an editor, the palette or exit).
-fn leave(term: &mut Term) -> io::Result<()> {
-    disable_raw_mode()?;
-    execute!(term.backend_mut(), LeaveAlternateScreen)
 }
 
 /// Start-up and exit code: 0 on a normal quit, 2 on an error or when `dir` is no repository.
@@ -53,72 +29,17 @@ fn main() -> ExitCode {
     }
 }
 
-/// Open the repository, then draw and handle events until the screen asks to quit.
+/// Open the repository and run the screen on the shell until it asks to quit.
 fn run(cli: Cli) -> io::Result<u8> {
     let dir = cli.dir.map(Ok).unwrap_or_else(std::env::current_dir)?;
     let Some(mut app) = App::new(&dir) else {
         eprintln!("gu: not a git repository: {}", dir.display());
         return Ok(2);
     };
-    let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
-    let mut term: Term = Terminal::new(CrosstermBackend::new(tty))?;
-    enter(&mut term)?;
-    let result = (|| -> io::Result<()> {
-        let theme = ui::Theme::load();
-        let mut dirty = true;
-        loop {
-            if dirty {
-                term.draw(|f| {
-                    let area = f.area();
-                    app.render(area, f.buffer_mut());
-                    ui::anim::finish(f.buffer_mut(), &theme);
-                })?;
-            }
-            if !event::poll(ui::anim::poll_timeout(Duration::from_millis(200)))? {
-                dirty = app.tick() | ui::anim::take_redraw();
-                continue;
-            }
-            let ev = event::read()?;
-            dirty = true;
-            if matches!(ev, Event::Resize(..)) {
-                continue;
-            }
-            let mut quit = app.handle_event(&ev);
-            // The palette: inside zellij `pick` is a floating pane over this screen, so the screen
-            // stays; elsewhere it takes the terminal for a moment.
-            while quit == Quit::Palette {
-                let popup = ui::popup::wanted(false);
-                if !popup {
-                    leave(&mut term)?;
-                }
-                let picked = ui::keys::choose("gu", &app.keys_rows(), "Commands");
-                if !popup {
-                    enter(&mut term)?;
-                }
-                quit = match picked {
-                    Some(id) => app.run_palette(id),
-                    None => Quit::No,
-                };
-            }
-            match quit {
-                Quit::No | Quit::Palette => {}
-                Quit::Yes => return Ok(()),
-                Quit::Edit(path) => {
-                    leave(&mut term)?;
-                    let editor = std::env::var("VISUAL")
-                        .or_else(|_| std::env::var("EDITOR"))
-                        .unwrap_or_else(|_| "vi".into());
-                    let status = std::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(format!("{editor} {}", ui::popup::quote(&path.to_string_lossy())))
-                        .status();
-                    enter(&mut term)?;
-                    app.edited(status.map(|s| s.success()).unwrap_or(false));
-                }
-            }
-        }
-    })();
-    let _ = leave(&mut term);
-    result?;
+    ui::app::App::new("gu")
+        .contexts(gu::contexts())
+        .groups(gu::GROUPS)
+        .tick(Duration::from_millis(200))
+        .run(&mut app)?;
     Ok(0)
 }

@@ -9,3 +9,4 @@ mod app;
 mod keys;
 
 pub use app::{App, Quit};
+pub use keys::{GROUPS, contexts};

@@ -355,6 +355,42 @@ impl Panel {
         matches!(self.mode, Mode::Commit(..))
     }
 
+    /// Whether the commit prompt or the discard question is open, so the keys are the panel's own
+    /// even though the host owns the keymap.
+    pub fn captures(&self, _ev: &Event) -> bool {
+        !matches!(self.mode, Mode::Normal)
+    }
+
+    /// Feeds an event the panel claimed (see `captures`) when the host owns the keymap, and returns
+    /// what the host should do about it.
+    pub fn handle_captured(&mut self, ev: &Event) -> Action {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+        if *kind == KeyEventKind::Release {
+            return Action::None;
+        }
+        match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Commit(input) => self.commit_key(input, ev, key),
+            Mode::Discard(rela, untracked) => match key.code {
+                KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
+                    let r = self.repo.discard(&rela, untracked);
+                    self.finish(if untracked { "deleted" } else { "discarded" }, r)
+                }
+                _ => Action::None,
+            },
+            Mode::Normal => Action::None,
+        }
+    }
+
+    /// Drops the footer message, as the next key press does.
+    pub fn clear_message(&mut self) {
+        self.message = None;
+    }
+
+    /// Shows a message in the footer; `error` colours it as a failure.
+    pub fn notify(&mut self, msg: impl Into<String>, error: bool) {
+        self.say(msg, error);
+    }
+
     /// Handles a key press: first the commit and discard prompts, else the keymap.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
@@ -416,6 +452,7 @@ impl Panel {
         if !keys::owns(id) {
             return Action::Command(id);
         }
+        self.message = None;
         match id {
             "nav.up" => self.move_by(-1),
             "nav.down" => self.move_by(1),
@@ -600,3 +637,22 @@ mod render;
 /// Tests for the panel.
 #[cfg(test)]
 mod tests;
+
+/// The change rows are what the shared movement walks.
+impl ui::app::Navigable for Panel {
+    fn move_by(&mut self, delta: isize) {
+        Panel::move_by(self, delta);
+    }
+
+    fn page(&self) -> usize {
+        self.page
+    }
+
+    fn top(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn bottom(&mut self) {
+        self.cursor = self.items.len().saturating_sub(1);
+    }
+}

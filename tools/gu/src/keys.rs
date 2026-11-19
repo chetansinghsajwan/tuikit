@@ -80,14 +80,6 @@ pub const GROUPS: &[Group] = &[
 
 /// Movement, the diff scroll and quitting, for the list panes.
 const COMMON: &[Action] = &[
-    basic("nav.up", "up", "move the cursor up", &["k", "up", "ctrl-p"]),
-    basic("nav.down", "down", "move the cursor down", &["j", "down", "ctrl-n"]),
-    basic("nav.up5", "up 5", "move the cursor up five rows", &["ctrl-k"]),
-    basic("nav.down5", "down 5", "move the cursor down five rows", &["ctrl-j"]),
-    basic("nav.page_up", "page up", "move a page up", &["pageup"]),
-    basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
-    basic("nav.top", "top", "go to the first row", &["g", "home"]),
-    basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
     basic("preview.down", "scroll diff down", "scroll the preview down", &["ctrl-d"]),
     basic("preview.up", "scroll diff up", "scroll the preview up", &["ctrl-u"]),
     basic("preview.next_hunk", "next hunk", "scroll the diff to the next hunk", &["}"]),
@@ -107,8 +99,6 @@ const COMMON: &[Action] = &[
         &["w"],
     ),
     basic("back", "back to files", "focus the files pane", &["esc"]),
-    basic("palette", "commands", "search every action by name and run it", &["leader space"]),
-    basic("help", "keys", "list every action with its keys", &["?"]),
     basic("quit", "quit", "close gu", &["q", "ctrl-c", "leader q"]),
 ];
 
@@ -350,6 +340,17 @@ pub fn pane_actions(pane: usize) -> Vec<Action> {
         _ => &[],
     };
     own.iter().chain(COMMON).chain(GLOBAL).cloned().collect()
+}
+
+/// The actions of the Files pane: the git panel's own and the global ones.
+fn files_actions() -> Vec<Action> {
+    git_panel::keys::hosted().into_iter().chain(GLOBAL.iter().cloned()).collect()
+}
+
+/// The actions of each context the shell switches between: Files (0), then Branches, Commits,
+/// Stashes and Submodules (1 to 4).
+pub fn contexts() -> Vec<Vec<Action>> {
+    std::iter::once(files_actions()).chain((0..4).map(pane_actions)).collect()
 }
 
 /// Tests of the key tables.

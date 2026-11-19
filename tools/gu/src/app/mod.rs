@@ -13,7 +13,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
-use ui::keys::{Feed, Keymap};
+use ui::app::{Host, Navigable, Request};
 use ui::{Pane, Theme};
 
 /// Loading history, status, refs and the commit list.
@@ -33,10 +33,6 @@ mod types;
 use pills::*;
 pub use types::Quit;
 use types::*;
-
-/// Tests of the screen.
-#[cfg(test)]
-mod tests;
 
 /// The whole git screen: the repository, what is loaded from it, and the UI state of every tab.
 pub struct App {
@@ -60,9 +56,6 @@ pub struct App {
     /// The commit whose files were folded by hand (another commit starts with none).
     fold_rev: Option<String>,
     pheight: usize,
-    /// The keymaps of the Branches, Commits, Stashes and Submodules panes (the Files pane has its own).
-    maps: [Keymap; 4],
-    help: Option<ui::keys::Help>,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
     /// The commit graph column in the Commits pane, and whether it covers every branch.
@@ -107,8 +100,7 @@ impl App {
         let root = repo.root().to_path_buf();
         let watch = ui::watch::Watch::new(&root, || {});
 
-        let mut files =
-            Panel::with_actions(dir, "space", crate::keys::GLOBAL.to_vec(), crate::keys::GROUPS)?;
+        let mut files = Panel::new(dir)?;
         files.set_title("Files");
         let mut app = App {
             root,
@@ -128,9 +120,6 @@ impl App {
             pscroll: 0,
             fold_rev: None,
             pheight: 10,
-            maps: [0, 1, 2, 3]
-                .map(|i| Keymap::new("space", &crate::keys::pane_actions(i), crate::keys::GROUPS)),
-            help: None,
             job: None,
             graph: true,
             all_branches: true,
@@ -165,3 +154,134 @@ impl App {
         Some(app)
     }
 }
+
+/// Lets the shared app shell host the screen: it owns the keymaps, the help, the palette and the
+/// terminal; the screen draws and runs its own actions.
+impl ui::app::Screen for App {
+    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
+        App::render(self, area, buf);
+    }
+
+    fn captures(&self, ev: &Event) -> bool {
+        self.takes(ev)
+    }
+
+    fn event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
+        let quit = self.typing(ev);
+        self.finish(quit, host)
+    }
+
+    /// The Files panel's own actions run on the panel, every other one here.
+    fn run(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
+        let quit = if self.focus == Focus::Files && git_panel::keys::owns(id) {
+            let action = self.files.run(id);
+            self.files_action(action)
+        } else {
+            self.run_id(id)
+        };
+        self.finish(quit, host)
+    }
+
+    fn keypress(&mut self) {
+        self.message = None;
+        self.files.clear_message();
+    }
+
+    fn unbound(&mut self, keys: &str) {
+        let text = format!("{keys} is not bound");
+        if self.focus == Focus::Files {
+            self.files.notify(text, true);
+        } else {
+            self.say(text, true);
+        }
+    }
+
+    fn tick(&mut self) -> bool {
+        App::tick(self)
+    }
+
+    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+        Some(self)
+    }
+
+    /// The focused pane: Files is context 0, the list panes follow.
+    fn context(&self) -> usize {
+        Self::list_index(self.focus).map_or(0, |i| i + 1)
+    }
+}
+
+impl App {
+    /// Turns what the screen decided into what the shell understands; an edit hands the terminal
+    /// to the editor and reloads when it returns.
+    fn finish(&mut self, quit: Quit, host: &mut dyn Host) -> Request {
+        match quit {
+            Quit::No => Request::None,
+            Quit::Yes => Request::Quit,
+            Quit::Palette => Request::Palette,
+            Quit::Help => Request::Help,
+            Quit::Edit(path) => {
+                let ok = ui::app::suspended(host, || {
+                    let editor = std::env::var("VISUAL")
+                        .or_else(|_| std::env::var("EDITOR"))
+                        .unwrap_or_else(|_| "vi".into());
+                    std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(format!("{editor} {}", ui::popup::quote(&path.to_string_lossy())))
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+                self.edited(ok);
+                Request::None
+            }
+        }
+    }
+}
+
+/// The cursor of the focused pane is what the shared movement walks; the Files pane is the git
+/// panel's own list.
+impl Navigable for App {
+    fn move_by(&mut self, delta: isize) {
+        match Self::list_index(self.focus) {
+            Some(li) => {
+                let last = self.len(self.focus).saturating_sub(1) as isize;
+                let st = &mut self.lists[li];
+                st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
+                self.pscroll = 0;
+            }
+            None => self.files.move_by(delta),
+        }
+    }
+
+    fn page(&self) -> usize {
+        match Self::list_index(self.focus) {
+            Some(_) => 10,
+            None => self.files.page(),
+        }
+    }
+
+    fn top(&mut self) {
+        match Self::list_index(self.focus) {
+            Some(li) => {
+                self.lists[li].cursor = 0;
+                self.pscroll = 0;
+            }
+            None => self.files.top(),
+        }
+    }
+
+    fn bottom(&mut self) {
+        match Self::list_index(self.focus) {
+            Some(li) => {
+                self.lists[li].cursor = self.len(self.focus).saturating_sub(1);
+                self.pscroll = 0;
+            }
+            None => self.files.bottom(),
+        }
+    }
+}
+
+/// Tests of the screen.
+#[cfg(test)]
+mod tests;
