@@ -1,5 +1,5 @@
 //! The file browser panel: owns the tree, cursor, marks, prompts and background jobs, and turns
-//! keys into `Action`s for the host. Drawing and paste live in the submodules.
+//! keys into `Outcome`s for the host. Drawing and paste live in the submodules.
 
 use crate::bookmarks::{self, Bookmarks};
 use crate::keys;
@@ -42,7 +42,7 @@ mod types;
 mod view;
 use paste::*;
 use types::*;
-pub use types::{Action, Linemode, PanelOptions, Search};
+pub use types::{Linemode, Outcome, PanelOptions, Search};
 
 /// The actions that belong to no domain: the palette, the help, back and quit.
 const GENERAL: &[ui::keys::Action] = &[
@@ -93,7 +93,7 @@ pub struct Panel {
     sizes_shown: Vec<(PathBuf, (u64, bool))>,
     /// A paste running in the background, and the action its end produced, waiting for the next event.
     job: Option<Job>,
-    pending: Option<Action>,
+    pending: Option<Outcome>,
     /// Something finished by itself since the last `tick`.
     redraw: bool,
     /// Show the entries that .gitignore and the other ignore files hide (toggle with `I`).
@@ -395,17 +395,17 @@ impl Panel {
 
     /// Feed one terminal event to the panel and return what the host should do about it. Also
     /// collects the end of a finished background paste.
-    pub fn handle_event(&mut self, ev: &Event) -> Action {
+    pub fn handle_event(&mut self, ev: &Event) -> Outcome {
         self.poll_job();
         let action = self.handle_key_event(ev);
-        if action == Action::None { self.pending.take().unwrap_or(Action::None) } else { action }
+        if action == Outcome::None { self.pending.take().unwrap_or(Outcome::None) } else { action }
     }
 
     /// Route a key to the open prompt, confirmation or bookmark wait, else to the normal keymap.
-    fn handle_key_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+    fn handle_key_event(&mut self, ev: &Event) -> Outcome {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
         if *kind == KeyEventKind::Release {
-            return Action::None;
+            return Outcome::None;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Prompt(kind, input) => return self.prompt_key(kind, input, ev, key),
@@ -419,16 +419,16 @@ impl Panel {
 
     /// While a paste runs, Esc cancels it and the delete keys are refused: the action to return
     /// for such a key, `None` for any other.
-    fn job_key(&mut self, key: &KeyEvent) -> Option<Action> {
+    fn job_key(&mut self, key: &KeyEvent) -> Option<Outcome> {
         let job = self.job.as_ref()?;
         if key.code == KeyCode::Esc {
             job.progress.cancel.store(true, Ordering::Relaxed);
             self.say("cancelling the paste", false);
-            return Some(Action::None);
+            return Some(Outcome::None);
         }
         if matches!(key.code, KeyCode::Char('d' | 'D')) {
             self.say("busy: a paste is running (Esc cancels it)", true);
-            return Some(Action::None);
+            return Some(Outcome::None);
         }
         None
     }
@@ -445,23 +445,23 @@ impl Panel {
 
     /// Feeds an event the panel claimed (see `captures`) when the host owns the keymap, and returns
     /// what the host should do about it.
-    pub fn handle_captured(&mut self, ev: &Event) -> Action {
+    pub fn handle_captured(&mut self, ev: &Event) -> Outcome {
         self.poll_job();
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
         if *kind == KeyEventKind::Release {
-            return Action::None;
+            return Outcome::None;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Prompt(kind, input) => self.prompt_key(kind, input, ev, key),
             Mode::Confirm(kind, targets) => self.confirm_key(kind, targets, key),
             Mode::Bookmark(op) => self.bookmark_key(op, key),
-            Mode::Normal => self.job_key(key).unwrap_or(Action::None),
+            Mode::Normal => self.job_key(key).unwrap_or(Outcome::None),
         }
     }
 
     /// A key in the normal mode: cancels or refuses things while a paste runs,
     /// else the keymap decides.
-    fn normal_key(&mut self, key: &KeyEvent) -> Action {
+    fn normal_key(&mut self, key: &KeyEvent) -> Outcome {
         if let Some(action) = self.job_key(key) {
             return action;
         }
@@ -470,10 +470,10 @@ impl Panel {
             ui::keys::Feed::NoBinding => {
                 let seq = self.keymap.rejected().to_string();
                 self.say(format!("{seq} is not bound"), true);
-                Action::None
+                Outcome::None
             }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
-                Action::None
+                Outcome::None
             }
         }
     }
@@ -499,9 +499,9 @@ impl Panel {
     }
 
     /// Run an action by id (what a key, the leader menu or a palette resolves to).
-    pub fn run(&mut self, id: &'static str) -> Action {
+    pub fn run(&mut self, id: &'static str) -> Outcome {
         if !keys::owns(id) {
-            return Action::Command(id);
+            return Outcome::Command(id);
         }
         match id.split('.').next().unwrap_or(id) {
             "nav" | "tree" => self.run_nav(id),
@@ -515,20 +515,20 @@ impl Panel {
     }
 
     /// Runs one of the actions that belong to no domain: back, the palette, the help and quit.
-    fn run_general(&mut self, id: &str) -> Action {
+    fn run_general(&mut self, id: &str) -> Outcome {
         match id {
             "back" => {
                 if self.marked.is_empty() {
-                    return Action::Close;
+                    return Outcome::Close;
                 }
                 self.marked.clear();
             }
-            "palette" => return Action::Palette,
-            "help" => return Action::Help,
-            "quit" => return Action::Close,
+            "palette" => return Outcome::Palette,
+            "help" => return Outcome::Help,
+            "quit" => return Outcome::Close,
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 
     /// A key while a text prompt (new, rename, open with) is open: Enter submits, Esc drops it.
@@ -538,29 +538,29 @@ impl Panel {
         mut input: Input,
         ev: &Event,
         key: &KeyEvent,
-    ) -> Action {
+    ) -> Outcome {
         match key.code {
-            KeyCode::Esc => Action::None,
+            KeyCode::Esc => Outcome::None,
             KeyCode::Enter => {
                 let value = input.value().to_string();
                 match kind {
                     PromptKind::Create(dir) => self.create(&dir, &value),
                     PromptKind::Rename(from) => self.rename(&from, &value),
-                    PromptKind::OpenWith(path) => Action::OpenWith(path, value),
+                    PromptKind::OpenWith(path) => Outcome::OpenWith(path, value),
                 }
             }
             _ => {
                 input.handle_event(ev);
                 self.mode = Mode::Prompt(kind, input);
-                Action::None
+                Outcome::None
             }
         }
     }
 
     /// The key typed after a bookmark command: it is the bookmark's name, and the open operation
     /// saves, jumps to or deletes it.
-    fn bookmark_key(&mut self, op: BookmarkOp, key: &KeyEvent) -> Action {
-        let KeyCode::Char(c) = key.code else { return Action::None };
+    fn bookmark_key(&mut self, op: BookmarkOp, key: &KeyEvent) -> Outcome {
+        let KeyCode::Char(c) = key.code else { return Outcome::None };
         match op {
             BookmarkOp::Set => {
                 let dir = self.target_dir();
@@ -580,48 +580,48 @@ impl Panel {
                 Err(e) => self.say(format!("bookmark not saved: {e}"), true),
             },
         }
-        Action::None
+        Outcome::None
     }
 
     /// A key at a delete confirmation: the confirm key or Enter deletes, anything else cancels.
-    fn confirm_key(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>, key: &KeyEvent) -> Action {
+    fn confirm_key(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>, key: &KeyEvent) -> Outcome {
         match key.code {
             KeyCode::Char(c) if c == kind.confirm_key() => self.delete(kind, targets),
             KeyCode::Enter => self.delete(kind, targets),
-            _ => Action::None,
+            _ => Outcome::None,
         }
     }
 
     /// Create the file or folder typed in the new prompt and move the cursor onto it.
-    fn create(&mut self, dir: &Path, name: &str) -> Action {
+    fn create(&mut self, dir: &Path, name: &str) -> Outcome {
         match ops::create(dir, name) {
             Ok((path, is_dir)) => {
                 self.say(format!("created {}", name.trim_end_matches('/')), false);
                 self.reveal(&path);
-                Action::Created(path, is_dir)
+                Outcome::Created(path, is_dir)
             }
             Err(e) => {
                 self.say(e.to_string(), true);
-                Action::None
+                Outcome::None
             }
         }
     }
 
     /// Rename `from` to the typed name, keeping open folders open and
     /// putting the cursor on the result.
-    fn rename(&mut self, from: &Path, name: &str) -> Action {
+    fn rename(&mut self, from: &Path, name: &str) -> Outcome {
         match ops::rename(from, name) {
-            Ok(to) if to == from => Action::None,
+            Ok(to) if to == from => Outcome::None,
             Ok(to) => {
                 self.remap_expanded(from, &to);
                 self.marked.clear();
                 self.say(format!("renamed to {name}"), false);
                 self.reveal(&to);
-                Action::Moved(vec![(from.to_path_buf(), to)])
+                Outcome::Moved(vec![(from.to_path_buf(), to)])
             }
             Err(e) => {
                 self.say(e.to_string(), true);
-                Action::None
+                Outcome::None
             }
         }
     }
@@ -639,7 +639,7 @@ impl Panel {
     }
 
     /// Trash or permanently delete the confirmed targets, then reread the tree either way.
-    fn delete(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>) -> Action {
+    fn delete(&mut self, kind: ConfirmKind, targets: Vec<PathBuf>) -> Outcome {
         let result = match kind {
             ConfirmKind::Trash => ops::trash(&targets),
             ConfirmKind::Delete => {
@@ -659,12 +659,12 @@ impl Panel {
                 );
                 self.marked.clear();
                 self.refresh();
-                Action::Deleted(targets)
+                Outcome::Deleted(targets)
             }
             Err(e) => {
                 self.say(e, true);
                 self.refresh();
-                Action::None
+                Outcome::None
             }
         }
     }

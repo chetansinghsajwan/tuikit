@@ -72,14 +72,14 @@ impl Panel {
     /// Paste the clipboard into the folder under the cursor. Small pastes happen at
     /// once; big ones (over `background_bytes`) run on a thread with a progress line
     /// in the footer, and Esc cancels them.
-    pub(super) fn paste(&mut self) -> Action {
+    pub(super) fn paste(&mut self) -> Outcome {
         if self.job.is_some() {
             self.say("a paste is already running (Esc cancels it)", true);
-            return Action::None;
+            return Outcome::None;
         }
         let Some(clip) = self.clip.take() else {
             self.say("nothing to paste (yank with y, cut with x)", true);
-            return Action::None;
+            return Outcome::None;
         };
         let dir = self.target_dir();
         // Work out every destination first, so two sources with one name do not collide.
@@ -112,13 +112,13 @@ impl Panel {
         };
         if self.opts.background_bytes.is_some_and(|min| total >= min) {
             self.job = Some(Job { progress, handle: std::thread::spawn(work), dir });
-            return Action::None;
+            return Outcome::None;
         }
         self.finish_paste(work(), dir)
     }
 
     /// Apply a finished paste: keep folders open across moves, refresh, report.
-    pub(super) fn finish_paste(&mut self, result: PasteResult, dir: PathBuf) -> Action {
+    pub(super) fn finish_paste(&mut self, result: PasteResult, dir: PathBuf) -> Outcome {
         for (from, to) in &result.moved {
             self.remap_expanded(from, to);
         }
@@ -132,7 +132,7 @@ impl Panel {
         } else {
             self.say(result.failed.join("; "), true);
         }
-        if result.moved.is_empty() { Action::None } else { Action::Moved(result.moved) }
+        if result.moved.is_empty() { Outcome::None } else { Outcome::Moved(result.moved) }
     }
 
     /// If the background paste has ended, apply it; the action it produces waits in
@@ -147,7 +147,7 @@ impl Panel {
             });
             self.redraw = true;
             let action = self.finish_paste(result, job.dir);
-            if action != Action::None {
+            if action != Outcome::None {
                 self.pending = Some(action);
             }
         }

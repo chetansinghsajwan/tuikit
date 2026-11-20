@@ -2,7 +2,7 @@
 //! //! hand-offs to the editor, `pick` and the system opener.
 
 use files::meta::{self, DirSize, Meta};
-use files::{Action, Panel, PanelOptions, Search, ops};
+use files::{Outcome, Panel, PanelOptions, Search, ops};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
@@ -184,9 +184,9 @@ impl Explorer {
     }
 
     /// Carries out what the panel asked for: open, search, rename, close or a command.
-    fn act(&mut self, action: Action, host: &mut dyn Host) -> Request {
+    fn act(&mut self, action: Outcome, host: &mut dyn Host) -> Request {
         match action {
-            Action::Open(path) => {
+            Outcome::Open(path) => {
                 if let Some(file) = &self.opts.chooser_file {
                     if let Err(e) = fs::write(file, path.as_os_str().as_encoded_bytes()) {
                         self.panel().notify(e.to_string(), true);
@@ -198,18 +198,18 @@ impl Explorer {
                 self.report(result);
                 self.panel().refresh();
             }
-            Action::Close => {
+            Outcome::Close => {
                 if self.tabs.close().is_none() {
                     return Request::Quit;
                 }
             }
-            Action::Search(kind) => {
+            Outcome::Search(kind) => {
                 let root = self.panel().root().to_path_buf();
                 if let Ok(Some(found)) = overlay(host, || search(&kind, &root)) {
                     self.panel().reveal(&found);
                 }
             }
-            Action::BulkRename(paths) => {
+            Outcome::BulkRename(paths) => {
                 let root = self.panel().root().to_path_buf();
                 let result = suspended(host, || bulk_rename(&root, &paths))
                     .unwrap_or_else(|e| Err(e.to_string()));
@@ -223,16 +223,16 @@ impl Explorer {
                     Err(e) => self.panel().notify(e, true),
                 }
             }
-            Action::OpenWith(path, cmd) => {
+            Outcome::OpenWith(path, cmd) => {
                 let result = suspended(host, || open_with(&cmd, &path))
                     .unwrap_or_else(|e| Err(e.to_string()));
                 self.report(result);
                 self.panel().refresh();
             }
-            Action::Command(id) => self.command(id),
-            Action::Help => return Request::Help,
-            Action::Palette => return Request::Palette,
-            Action::None | Action::Created(..) | Action::Moved(_) | Action::Deleted(_) => {}
+            Outcome::Command(id) => self.command(id),
+            Outcome::Help => return Request::Help,
+            Outcome::Palette => return Request::Palette,
+            Outcome::None | Outcome::Created(..) | Outcome::Moved(_) | Outcome::Deleted(_) => {}
         }
         Request::None
     }

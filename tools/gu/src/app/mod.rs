@@ -3,7 +3,7 @@
 use git_core::{
     CommitInfo, Operation, RefInfo, RefKind, Repo, ResetMode, StashInfo, SubmoduleInfo,
 };
-use git_panel::{Action as PanelAction, Panel};
+use git_panel::{Outcome as PanelOutcome, Panel};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::layout::{Constraint, Layout, Rect};

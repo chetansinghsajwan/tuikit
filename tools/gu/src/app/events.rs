@@ -204,18 +204,18 @@ impl App {
     }
 
     /// Turn what the Files panel asked for into a reload, a screen change or a `Quit` for the host.
-    pub(super) fn files_action(&mut self, action: PanelAction) -> Quit {
+    pub(super) fn files_action(&mut self, action: PanelOutcome) -> Quit {
         match action {
-            PanelAction::Close => Quit::Yes,
-            PanelAction::Open(path) => Quit::Edit(path),
-            PanelAction::Changed => {
+            PanelOutcome::Close => Quit::Yes,
+            PanelOutcome::Open(path) => Quit::Edit(path),
+            PanelOutcome::Changed => {
                 self.reload_history();
                 Quit::No
             }
-            PanelAction::Palette => Quit::Palette,
-            PanelAction::Help => Quit::Help,
-            PanelAction::Command(id) => self.run_id(id),
-            PanelAction::None => Quit::No,
+            PanelOutcome::Palette => Quit::Palette,
+            PanelOutcome::Help => Quit::Help,
+            PanelOutcome::Command(id) => self.run_id(id),
+            PanelOutcome::None => Quit::No,
         }
     }
 

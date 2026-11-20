@@ -16,7 +16,7 @@ use ui::{Pane, Theme, layout};
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Action {
+pub enum Outcome {
     None,
     /// The user chose a file to open (absolute path).
     Open(PathBuf),
@@ -155,7 +155,7 @@ impl Panel {
     }
 
     /// The panel with a leader key and the host's own `actions` added to its keymap (they come
-    /// back as `Action::Command(id)`).
+    /// back as `Outcome::Command(id)`).
     pub fn with_actions(
         path: &Path,
         leader: &str,
@@ -336,16 +336,16 @@ impl Panel {
 
     /// Turns the result of a git change into a footer message and a refresh, and tells the host the
     /// repo changed.
-    fn finish(&mut self, what: &str, result: Result<(), git_core::Error>) -> Action {
+    fn finish(&mut self, what: &str, result: Result<(), git_core::Error>) -> Outcome {
         match result {
             Ok(()) => {
                 self.say(what, false);
                 self.refresh();
-                Action::Changed
+                Outcome::Changed
             }
             Err(e) => {
                 self.say(e.to_string(), true);
-                Action::None
+                Outcome::None
             }
         }
     }
@@ -363,10 +363,10 @@ impl Panel {
 
     /// Feeds an event the panel claimed (see `captures`) when the host owns the keymap, and returns
     /// what the host should do about it.
-    pub fn handle_captured(&mut self, ev: &Event) -> Action {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+    pub fn handle_captured(&mut self, ev: &Event) -> Outcome {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
         if *kind == KeyEventKind::Release {
-            return Action::None;
+            return Outcome::None;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Commit(input) => self.commit_key(input, ev, key),
@@ -375,9 +375,9 @@ impl Panel {
                     let r = self.repo.discard(&rela, untracked);
                     self.finish(if untracked { "deleted" } else { "discarded" }, r)
                 }
-                _ => Action::None,
+                _ => Outcome::None,
             },
-            Mode::Normal => Action::None,
+            Mode::Normal => Outcome::None,
         }
     }
 
@@ -392,10 +392,10 @@ impl Panel {
     }
 
     /// Handles a key press: first the commit and discard prompts, else the keymap.
-    pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
+    pub fn handle_event(&mut self, ev: &Event) -> Outcome {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
         if *kind == KeyEventKind::Release {
-            return Action::None;
+            return Outcome::None;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Commit(input) => return self.commit_key(input, ev, key),
@@ -405,7 +405,7 @@ impl Panel {
                         let r = self.repo.discard(&rela, untracked);
                         self.finish(if untracked { "deleted" } else { "discarded" }, r)
                     }
-                    _ => Action::None,
+                    _ => Outcome::None,
                 };
             }
             Mode::Normal => {}
@@ -416,10 +416,10 @@ impl Panel {
             ui::keys::Feed::NoBinding => {
                 let seq = self.keymap.rejected().to_string();
                 self.say(format!("{seq} is not bound"), true);
-                Action::None
+                Outcome::None
             }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
-                Action::None
+                Outcome::None
             }
         }
     }
@@ -448,9 +448,9 @@ impl Panel {
     }
 
     /// Run an action by id (what a key, the leader menu or a palette resolves to).
-    pub fn run(&mut self, id: &'static str) -> Action {
+    pub fn run(&mut self, id: &'static str) -> Outcome {
         if !keys::owns(id) {
-            return Action::Command(id);
+            return Outcome::Command(id);
         }
         self.message = None;
         match id {
@@ -472,10 +472,10 @@ impl Panel {
                         self.folded.insert(key);
                     }
                     self.refresh();
-                    return Action::None;
+                    return Outcome::None;
                 }
                 if let Some(c) = self.current() {
-                    return Action::Open(self.root.join(&c.rela));
+                    return Outcome::Open(self.root.join(&c.rela));
                 }
             }
             "change.stage" => {
@@ -485,7 +485,7 @@ impl Panel {
                     None => self.current().cloned().into_iter().collect(),
                 };
                 if targets.is_empty() {
-                    return Action::None;
+                    return Outcome::None;
                 }
                 if targets.iter().any(Change::open) {
                     let paths: Vec<PathBuf> =
@@ -529,7 +529,7 @@ impl Panel {
             "change.discard" => {
                 if self.current_folder().is_some() {
                     self.say("discard works on one file at a time", true);
-                    return Action::None;
+                    return Outcome::None;
                 }
                 // Discard: only work-tree changes, never the staged ones.
                 if let Some(c) = self.current().cloned() {
@@ -563,39 +563,39 @@ impl Panel {
                 self.refresh();
                 self.say("refreshed", false);
             }
-            "palette" => return Action::Palette,
-            "help" => return Action::Help,
-            "quit" => return Action::Close,
+            "palette" => return Outcome::Palette,
+            "help" => return Outcome::Help,
+            "quit" => return Outcome::Close,
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 
     /// Handles a key while the commit message is typed: Enter commits, Esc cancels, anything else
     /// edits.
-    fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Action {
+    fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Outcome {
         match key.code {
-            KeyCode::Esc => Action::None,
+            KeyCode::Esc => Outcome::None,
             KeyCode::Enter => {
                 let message = input.value().to_string();
                 match self.repo.create_commit(&message) {
                     Ok(summary) => {
                         self.say(format!("committed {summary}"), false);
                         self.refresh();
-                        Action::Changed
+                        Outcome::Changed
                     }
                     Err(e) => {
                         self.say(e.to_string(), true);
                         // Keep what was typed so the message is not lost.
                         self.mode = Mode::Commit(input);
-                        Action::None
+                        Outcome::None
                     }
                 }
             }
             _ => {
                 input.handle_event(ev);
                 self.mode = Mode::Commit(input);
-                Action::None
+                Outcome::None
             }
         }
     }

@@ -171,12 +171,12 @@ fn enter_opens_files_and_toggles_hidden() {
     let d = tree("open");
     let mut p = panel(&d);
     p.handle_event(&key(KeyCode::Char('G'))); // README.md
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Open(d.join("README.md")));
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::Open(d.join("README.md")));
     p.handle_event(&key(KeyCode::Char('.')));
     assert!(names(&p).contains(&".hidden".to_string()));
     p.handle_event(&key(KeyCode::Char('.')));
     assert!(!names(&p).contains(&".hidden".to_string()));
-    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::Close);
+    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Outcome::Close);
 }
 
 #[test]
@@ -290,14 +290,14 @@ fn a_creates_in_the_folder_under_the_cursor_and_reports_it() {
     cursor_on(&mut p, "src");
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "new.rs");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Created(d.join("src/new.rs"), false));
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::Created(d.join("src/new.rs"), false));
     assert!(d.join("src/new.rs").is_file());
     // The folder opened and the cursor is on the new file.
     assert_eq!(p.current().unwrap(), d.join("src/new.rs"));
     // On a file the new item goes next to it; a trailing slash makes a folder.
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "pkg/mod/");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Created(d.join("src/pkg/mod"), true));
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::Created(d.join("src/pkg/mod"), true));
     assert!(d.join("src/pkg/mod").is_dir());
 }
 
@@ -308,7 +308,7 @@ fn creating_something_that_exists_shows_an_error_and_esc_cancels_the_prompt() {
     cursor_on(&mut p, "README.md");
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "README.md");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::None);
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::None);
     assert!(
         p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("already exists")),
         "{:?}",
@@ -316,11 +316,11 @@ fn creating_something_that_exists_shows_an_error_and_esc_cancels_the_prompt() {
     );
     p.handle_event(&key(KeyCode::Char('a')));
     type_text(&mut p, "abc");
-    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::None);
+    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Outcome::None);
     assert!(matches!(p.mode, Mode::Normal));
     assert!(!d.join("abc").exists());
     // Esc in normal mode still closes the panel.
-    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::Close);
+    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Outcome::Close);
 }
 
 #[test]
@@ -337,7 +337,7 @@ fn r_renames_with_the_name_prefilled_and_keeps_folders_open() {
     type_text(&mut p, "lib");
     assert_eq!(
         p.handle_event(&key(KeyCode::Enter)),
-        Action::Moved(vec![(d.join("src"), d.join("lib"))])
+        Outcome::Moved(vec![(d.join("src"), d.join("lib"))])
     );
     assert!(d.join("lib/main.rs").is_file() && !d.join("src").exists());
     assert!(names(&p).contains(&"  main.rs".to_string()), "still expanded: {:?}", names(&p));
@@ -355,11 +355,11 @@ fn d_asks_first_and_deletes_the_marked_items_only_when_pressed_again() {
     assert_eq!(p.marked.len(), 2);
     p.handle_event(&key(KeyCode::Char('D'))); // permanent delete (the trash is not used in tests)
     assert!(matches!(p.mode, Mode::Confirm(ConfirmKind::Delete, _)));
-    assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::None);
+    assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Outcome::None);
     assert!(d.join("docs").exists() && d.join("README.md").exists());
     p.handle_event(&key(KeyCode::Char('D')));
     let got = p.handle_event(&key(KeyCode::Char('D')));
-    assert_eq!(got, Action::Deleted(vec![d.join("README.md"), d.join("docs")]));
+    assert_eq!(got, Outcome::Deleted(vec![d.join("README.md"), d.join("docs")]));
     assert!(!d.join("docs").exists() && !d.join("README.md").exists());
     assert!(p.marked.is_empty());
 }
@@ -372,7 +372,7 @@ fn y_then_p_copies_and_x_then_p_moves_with_unique_names() {
     cursor_on(&mut p, "README.md");
     p.handle_event(&key(KeyCode::Char('y')));
     cursor_on(&mut p, "docs");
-    assert_eq!(p.handle_event(&key(KeyCode::Char('p'))), Action::None);
+    assert_eq!(p.handle_event(&key(KeyCode::Char('p'))), Outcome::None);
     p.handle_event(&key(KeyCode::Char('p')));
     assert!(d.join("docs/README.md").is_file() && d.join("docs/README copy.md").is_file());
     assert!(d.join("README.md").is_file(), "a copy keeps the original");
@@ -383,7 +383,7 @@ fn y_then_p_copies_and_x_then_p_moves_with_unique_names() {
     p.handle_event(&key(KeyCode::Char('x')));
     cursor_on(&mut p, "docs");
     let got = p.handle_event(&key(KeyCode::Char('p')));
-    assert_eq!(got, Action::Moved(vec![(d.join("src/main.rs"), d.join("docs/main.rs"))]));
+    assert_eq!(got, Outcome::Moved(vec![(d.join("src/main.rs"), d.join("docs/main.rs"))]));
     assert!(!d.join("src/main.rs").exists() && d.join("docs/main.rs").is_file());
     // The cut clipboard is spent.
     p.handle_event(&key(KeyCode::Char('p')));
@@ -542,7 +542,7 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
     find(&mut p, "big.bin");
     p.handle_event(&key(KeyCode::Char('x')));
     find(&mut p, "docs");
-    assert_eq!(p.handle_event(&key(KeyCode::Char('p'))), Action::None, "returns at once");
+    assert_eq!(p.handle_event(&key(KeyCode::Char('p'))), Outcome::None, "returns at once");
     for _ in 0..500 {
         p.tick();
         if p.job.is_none() {
@@ -554,7 +554,7 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
     // The end waits for the next event.
     assert_eq!(
         p.handle_event(&key(KeyCode::Char('R'))),
-        Action::Moved(vec![(d.join("big.bin"), d.join("docs/big.bin"))])
+        Outcome::Moved(vec![(d.join("big.bin"), d.join("docs/big.bin"))])
     );
 
     // A copy (yank) of a folder with a few files, also in the background.
@@ -631,7 +631,7 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     );
     p.handle_event(&key(KeyCode::Char(',')));
     p.handle_event(&key(KeyCode::Char('t')));
-    assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Action::Command("tab.new"));
+    assert_eq!(p.handle_event(&key(KeyCode::Char('n'))), Outcome::Command("tab.new"));
 }
 
 #[test]

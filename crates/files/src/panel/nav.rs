@@ -23,7 +23,7 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_nav(&mut self, id: &str) -> Action {
+    pub(super) fn run_nav(&mut self, id: &str) -> Outcome {
         match id {
             "nav.up" => self.move_by(-1),
             "nav.down" => self.move_by(1),
@@ -36,6 +36,6 @@ impl Panel {
             "tree.out" => self.left(),
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 }

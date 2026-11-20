@@ -13,4 +13,4 @@ pub mod ops;
 /// The panel itself: tree state, key handling and drawing.
 mod panel;
 
-pub use panel::{Action, Linemode, Panel, PanelOptions, Search};
+pub use panel::{Linemode, Outcome, Panel, PanelOptions, Search};

@@ -22,13 +22,13 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_search(&mut self, id: &str) -> Action {
+    pub(super) fn run_search(&mut self, id: &str) -> Outcome {
         match id {
-            "search.files" => return Action::Search(Search::Files),
-            "search.here" => return Action::Search(Search::Here(self.target_dir())),
-            "search.grep" => return Action::Search(Search::Grep),
+            "search.files" => return Outcome::Search(Search::Files),
+            "search.here" => return Outcome::Search(Search::Here(self.target_dir())),
+            "search.grep" => return Outcome::Search(Search::Grep),
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 }

@@ -34,7 +34,7 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_view(&mut self, id: &str) -> Action {
+    pub(super) fn run_view(&mut self, id: &str) -> Outcome {
         match id {
             "view.ignored" => {
                 self.show_ignored = !self.show_ignored;
@@ -58,6 +58,6 @@ impl Panel {
             "view.refresh" => self.refresh(),
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 }

@@ -9,4 +9,4 @@ pub mod keys;
 /// The panel itself: state, key handling and drawing.
 mod panel;
 
-pub use panel::{Action, Panel};
+pub use panel::{Outcome, Panel};

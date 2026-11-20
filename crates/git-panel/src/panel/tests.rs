@@ -61,8 +61,8 @@ fn key(c: KeyCode) -> Event {
 }
 
 /// Sends the keys named by `s` to the panel and returns the last action.
-fn press(p: &mut Panel, s: &str) -> Action {
-    let mut last = Action::None;
+fn press(p: &mut Panel, s: &str) -> Outcome {
+    let mut last = Outcome::None;
     for c in s.chars() {
         last = p.handle_event(&key(KeyCode::Char(c)));
     }
@@ -139,28 +139,28 @@ fn s_toggles_stage_and_unstage_and_the_cursor_stays_on_the_file() {
     let d = repo("toggle");
     let mut p = Panel::new(&d).unwrap();
     on(&mut p, "new.txt");
-    assert_eq!(press(&mut p, "s"), Action::Changed);
+    assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert_eq!(
         p.current().map(|c| (c.rela.clone(), c.staged)),
         Some((PathBuf::from("new.txt"), Some(Kind::Added)))
     );
-    assert_eq!(press(&mut p, "s"), Action::Changed); // all staged: back out
+    assert_eq!(press(&mut p, "s"), Outcome::Changed); // all staged: back out
     assert_eq!(p.current().map(|c| c.unstaged), Some(Some(Kind::Untracked)));
     // `u` only unstages.
     on(&mut p, "a.txt");
-    assert_eq!(press(&mut p, "u"), Action::None);
+    assert_eq!(press(&mut p, "u"), Outcome::None);
     // A partly staged file: s stages the rest, s again unstages it.
     on(&mut p, "b.txt");
     fs::write(d.join("b.txt"), "b1\nmore\n").unwrap();
     p.refresh();
-    assert_eq!(press(&mut p, "s"), Action::Changed);
+    assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert!(p.current().is_some_and(|c| c.unstaged.is_none() && c.staged.is_some()));
-    assert_eq!(press(&mut p, "s"), Action::Changed);
+    assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert!(p.current().is_some_and(|c| c.staged.is_none()), "{:?}", p.current());
     // `a` toggles: it stages everything while something is left, and unstages it all once all is staged.
-    assert_eq!(press(&mut p, "a"), Action::Changed);
+    assert_eq!(press(&mut p, "a"), Outcome::Changed);
     assert!(p.all.iter().all(|c| !c.open()));
-    assert_eq!(press(&mut p, "a"), Action::Changed);
+    assert_eq!(press(&mut p, "a"), Outcome::Changed);
     assert!(p.all.iter().all(|c| c.staged.is_none()));
 }
 
@@ -186,13 +186,13 @@ fn the_tree_groups_by_folder_stages_a_folder_folds_and_toggles_to_a_list() {
     let text = draw(&mut p).join("\n");
     assert!(text.contains("src 2") && !text.contains("one.rs"), "{text}");
     // s on the folder stages everything below it, s again unstages it.
-    assert_eq!(press(&mut p, "s"), Action::Changed);
+    assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert!(
         p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()),
         "{:?}",
         p.message
     );
-    assert_eq!(press(&mut p, "s"), Action::Changed);
+    assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| c.staged.is_none()));
     // t switches to the flat list with the full paths.
     press(&mut p, "t");
@@ -212,16 +212,16 @@ fn x_asks_before_discarding_and_never_touches_staged_changes() {
     on(&mut p, "a.txt");
     press(&mut p, "d");
     assert!(draw(&mut p).join("\n").contains("Discard a.txt? d again"));
-    assert_eq!(press(&mut p, "n"), Action::None);
+    assert_eq!(press(&mut p, "n"), Outcome::None);
     assert_eq!(fs::read_to_string(d.join("a.txt")).unwrap(), "a1\nA2 changed\n");
     press(&mut p, "d");
-    assert_eq!(press(&mut p, "d"), Action::Changed);
+    assert_eq!(press(&mut p, "d"), Outcome::Changed);
     assert_eq!(fs::read_to_string(d.join("a.txt")).unwrap(), "a1\na2\n");
 
     on(&mut p, "new.txt");
     press(&mut p, "d");
     assert!(draw(&mut p).join("\n").contains("Delete new.txt? d again"));
-    assert_eq!(press(&mut p, "y"), Action::Changed);
+    assert_eq!(press(&mut p, "y"), Outcome::Changed);
     assert!(!d.join("new.txt").exists());
 }
 
@@ -232,7 +232,7 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     // Empty message: refused, the prompt stays so nothing typed is lost.
     press(&mut p, "c");
     assert!(draw(&mut p).join("\n").contains("commit: "));
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::None);
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::None);
     assert!(matches!(p.mode, Mode::Commit(_)) && p.message.as_ref().is_some_and(|(_, e)| *e));
     let shown = draw(&mut p).join("\n");
     assert!(
@@ -241,7 +241,7 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     );
     press(&mut p, "fix b");
     assert!(draw(&mut p).join("\n").contains("commit: fix b"));
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Changed);
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::Changed);
     let log = p.repo.commits(2).unwrap();
     assert_eq!(log[0].subject, "fix b");
     // What was staged is gone from the list; the other files remain.
@@ -268,8 +268,8 @@ fn enter_opens_the_file_and_the_preview_shows_the_right_side_of_the_diff() {
     on(&mut p, "b.txt");
     let text = draw(&mut p).join("\n");
     assert!(text.contains("B2 staged"), "staged diff of b.txt:\n{text}");
-    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Open(d.join("b.txt")));
-    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Action::Close);
+    assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::Open(d.join("b.txt")));
+    assert_eq!(p.handle_event(&key(KeyCode::Esc)), Outcome::Close);
 }
 
 #[test]
@@ -281,22 +281,22 @@ fn a_clean_repo_and_a_non_repo() {
     git(&d, &["init", "-q", "-b", "main"]);
     let mut p = Panel::new(&d).unwrap();
     assert!(draw(&mut p).join("\n").contains("clean: nothing to commit"));
-    assert_eq!(press(&mut p, "j"), Action::None); // navigation on an empty list is harmless
+    assert_eq!(press(&mut p, "j"), Outcome::None); // navigation on an empty list is harmless
 }
 
 #[test]
 fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the_host() {
     let d = repo("leader");
     let mut p = Panel::new(&d).unwrap();
-    assert_eq!(press(&mut p, " "), Action::None);
+    assert_eq!(press(&mut p, " "), Outcome::None);
     let menu = p.menu().expect("a leader menu");
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
     for want in ["stage or unstage", "unstage", "commit", "discard", "commands"] {
         assert!(names.contains(&want), "{want} in {names:?}");
     }
     // Space then Space is the palette; `?` is the help; the host's own actions come back as commands.
-    assert_eq!(press(&mut p, " "), Action::Palette);
-    assert_eq!(press(&mut p, "?"), Action::Help);
+    assert_eq!(press(&mut p, " "), Outcome::Palette);
+    assert_eq!(press(&mut p, "?"), Outcome::Help);
     let extra = vec![ui::keys::Action {
         id: "pane.next",
         name: "next pane",
@@ -307,7 +307,7 @@ fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the
     let mut p = Panel::with_actions(&d, "space", extra, &[]).unwrap();
     assert_eq!(
         p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))),
-        Action::Command("pane.next")
+        Outcome::Command("pane.next")
     );
     // The rows for a palette: the basic keys are marked.
     assert!(

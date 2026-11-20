@@ -17,13 +17,13 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_bookmark(&mut self, id: &str) -> Action {
+    pub(super) fn run_bookmark(&mut self, id: &str) -> Outcome {
         match id {
             "bookmark.set" => self.mode = Mode::Bookmark(BookmarkOp::Set),
             "bookmark.jump" => self.mode = Mode::Bookmark(BookmarkOp::Jump),
             "bookmark.delete" => self.mode = Mode::Bookmark(BookmarkOp::Delete),
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 }

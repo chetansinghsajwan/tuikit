@@ -18,7 +18,7 @@ pub struct PanelOptions {
     /// The leader key (a key name, see `ui::keys`).
     pub leader: String,
     /// Actions of the host (tabs, a properties pane, ...) added to the keymap; the panel
-    /// returns `Action::Command(id)` when one runs.
+    /// returns `Outcome::Command(id)` when one runs.
     pub actions: Vec<ui::keys::Action>,
 }
 
@@ -82,7 +82,7 @@ impl Linemode {
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Action {
+pub enum Outcome {
     None,
     /// The user chose a file to open.
     Open(PathBuf),

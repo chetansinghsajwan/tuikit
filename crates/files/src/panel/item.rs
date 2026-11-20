@@ -36,14 +36,14 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_item(&mut self, id: &str) -> Action {
+    pub(super) fn run_item(&mut self, id: &str) -> Outcome {
         match id {
             "item.open" => {
                 if let Some(row) = self.rows.get(self.cursor) {
                     if row.is_dir {
                         self.toggle(Some(true));
                     } else {
-                        return Action::Open(row.path.clone());
+                        return Outcome::Open(row.path.clone());
                     }
                 }
             }
@@ -101,11 +101,11 @@ impl Panel {
             "item.bulk_rename" => {
                 let t = self.targets();
                 if !t.is_empty() {
-                    return Action::BulkRename(t);
+                    return Outcome::BulkRename(t);
                 }
             }
             _ => {}
         }
-        Action::None
+        Outcome::None
     }
 }
