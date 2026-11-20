@@ -102,16 +102,16 @@ pub trait Navigable {
     fn move_by(&mut self, delta: isize);
 
     /// How many rows a page move covers.
-    fn page(&self) -> usize;
+    fn page_row_count(&self) -> usize;
 
     /// Moves to the first row.
-    fn top(&mut self);
+    fn move_to_top(&mut self);
 
     /// Moves to the last row.
-    fn bottom(&mut self);
+    fn move_to_bottom(&mut self);
 
-    /// How many rows the step moves (`nav.up5` and `nav.down5`) cover.
-    fn step(&self) -> usize {
+    /// How many rows `nav.up5` and `nav.down5` move.
+    fn step_size(&self) -> usize {
         5
     }
 }
@@ -466,8 +466,8 @@ fn switch(tabs: &mut dyn Tabbed, id: &str) {
 
 /// Carries out one shared movement on the screen.
 fn navigate(nav: &mut dyn Navigable, id: &str) {
-    let page = nav.page().max(1) as isize;
-    let step = nav.step().max(1) as isize;
+    let page = nav.page_row_count().max(1) as isize;
+    let step = nav.step_size().max(1) as isize;
     match id {
         "nav.up" => nav.move_by(-1),
         "nav.down" => nav.move_by(1),
@@ -475,8 +475,8 @@ fn navigate(nav: &mut dyn Navigable, id: &str) {
         "nav.down5" => nav.move_by(step),
         "nav.page_up" => nav.move_by(-page),
         "nav.page_down" => nav.move_by(page),
-        "nav.top" => nav.top(),
-        "nav.bottom" => nav.bottom(),
+        "nav.top" => nav.move_to_top(),
+        "nav.bottom" => nav.move_to_bottom(),
         _ => {}
     }
 }

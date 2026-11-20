@@ -676,15 +676,15 @@ impl ui::app::Navigable for Panel {
         Panel::move_by(self, delta);
     }
 
-    fn page(&self) -> usize {
+    fn page_row_count(&self) -> usize {
         self.page
     }
 
-    fn top(&mut self) {
+    fn move_to_top(&mut self) {
         self.cursor = 0;
     }
 
-    fn bottom(&mut self) {
+    fn move_to_bottom(&mut self) {
         self.cursor = self.rows.len().saturating_sub(1);
     }
 }

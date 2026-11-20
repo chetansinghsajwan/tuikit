@@ -286,30 +286,30 @@ impl Navigable for App {
         }
     }
 
-    fn page(&self) -> usize {
+    fn page_row_count(&self) -> usize {
         match Self::list_index(self.focus) {
             Some(_) => 10,
-            None => self.files.page(),
+            None => self.files.page_row_count(),
         }
     }
 
-    fn top(&mut self) {
+    fn move_to_top(&mut self) {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = 0;
                 self.pscroll = 0;
             }
-            None => self.files.top(),
+            None => self.files.move_to_top(),
         }
     }
 
-    fn bottom(&mut self) {
+    fn move_to_bottom(&mut self) {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = self.len(self.focus).saturating_sub(1);
                 self.pscroll = 0;
             }
-            None => self.files.bottom(),
+            None => self.files.move_to_bottom(),
         }
     }
 }

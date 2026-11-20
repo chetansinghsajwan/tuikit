@@ -592,15 +592,15 @@ impl Navigable for Grid {
         self.go_rows(delta);
     }
 
-    fn page(&self) -> usize {
+    fn page_row_count(&self) -> usize {
         self.page
     }
 
-    fn top(&mut self) {
+    fn move_to_top(&mut self) {
         self.cur.0 = 0;
     }
 
-    fn bottom(&mut self) {
+    fn move_to_bottom(&mut self) {
         self.cur.0 = self.rows() - 1;
     }
 }

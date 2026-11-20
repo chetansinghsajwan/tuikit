@@ -470,15 +470,15 @@ impl Navigable for App {
         st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
     }
 
-    fn page(&self) -> usize {
+    fn page_row_count(&self) -> usize {
         10
     }
 
-    fn top(&mut self) {
+    fn move_to_top(&mut self) {
         self.lists[Self::pane(self.focus)].cursor = 0;
     }
 
-    fn bottom(&mut self) {
+    fn move_to_bottom(&mut self) {
         let last = self.len(self.focus).saturating_sub(1);
         self.lists[Self::pane(self.focus)].cursor = last;
     }

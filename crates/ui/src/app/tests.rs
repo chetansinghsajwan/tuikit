@@ -90,15 +90,15 @@ impl Navigable for Fake {
         self.cursor = (self.cursor + delta).clamp(0, 9);
     }
 
-    fn page(&self) -> usize {
+    fn page_row_count(&self) -> usize {
         4
     }
 
-    fn top(&mut self) {
+    fn move_to_top(&mut self) {
         self.cursor = 0;
     }
 
-    fn bottom(&mut self) {
+    fn move_to_bottom(&mut self) {
         self.cursor = 9;
     }
 }
