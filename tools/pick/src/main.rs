@@ -4,20 +4,16 @@
 use clap::Parser;
 use pick::source::GitSource;
 use pick::{Action, Mode, Picker, PickerOptions, source};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event::{self, Event};
-use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use std::fs::OpenOptions;
+use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::Event;
+use ratatui::layout::Rect;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use ui::app::{Host, Request, Screen};
 
 /// Fuzzy picker. Candidates come from stdin or `--files`; the selection is
 /// printed to stdout, one per line.
@@ -105,14 +101,50 @@ const EXIT_NO_SELECTION: u8 = 1;
 /// Exit code when the user cancelled; 130 is the shell's code for an interrupt.
 const EXIT_CANCEL: u8 = 130;
 
-/// The terminal the picker draws on. Dropping it restores the terminal, even on early return.
-struct Tty(Terminal<CrosstermBackend<std::fs::File>>);
+/// The picker as a screen of the shared shell, which owns the terminal. Every event is the
+/// picker's own (it has its own keys), so the shell's keymap stays out of it.
+struct PickScreen {
+    picker: Picker,
+    /// Set by the background sources when they have news; the tick takes it.
+    wake: Arc<AtomicBool>,
+    /// How the picker ended.
+    result: Action,
+}
 
-impl Drop for Tty {
-    /// Leaves raw mode and the alternate screen.
-    fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        let _ = execute!(self.0.backend_mut(), LeaveAlternateScreen);
+impl Screen for PickScreen {
+    /// Draws the picker.
+    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &ui::Theme) {
+        self.picker.render(area, buf, theme);
+    }
+
+    /// The picker takes every event.
+    fn captures_input(&self, _ev: &Event) -> bool {
+        true
+    }
+
+    /// Feeds a key to the picker and quits once it accepts or cancels.
+    fn on_event(&mut self, ev: &Event, _host: &mut dyn Host) -> Request {
+        if let Event::Key(_) = ev {
+            match self.picker.handle_event(ev) {
+                Action::None => {}
+                done => {
+                    self.result = done;
+                    return Request::Quit;
+                }
+            }
+        }
+        Request::None
+    }
+
+    /// The picker has no shell actions.
+    fn run_action(&mut self, _id: &'static str, _host: &mut dyn Host) -> Request {
+        Request::None
+    }
+
+    /// Lets the picker take what the background sources found.
+    fn on_tick(&mut self) -> bool {
+        self.wake.store(false, Ordering::Relaxed);
+        self.picker.tick()
     }
 }
 
@@ -217,44 +249,15 @@ fn run(cli: Cli) -> io::Result<u8> {
         }
     }
 
-    // Draw on the controlling terminal so stdin can carry candidates and
-    // stdout the selection.
-    let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
-    enable_raw_mode()?;
-    let mut tty_term = Tty(Terminal::new(CrosstermBackend::new(tty))?);
-    execute!(tty_term.0.backend_mut(), EnterAlternateScreen)?;
-    let theme = ui::Theme::load();
-
-    let mut dirty = true;
-    let result = loop {
-        if wake.swap(false, Ordering::Relaxed) {
-            dirty |= picker.tick();
-        }
-        if dirty {
-            tty_term.0.draw(|f| {
-                let area = f.area();
-                picker.render(area, f.buffer_mut(), &theme);
-                ui::anim::finish(f.buffer_mut(), &theme);
-            })?;
-            dirty = false;
-        }
-        if !event::poll(ui::anim::poll_timeout(Duration::from_millis(30)))? {
-            dirty |= ui::anim::take_redraw();
-        } else {
-            let ev = event::read()?;
-            dirty = true;
-            if let Event::Key(_) = ev {
-                match picker.handle_event(&ev) {
-                    Action::None => {}
-                    Action::Cancel => break Action::Cancel,
-                    Action::Accept(v) => break Action::Accept(v),
-                    Action::AcceptWith(k, v) => break Action::AcceptWith(k, v),
-                }
-            }
-        }
-        dirty |= picker.tick();
-    };
-    drop(tty_term);
+    // The shell draws on the controlling terminal, so stdin can carry candidates and stdout the
+    // selection.
+    let mut screen = PickScreen { picker, wake, result: Action::Cancel };
+    ui::app::Shell::new("pick")
+        .with_navigation(false)
+        .with_tabs(false)
+        .tick_interval(Duration::from_millis(30))
+        .run(&mut screen)?;
+    let result = screen.result;
 
     // With `--expect`, the first line names the key used (empty for Enter).
     let expecting = !cli.expect.is_empty();

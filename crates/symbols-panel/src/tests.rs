@@ -1,7 +1,7 @@
 //! Tests for the symbol explorer.
 
 use super::*;
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Builds a symbol at column 4 with no detail.
 fn sym(name: &str, kind: Kind, line: u32, end: u32, children: Vec<Symbol>) -> Symbol {

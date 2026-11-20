@@ -4,14 +4,15 @@
 use crate::keys;
 use git_core::{Kind, Repo, Side};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{Event, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
+use ui::footer::Footer;
+use ui::prompt::Typed;
 use ui::{Pane, Theme, layout};
 
 /// What the host should do after an event.
@@ -118,7 +119,7 @@ pub struct Panel {
     page: usize,
     branch: String,
     mode: Mode,
-    message: Option<(String, bool)>,
+    message: Option<ui::footer::Notice>,
     preview: Option<Preview>,
     /// Bumped when the repository changes, so cached diffs are dropped.
     version: u64,
@@ -324,13 +325,12 @@ impl Panel {
 
     /// Shows a message in the footer; `error` colours it as a failure.
     fn show_message(&mut self, msg: impl Into<String>, error: bool) {
-        self.message = Some((msg.into(), error));
+        self.message = Some(ui::footer::Notice::new(msg, error));
     }
 
     /// Moves the cursor by `delta` rows, stopping at the first and last.
     fn move_by(&mut self, delta: isize) {
-        let last = self.items.len().saturating_sub(1) as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
+        self.cursor = ui::list::move_cursor(self.cursor, delta, self.items.len());
     }
 
     /// Turns the result of a git change into a footer message and a refresh, and tells the host the
@@ -363,21 +363,21 @@ impl Panel {
     /// Feeds an event the panel claimed (see `captures`) when the host owns the keymap, and returns
     /// what the host should do about it.
     pub fn handle_captured(&mut self, ev: &Event) -> Outcome {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
-        if *kind == KeyEventKind::Release {
-            return Outcome::None;
-        }
-        match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Commit(input) => self.commit_key(input, ev, key),
-            Mode::Discard(rel_path, untracked) => match key.code {
-                KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
-                    let r = self.repo.discard(&rel_path, untracked);
-                    self.finish(if untracked { "deleted" } else { "discarded" }, r)
-                }
-                _ => Outcome::None,
-            },
-            Mode::Normal => Outcome::None,
-        }
+        let Some(key) = ui::keys::pressed(ev) else { return Outcome::None };
+        self.modal_key(ev, key).unwrap_or(Outcome::None)
+    }
+
+    /// Routes a key to the open commit prompt or discard question; `None` when neither is open.
+    fn modal_key(&mut self, ev: &Event, key: &KeyEvent) -> Option<Outcome> {
+        Some(match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Commit(input) => self.commit_key(input, ev),
+            Mode::Discard(rel_path, untracked) if ui::prompt::confirms(key.code) => {
+                let r = self.repo.discard(&rel_path, untracked);
+                self.finish(if untracked { "deleted" } else { "discarded" }, r)
+            }
+            Mode::Discard(..) => Outcome::None,
+            Mode::Normal => return None,
+        })
     }
 
     /// Drops the footer message, as the next key press does.
@@ -392,22 +392,9 @@ impl Panel {
 
     /// Handles a key press: first the commit and discard prompts, else the keymap.
     pub fn handle_event(&mut self, ev: &Event) -> Outcome {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
-        if *kind == KeyEventKind::Release {
-            return Outcome::None;
-        }
-        match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Commit(input) => return self.commit_key(input, ev, key),
-            Mode::Discard(rel_path, untracked) => {
-                return match key.code {
-                    KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
-                        let r = self.repo.discard(&rel_path, untracked);
-                        self.finish(if untracked { "deleted" } else { "discarded" }, r)
-                    }
-                    _ => Outcome::None,
-                };
-            }
-            Mode::Normal => {}
+        let Some(key) = ui::keys::pressed(ev) else { return Outcome::None };
+        if let Some(outcome) = self.modal_key(ev, key) {
+            return outcome;
         }
         self.message = None;
         match self.keymap.feed(key) {
@@ -578,27 +565,23 @@ impl Panel {
 
     /// Handles a key while the commit message is typed: Enter commits, Esc cancels, anything else
     /// edits.
-    fn commit_key(&mut self, mut input: Input, ev: &Event, key: &KeyEvent) -> Outcome {
-        match key.code {
-            KeyCode::Esc => Outcome::None,
-            KeyCode::Enter => {
-                let message = input.value().to_string();
-                match self.repo.create_commit(&message) {
-                    Ok(summary) => {
-                        self.show_message(format!("committed {summary}"), false);
-                        self.refresh();
-                        Outcome::Changed
-                    }
-                    Err(e) => {
-                        self.show_message(e.to_string(), true);
-                        // Keep what was typed so the message is not lost.
-                        self.mode = Mode::Commit(input);
-                        Outcome::None
-                    }
+    fn commit_key(&mut self, mut input: Input, ev: &Event) -> Outcome {
+        match ui::prompt::typed(&mut input, ev) {
+            Typed::Cancel => Outcome::None,
+            Typed::Submit(message) => match self.repo.create_commit(&message) {
+                Ok(summary) => {
+                    self.show_message(format!("committed {summary}"), false);
+                    self.refresh();
+                    Outcome::Changed
                 }
-            }
-            _ => {
-                input.handle_event(ev);
+                Err(e) => {
+                    self.show_message(e.to_string(), true);
+                    // Keep what was typed so the message is not lost.
+                    self.mode = Mode::Commit(input);
+                    Outcome::None
+                }
+            },
+            Typed::Editing => {
                 self.mode = Mode::Commit(input);
                 Outcome::None
             }
@@ -609,27 +592,17 @@ impl Panel {
     /// message. While the commit prompt is open an error (a refused commit) is
     /// shown above it, so it is not hidden by what you are typing.
     fn footer(&self, theme: &Theme) -> Vec<Line<'static>> {
-        let c = &theme.colors;
-        let message = self.message.as_ref().map(|(m, err)| {
-            Line::from(Span::styled(
-                m.clone(),
-                Style::new().fg(if *err { c.error } else { c.muted }.into()),
-            ))
-        });
+        let message = self.message.as_ref().map(|n| Footer::Notice(n).line(theme));
         match &self.mode {
             Mode::Commit(input) => {
-                let prompt = Line::from(vec![
-                    Span::styled("commit: ", Style::new().fg(c.accent.into())),
-                    Span::styled(input.value().to_string(), Style::new().fg(c.fg.into())),
-                ]);
+                let prompt = ui::prompt::line(theme, "commit: ", input.value());
                 message.into_iter().chain(std::iter::once(prompt)).collect()
             }
             Mode::Discard(rel_path, untracked) => {
                 let what = if *untracked { "Delete" } else { "Discard" };
-                vec![Line::from(Span::styled(
-                    format!("{what} {}? d again", rel_path.display()),
-                    Style::new().fg(c.warning.into()),
-                ))]
+                vec![
+                    Footer::Question(format!("{what} {}? d again", rel_path.display())).line(theme),
+                ]
             }
             Mode::Normal => message.into_iter().collect(),
         }

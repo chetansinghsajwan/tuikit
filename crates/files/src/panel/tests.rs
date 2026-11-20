@@ -310,7 +310,10 @@ fn creating_something_that_exists_shows_an_error_and_esc_cancels_the_prompt() {
     type_text(&mut p, "README.md");
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::None);
     assert!(
-        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("already exists")),
+        p.message
+            .as_ref()
+            .is_some_and(|ui::footer::Notice { text: m, is_error: err }| *err
+                && m.contains("already exists")),
         "{:?}",
         p.message
     );
@@ -388,7 +391,10 @@ fn y_then_p_copies_and_x_then_p_moves_with_unique_names() {
     // The cut clipboard is spent.
     p.handle_event(&key(KeyCode::Char('p')));
     assert!(
-        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("nothing to paste")),
+        p.message
+            .as_ref()
+            .is_some_and(|ui::footer::Notice { text: m, is_error: err }| *err
+                && m.contains("nothing to paste")),
         "{:?}",
         p.message
     );
@@ -603,7 +609,9 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     assert_eq!(p.rows.len(), rows);
     assert!(p.menu().is_some());
     assert!(
-        p.message.as_ref().is_some_and(|(m, err)| *err && m.contains("not bound")),
+        p.message.as_ref().is_some_and(
+            |ui::footer::Notice { text: m, is_error: err }| *err && m.contains("not bound")
+        ),
         "{:?}",
         p.message
     );

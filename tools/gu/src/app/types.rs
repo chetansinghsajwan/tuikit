@@ -93,11 +93,7 @@ pub(super) enum Confirm {
 }
 
 /// A git command talking to a remote, running on its own thread.
-pub(super) struct Job {
-    pub(super) label: String,
-    pub(super) done_message: String,
-    pub(super) thread: std::thread::JoinHandle<Result<(), git_core::Error>>,
-}
+pub(super) type Job = ui::job::Job<Result<(), git_core::Error>>;
 
 /// The tabs: the changed files, the full commit graph, and the refs (branches, tags, stashes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

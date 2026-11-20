@@ -4,7 +4,7 @@
 //! costs a comparison) and reacts to the `Action`s.
 
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -198,10 +198,9 @@ impl Panel {
 
     /// Handles a key press and tells the host what to do (open a place, close, or nothing).
     pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(KeyEvent { code, modifiers, kind, .. }) = ev else { return Action::None };
-        if *kind == KeyEventKind::Release {
+        let Some(KeyEvent { code, modifiers, .. }) = ui::keys::pressed(ev) else {
             return Action::None;
-        }
+        };
         let ctrl = modifiers.contains(KeyModifiers::CONTROL);
         match code {
             KeyCode::Esc | KeyCode::Char('q') => return Action::Close,
@@ -280,11 +279,7 @@ impl Panel {
 
         self.page = usize::from(inner.height).max(1);
         let crow = self.selectable.get(self.cursor).copied().unwrap_or(0);
-        if crow < self.offset {
-            self.offset = crow;
-        } else if crow >= self.offset + self.page {
-            self.offset = crow + 1 - self.page;
-        }
+        self.offset = ui::list::follow_cursor(crow, self.offset, self.page);
         let geo = ui::list::Rows::new(area, inner);
         for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (i - self.offset) as u16;

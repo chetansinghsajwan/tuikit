@@ -34,17 +34,7 @@ struct Cli {
 
 /// Loads the theme config, parses the command line and runs the app. Failures exit with code 2.
 fn main() -> ExitCode {
-    for p in ui::config::init("files") {
-        eprintln!("files: {p}");
-    }
-    let cli = Cli::parse();
-    match app::run(cli.into()) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("files: {e}");
-            ExitCode::from(2)
-        }
-    }
+    ui::app::main("files", || app::run(Cli::parse().into()).map(|()| 0))
 }
 
 impl From<Cli> for app::Options {

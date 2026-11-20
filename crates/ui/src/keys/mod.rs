@@ -13,7 +13,7 @@
 
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -409,6 +409,15 @@ impl Keymap {
                 basic: a.basic,
             })
             .collect()
+    }
+}
+
+/// The key of `ev` when it is a key press (or repeat), `None` for releases and other events. Terminals
+/// that report releases send one per key, which no tool acts on.
+pub fn pressed(ev: &Event) -> Option<&KeyEvent> {
+    match ev {
+        Event::Key(key) if key.kind != KeyEventKind::Release => Some(key),
+        _ => None,
     }
 }
 

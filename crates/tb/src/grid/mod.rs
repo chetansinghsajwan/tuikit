@@ -2,15 +2,15 @@
 
 use crate::table::{self, Table};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::widgets::Widget;
 use std::path::PathBuf;
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
 use ui::app::{Navigable, Request};
+use ui::footer::Footer;
+use ui::prompt::Typed;
 use ui::{Pane, Theme};
 use unicode_width::UnicodeWidthStr;
 
@@ -56,7 +56,7 @@ pub struct Grid {
     mode: Mode,
     find: String,
     copied: String,
-    message: Option<(String, bool)>,
+    message: Option<ui::footer::Notice>,
 }
 
 impl Grid {
@@ -114,7 +114,7 @@ impl Grid {
 
     /// Shows a message in the footer; `error` colours it as a failure.
     fn show_message(&mut self, text: impl Into<String>, error: bool) {
-        self.message = Some((text.into(), error));
+        self.message = Some(ui::footer::Notice::new(text, error));
     }
 
     /// The row count, at least 1 so the cursor always has a place.
@@ -144,51 +144,42 @@ impl Grid {
 
     /// Moves the cursor by `delta` rows, stopping at the first and last.
     fn go_rows(&mut self, delta: isize) {
-        self.cur.0 = (self.cur.0 as isize + delta).clamp(0, self.rows() as isize - 1) as usize;
+        self.cur.0 = ui::list::move_cursor(self.cur.0, delta, self.rows());
     }
 
     /// Moves the cursor by `delta` columns, stopping at the first and last.
     fn go_cols(&mut self, delta: isize) {
-        self.cur.1 = (self.cur.1 as isize + delta).clamp(0, self.cols() as isize - 1) as usize;
+        self.cur.1 = ui::list::move_cursor(self.cur.1, delta, self.cols());
     }
 
     /// Handles a key press for the open prompt or question; in normal mode it does nothing.
     fn typing(&mut self, ev: &Event) -> Request {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Request::None };
-        if *kind == KeyEventKind::Release {
-            return Request::None;
-        }
+        let Some(key) = ui::keys::pressed(ev) else { return Request::None };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Edit(mut input) => {
-                match key.code {
-                    KeyCode::Esc => {}
-                    KeyCode::Enter => {
+                match ui::prompt::typed(&mut input, ev) {
+                    Typed::Submit(text) => {
                         self.change();
-                        self.table.set(self.cur.0, self.cur.1, input.value());
+                        self.table.set(self.cur.0, self.cur.1, &text);
                     }
-                    _ => {
-                        input.handle_event(ev);
-                        self.mode = Mode::Edit(input);
-                    }
+                    Typed::Cancel => {}
+                    Typed::Editing => self.mode = Mode::Edit(input),
                 }
                 return Request::None;
             }
             Mode::Find(mut input) => {
-                match key.code {
-                    KeyCode::Esc => {}
-                    KeyCode::Enter => {
-                        self.find = input.value().to_string();
+                match ui::prompt::typed(&mut input, ev) {
+                    Typed::Submit(text) => {
+                        self.find = text;
                         self.find_next(true);
                     }
-                    _ => {
-                        input.handle_event(ev);
-                        self.mode = Mode::Find(input);
-                    }
+                    Typed::Cancel => {}
+                    Typed::Editing => self.mode = Mode::Find(input),
                 }
                 return Request::None;
             }
             Mode::Confirm(what) => {
-                let yes = matches!(key.code, KeyCode::Char('d' | 'y') | KeyCode::Enter)
+                let yes = ui::prompt::confirms(key.code)
                     && !matches!((what, key.code), (Confirm::Quit, KeyCode::Char('d')));
                 let quit_again = matches!((what, key.code), (Confirm::Quit, KeyCode::Char('q')));
                 if yes || quit_again {
@@ -394,49 +385,37 @@ impl Grid {
             return;
         }
         // The last row: a prompt, a question, a message, or where the cursor is.
-        let footer = Rect { y: inner.bottom() - 1, height: 1, ..inner };
+        let footer_row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
         inner.height -= 1;
-        let (line, cursor, label) = match &self.mode {
-            Mode::Edit(i) => {
-                (ui::prompt::line(theme, "edit: ", i.value()), Some(i.visual_cursor()), "edit: ")
-            }
-            Mode::Find(i) => {
-                (ui::prompt::line(theme, "find: ", i.value()), Some(i.visual_cursor()), "find: ")
-            }
-            Mode::Confirm(w) => {
-                let q = match w {
-                    Confirm::DeleteRow => format!("Delete row {}? d again", self.cur.0 + 1),
-                    Confirm::DeleteCol => format!("Delete column {}? d again", self.cur.1 + 1),
-                    Confirm::Quit => "Unsaved changes. q again to discard".to_string(),
-                };
-                (Line::from(Span::styled(q, Style::new().fg(c.warning.into()))), None, "")
-            }
+        let footer = match &self.mode {
+            Mode::Edit(i) => Footer::Prompt {
+                label: "edit: ",
+                text: i.value().into(),
+                cursor: i.visual_cursor(),
+            },
+            Mode::Find(i) => Footer::Prompt {
+                label: "find: ",
+                text: i.value().into(),
+                cursor: i.visual_cursor(),
+            },
+            Mode::Confirm(w) => Footer::Question(match w {
+                Confirm::DeleteRow => format!("Delete row {}? d again", self.cur.0 + 1),
+                Confirm::DeleteCol => format!("Delete column {}? d again", self.cur.1 + 1),
+                Confirm::Quit => "Unsaved changes. q again to discard".to_string(),
+            }),
             Mode::Normal => match &self.message {
-                Some((m, err)) => (
-                    Line::from(Span::styled(
-                        m.clone(),
-                        Style::new().fg(if *err { c.error } else { c.muted }.into()),
-                    )),
-                    None,
-                    "",
-                ),
-                None => {
-                    let info = format!(
-                        "R{} C{}  {} rows × {} cols{}",
-                        self.cur.0 + 1,
-                        self.cur.1 + 1,
-                        self.table.row_count(),
-                        self.table.col_count(),
-                        if self.modified() { "  modified" } else { "" }
-                    );
-                    (Line::from(Span::styled(info, Style::new().fg(c.muted.into()))), None, "")
-                }
+                Some(notice) => Footer::Notice(notice),
+                None => Footer::Hint(format!(
+                    "R{} C{}  {} rows × {} cols{}",
+                    self.cur.0 + 1,
+                    self.cur.1 + 1,
+                    self.table.row_count(),
+                    self.table.col_count(),
+                    if self.modified() { "  modified" } else { "" }
+                )),
             },
         };
-        Paragraph::new(line).render(footer, buf);
-        if let Some(cur) = cursor {
-            ui::prompt::cursor(buf, footer, label, cur);
-        }
+        footer.render(footer_row, buf, theme);
 
         let widths = self.widths();
         let digits = self.table.row_count().to_string().len().max(2);

@@ -104,7 +104,7 @@ impl App {
 
     /// Show a message in the status line (an error when `error` is set).
     pub(super) fn show_message(&mut self, msg: impl Into<String>, error: bool) {
-        self.message = Some((msg.into(), error));
+        self.message = Some(ui::footer::Notice::new(msg, error));
     }
 
     /// The index of `focus` in `lists` and `maps`; `None` for the Files pane, which has its own.

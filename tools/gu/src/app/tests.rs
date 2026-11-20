@@ -169,7 +169,9 @@ fn the_commits_tab_shows_every_branch_and_searches() {
     type_text(&mut app, "needle");
     assert_eq!(app.commits[app.lists[1].cursor].subject, "needle on a side branch");
     assert!(
-        app.message.as_ref().is_some_and(|(m, _)| m.contains("match 1 of 1")),
+        app.message
+            .as_ref()
+            .is_some_and(|ui::footer::Notice { text: m, is_error: _ }| m.contains("match 1 of 1")),
         "{:?}",
         app.message
     );
@@ -205,7 +207,9 @@ fn switch_to_takes_a_ref_a_chosen_option_or_a_commit_hash() {
     press(&mut app, " ");
     press(&mut app, "S");
     type_text(&mut app, "zzzz-nothing");
-    assert!(app.message.as_ref().is_some_and(|(m, err)| *err && m.contains("no branch")));
+    assert!(app.message.as_ref().is_some_and(
+        |ui::footer::Notice { text: m, is_error: err }| *err && m.contains("no branch")
+    ));
 }
 
 #[test]
@@ -437,7 +441,11 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
         app.handle_event(&key(KeyCode::Backspace));
     }
     type_text(&mut app, "bad name");
-    assert!(app.message.as_ref().is_some_and(|(_, e)| *e), "{:?}", app.message);
+    assert!(
+        app.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e),
+        "{:?}",
+        app.message
+    );
     assert_eq!(app.branches.iter().map(|b| b.name.clone()).collect::<Vec<_>>(), snapshot);
 }
 
@@ -483,7 +491,10 @@ fn tags_and_folders_of_refs_can_be_renamed() {
     // A section cannot be renamed.
     app.lists[0].cursor = 0;
     press(&mut app, "r");
-    assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
+    assert!(
+        matches!(app.mode, Mode::Normal)
+            && app.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e)
+    );
 }
 
 #[test]
@@ -558,7 +569,10 @@ fn branches_checkout_create_and_delete() {
     // The checked-out branch cannot be deleted.
     app.lists[0].cursor = ref_row(&app, "topic");
     press(&mut app, "d");
-    assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
+    assert!(
+        matches!(app.mode, Mode::Normal)
+            && app.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e)
+    );
 }
 
 #[test]
@@ -889,7 +903,7 @@ fn remote_commands_run_in_the_background_and_report() {
     assert!(app.job.is_some());
     wait(&mut app);
     assert_eq!(
-        app.message.as_ref().map(|(m, e)| (m.as_str(), *e)),
+        app.message.as_ref().map(|ui::footer::Notice { text: m, is_error: e }| (m.as_str(), *e)),
         Some(("pushed", false)),
         "{:?}",
         app.message
@@ -902,7 +916,10 @@ fn remote_commands_run_in_the_background_and_report() {
         press_raw(&mut app, k);
         wait(&mut app);
     }
-    assert_eq!(app.message.as_ref().map(|(m, _)| m.as_str()), Some("pulled"));
+    assert_eq!(
+        app.message.as_ref().map(|ui::footer::Notice { text: m, is_error: _ }| m.as_str()),
+        Some("pulled")
+    );
     press_raw(&mut app, ' ');
     press_raw(&mut app, 'r');
     press_raw(&mut app, 'F');

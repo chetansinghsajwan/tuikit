@@ -61,22 +61,14 @@ impl App {
                         format!("Delete {name} on the remote? (d again or y)")
                     }
                 };
-                Line::from(Span::styled(q, Style::new().fg(c.warning.into())))
+                Footer::Question(q).line(theme)
             }
             Mode::Popup(_) => Line::default(),
-            Mode::Normal if self.job.is_some() => Line::from(Span::styled(
-                format!(
-                    "{} {}",
-                    ui::anim::spinner(),
-                    self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")
-                ),
-                Style::new().fg(c.accent.into()),
-            )),
+            Mode::Normal if self.job.is_some() => {
+                Footer::Busy(self.job.as_ref().map(Job::label).unwrap_or("")).line(theme)
+            }
             Mode::Normal => match &self.message {
-                Some((m, err)) => Line::from(Span::styled(
-                    m.clone(),
-                    Style::new().fg(if *err { c.error } else { c.accent }.into()),
-                )),
+                Some(notice) => Footer::Notice(notice).line(theme),
                 None => match self.operation_name() {
                     Some(op) => Line::from(vec![
                         Span::styled(
@@ -88,7 +80,7 @@ impl App {
                             Style::new().fg(c.muted.into()),
                         ),
                     ]),
-                    None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
+                    None => Footer::Hint(self.hints().to_string()).line(theme),
                 },
             },
         };

@@ -1,7 +1,7 @@
 //! Tests for the grid editor.
 
 use super::*;
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
 
 /// A grid with the shell's dispatcher in front of it, so keys reach it the way they do in the
 /// app.

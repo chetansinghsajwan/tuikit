@@ -92,10 +92,13 @@ impl Panel {
                     format!("{} items", targets.len())
                 };
                 let verb = if *kind == ConfirmKind::Trash { "Trash" } else { "Delete permanently" };
-                Some(Line::from(Span::styled(
-                    format!("{verb} {what}? ({} again, Esc cancels)", kind.confirm_key()),
-                    Style::new().fg(c.warning.into()),
-                )))
+                Some(
+                    Footer::Question(format!(
+                        "{verb} {what}? ({} again, Esc cancels)",
+                        kind.confirm_key()
+                    ))
+                    .line(theme),
+                )
             }
             Mode::Bookmark(op) => {
                 let verb = match op {
@@ -116,12 +119,7 @@ impl Panel {
                 Some(Line::from(spans))
             }
             Mode::Normal if self.job.is_some() => self.job_line(theme),
-            Mode::Normal => self.message.as_ref().map(|(m, err)| {
-                Line::from(Span::styled(
-                    m.clone(),
-                    Style::new().fg(if *err { c.error } else { c.muted }.into()),
-                ))
-            }),
+            Mode::Normal => self.message.as_ref().map(|n| Footer::Notice(n).line(theme)),
         }
     }
 

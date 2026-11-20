@@ -20,16 +20,7 @@ struct Cli {
 
 /// Loads the shared config, runs the app and turns its result into an exit code.
 fn main() -> ExitCode {
-    for p in ui::config::init("nu") {
-        eprintln!("nu: {p}");
-    }
-    match run(Cli::parse()) {
-        Ok(code) => ExitCode::from(code),
-        Err(e) => {
-            eprintln!("nu: {e}");
-            ExitCode::from(2)
-        }
-    }
+    ui::app::main("nu", || run(Cli::parse()))
 }
 
 /// The real radios of this system: NetworkManager and BlueZ on Linux, CoreWLAN and IOBluetooth on

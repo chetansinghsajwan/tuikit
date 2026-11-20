@@ -61,11 +61,7 @@ impl App {
         }
         let page = usize::from(inner.height);
         let st = &mut self.lists[Self::pane(focus)];
-        if st.cursor < st.offset {
-            st.offset = st.cursor;
-        } else if st.cursor >= st.offset + page {
-            st.offset = st.cursor + 1 - page;
-        }
+        st.offset = ui::list::follow_cursor(st.cursor, st.offset, page);
         let (cursor, offset) = (st.cursor, st.offset);
         let geo = ui::list::Rows::new(area, inner);
         for (row, i) in (offset..(offset + page).min(rows.len())).enumerate() {
@@ -256,35 +252,28 @@ impl App {
 
     /// The bottom line: a prompt, a running job, the last message, or else the key hints.
     pub(super) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        let c = &theme.colors;
-        let line = match &self.mode {
-            Mode::Password(ssid, input) => {
-                let label = format!("password for {ssid}: ");
-                ui::prompt::cursor(buf, area, &label, input.visual_cursor());
-                ui::prompt::line(theme, &label, &"•".repeat(input.value().chars().count()))
+        let _c = &theme.colors;
+        let footer = match &self.mode {
+            Mode::Password(ssid, input) => Footer::Prompt {
+                label: &format!("password for {ssid}: "),
+                text: ui::footer::mask(input.value()),
+                cursor: input.visual_cursor(),
+            },
+            Mode::ForgetWifi(ssid) => Footer::Question(format!("Forget {ssid}? (d again or y)")),
+            Mode::ForgetDevice(_, name) => {
+                Footer::Question(format!("Forget {name}? (d again or y)"))
             }
-            Mode::ForgetWifi(ssid) => Line::from(Span::styled(
-                format!("Forget {ssid}? (d again or y)"),
-                Style::new().fg(c.warning.into()),
-            )),
-            Mode::ForgetDevice(_, name) => Line::from(Span::styled(
-                format!("Forget {name}? (d again or y)"),
-                Style::new().fg(c.warning.into()),
-            )),
-            Mode::Normal if self.job.is_some() => Line::from(Span::styled(
-                format!("{} …", self.job.as_ref().map(|j| j.label.as_str()).unwrap_or("")),
-                Style::new().fg(c.accent.into()),
-            )),
-            Mode::Normal => match &self.message {
-                Some((m, err)) => Line::from(Span::styled(
-                    m.clone(),
-                    Style::new().fg(if *err { c.error } else { c.accent }.into()),
-                )),
-                None => Line::from(Span::styled(self.hints(), Style::new().fg(c.muted.into()))),
+            Mode::Normal => match (&self.job, &self.message) {
+                (Some(job), _) => Footer::Busy(job.label()),
+                (None, Some(notice)) => Footer::Notice(notice),
+                (None, None) => Footer::Hint(self.hints().to_string()),
             },
         };
-        Paragraph::new(line)
-            .render(Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
+        footer.render(
+            Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area },
+            buf,
+            theme,
+        );
     }
 
     /// The short key hints of the focused pane.

@@ -4,7 +4,7 @@
 use nu_core::bluetooth::{Bluetooth, BtStatus, Device, rssi_percent};
 use nu_core::{Backend, Network, Security, Status};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode};
+use ratatui::crossterm::event::Event;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -12,8 +12,9 @@ use ratatui::widgets::{Paragraph, Widget};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
 use ui::app::{Host, Navigable, Request};
+use ui::footer::Footer;
+use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
 /// How often the lists are reread while the screen is open.
@@ -41,10 +42,7 @@ enum Mode {
 }
 
 /// A connection attempt, on its own thread (it waits for the network or the device).
-struct Job {
-    label: String,
-    thread: std::thread::JoinHandle<nu_core::Result<()>>,
-}
+type Job = ui::job::Job<nu_core::Result<()>>;
 
 /// Where the cursor is in a list and how far the list is scrolled.
 #[derive(Default, Clone, Copy)]
@@ -68,7 +66,7 @@ pub struct App {
     lists: [ListState; 2],
     focus: Focus,
     mode: Mode,
-    message: Option<(String, bool)>,
+    message: Option<ui::footer::Notice>,
     job: Option<Job>,
     refreshed: Instant,
 }
@@ -157,7 +155,7 @@ impl App {
 
     /// Shows a message on the status line until the next key; `error` colors it as an error.
     fn show_message(&mut self, msg: impl Into<String>, error: bool) {
-        self.message = Some((msg.into(), error));
+        self.message = Some(ui::footer::Notice::new(msg, error));
     }
 
     /// The Wi-Fi network under the cursor, if any.
@@ -173,12 +171,11 @@ impl App {
     /// Call between events: finishes a connection attempt that ended and rereads the lists now
     /// and then. `true` when the screen should be redrawn.
     pub fn tick(&mut self) -> bool {
-        if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
-            let job = self.job.take().expect("checked above");
-            match job.thread.join() {
-                Ok(Ok(())) => self.show_message(format!("{} done", job.label), false),
-                Ok(Err(e)) => self.show_message(e.to_string(), true),
-                Err(_) => self.show_message("the connection attempt crashed", true),
+        if let Some(done) = ui::job::finished(&mut self.job) {
+            match done.result {
+                Some(Ok(())) => self.show_message(done.done_text, false),
+                Some(Err(e)) => self.show_message(e.to_string(), true),
+                None => self.show_message("the connection attempt crashed", true),
             }
             self.refresh();
             return true;
@@ -197,19 +194,13 @@ impl App {
     fn typing(&mut self, ev: &Event) {
         let Event::Key(key) = ev else { return };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Password(ssid, mut input) => match key.code {
-                KeyCode::Esc => {}
-                KeyCode::Enter => {
-                    let password = input.value().to_string();
-                    self.start_wifi(ssid, Some(password));
-                }
-                _ => {
-                    input.handle_event(ev);
-                    self.mode = Mode::Password(ssid, input);
-                }
+            Mode::Password(ssid, mut input) => match ui::prompt::typed(&mut input, ev) {
+                Typed::Cancel => {}
+                Typed::Submit(password) => self.start_wifi(ssid, Some(password)),
+                Typed::Editing => self.mode = Mode::Password(ssid, input),
             },
             Mode::ForgetWifi(ssid) => {
-                if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
+                if ui::prompt::confirms(key.code) {
                     match self.wifi.forget(&ssid) {
                         Ok(()) => self.show_message(format!("forgot {ssid}"), false),
                         Err(e) => self.show_message(e.to_string(), true),
@@ -218,7 +209,7 @@ impl App {
                 }
             }
             Mode::ForgetDevice(address, name) => {
-                if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
+                if ui::prompt::confirms(key.code) {
                     match self.bt.remove(&address) {
                         Ok(()) => self.show_message(format!("forgot {name}"), false),
                         Err(e) => self.show_message(e.to_string(), true),
@@ -246,8 +237,9 @@ impl App {
         }
         let backend = self.wifi.clone();
         let label = format!("connecting to {ssid}");
-        let handle = std::thread::spawn(move || backend.connect(&ssid, password.as_deref()));
-        self.job = Some(Job { label, thread: handle });
+        let done = format!("{label} done");
+        self.job =
+            Some(Job::spawn(label, done, move || backend.connect(&ssid, password.as_deref())));
     }
 
     /// Connects (pairing first if new) to a device on a thread, so the screen stays alive.
@@ -264,8 +256,8 @@ impl App {
                 format!("pairing with {}", device.name)
             },
         );
-        let handle = std::thread::spawn(move || backend.connect(&address));
-        self.job = Some(Job { label, thread: handle });
+        let done = format!("{label} done");
+        self.job = Some(Job::spawn(label, done, move || backend.connect(&address)));
     }
 
     /// Moves the focus to a pane.
@@ -468,9 +460,9 @@ impl ui::app::Screen for App {
 /// The cursor of the focused list is what the shared movement walks.
 impl Navigable for App {
     fn move_by(&mut self, delta: isize) {
-        let last = self.len(self.focus).saturating_sub(1) as isize;
+        let len = self.len(self.focus);
         let st = &mut self.lists[Self::pane(self.focus)];
-        st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
+        st.cursor = ui::list::move_cursor(st.cursor, delta, len);
     }
 
     fn page_row_count(&self) -> usize {

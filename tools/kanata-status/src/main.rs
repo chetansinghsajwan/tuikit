@@ -34,16 +34,7 @@ fn default_cfg() -> PathBuf {
 
 /// Entry point: loads the theme config, runs the app and maps a failure to exit code 2.
 fn main() -> ExitCode {
-    for p in ui::config::init("kanata-status") {
-        eprintln!("kanata-status: {p}");
-    }
-    match run(Cli::parse()) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("kanata-status: {e}");
-            ExitCode::from(2)
-        }
-    }
+    ui::app::main("kanata-status", || run(Cli::parse()).map(|()| 0))
 }
 
 /// Parses the config, follows the daemon and runs the screen on the shared app shell, which

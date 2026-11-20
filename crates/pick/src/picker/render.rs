@@ -307,11 +307,9 @@ impl Picker {
             return;
         }
         // Keep the cursor inside the window.
-        if self.cursor < self.offset {
-            self.offset = self.cursor;
-        } else if self.cursor >= self.offset + self.page {
-            self.offset = self.cursor + 1 - self.page;
-        }
+        self.offset =
+            ui::list::follow_cursor(self.cursor as usize, self.offset as usize, self.page as usize)
+                as u32;
 
         let end = (self.offset + self.page).min(snap_matched);
         for (row, idx) in (self.offset..end).enumerate() {

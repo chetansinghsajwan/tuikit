@@ -5,15 +5,16 @@ use git_core::{
 };
 use git_panel::{Outcome as PanelOutcome, Panel};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::{Path, PathBuf};
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
 use ui::app::{Host, Navigable, Request, Tabbed};
+use ui::footer::Footer;
+use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
 /// Loading history, status, refs and the commit list.
@@ -50,7 +51,7 @@ pub struct App {
     lists: [ListState; 4],
     focus: Focus,
     mode: Mode,
-    message: Option<(String, bool)>,
+    message: Option<ui::footer::Notice>,
     preview: Option<Preview>,
     preview_scroll: usize,
     /// The commit whose files were folded by hand (another commit starts with none).
@@ -277,9 +278,9 @@ impl Navigable for App {
     fn move_by(&mut self, delta: isize) {
         match Self::list_index(self.focus) {
             Some(li) => {
-                let last = self.len(self.focus).saturating_sub(1) as isize;
+                let len = self.len(self.focus);
                 let st = &mut self.lists[li];
-                st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
+                st.cursor = ui::list::move_cursor(st.cursor, delta, len);
                 self.preview_scroll = 0;
             }
             None => self.files.move_by(delta),

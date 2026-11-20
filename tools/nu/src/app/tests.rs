@@ -4,7 +4,7 @@
 use super::*;
 use nu_core::bluetooth::Kind;
 use nu_core::fake::{Fake, FakeBluetooth};
-use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ui::app::Screen;
 
 /// A plain key press event.
@@ -121,7 +121,11 @@ fn wifi_enter_connects_asks_for_a_password_when_needed_and_toggles_off() {
     assert!(masked.contains("•••••") && !masked.contains("short"), "{masked}");
     app.handle_event(&key(KeyCode::Enter));
     wait(&mut app);
-    assert!(app.message.as_ref().is_some_and(|(_, e)| *e), "{:?}", app.message);
+    assert!(
+        app.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e),
+        "{:?}",
+        app.message
+    );
     app.lists[0].cursor = app.networks.iter().position(|n| n.ssid == "neighbor").unwrap();
     app.handle_event(&key(KeyCode::Enter));
     press(&mut app, "longenoughpw");
@@ -141,9 +145,16 @@ fn wifi_forget_asks_first_and_scan_and_power_work() {
     press(&mut app, "y");
     assert!(app.networks.iter().any(|n| n.ssid == "home" && !n.known));
     press(&mut app, "d");
-    assert!(matches!(app.mode, Mode::Normal) && app.message.as_ref().is_some_and(|(_, e)| *e));
+    assert!(
+        matches!(app.mode, Mode::Normal)
+            && app.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e)
+    );
     press(&mut app, "s");
-    assert!(app.message.as_ref().is_some_and(|(m, _)| m.contains("scanning")));
+    assert!(
+        app.message
+            .as_ref()
+            .is_some_and(|ui::footer::Notice { text: m, is_error: _ }| m.contains("scanning"))
+    );
     press(&mut app, " ");
     press(&mut app, "p");
     assert!(!app.wifi_status.enabled && screen(&mut app).contains("Wi-Fi is off"));
@@ -160,7 +171,7 @@ fn bluetooth_connect_pairs_new_devices_toggles_disconnect_trust_forget_scan_and_
     // A new device is paired and connected in the background.
     app.lists[1].cursor = at(&app, "Phone");
     app.handle_event(&key(KeyCode::Enter));
-    assert!(app.job.as_ref().is_some_and(|j| j.label.contains("pairing")));
+    assert!(app.job.as_ref().is_some_and(|j| j.label().contains("pairing")));
     wait(&mut app);
     let phone = app.devices.iter().find(|d| d.name == "Phone").unwrap();
     assert!(phone.paired && phone.trusted && phone.connected, "{:?}", app.message);
@@ -175,7 +186,9 @@ fn bluetooth_connect_pairs_new_devices_toggles_disconnect_trust_forget_scan_and_
     app.handle_event(&key(KeyCode::Enter));
     wait(&mut app);
     assert!(
-        app.message.as_ref().is_some_and(|(m, e)| *e && m.contains("not in range")),
+        app.message.as_ref().is_some_and(
+            |ui::footer::Notice { text: m, is_error: e }| *e && m.contains("not in range")
+        ),
         "{:?}",
         app.message
     );

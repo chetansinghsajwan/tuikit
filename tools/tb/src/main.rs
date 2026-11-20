@@ -15,26 +15,14 @@ struct Cli {
 
 /// Opens the table file and runs the editor. Failures exit with code 2.
 fn main() -> ExitCode {
-    for p in ui::config::init("tb") {
-        eprintln!("tb: {p}");
-    }
-    let cli = Cli::parse();
-    let mut grid = match Grid::open(&cli.file) {
-        Ok(g) => g,
-        Err(e) => {
-            eprintln!("tb: {e}");
-            return ExitCode::from(2);
-        }
-    };
-    match ui::app::Shell::new("tb")
-        .actions(tb::keys::ACTIONS)
-        .groups(tb::keys::GROUPS)
-        .run(&mut grid)
-    {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("tb: {e}");
-            ExitCode::from(2)
-        }
-    }
+    ui::app::main("tb", || {
+        let cli = Cli::parse();
+        let mut grid = Grid::open(&cli.file).map_err(|e| e.to_string())?;
+        ui::app::Shell::new("tb")
+            .actions(tb::keys::ACTIONS)
+            .groups(tb::keys::GROUPS)
+            .run(&mut grid)
+            .map(|()| 0)
+            .map_err(|e| e.to_string())
+    })
 }

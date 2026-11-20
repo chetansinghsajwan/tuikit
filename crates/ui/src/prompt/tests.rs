@@ -36,3 +36,21 @@ fn line_has_the_label_then_the_value() {
     let l = line(&Theme::default(), "new: ", "a.rs");
     assert_eq!(l.spans.iter().map(|s| s.content.as_ref()).collect::<String>(), "new: a.rs");
 }
+
+#[test]
+fn a_prompt_edits_submits_and_cancels() {
+    use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
+    let key = |c| Event::Key(KeyEvent::new(c, KeyModifiers::NONE));
+    let mut input = Input::default();
+    assert_eq!(typed(&mut input, &key(KeyCode::Char('a'))), Typed::Editing);
+    assert_eq!(typed(&mut input, &key(KeyCode::Enter)), Typed::Submit("a".into()));
+    assert_eq!(typed(&mut input, &key(KeyCode::Esc)), Typed::Cancel);
+}
+
+#[test]
+fn only_y_d_and_enter_confirm() {
+    assert!(confirms(KeyCode::Char('y')));
+    assert!(confirms(KeyCode::Char('D')));
+    assert!(confirms(KeyCode::Enter));
+    assert!(!confirms(KeyCode::Char('n')));
+}

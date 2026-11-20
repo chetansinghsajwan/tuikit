@@ -47,6 +47,25 @@ pub trait Host {
     fn overlay(&mut self, f: &mut dyn FnMut()) -> io::Result<()>;
 }
 
+/// The whole of a tool's `main`: loads the shared config of `tool` (printing what is wrong with
+/// it), runs `run`, and turns its result into the exit code. `Ok(code)` exits with `code`; an
+/// error is printed as `tool: message` and exits with 2.
+pub fn main<E: std::fmt::Display>(
+    tool: &str,
+    run: impl FnOnce() -> Result<u8, E>,
+) -> std::process::ExitCode {
+    for problem in crate::config::init(tool) {
+        eprintln!("{tool}: {problem}");
+    }
+    match run() {
+        Ok(code) => std::process::ExitCode::from(code),
+        Err(e) => {
+            eprintln!("{tool}: {e}");
+            std::process::ExitCode::from(2)
+        }
+    }
+}
+
 /// Gives the terminal to `f` and takes it back afterwards.
 pub fn with_suspended<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T> {
     let mut f = Some(f);
@@ -496,7 +515,10 @@ fn open() -> io::Result<Term> {
 fn enter(term: &mut Term) -> io::Result<()> {
     enable_raw_mode()?;
     execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
-    term.clear()
+    // Not `Terminal::clear`: it asks the terminal for the cursor position, and that question goes
+    // to stdout, which a tool that prints its result there (`pick`) has redirected.
+    let area = term.size()?;
+    term.resize(Rect::from(area))
 }
 
 /// Gives the terminal back to the shell.

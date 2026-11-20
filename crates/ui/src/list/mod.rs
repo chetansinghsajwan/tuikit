@@ -200,6 +200,25 @@ impl ListRow {
     }
 }
 
+/// The cursor `delta` rows from `cursor` in a list of `len` rows, stopping at the first and the last
+/// row (0 for an empty list). The one rule every list moves by.
+pub fn move_cursor(cursor: usize, delta: isize, len: usize) -> usize {
+    let last = len.saturating_sub(1) as isize;
+    (cursor as isize + delta).clamp(0, last) as usize
+}
+
+/// The first visible row that keeps `cursor` inside a window of `page` rows, scrolling as little as
+/// possible from `first_visible_row`. The one rule every list scrolls by.
+pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize) -> usize {
+    if cursor < first_visible_row {
+        cursor
+    } else if cursor >= first_visible_row + page {
+        cursor + 1 - page
+    } else {
+        first_visible_row
+    }
+}
+
 /// The row that is current while its pane does not have the focus (the file open in the editor): a
 /// fainter blue than the hovered row.
 pub fn active(theme: &Theme) -> Style {

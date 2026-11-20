@@ -8,7 +8,7 @@ use crate::ops;
 use git_core::{Kind, Repo, Status};
 use ignore::WalkBuilder;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -18,8 +18,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
+use ui::footer::Footer;
 use ui::keys::{action, basic};
+use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
 /// Bookmarks: folders saved under a key.
@@ -84,7 +85,7 @@ pub struct Panel {
     marked: BTreeSet<PathBuf>,
     clip: Option<Clip>,
     /// Last result or error, shown in the footer until the next key.
-    message: Option<(String, bool)>,
+    message: Option<ui::footer::Notice>,
     bookmarks: Bookmarks,
     keymap: ui::keys::Keymap,
     /// Folder sizes counted in the background for the size column.
@@ -332,8 +333,7 @@ impl Panel {
 
     /// Move the cursor by `delta` rows, staying inside the list.
     fn move_by(&mut self, delta: isize) {
-        let last = self.rows.len().saturating_sub(1) as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
+        self.cursor = ui::list::move_cursor(self.cursor, delta, self.rows.len());
     }
 
     /// Open or close the folder under the cursor (`open` forces a state, `None` flips it).
@@ -380,7 +380,7 @@ impl Panel {
 
     /// Set the footer message; `error` makes it show as a failure.
     fn show_message(&mut self, msg: impl Into<String>, error: bool) {
-        self.message = Some((msg.into(), error));
+        self.message = Some(ui::footer::Notice::new(msg, error));
     }
 
     /// Whether a prompt or a confirmation is open (keys belong to it, not to the host).
@@ -403,15 +403,9 @@ impl Panel {
 
     /// Route a key to the open prompt, confirmation or bookmark wait, else to the normal keymap.
     fn handle_key_event(&mut self, ev: &Event) -> Outcome {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
-        if *kind == KeyEventKind::Release {
-            return Outcome::None;
-        }
-        match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Prompt(kind, input) => return self.prompt_key(kind, input, ev, key),
-            Mode::Confirm(kind, targets) => return self.confirm_key(kind, targets, key),
-            Mode::Bookmark(op) => return self.bookmark_key(op, key),
-            Mode::Normal => {}
+        let Some(key) = ui::keys::pressed(ev) else { return Outcome::None };
+        if let Some(outcome) = self.modal_key(ev, key) {
+            return outcome;
         }
         self.message = None;
         self.normal_key(key)
@@ -447,16 +441,21 @@ impl Panel {
     /// what the host should do about it.
     pub fn handle_captured(&mut self, ev: &Event) -> Outcome {
         self.poll_job();
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::None };
-        if *kind == KeyEventKind::Release {
-            return Outcome::None;
+        let Some(key) = ui::keys::pressed(ev) else { return Outcome::None };
+        match self.modal_key(ev, key) {
+            Some(outcome) => outcome,
+            None => self.job_key(key).unwrap_or(Outcome::None),
         }
-        match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Prompt(kind, input) => self.prompt_key(kind, input, ev, key),
+    }
+
+    /// Routes a key to the open prompt, question or bookmark wait; `None` when none is open.
+    fn modal_key(&mut self, ev: &Event, key: &KeyEvent) -> Option<Outcome> {
+        Some(match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Prompt(kind, input) => self.prompt_key(kind, input, ev),
             Mode::Confirm(kind, targets) => self.confirm_key(kind, targets, key),
             Mode::Bookmark(op) => self.bookmark_key(op, key),
-            Mode::Normal => self.job_key(key).unwrap_or(Outcome::None),
-        }
+            Mode::Normal => return None,
+        })
     }
 
     /// A key in the normal mode: cancels or refuses things while a paste runs,
@@ -532,25 +531,15 @@ impl Panel {
     }
 
     /// A key while a text prompt (new, rename, open with) is open: Enter submits, Esc drops it.
-    fn prompt_key(
-        &mut self,
-        kind: PromptKind,
-        mut input: Input,
-        ev: &Event,
-        key: &KeyEvent,
-    ) -> Outcome {
-        match key.code {
-            KeyCode::Esc => Outcome::None,
-            KeyCode::Enter => {
-                let value = input.value().to_string();
-                match kind {
-                    PromptKind::Create(dir) => self.create(&dir, &value),
-                    PromptKind::Rename(from) => self.rename(&from, &value),
-                    PromptKind::OpenWith(path) => Outcome::OpenWith(path, value),
-                }
-            }
-            _ => {
-                input.handle_event(ev);
+    fn prompt_key(&mut self, kind: PromptKind, mut input: Input, ev: &Event) -> Outcome {
+        match ui::prompt::typed(&mut input, ev) {
+            Typed::Cancel => Outcome::None,
+            Typed::Submit(value) => match kind {
+                PromptKind::Create(dir) => self.create(&dir, &value),
+                PromptKind::Rename(from) => self.rename(&from, &value),
+                PromptKind::OpenWith(path) => Outcome::OpenWith(path, value),
+            },
+            Typed::Editing => {
                 self.mode = Mode::Prompt(kind, input);
                 Outcome::None
             }

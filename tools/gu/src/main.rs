@@ -17,16 +17,7 @@ struct Cli {
 
 /// Start-up and exit code: 0 on a normal quit, 2 on an error or when `dir` is no repository.
 fn main() -> ExitCode {
-    for p in ui::config::init("gu") {
-        eprintln!("gu: {p}");
-    }
-    match run(Cli::parse()) {
-        Ok(code) => ExitCode::from(code),
-        Err(e) => {
-            eprintln!("gu: {e}");
-            ExitCode::from(2)
-        }
-    }
+    ui::app::main("gu", || run(Cli::parse()))
 }
 
 /// Open the repository and run the screen on the shell until it asks to quit.

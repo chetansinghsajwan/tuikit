@@ -1,7 +1,7 @@
 //! Tests for the git panel, run against throwaway git repos.
 
 use super::*;
-use ratatui::crossterm::event::KeyModifiers;
+use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use std::fs;
 use std::process::Command;
 
@@ -207,7 +207,7 @@ fn x_asks_before_discarding_and_never_touches_staged_changes() {
     on(&mut p, "b.txt"); // staged
     press(&mut p, "d");
     assert!(matches!(p.mode, Mode::Normal), "staged files are not discarded");
-    assert!(p.message.as_ref().is_some_and(|(_, err)| *err));
+    assert!(p.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: err }| *err));
 
     on(&mut p, "a.txt");
     press(&mut p, "d");
@@ -233,7 +233,10 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     press(&mut p, "c");
     assert!(draw(&mut p).join("\n").contains("commit: "));
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Outcome::None);
-    assert!(matches!(p.mode, Mode::Commit(_)) && p.message.as_ref().is_some_and(|(_, e)| *e));
+    assert!(
+        matches!(p.mode, Mode::Commit(_))
+            && p.message.as_ref().is_some_and(|ui::footer::Notice { text: _, is_error: e }| *e)
+    );
     let shown = draw(&mut p).join("\n");
     assert!(
         shown.contains("empty commit message") && shown.contains("commit: "),
@@ -252,7 +255,9 @@ fn c_commits_the_staged_files_with_the_typed_message() {
     );
     // Esc cancels the prompt.
     press(&mut p, "c"); // nothing staged now
-    assert!(p.message.as_ref().is_some_and(|(m, e)| *e && m.contains("nothing staged")));
+    assert!(p.message.as_ref().is_some_and(
+        |ui::footer::Notice { text: m, is_error: e }| *e && m.contains("nothing staged")
+    ));
 }
 
 #[test]

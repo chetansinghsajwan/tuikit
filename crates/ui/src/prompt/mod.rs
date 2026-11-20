@@ -3,9 +3,11 @@
 
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
+use tui_input::{Input, backend::crossterm::EventHandler};
 use unicode_width::UnicodeWidthStr;
 
 /// `label` in the accent color followed by the typed `value`.
@@ -26,6 +28,37 @@ pub fn cursor(buf: &mut Buffer, area: Rect, label: &str, cursor: usize) {
     {
         cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
     }
+}
+
+/// What a key did to an open prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Typed {
+    /// The text changed (or the key did nothing); the prompt stays open.
+    Editing,
+    /// Enter: the prompt is done, with its text.
+    Submit(String),
+    /// Esc: the prompt is closed without a result.
+    Cancel,
+}
+
+/// Feeds a key event to the open prompt `input`: Esc cancels, Enter submits, anything else edits. The one
+/// rule every prompt of every tool types by.
+pub fn typed(input: &mut Input, ev: &Event) -> Typed {
+    match crate::keys::pressed(ev).map(|k| k.code) {
+        Some(KeyCode::Esc) => Typed::Cancel,
+        Some(KeyCode::Enter) => Typed::Submit(input.value().to_string()),
+        Some(_) => {
+            input.handle_event(ev);
+            Typed::Editing
+        }
+        None => Typed::Editing,
+    }
+}
+
+/// Whether `code` answers a question with yes: `y`, `d` (the same key that asked) or Enter. Any other key
+/// is a no.
+pub fn confirms(code: KeyCode) -> bool {
+    matches!(code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter)
 }
 
 /// The suggestions for a prompt: the options, the ones matching what is typed, and the selected one.

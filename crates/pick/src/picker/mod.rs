@@ -7,7 +7,7 @@ use git_core::{Repo, Status};
 use nucleo::pattern::{CaseMatching, Normalization};
 use nucleo::{Config, Injector, Matcher, Nucleo};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -465,12 +465,9 @@ impl Picker {
 
     /// Handle one terminal event and tell the host what to do next (nothing, accept or cancel).
     pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(KeyEvent { code, modifiers, kind, .. }) = ev else {
+        let Some(KeyEvent { code, modifiers, .. }) = ui::keys::pressed(ev) else {
             return Action::None;
         };
-        if *kind == KeyEventKind::Release {
-            return Action::None;
-        }
         let ctrl = modifiers.contains(KeyModifiers::CONTROL);
         // `--expect` keys accept and report which key was used.
         if let Some((name, _)) = self

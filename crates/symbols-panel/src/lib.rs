@@ -7,14 +7,15 @@
 pub mod keys;
 
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::text::Span;
+use ratatui::widgets::Widget;
 use std::collections::HashSet;
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
+use ui::footer::Footer;
+use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
 pub use ui::symbol::Kind;
@@ -83,7 +84,7 @@ pub struct Panel {
     /// The cursor line of the editor: while the panel is not focused, the cursor follows it.
     following: Option<u32>,
     keymap: ui::keys::Keymap,
-    message: Option<String>,
+    message: Option<ui::footer::Notice>,
 }
 
 impl Default for Panel {
@@ -241,19 +242,15 @@ impl Panel {
 
     /// Feeds a terminal event to the filter box or the keymap and returns what the host must do.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Action::None };
-        if *kind == KeyEventKind::Release {
-            return Action::None;
-        }
+        let Some(key) = ui::keys::pressed(ev) else { return Action::None };
         if let Mode::Filter(mut input) = std::mem::replace(&mut self.mode, Mode::Normal) {
-            match key.code {
-                KeyCode::Esc => {
+            match ui::prompt::typed(&mut input, ev) {
+                Typed::Cancel => {
                     self.filter.clear();
                     self.rebuild();
                 }
-                KeyCode::Enter => {}
-                _ => {
-                    input.handle_event(ev);
+                Typed::Submit(_) => {}
+                Typed::Editing => {
                     self.filter = input.value().to_string();
                     self.rebuild();
                     self.mode = Mode::Filter(input);
@@ -265,7 +262,10 @@ impl Panel {
         match self.keymap.feed(key) {
             ui::keys::Feed::Run(id) => self.run(id),
             ui::keys::Feed::NoBinding => {
-                self.message = Some(format!("{} is not bound", self.keymap.rejected()));
+                self.message = Some(ui::footer::Notice::new(
+                    format!("{} is not bound", self.keymap.rejected()),
+                    true,
+                ));
                 Action::None
             }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
@@ -339,27 +339,19 @@ impl Panel {
         }
         // The filter prompt or a message takes the last row.
         let footer = match &self.mode {
-            Mode::Filter(input) => Some((
-                ui::prompt::line(theme, "filter: ", input.value()),
-                Some(input.visual_cursor()),
-            )),
-            Mode::Normal if !self.filter.is_empty() => Some((
-                Line::from(Span::styled(
-                    format!("filter: {}", self.filter),
-                    Style::new().fg(c.warning.into()),
-                )),
-                None,
-            )),
-            Mode::Normal => self.message.as_ref().map(|m| {
-                (Line::from(Span::styled(m.clone(), Style::new().fg(c.error.into()))), None)
+            Mode::Filter(input) => Some(Footer::Prompt {
+                label: "filter: ",
+                text: input.value().into(),
+                cursor: input.visual_cursor(),
             }),
-        };
-        if let Some((line, cursor)) = footer {
-            let row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
-            Paragraph::new(line).render(row, buf);
-            if let Some(cur) = cursor {
-                ui::prompt::cursor(buf, row, "filter: ", cur);
+            Mode::Normal if !self.filter.is_empty() => {
+                Some(Footer::Question(format!("filter: {}", self.filter)))
             }
+            Mode::Normal => self.message.as_ref().map(Footer::Notice),
+        };
+        if let Some(footer) = footer {
+            let row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
+            footer.render(row, buf, theme);
             inner.height -= 1;
             if inner.height == 0 {
                 return;
@@ -382,11 +374,7 @@ impl Panel {
             self.cursor = i;
         }
         self.page = usize::from(inner.height).max(1);
-        if self.cursor < self.offset {
-            self.offset = self.cursor;
-        } else if self.cursor >= self.offset + self.page {
-            self.offset = self.cursor + 1 - self.page;
-        }
+        self.offset = ui::list::follow_cursor(self.cursor, self.offset, self.page);
         let geo = ui::list::Rows::new(area, inner);
         for (n, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (n - self.offset) as u16;

@@ -6,10 +6,7 @@ impl App {
     /// Handles an event the screen claimed (see `captures`): a prompt, a question, a popup, the
     /// files of a commit or the Files panel's own prompts. Tells the host what to do next.
     pub(super) fn typing(&mut self, ev: &Event) -> Outcome {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::Continue };
-        if *kind == KeyEventKind::Release {
-            return Outcome::Continue;
-        }
+        let Some(key) = ui::keys::pressed(ev) else { return Outcome::Continue };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Prompt(kind, input) => {
                 self.prompt_key(kind, input, ev, key);
@@ -152,11 +149,10 @@ impl App {
             return;
         }
         let root = self.root.clone();
-        let thread = std::thread::spawn(move || match Repo::discover(&root) {
+        self.job = Some(Job::spawn(label, done, move || match Repo::discover(&root) {
             Some(repo) => f(&repo),
             None => Err(git_core::Error("the repository is gone".into())),
-        });
-        self.job = Some(Job { label: label.to_string(), done_message: done.to_string(), thread });
+        }));
     }
 
     /// Call between events: finishes a remote command that ended. `true` when the screen should be redrawn.
@@ -165,12 +161,11 @@ impl App {
             self.reload_all();
             return true;
         }
-        if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
-            let job = self.job.take().expect("checked above");
-            match job.thread.join() {
-                Ok(Ok(())) => self.show_message(job.done_message, false),
-                Ok(Err(e)) => self.show_message(e.to_string(), true),
-                Err(_) => self.show_message("the remote command crashed", true),
+        if let Some(done) = ui::job::finished(&mut self.job) {
+            match done.result {
+                Some(Ok(())) => self.show_message(done.done_text, false),
+                Some(Err(e)) => self.show_message(e.to_string(), true),
+                None => self.show_message("the remote command crashed", true),
             }
             self.reload_all();
             return true;
@@ -548,10 +543,9 @@ impl App {
                 return;
             }
         }
-        match key.code {
-            KeyCode::Esc => {}
-            KeyCode::Enter => {
-                let value = input.value().to_string();
+        match ui::prompt::typed(&mut input, ev) {
+            Typed::Cancel => {}
+            Typed::Submit(value) => {
                 match kind {
                     PromptKind::Search => {
                         self.search = if value.is_empty() { None } else { Some(value) };
@@ -663,8 +657,7 @@ impl App {
                     }
                 }
             }
-            _ => {
-                input.handle_event(ev);
+            Typed::Editing => {
                 self.suggest.set_typed_text(input.value());
                 self.mode = Mode::Prompt(kind, input);
             }
