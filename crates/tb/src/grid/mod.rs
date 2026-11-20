@@ -584,7 +584,7 @@ impl ui::app::Screen for Grid {
         self.show_message(format!("{keys} is not bound"), true);
     }
 
-    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+    fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         Some(self)
     }
 }

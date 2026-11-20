@@ -124,11 +124,11 @@ impl ui::app::Screen for Explorer {
         self.panel().tick() || props
     }
 
-    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+    fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         Some(self.tabs.active_mut())
     }
 
-    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+    fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         Some(self)
     }
 }
@@ -136,15 +136,15 @@ impl ui::app::Screen for Explorer {
 /// The explorer's tabs are panels the user opens and closes.
 impl Tabbed for Explorer {
     fn tab_next(&mut self) {
-        self.tabs.next();
+        self.tabs.select_next();
     }
 
     fn tab_prev(&mut self) {
-        self.tabs.prev();
+        self.tabs.select_prev();
     }
 
     fn tab_select(&mut self, index: usize) {
-        self.tabs.goto(index);
+        self.tabs.select_at(index);
     }
 
     fn can_open_close_tabs(&self) -> bool {
@@ -153,11 +153,11 @@ impl Tabbed for Explorer {
 
     fn tab_open(&mut self) {
         let root = self.panel().root().to_path_buf();
-        self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
+        self.tabs.open_tab(Panel::new(root, panel_opts(&self.opts)));
     }
 
     fn tab_reopen(&mut self) {
-        if !self.tabs.reopen() {
+        if !self.tabs.reopen_tab() {
             self.panel().notify("no closed tab to reopen", false);
         }
     }
@@ -167,11 +167,11 @@ impl Tabbed for Explorer {
     }
 
     fn tab_move(&mut self, delta: isize) {
-        self.tabs.move_active(delta);
+        self.tabs.move_active_tab(delta);
     }
 
     fn tab_close(&mut self) {
-        if self.tabs.close().is_none() {
+        if !self.tabs.close_tab() {
             self.panel().notify("this is the last tab (q quits)", false);
         }
     }
@@ -200,7 +200,7 @@ impl Explorer {
                 self.panel().refresh();
             }
             Outcome::Close => {
-                if self.tabs.close().is_none() {
+                if !self.tabs.close_tab() {
                     return Request::Quit;
                 }
             }

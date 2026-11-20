@@ -57,7 +57,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let mut app = App::new(cfg, cli.addr).with_events(rx);
     ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
-        .nav(false)
+        .with_navigation(false)
         .actions(ACTIONS)
         .tick_interval(Duration::from_millis(100))
         .run(&mut app)

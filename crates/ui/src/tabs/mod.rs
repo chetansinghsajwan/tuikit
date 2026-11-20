@@ -63,15 +63,15 @@ impl<T> Tabs<T> {
     }
 
     /// Add a tab after the active one and switch to it.
-    pub fn open(&mut self, tab: T) {
+    pub fn open_tab(&mut self, tab: T) {
         self.items.insert(self.active + 1, tab);
         self.active += 1;
     }
 
-    /// Close the active tab (kept for `reopen`). The last tab cannot be closed: `None`.
-    pub fn close(&mut self) -> Option<()> {
+    /// Close the active tab (kept for `reopen_tab`). The last tab cannot be closed: `false`.
+    pub fn close_tab(&mut self) -> bool {
         if self.items.len() <= 1 {
-            return None;
+            return false;
         }
         let tab = self.items.remove(self.active);
         self.closed.push(tab);
@@ -79,14 +79,14 @@ impl<T> Tabs<T> {
             self.closed.remove(0);
         }
         self.active = self.active.min(self.items.len() - 1);
-        Some(())
+        true
     }
 
     /// Bring back the tab closed last, after the active one. `false` if there is none.
-    pub fn reopen(&mut self) -> bool {
+    pub fn reopen_tab(&mut self) -> bool {
         match self.closed.pop() {
             Some(tab) => {
-                self.open(tab);
+                self.open_tab(tab);
                 true
             }
             None => false,
@@ -94,19 +94,19 @@ impl<T> Tabs<T> {
     }
 
     /// The next tab, wrapping at the end.
-    pub fn next(&mut self) {
+    pub fn select_next(&mut self) {
         self.active = (self.active + 1) % self.items.len();
     }
 
     /// The previous tab, wrapping at the start.
-    pub fn prev(&mut self) {
+    pub fn select_prev(&mut self) {
         self.active = (self.active + self.items.len() - 1) % self.items.len();
     }
 
-    /// Switch to tab `n` (0-based). `false` if there is no such tab.
-    pub fn goto(&mut self, n: usize) -> bool {
-        if n < self.items.len() {
-            self.active = n;
+    /// Switch to the tab at `index` (0-based). `false` if there is no such tab.
+    pub fn select_at(&mut self, index: usize) -> bool {
+        if index < self.items.len() {
+            self.active = index;
             true
         } else {
             false
@@ -114,7 +114,7 @@ impl<T> Tabs<T> {
     }
 
     /// Move the active tab `delta` places (negative: left), staying in range.
-    pub fn move_active(&mut self, delta: isize) {
+    pub fn move_active_tab(&mut self, delta: isize) {
         let to = (self.active as isize + delta).clamp(0, self.items.len() as isize - 1) as usize;
         let tab = self.items.remove(self.active);
         self.items.insert(to, tab);
@@ -124,9 +124,9 @@ impl<T> Tabs<T> {
 
 impl<T: Clone> Tabs<T> {
     /// A copy of the active tab, next to it.
-    pub fn duplicate(&mut self) {
+    pub fn duplicate_tab(&mut self) {
         let copy = self.items[self.active].clone();
-        self.open(copy);
+        self.open_tab(copy);
     }
 }
 

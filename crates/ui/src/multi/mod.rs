@@ -77,10 +77,10 @@ impl Multi {
             .collect()
     }
 
-    /// Move to another section by `d` (wrapping), starting it with a clean cursor and search.
-    fn switch(&mut self, d: isize) {
+    /// Move to another section by `delta` (wrapping), starting it with a clean cursor and search.
+    fn move_section(&mut self, delta: isize) {
         self.current =
-            (self.current as isize + d).rem_euclid(self.sections.len() as isize) as usize;
+            (self.current as isize + delta).rem_euclid(self.sections.len() as isize) as usize;
         self.cursor = 0;
         self.query.clear();
     }
@@ -92,8 +92,8 @@ impl Multi {
         match key.code {
             KeyCode::Esc => return Outcome::Cancel,
             KeyCode::Enter => return Outcome::Apply,
-            KeyCode::Tab | KeyCode::Right => self.switch(1),
-            KeyCode::BackTab | KeyCode::Left => self.switch(-1),
+            KeyCode::Tab | KeyCode::Right => self.move_section(1),
+            KeyCode::BackTab | KeyCode::Left => self.move_section(-1),
             KeyCode::Down => {
                 self.cursor = (self.cursor + 1).min(self.visible().len().saturating_sub(1))
             }

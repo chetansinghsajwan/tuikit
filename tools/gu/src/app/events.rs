@@ -536,13 +536,13 @@ impl App {
                 _ => None,
             };
             if let Some(d) = step {
-                self.suggest.typed(input.value());
+                self.suggest.set_typed_text(input.value());
                 if matches!(key.code, KeyCode::Tab) {
-                    if let Some(s) = self.suggest.current() {
+                    if let Some(s) = self.suggest.selected() {
                         input = Input::new(s);
                     }
                 } else {
-                    self.suggest.step(d);
+                    self.suggest.move_selection(d);
                 }
                 self.mode = Mode::Prompt(kind, input);
                 return;
@@ -665,7 +665,7 @@ impl App {
             }
             _ => {
                 input.handle_event(ev);
-                self.suggest.typed(input.value());
+                self.suggest.set_typed_text(input.value());
                 self.mode = Mode::Prompt(kind, input);
             }
         }
@@ -680,7 +680,7 @@ impl App {
                 .find(|b| b.name == name)
                 .map(|b| (b.name.clone(), b.kind, b.is_head))
         };
-        let pick = by(&typed).or_else(|| self.suggest.current().and_then(|s| by(&s)));
+        let pick = by(&typed).or_else(|| self.suggest.selected().and_then(|s| by(&s)));
         match pick {
             Some((name, _, true)) => self.show_message(format!("already on {name}"), false),
             Some((name, kind, false)) => {

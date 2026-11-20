@@ -5,48 +5,48 @@ use super::*;
 #[test]
 fn open_close_next_prev_goto_and_reorder() {
     let mut t = Tabs::new("a");
-    t.open("b");
-    t.open("c"); // a b c, c active
+    t.open_tab("b");
+    t.open_tab("c"); // a b c, c active
     assert_eq!((t.len(), t.active_index(), *t.active()), (3, 2, "c"));
-    t.next();
+    t.select_next();
     assert_eq!(*t.active(), "a"); // wraps
-    t.prev();
+    t.select_prev();
     assert_eq!(*t.active(), "c");
-    assert!(t.goto(1) && *t.active() == "b" && !t.goto(9));
+    assert!(t.select_at(1) && *t.active() == "b" && !t.select_at(9));
     // A new tab opens next to the active one.
-    t.open("x");
+    t.open_tab("x");
     assert_eq!(t.iter().copied().collect::<Vec<_>>(), vec!["a", "b", "x", "c"]);
     assert_eq!(t.active_index(), 2);
     // Reorder: the active tab moves, staying in range.
-    t.move_active(-1);
+    t.move_active_tab(-1);
     assert_eq!(t.iter().copied().collect::<Vec<_>>(), vec!["a", "x", "b", "c"]);
-    t.move_active(-5);
+    t.move_active_tab(-5);
     assert_eq!((t.active_index(), *t.active()), (0, "x"));
-    t.move_active(9);
+    t.move_active_tab(9);
     assert_eq!((t.active_index(), *t.active()), (3, "x"));
 }
 
 #[test]
 fn closing_remembers_for_reopen_and_the_last_tab_stays() {
     let mut t = Tabs::new(1);
-    assert_eq!(t.close(), None, "the last tab cannot be closed");
-    t.open(2);
-    t.open(3);
-    assert_eq!(t.close(), Some(())); // closes 3, 2 becomes active
+    assert!(!t.close_tab(), "the last tab cannot be closed");
+    t.open_tab(2);
+    t.open_tab(3);
+    assert!(t.close_tab()); // closes 3, 2 becomes active
     assert_eq!(*t.active(), 2);
-    assert!(t.reopen());
+    assert!(t.reopen_tab());
     assert_eq!(t.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
     assert_eq!(*t.active(), 3);
-    assert!(!t.reopen());
-    t.duplicate();
+    assert!(!t.reopen_tab());
+    t.duplicate_tab();
     assert_eq!(t.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3, 3]);
     for i in 0..20 {
-        t.open(100 + i);
-        t.close();
+        t.open_tab(100 + i);
+        t.close_tab();
     }
     // Only the last few closed tabs are remembered.
     let mut back = 0;
-    while t.reopen() {
+    while t.reopen_tab() {
         back += 1;
     }
     assert_eq!(back, CLOSED_KEPT);

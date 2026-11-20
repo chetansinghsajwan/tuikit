@@ -46,7 +46,7 @@ impl Suggest {
     }
 
     /// What is typed changed: the selection starts over.
-    pub fn typed(&mut self, typed: &str) {
+    pub fn set_typed_text(&mut self, typed: &str) {
         if self.typed != typed {
             self.typed = typed.to_string();
             self.selected = 0;
@@ -72,17 +72,17 @@ impl Suggest {
     }
 
     /// Move the selection by `d` rows (wrapping); false when there is nothing to select.
-    pub fn step(&mut self, d: isize) -> bool {
+    pub fn move_selection(&mut self, delta: isize) -> bool {
         let n = self.matches().len();
         if n == 0 {
             return false;
         }
-        self.selected = (self.selected as isize + d).rem_euclid(n as isize) as usize;
+        self.selected = (self.selected as isize + delta).rem_euclid(n as isize) as usize;
         true
     }
 
     /// The selected option, if anything matches.
-    pub fn current(&self) -> Option<String> {
+    pub fn selected(&self) -> Option<String> {
         self.matches().get(self.selected).map(|s| s.to_string())
     }
 

@@ -82,7 +82,7 @@ fn only_ctrl_chords_do_anything_and_ctrl_space_opens_the_menu() {
     let mut app = app();
     let mut d = ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
-        .nav(false)
+        .with_navigation(false)
         .actions(crate::ACTIONS)
         .dispatcher(&mut app);
     let ctrl = KeyModifiers::CONTROL;

@@ -455,7 +455,7 @@ impl ui::app::Screen for App {
         App::tick(self)
     }
 
-    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+    fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         Some(self)
     }
 

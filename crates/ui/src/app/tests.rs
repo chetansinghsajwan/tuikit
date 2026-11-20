@@ -50,7 +50,7 @@ impl Screen for Fake {
         self.unbound.push(keys.to_string());
     }
 
-    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+    fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         if self.no_nav { None } else { Some(self) }
     }
 
@@ -58,7 +58,7 @@ impl Screen for Fake {
         self.ctx
     }
 
-    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+    fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         if self.tabs { Some(self) } else { None }
     }
 }
@@ -146,7 +146,7 @@ fn a_screen_without_movement_or_with_no_nav_gets_no_nav_keys() {
     assert_eq!(s.got, vec!['j'], "an unbound key goes to the screen");
 
     let mut s = Fake::default();
-    let mut d = app().nav(false).dispatcher(&mut s);
+    let mut d = app().with_navigation(false).dispatcher(&mut s);
     press(&mut d, &mut s, "j");
     assert_eq!((s.cursor, s.got.as_slice()), (0, &['j'][..]));
 }
@@ -280,7 +280,7 @@ fn a_screen_without_tabs_or_with_no_tabs_gets_no_tab_keys() {
     assert_eq!(s.got, vec![']']);
 
     let mut s = Fake { tabs: true, ..Fake::default() };
-    let mut d = app().tabs(false).dispatcher(&mut s);
+    let mut d = app().with_tabs(false).dispatcher(&mut s);
     press(&mut d, &mut s, "]");
     assert_eq!((s.tab, s.got.as_slice()), (0, &[']'][..]));
 }

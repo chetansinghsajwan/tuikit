@@ -186,12 +186,12 @@ pub trait Screen {
     }
 
     /// The movement the screen offers, if any.
-    fn nav(&mut self) -> Option<&mut dyn Navigable> {
+    fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         None
     }
 
     /// The tabs the screen offers, if any.
-    fn tabs(&mut self) -> Option<&mut dyn Tabbed> {
+    fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         None
     }
 
@@ -294,13 +294,13 @@ impl Shell {
     }
 
     /// Leaves the shared movement out, even for a screen that offers it.
-    pub fn nav(mut self, on: bool) -> Shell {
+    pub fn with_navigation(mut self, on: bool) -> Shell {
         self.nav = on;
         self
     }
 
     /// Leaves the shared tab actions out, even for a screen that offers tabs.
-    pub fn tabs(mut self, on: bool) -> Shell {
+    pub fn with_tabs(mut self, on: bool) -> Shell {
         self.tabs = on;
         self
     }
@@ -315,15 +315,15 @@ impl Shell {
     /// configuration. Panics when two actions of a keymap share an id, so a clash shows up at
     /// startup, not as a dead key.
     pub fn dispatcher<S: Screen>(&self, screen: &mut S) -> Dispatcher {
-        let nav = self.nav && screen.nav().is_some();
-        let tabs = self.tabs && screen.tabs().is_some();
+        let nav = self.nav && screen.navigable().is_some();
+        let tabs = self.tabs && screen.tabbed().is_some();
         let mut all: Vec<Action> = Vec::new();
         if nav {
             all.extend_from_slice(NAV);
         }
         if tabs {
             all.extend_from_slice(TABS);
-            if screen.tabs().is_some_and(|t| t.can_open_close_tabs()) {
+            if screen.tabbed().is_some_and(|t| t.can_open_close_tabs()) {
                 all.extend_from_slice(DYNAMIC_TABS);
             }
         }
@@ -400,7 +400,7 @@ impl Dispatcher {
                 if self.tabs
                     && let KeyCode::Char(c @ '1'..='9') = key.code
                     && !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
-                    && let Some(tabs) = screen.tabs()
+                    && let Some(tabs) = screen.tabbed()
                 {
                     tabs.tab_select(c as usize - '1' as usize);
                     return Request::None;
@@ -422,14 +422,14 @@ impl Dispatcher {
             "palette" => Request::Palette,
             "help" => Request::Help,
             _ if self.nav && NAV.iter().any(|a| a.id == id) => {
-                if let Some(nav) = screen.nav() {
-                    navigate(nav, id);
+                if let Some(nav) = screen.navigable() {
+                    run_nav_action(nav, id);
                 }
                 Request::None
             }
             _ if self.tabs && id.starts_with("tab.") => {
-                if let Some(tabs) = screen.tabs() {
-                    switch(tabs, id);
+                if let Some(tabs) = screen.tabbed() {
+                    run_tab_action(tabs, id);
                 }
                 Request::None
             }
@@ -455,7 +455,7 @@ impl Dispatcher {
 }
 
 /// Carries out one shared tab action on the screen.
-fn switch(tabs: &mut dyn Tabbed, id: &str) {
+fn run_tab_action(tabs: &mut dyn Tabbed, id: &str) {
     match id {
         "tab.next" => tabs.tab_next(),
         "tab.prev" => tabs.tab_prev(),
@@ -470,7 +470,7 @@ fn switch(tabs: &mut dyn Tabbed, id: &str) {
 }
 
 /// Carries out one shared movement on the screen.
-fn navigate(nav: &mut dyn Navigable, id: &str) {
+fn run_nav_action(nav: &mut dyn Navigable, id: &str) {
     let page = nav.page_row_count().max(1) as isize;
     let step = nav.step_size().max(1) as isize;
     match id {
