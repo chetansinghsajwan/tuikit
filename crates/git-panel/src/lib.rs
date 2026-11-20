@@ -10,3 +10,7 @@ pub mod keys;
 mod panel;
 
 pub use panel::{Outcome, Panel};
+
+/// The old name of `Outcome`, kept so hosts that still match on it keep building.
+#[deprecated(note = "renamed to `Outcome`")]
+pub type Action = Outcome;
