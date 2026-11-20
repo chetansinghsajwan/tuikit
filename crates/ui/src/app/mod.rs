@@ -110,7 +110,7 @@ pub trait Navigable {
     /// Moves to the last row.
     fn move_to_bottom(&mut self);
 
-    /// How many rows `nav.up5` and `nav.down5` move.
+    /// How many rows `nav.up_step` and `nav.down_step` move.
     fn step_size(&self) -> usize {
         5
     }
@@ -206,8 +206,8 @@ pub trait Screen {
 const NAV: &[Action] = &[
     basic("nav.up", "up", "move the cursor up", &["k", "up", "ctrl-p"]),
     basic("nav.down", "down", "move the cursor down", &["j", "down", "ctrl-n"]),
-    basic("nav.up5", "up a step", "move the cursor up several rows", &["ctrl-k"]),
-    basic("nav.down5", "down a step", "move the cursor down several rows", &["ctrl-j"]),
+    basic("nav.up_step", "up a step", "move the cursor up several rows", &["ctrl-k"]),
+    basic("nav.down_step", "down a step", "move the cursor down several rows", &["ctrl-j"]),
     basic("nav.page_up", "page up", "move a page up", &["pageup"]),
     basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
     basic("nav.top", "top", "go to the first row", &["g", "home"]),
@@ -476,8 +476,8 @@ fn navigate(nav: &mut dyn Navigable, id: &str) {
     match id {
         "nav.up" => nav.move_by(-1),
         "nav.down" => nav.move_by(1),
-        "nav.up5" => nav.move_by(-step),
-        "nav.down5" => nav.move_by(step),
+        "nav.up_step" => nav.move_by(-step),
+        "nav.down_step" => nav.move_by(step),
         "nav.page_up" => nav.move_by(-page),
         "nav.page_down" => nav.move_by(page),
         "nav.top" => nav.move_to_top(),

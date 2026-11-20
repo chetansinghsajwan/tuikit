@@ -215,3 +215,10 @@ fn help_search_filters_rows_and_esc_clears_before_closing() {
     help.key(&k('z'));
     assert!(text(&mut help).contains("no match"));
 }
+
+#[test]
+fn a_renamed_id_in_the_config_still_finds_its_action() {
+    assert_eq!(current_id("nav.up5"), "nav.up_step");
+    assert_eq!(current_id("item.yank"), "item.copy");
+    assert_eq!(current_id("nav.up"), "nav.up", "an id that was never renamed is unchanged");
+}

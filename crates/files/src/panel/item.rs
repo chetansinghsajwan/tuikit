@@ -8,7 +8,7 @@ use ui::keys::{Action as Key, action, basic};
 pub(super) const ACTIONS: &[Key] = &[
     basic("item.open", "open", "open the file, or expand the folder", &["enter", "l", "right"]),
     basic("item.mark", "mark", "mark or unmark the row for a multi-row action", &["tab"]),
-    action("item.new", "new", "create a file (a trailing / makes a folder)", &["a", "leader n"]),
+    action("item.create", "new", "create a file (a trailing / makes a folder)", &["a", "leader n"]),
     action("item.rename", "rename", "rename the row", &["r", "leader r"]),
     action(
         "item.delete",
@@ -22,7 +22,7 @@ pub(super) const ACTIONS: &[Key] = &[
         "delete the marked rows permanently (asks first)",
         &["D"],
     ),
-    action("item.yank", "copy", "copy the marked rows", &["y", "leader y"]),
+    action("item.copy", "copy", "copy the marked rows", &["y", "leader y"]),
     action("item.cut", "cut", "cut the marked rows", &["x", "leader x"]),
     action("item.paste", "paste", "paste into the folder under the cursor", &["p", "leader p"]),
     action("item.open_with", "open with", "open the row with a command you type", &["leader o"]),
@@ -55,7 +55,7 @@ impl Panel {
                     self.move_by(1);
                 }
             }
-            "item.new" => {
+            "item.create" => {
                 self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default())
             }
             "item.rename" => {
@@ -75,7 +75,7 @@ impl Panel {
                     );
                 }
             }
-            "item.yank" | "item.cut" => {
+            "item.copy" | "item.cut" => {
                 let paths = self.targets();
                 if !paths.is_empty() {
                     let (n, cut) = (paths.len(), id == "item.cut");

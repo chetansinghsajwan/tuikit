@@ -279,13 +279,13 @@ impl Panel {
         match id {
             "nav.up" => self.move_by(-1),
             "nav.down" => self.move_by(1),
-            "nav.up5" => self.move_by(-5),
-            "nav.down5" => self.move_by(5),
+            "nav.up_step" => self.move_by(-5),
+            "nav.down_step" => self.move_by(5),
             "nav.page_up" => self.move_by(-(self.page as isize)),
             "nav.page_down" => self.move_by(self.page as isize),
             "nav.top" => self.cursor = 0,
             "nav.bottom" => self.cursor = self.rows.len().saturating_sub(1),
-            "tree.out" => {
+            "tree.collapse" => {
                 if let Some(r) = self.rows.get(self.cursor) {
                     if r.folded == Some(false) {
                         let p = r.path.clone();

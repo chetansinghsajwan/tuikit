@@ -25,7 +25,7 @@ pub(super) const ACTIONS: &[Key] = &[
         &["R", "leader v r"],
     ),
     action(
-        "view.raw",
+        "view.tables_as_text",
         "tables as text",
         "show CSV, TSV and spreadsheets in the preview as text instead of tables (and back)",
         &["leader v t"],
@@ -44,7 +44,7 @@ impl Panel {
                 self.opts.hidden = !self.opts.hidden;
                 self.rebuild();
             }
-            "view.raw" => {
+            "view.tables_as_text" => {
                 pv::set_raw_tables(!pv::raw_tables());
                 self.show_message(
                     if pv::raw_tables() { "tables show as text" } else { "tables show as tables" },
