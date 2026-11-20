@@ -19,17 +19,52 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
+use ui::keys::{action, basic};
 use ui::{Pane, Theme};
 
+/// Bookmarks: folders saved under a key.
+mod bookmark;
+/// Actions on the row under the cursor or the marked rows.
+mod item;
+/// Movement: the cursor keys and folding.
+mod nav;
 /// Copy and move jobs that run in the background with progress.
 mod paste;
 /// Drawing of the tree, footer and prompts.
 mod render;
+/// Which folder is the root of the tree.
+mod root;
+/// Finding files and contents through the host's picker.
+mod search;
 /// The panel's small shared types (rows, modes, options, actions).
 mod types;
+/// What the list shows: hidden and ignored files, the columns, refresh.
+mod view;
 use paste::*;
 use types::*;
 pub use types::{Action, Linemode, PanelOptions, Search};
+
+/// The actions that belong to no domain: the palette, the help, back and quit.
+const GENERAL: &[ui::keys::Action] = &[
+    basic("palette", "commands", "search every action by name and run it", &["leader space"]),
+    action("help", "keys", "list every action with its keys", &["?"]),
+    basic("back", "back", "clear the marks, else close", &["esc"]),
+    basic("quit", "quit", "close the explorer", &["q", "ctrl-c", "leader q"]),
+];
+
+/// Every action of the panel in the order the help lists them: each domain's own table.
+pub(crate) fn actions() -> Vec<ui::keys::Action> {
+    [
+        nav::ACTIONS,
+        item::ACTIONS,
+        search::ACTIONS,
+        view::ACTIONS,
+        root::ACTIONS,
+        bookmark::ACTIONS,
+        GENERAL,
+    ]
+    .concat()
+}
 
 #[cfg(test)]
 mod tests;
@@ -468,130 +503,20 @@ impl Panel {
         if !keys::owns(id) {
             return Action::Command(id);
         }
+        match id.split('.').next().unwrap_or(id) {
+            "nav" | "tree" => self.run_nav(id),
+            "item" => self.run_item(id),
+            "search" => self.run_search(id),
+            "view" => self.run_view(id),
+            "root" => self.run_root(id),
+            "bookmark" => self.run_bookmark(id),
+            _ => self.run_general(id),
+        }
+    }
+
+    /// Runs one of the actions that belong to no domain: back, the palette, the help and quit.
+    fn run_general(&mut self, id: &str) -> Action {
         match id {
-            "nav.up" => self.move_by(-1),
-            "nav.down" => self.move_by(1),
-            "nav.up5" => self.move_by(-5),
-            "nav.down5" => self.move_by(5),
-            "nav.page_up" => self.move_by(-(self.page as isize)),
-            "nav.page_down" => self.move_by(self.page as isize),
-            "nav.top" => self.cursor = 0,
-            "nav.bottom" => self.cursor = self.rows.len().saturating_sub(1),
-            "tree.out" => self.left(),
-            "item.open" => {
-                if let Some(row) = self.rows.get(self.cursor) {
-                    if row.is_dir {
-                        self.toggle(Some(true));
-                    } else {
-                        return Action::Open(row.path.clone());
-                    }
-                }
-            }
-            "item.mark" => {
-                if let Some(path) = self.current().map(Path::to_path_buf) {
-                    if !self.marked.remove(&path) {
-                        self.marked.insert(path);
-                    }
-                    self.move_by(1);
-                }
-            }
-            "item.new" => {
-                self.mode = Mode::Prompt(PromptKind::Create(self.target_dir()), Input::default())
-            }
-            "item.rename" => {
-                if let Some(row) = self.rows.get(self.cursor) {
-                    self.mode = Mode::Prompt(
-                        PromptKind::Rename(row.path.clone()),
-                        Input::new(row.name.clone()),
-                    );
-                }
-            }
-            "item.delete" | "item.delete_forever" => {
-                let targets = self.targets();
-                if !targets.is_empty() {
-                    self.mode = Mode::Confirm(
-                        if id == "item.delete" { ConfirmKind::Trash } else { ConfirmKind::Delete },
-                        targets,
-                    );
-                }
-            }
-            "item.yank" | "item.cut" => {
-                let paths = self.targets();
-                if !paths.is_empty() {
-                    let (n, cut) = (paths.len(), id == "item.cut");
-                    self.clip = Some(Clip { paths, cut });
-                    self.marked.clear();
-                    self.say(
-                        format!(
-                            "{} {n} item{}",
-                            if cut { "cut" } else { "yanked" },
-                            if n == 1 { "" } else { "s" }
-                        ),
-                        false,
-                    );
-                }
-            }
-            "item.paste" => return self.paste(),
-            "item.open_with" => {
-                if let Some(row) = self.rows.get(self.cursor) {
-                    self.mode =
-                        Mode::Prompt(PromptKind::OpenWith(row.path.clone()), Input::default());
-                }
-            }
-            "item.bulk_rename" => {
-                let t = self.targets();
-                if !t.is_empty() {
-                    return Action::BulkRename(t);
-                }
-            }
-            "search.files" => return Action::Search(Search::Files),
-            "search.here" => return Action::Search(Search::Here(self.target_dir())),
-            "search.grep" => return Action::Search(Search::Grep),
-            "view.ignored" => {
-                self.show_ignored = !self.show_ignored;
-                self.rebuild();
-            }
-            "view.hidden" => {
-                self.opts.hidden = !self.opts.hidden;
-                self.rebuild();
-            }
-            "view.raw" => {
-                pv::set_raw_tables(!pv::raw_tables());
-                self.say(
-                    if pv::raw_tables() { "tables show as text" } else { "tables show as tables" },
-                    false,
-                );
-            }
-            "view.columns" => {
-                self.opts.linemode = self.opts.linemode.next();
-                self.say(self.opts.linemode.label(), false);
-            }
-            "view.refresh" => self.refresh(),
-            "root.into" => {
-                if let Some(row) = self.rows.get(self.cursor).filter(|r| r.is_dir) {
-                    let dir = row.path.clone();
-                    self.set_root(dir);
-                }
-            }
-            "root.focus" => {
-                // The folder the cursor row sits in becomes the root: its siblings only, no other branches.
-                if let Some(path) = self.current().map(Path::to_path_buf)
-                    && let Some(dir) = path.parent().map(Path::to_path_buf)
-                {
-                    self.set_root(dir);
-                    self.reveal(&path);
-                }
-            }
-            "root.up" => {
-                if let Some(parent) = self.root.parent().map(Path::to_path_buf) {
-                    let old = self.root.clone();
-                    self.set_root(parent);
-                    self.reveal(&old);
-                }
-            }
-            "bookmark.set" => self.mode = Mode::Bookmark(BookmarkOp::Set),
-            "bookmark.jump" => self.mode = Mode::Bookmark(BookmarkOp::Jump),
-            "bookmark.delete" => self.mode = Mode::Bookmark(BookmarkOp::Delete),
             "back" => {
                 if self.marked.is_empty() {
                     return Action::Close;
