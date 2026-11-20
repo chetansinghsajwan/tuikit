@@ -538,6 +538,12 @@ impl Picker {
                     theme,
                     &opts,
                 ),
+                // Plain text with a preview supplied by the embedding tool.
+                (None, None) if self.preview_fn.is_some() && cand.loc.is_none() => {
+                    let line = cand.raw.as_deref().unwrap_or(&cand.display);
+                    let f = self.preview_fn.as_ref();
+                    Ok(f.map(|f| f(line, inner.width, theme)).unwrap_or_default())
+                }
                 // Plain text with an external preview command: its output, colors kept.
                 (None, None) if self.preview_cmd.is_some() && cand.loc.is_none() => {
                     let line = cand.raw.as_deref().unwrap_or(&cand.display);
@@ -560,7 +566,9 @@ impl Picker {
         if let Some(p) = &self.preview {
             // Commit and command previews scroll; the rest are already windowed to the pane.
             let scrolls = cand.git.is_some()
-                || (self.preview_cmd.is_some() && cand.loc.is_none() && cand.buffer.is_none());
+                || ((self.preview_cmd.is_some() || self.preview_fn.is_some())
+                    && cand.loc.is_none()
+                    && cand.buffer.is_none());
             let skip = if scrolls { self.pscroll.min(p.lines.len().saturating_sub(1)) } else { 0 };
             if scrolls {
                 self.pscroll = skip;

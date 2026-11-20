@@ -598,3 +598,12 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - `pick` is on the shell too (`PickScreen`: `captures_input` is always true, so its own keys stay its own; no nav, no tabs; the 30 ms tick takes what the background sources found). `Shell` draws on `/dev/tty`, so stdout stays free for the result. Never use `Terminal::clear` there: it asks the terminal for the cursor position on stdout.
 - Shared pieces beside the shell, one each (a tool never keeps its own copy): `ui::footer` (`Footer` draws a prompt, a question, a busy label, a message or the hints; `Notice` is the last message with its error flag), `ui::prompt::typed` (Esc cancels, Enter submits, else edits) and `prompt::confirms` (`y`, `d` or Enter), `ui::keys::pressed` (a key press, never a release), `ui::list::{move_cursor, follow_cursor}` (the cursor clamp and the scroll window), `ui::job` (`Job` runs work on a thread, `finished` collects it), `ui::app::main` (config init, error print, exit code 2).
 - Not shared yet: the preview-scroll state (`gu`, `git-panel`, `pick`, `files`) and the paste job of `files` (it carries progress counters, so it keeps its own).
+
+## `ev`: environment variables (first cut, 2026-11-20)
+
+- New tool `tools/ev` (crate `tuikit-ev`, binary `ev`), picker-style: lists `NAME=value` of the current process, prints the chosen lines. Meant to grow (edit, origins, process env) later; the larger env-manager TUI is deferred. The shell function `fe` now just runs `ev`.
+- Built on `pick`: `Picker::set_preview_fn` (new: a tool draws the preview of plain-text candidates in-process, given the line, pane width and theme) and `pick::PickScreen` (the picker as a shell screen, moved out of `tools/pick` so both binaries share it).
+- Preview: size, value wrapped to the pane; directory lists (`*PATH`, `XDG_*_DIRS`, or any all-absolute `:` list) one entry per row, flagged `missing`, `duplicate`, `relative` or `empty`.
+- Secrets (`*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*PASSWD*`, `*CREDENTIAL*`, `*KEY*`) are masked in the list and the preview; `ev --reveal` shows them. Accepting still prints the real value. The name check lives in `ev` for now; move it to `ui` when a second tool needs it. No reveal key yet.
+- No zellij popup: a popup is another process and would show the session's environment, not the shell's.
+- Tested: 7 unit tests; run in tmux (mask, path flags, print on Enter). Not yet: `nix build` of the new package and `fe` in a rebuilt shell.

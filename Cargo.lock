@@ -5659,6 +5659,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tuikit-ev"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tuikit-pick",
+ "tuikit-ui",
+]
+
+[[package]]
 name = "tuikit-files"
 version = "0.1.0"
 dependencies = [

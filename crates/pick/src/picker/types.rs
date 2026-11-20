@@ -33,6 +33,10 @@ pub struct PickerOptions {
     pub query: String,
 }
 
+/// Draws the preview of a plain-text candidate: the line, the pane width and the theme in, the
+/// rows out (see `Picker::set_preview_fn`).
+pub type PreviewFn = Arc<dyn Fn(&str, u16, &Theme) -> Vec<Line<'static>> + Send + Sync>;
+
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {

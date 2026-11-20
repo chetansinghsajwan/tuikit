@@ -23,7 +23,7 @@ use ui::{Pane, Theme, layout};
 mod render;
 mod types;
 use types::*;
-pub use types::{Action, LiveSource, Mode, PickerOptions, RowStyle};
+pub use types::{Action, LiveSource, Mode, PickerOptions, PreviewFn, RowStyle};
 
 #[cfg(test)]
 mod tests;
@@ -64,6 +64,8 @@ pub struct Picker {
     icon: Option<ui::icons::Icon>,
     /// External preview command for candidates that are plain text (`--preview-cmd`).
     preview_cmd: Option<crate::preview_cmd::PreviewCmd>,
+    /// In-process preview for candidates that are plain text, supplied by the embedding tool.
+    preview_fn: Option<PreviewFn>,
     /// Keys that accept and report themselves (`--expect`).
     expect: Vec<(String, KeyEvent)>,
     /// Fixed lines under the prompt (`--header-lines`).
@@ -115,6 +117,7 @@ impl Picker {
             title: None,
             icon: None,
             preview_cmd: None,
+            preview_fn: None,
             row_style: RowStyle::default(),
             timestamps: false,
             expect: Vec::new(),
@@ -189,6 +192,15 @@ impl Picker {
     /// `delimiter` or whitespace). Turns the preview pane on.
     pub fn set_preview_command(&mut self, cmd: impl Into<String>, delimiter: Option<String>) {
         self.preview_cmd = Some(crate::preview_cmd::PreviewCmd { cmd: cmd.into(), delimiter });
+        self.opts.preview = true;
+    }
+
+    /// Preview plain-text candidates with `f`, which gets the highlighted line (the whole input
+    /// line when `display` shows part of it), the pane width and the theme, and returns the
+    /// rows to draw. For tools that render their own content in the shared look. Turns the
+    /// preview pane on.
+    pub fn set_preview_fn(&mut self, f: PreviewFn) {
+        self.preview_fn = Some(f);
         self.opts.preview = true;
     }
 

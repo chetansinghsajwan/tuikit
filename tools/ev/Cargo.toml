@@ -1,0 +1,21 @@
+[package]
+name = "tuikit-ev"
+description = "ev: browse the environment variables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "ev"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ratatui.workspace = true
+tuikit-pick.workspace = true
+tuikit-ui.workspace = true
