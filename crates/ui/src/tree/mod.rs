@@ -279,29 +279,29 @@ pub struct FileRow<'a> {
     pub name: &'a str,
     pub is_dir: bool,
     /// A folder is open (its icon).
-    pub open: bool,
+    pub is_open: bool,
     /// A file is executable (its icon).
-    pub executable: bool,
+    pub is_executable: bool,
     /// An icon to use instead of the one the name and kind give (a submodule).
     pub icon: Option<Icon>,
     /// The git color of the row (or any status color): tints the row and colors the name.
     pub tint: Option<Color>,
 
     // State.
-    pub selected: bool,
+    pub is_selected: bool,
     /// The pane has the focus. A selected row of an unfocused pane is the faint "current" row.
-    pub focused: bool,
+    pub is_focused: bool,
     /// The indent guide to highlight, by column: the scope the cursor is in. Rows of one scope all pass the same column.
     pub active_guide: Option<usize>,
     /// Picked by the user: yellow and underlined.
-    pub marked: bool,
+    pub is_marked: bool,
     /// Cut to the clipboard: dimmed.
-    pub cut: bool,
+    pub is_cut: bool,
     /// A dot file: the name is muted.
-    pub hidden: bool,
+    pub is_hidden: bool,
     /// Git ignores it (shown only when the tool asks for ignored files): muted, dimmed and italic, so it reads
     /// fainter than a dot file; a dot file that is also ignored gets both.
-    pub ignored: bool,
+    pub is_ignored: bool,
 
     // Options, all off by default.
     /// The number of entries beneath a folder, after its name.
@@ -335,24 +335,24 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
     if row.is_dir {
         name_style = name_style.add_modifier(Modifier::BOLD);
     }
-    if (row.hidden || row.ignored) && row.tint.is_none() {
+    if (row.is_hidden || row.is_ignored) && row.tint.is_none() {
         name_style = name_style.fg(c.muted.into());
     }
-    if row.ignored {
+    if row.is_ignored {
         name_style = name_style.add_modifier(Modifier::DIM | Modifier::ITALIC);
     }
-    if row.marked {
+    if row.is_marked {
         name_style = name_style.fg(c.warning.into()).add_modifier(Modifier::UNDERLINED);
     }
-    if row.cut {
+    if row.is_cut {
         name_style = name_style.add_modifier(Modifier::DIM);
     }
     let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
     let icon = row.icon.unwrap_or_else(|| {
         if row.is_dir {
-            theme.icons.dir(base_name, row.open)
+            theme.icons.dir(base_name, row.is_open)
         } else {
-            theme.icons.file(base_name, row.executable)
+            theme.icons.file(base_name, row.is_executable)
         }
     });
     let mut spans = guides_marked(theme, row.depth, row.active_guide);
@@ -389,11 +389,11 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         content: crate::anim::hash_of(&(
             row.tint,
             row.is_dir,
-            row.executable,
-            row.marked,
-            row.cut,
-            row.hidden,
-            row.ignored,
+            row.is_executable,
+            row.is_marked,
+            row.is_cut,
+            row.is_hidden,
+            row.is_ignored,
             row.count,
             row.note,
             row.signs.clone(),
@@ -402,10 +402,10 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
         left: spans,
         right: if show_trailing { row.trailing.clone() } else { Vec::new() },
         signs: row.signs.clone(),
-        sign_cell: true,
+        has_sign_cell: true,
         tint: row.tint,
-        selected: row.selected,
-        focused: row.focused,
+        is_selected: row.is_selected,
+        is_focused: row.is_focused,
         ..Default::default()
     }
 }
@@ -418,9 +418,9 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
         let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
         let icon = row.icon.unwrap_or_else(|| {
             if row.is_dir {
-                theme.icons.dir(base_name, row.open)
+                theme.icons.dir(base_name, row.is_open)
             } else {
-                theme.icons.file(base_name, row.executable)
+                theme.icons.file(base_name, row.is_executable)
             }
         });
         spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));

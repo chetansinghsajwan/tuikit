@@ -333,10 +333,10 @@ impl Picker {
                 id: ui::anim::hash_of(&cand.output()),
                 left: spans,
                 signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
-                sign_cell: true,
+                has_sign_cell: true,
                 tint: git.map(|(_, k)| Self::git_color(theme, k)),
-                selected,
-                focused: true,
+                is_selected: selected,
+                is_focused: true,
                 ..Default::default()
             }
             .draw(theme, buf, &rows, y);
@@ -424,7 +424,7 @@ impl Picker {
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&(depth, label)),
                         left: spans,
-                        focused: true,
+                        is_focused: true,
                         ..Default::default()
                     }
                     .draw(theme, buf, &rows_geo, y);
@@ -445,7 +445,7 @@ impl Picker {
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&(depth, label)),
                         left: spans,
-                        focused: true,
+                        is_focused: true,
                         ..Default::default()
                     }
                     .draw(theme, buf, &rows_geo, y);
@@ -474,10 +474,10 @@ impl Picker {
                             .map(|(ch, k)| (ch, Self::git_color(theme, k)))
                             .into_iter()
                             .collect(),
-                        sign_cell: true,
+                        has_sign_cell: true,
                         tint: git.map(|(_, k)| Self::git_color(theme, k)),
-                        selected,
-                        focused: true,
+                        is_selected: selected,
+                        is_focused: true,
                         ..Default::default()
                     }
                     .draw(theme, buf, &rows_geo, y);

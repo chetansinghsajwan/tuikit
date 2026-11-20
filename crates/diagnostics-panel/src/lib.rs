@@ -339,8 +339,8 @@ impl Panel {
                     ui::list::ListRow {
                         id: ui::anim::hash_of(&(it.line, it.col, &it.message)),
                         left: line.spans,
-                        selected,
-                        focused,
+                        is_selected: selected,
+                        is_focused: focused,
                         ..Default::default()
                     }
                     .draw(theme, buf, &geo, y);

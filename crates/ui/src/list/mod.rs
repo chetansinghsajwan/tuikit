@@ -103,11 +103,11 @@ pub struct ListRow {
     /// Signs at the right edge, the most serious first (git letters).
     pub signs: Vec<(char, Color)>,
     /// The last cell is kept for signs even when this row has none, so right columns line up across rows.
-    pub sign_cell: bool,
+    pub has_sign_cell: bool,
     pub tint: Option<Color>,
-    pub selected: bool,
+    pub is_selected: bool,
     /// The pane has the focus; a selected row of an unfocused pane is the faint current row.
-    pub focused: bool,
+    pub is_focused: bool,
 }
 
 /// The plain text of `spans` with the styles dropped, for measuring and for default row identity.
@@ -157,15 +157,15 @@ impl ListRow {
     pub fn paint(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
         use ratatui::text::Line;
         use ratatui::widgets::{Paragraph, Widget};
-        let base = if self.selected && !self.focused {
+        let base = if self.is_selected && !self.is_focused {
             active(theme)
         } else {
-            style(theme, self.selected && self.focused, self.tint)
+            style(theme, self.is_selected && self.is_focused, self.tint)
         };
         buf.set_style(rows.bar(y), base);
         let area = rows.content(y);
         let width = usize::from(area.width);
-        let cell = usize::from(self.sign_cell);
+        let cell = usize::from(self.has_sign_cell);
         let signs = if self.signs.is_empty() { cell } else { self.signs.len() * 2 };
         let right_w: usize = self.right.iter().map(|s| s.content.width()).sum();
         // One blank cell between the left content and the right column, and the column clear of the signs.

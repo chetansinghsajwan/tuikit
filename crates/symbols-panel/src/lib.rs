@@ -416,8 +416,8 @@ impl Panel {
             ui::list::ListRow {
                 id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind).glyph)),
                 left: spans,
-                selected: at,
-                focused,
+                is_selected: at,
+                is_focused: focused,
                 ..Default::default()
             }
             .draw(theme, buf, &geo, y);

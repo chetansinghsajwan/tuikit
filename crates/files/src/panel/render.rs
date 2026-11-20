@@ -234,17 +234,20 @@ impl Panel {
                     name: &row.name,
                     active_guide: active.and_then(|s| s.col_at(i)),
                     is_dir: row.is_dir,
-                    open: self.expanded.contains(&row.path),
-                    executable: !row.is_dir && is_executable(&row.path),
+                    is_open: self.expanded.contains(&row.path),
+                    is_executable: !row.is_dir && is_executable(&row.path),
                     icon: submodule.then_some(theme.icons.submodule),
                     tint,
-                    selected,
-                    focused,
+                    is_selected: selected,
+                    is_focused: focused,
                     // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
-                    marked: self.marked.contains(&row.path),
-                    cut: self.clip.as_ref().is_some_and(|k| k.cut && k.paths.contains(&row.path)),
-                    hidden: row.name.starts_with('.'),
-                    ignored: row.ignored,
+                    is_marked: self.marked.contains(&row.path),
+                    is_cut: self
+                        .clip
+                        .as_ref()
+                        .is_some_and(|k| k.cut && k.paths.contains(&row.path)),
+                    is_hidden: row.name.starts_with('.'),
+                    is_ignored: row.ignored,
                     trailing,
                     signs,
                     ..Default::default()

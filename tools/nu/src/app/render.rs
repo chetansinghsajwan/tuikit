@@ -76,8 +76,8 @@ impl App {
                 right: vec![Span::raw(right.clone())],
                 min_left: 12,
                 tint: active.then(|| c.success.into()),
-                selected: i == cursor,
-                focused,
+                is_selected: i == cursor,
+                is_focused: focused,
                 ..Default::default()
             }
             .draw(theme, buf, &geo, y);

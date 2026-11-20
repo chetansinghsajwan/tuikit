@@ -98,7 +98,7 @@ impl App {
                     depth: *depth,
                     name: label,
                     is_dir: true,
-                    open: !*folded,
+                    is_open: !*folded,
                     count: Some(*count),
                     ..Default::default()
                 },
@@ -132,8 +132,8 @@ impl App {
                 &geo,
                 y,
                 &ui::tree::FileRow {
-                    selected,
-                    focused: true,
+                    is_selected: selected,
+                    is_focused: true,
                     active_guide: scope.and_then(|s| s.col_at(n)),
                     ..file_row
                 },

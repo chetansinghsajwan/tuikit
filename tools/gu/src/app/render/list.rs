@@ -82,8 +82,8 @@ impl App {
                 left: left.spans,
                 right: vec![Span::raw(right)],
                 min_left: 12,
-                selected: i == cursor,
-                focused,
+                is_selected: i == cursor,
+                is_focused: focused,
                 ..Default::default()
             }
             .draw(theme, buf, &rows, y);
