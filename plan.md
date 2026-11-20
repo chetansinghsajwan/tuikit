@@ -607,3 +607,10 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - Secrets (`*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*PASSWD*`, `*CREDENTIAL*`, `*KEY*`) are masked in the list and the preview; `ev --reveal` shows them. Accepting still prints the real value. The name check lives in `ev` for now; move it to `ui` when a second tool needs it. No reveal key yet.
 - No zellij popup: a popup is another process and would show the session's environment, not the shell's.
 - Tested: 7 unit tests; run in tmux (mask, path flags, print on Enter). Not yet: `nix build` of the new package and `fe` in a rebuilt shell.
+
+## `cb`: clipboard history (first cut, 2026-11-20)
+
+- Tool `tools/cb` (`tuikit-cb`), picker-style like `ev`: `cb` browses (Enter copies through `wl-copy`, ctrl-x deletes), `cb watch` records, `cb store` records stdin.
+- Store: `$XDG_STATE_HOME/cb/history` (`time\ntext` records split by NUL), newest wins on repeats, 1000 entries, text only.
+- `watch` polls `wl-paste` every 500 ms instead of `wl-paste --watch`: WSLg's compositor lacks the data-control protocol, so cliphist never worked there (the old `fcp` failure). Home runs it as the systemd user service `cb-watch` (home/programs/clipboard).
+- Open: images, pinning, a Windows-side source on WSL.

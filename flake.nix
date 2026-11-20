@@ -29,6 +29,7 @@
       files = "tuikit-files-cli";
       gu = "tuikit-gu";
       ev = "tuikit-ev";
+      cb = "tuikit-cb";
       kanata-status = "tuikit-kanata-status";
       tb = "tuikit-tb-cli";
       nu = "tuikit-nu";

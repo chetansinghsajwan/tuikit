@@ -5650,6 +5650,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tuikit-cb"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ratatui",
+ "tuikit-pick",
+ "tuikit-ui",
+]
+
+[[package]]
 name = "tuikit-diagnostics-panel"
 version = "0.1.0"
 dependencies = [
