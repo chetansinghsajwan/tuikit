@@ -9,7 +9,7 @@ pub struct PanelOptions {
     /// Git status colors and signs.
     pub git: bool,
     /// What the columns beside each name show (cycle with `c`).
-    pub linemode: Linemode,
+    pub columns: Columns,
     /// Where bookmarks are kept (`None`: in memory only).
     pub bookmarks: Option<PathBuf>,
     /// Pastes of at least this many bytes run in the background with a progress line
@@ -27,7 +27,7 @@ impl Default for PanelOptions {
         PanelOptions {
             hidden: true,
             git: true,
-            linemode: Linemode::Off,
+            columns: Columns::Off,
             bookmarks: bookmarks::default_path(),
             background_bytes: Some(8 << 20),
             leader: "space".into(),
@@ -38,7 +38,7 @@ impl Default for PanelOptions {
 
 /// What the columns beside each name show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Linemode {
+pub enum Columns {
     Off,
     /// Permissions, size and modified time (the standalone app's default).
     Full,
@@ -48,34 +48,34 @@ pub enum Linemode {
     PermTime,
 }
 
-impl Linemode {
+impl Columns {
     /// The next column layout in the cycle, so one key steps through all of them.
-    pub fn next(self) -> Linemode {
+    pub fn cycle(self) -> Columns {
         match self {
-            Linemode::Off => Linemode::Full,
-            Linemode::Full => Linemode::SizeTime,
-            Linemode::SizeTime => Linemode::PermTime,
-            Linemode::PermTime => Linemode::Off,
+            Columns::Off => Columns::Full,
+            Columns::Full => Columns::SizeTime,
+            Columns::SizeTime => Columns::PermTime,
+            Columns::PermTime => Columns::Off,
         }
     }
 
     /// A short description of the layout, shown in the footer when it changes.
     pub(super) fn label(self) -> &'static str {
         match self {
-            Linemode::Off => "columns off",
-            Linemode::Full => "permissions, size and time",
-            Linemode::SizeTime => "size and time",
-            Linemode::PermTime => "permissions and time",
+            Columns::Off => "columns off",
+            Columns::Full => "permissions, size and time",
+            Columns::SizeTime => "size and time",
+            Columns::PermTime => "permissions and time",
         }
     }
 
     /// Cells the columns take, with the gap before the git letter.
     pub(super) fn width(self) -> u16 {
         match self {
-            Linemode::Off => 0,
-            Linemode::Full => 9 + 1 + 5 + 1 + 8 + 1,
-            Linemode::SizeTime => 5 + 1 + 8 + 1,
-            Linemode::PermTime => 9 + 1 + 8 + 1,
+            Columns::Off => 0,
+            Columns::Full => 9 + 1 + 5 + 1 + 8 + 1,
+            Columns::SizeTime => 5 + 1 + 8 + 1,
+            Columns::PermTime => 9 + 1 + 8 + 1,
         }
     }
 }

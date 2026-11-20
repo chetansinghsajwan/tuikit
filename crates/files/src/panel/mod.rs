@@ -42,7 +42,7 @@ mod types;
 mod view;
 use paste::*;
 use types::*;
-pub use types::{Linemode, Outcome, PanelOptions, Search};
+pub use types::{Columns, Outcome, PanelOptions, Search};
 
 /// The actions that belong to no domain: the palette, the help, back and quit.
 const GENERAL: &[ui::keys::Action] = &[

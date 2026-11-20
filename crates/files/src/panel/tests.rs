@@ -43,7 +43,7 @@ fn panel(d: &Path) -> Panel {
         PanelOptions {
             hidden: false,
             git: false,
-            linemode: Linemode::Off,
+            columns: Columns::Off,
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
@@ -84,7 +84,7 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
         PanelOptions {
             hidden: false,
             git: true,
-            linemode: Linemode::Off,
+            columns: Columns::Off,
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
@@ -450,7 +450,7 @@ fn columns_show_size_and_time_for_files_when_wide() {
         PanelOptions {
             hidden: false,
             git: false,
-            linemode: Linemode::SizeTime,
+            columns: Columns::SizeTime,
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
@@ -474,14 +474,14 @@ fn columns_show_size_and_time_for_files_when_wide() {
 
 #[test]
 fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
-    let d = tree("linemode");
+    let d = tree("columns");
     std::fs::write(d.join("src/main.rs"), vec![b'x'; 3000]).unwrap();
     let mut p = Panel::new(
         &d,
         PanelOptions {
             hidden: false,
             git: false,
-            linemode: Linemode::SizeTime,
+            columns: Columns::SizeTime,
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
@@ -527,7 +527,7 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
         PanelOptions {
             hidden: false,
             git: false,
-            linemode: Linemode::Off,
+            columns: Columns::Off,
             bookmarks: None,
             background_bytes: Some(0),
             leader: "space".into(),
@@ -622,7 +622,7 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
         PanelOptions {
             hidden: false,
             git: false,
-            linemode: Linemode::Off,
+            columns: Columns::Off,
             bookmarks: None,
             background_bytes: None,
             leader: ",".into(),

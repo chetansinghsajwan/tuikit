@@ -25,7 +25,7 @@ impl Panel {
 
     /// Start counting the visible folders' sizes (a few at a time) while the size column is on.
     pub(super) fn count_visible_dirs(&mut self) {
-        if !matches!(self.opts.linemode, Linemode::Full | Linemode::SizeTime) {
+        if !matches!(self.opts.columns, Columns::Full | Columns::SizeTime) {
             return;
         }
         let mut running = self.dir_sizes.values().filter(|d| !d.state().1).count();
@@ -190,17 +190,17 @@ impl Panel {
             let tint = git.map(|(_, k)| pv::kind_color(theme, k));
 
             // Size and modified-time columns sit left of the git sign, when there is room.
-            let cols = if area.width >= 44 { self.opts.linemode.width() } else { 0 };
+            let cols = if area.width >= 44 { self.opts.columns.width() } else { 0 };
             let mut trailing: Vec<Span<'static>> = Vec::new();
             if cols > 0 {
-                let mode = self.opts.linemode;
+                let mode = self.opts.columns;
                 let muted = Style::new().fg(c.muted.into());
-                if matches!(mode, Linemode::Full | Linemode::PermTime) {
+                if matches!(mode, Columns::Full | Columns::PermTime) {
                     trailing.extend(meta::perm_spans(theme, &meta::perm_string(row.mode), false));
                     trailing.push(Span::styled(" ", muted));
                 }
                 let mut text = String::new();
-                if matches!(mode, Linemode::Full | Linemode::SizeTime) {
+                if matches!(mode, Columns::Full | Columns::SizeTime) {
                     let size = if row.is_dir {
                         sizes.get(&row.path).map(|d| meta::size_cell(d.state())).unwrap_or_default()
                     } else {

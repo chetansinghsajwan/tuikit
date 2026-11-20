@@ -52,8 +52,8 @@ impl Panel {
                 );
             }
             "view.columns" => {
-                self.opts.linemode = self.opts.linemode.next();
-                self.show_message(self.opts.linemode.label(), false);
+                self.opts.columns = self.opts.columns.cycle();
+                self.show_message(self.opts.columns.label(), false);
             }
             "view.refresh" => self.refresh(),
             _ => {}

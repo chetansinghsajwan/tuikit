@@ -13,7 +13,11 @@ pub mod ops;
 /// The panel itself: tree state, key handling and drawing.
 mod panel;
 
-pub use panel::{Linemode, Outcome, Panel, PanelOptions, Search};
+pub use panel::{Columns, Outcome, Panel, PanelOptions, Search};
+
+/// The old name of `Columns`, kept so hosts that still use it keep building.
+#[deprecated(note = "renamed to `Columns`")]
+pub type Linemode = Columns;
 
 /// The old name of `Outcome`, kept so hosts that still match on it keep building.
 #[deprecated(note = "renamed to `Outcome`")]

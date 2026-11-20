@@ -439,7 +439,7 @@ fn panel_opts(o: &Options) -> PanelOptions {
     PanelOptions {
         hidden: o.hidden,
         git: o.git,
-        linemode: files::Linemode::Full,
+        columns: files::Columns::Full,
         ..PanelOptions::default()
     }
 }
