@@ -3,17 +3,30 @@
 use crate::kbd::{self, Action, Config};
 use crate::link::{Event, State};
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event as Term, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use std::sync::mpsc::Receiver;
+use ui::app::{Host, Request};
+use ui::keys::basic;
 use ui::{Pane, Theme, mix};
 
 /// Cap on the history log, so a long session does not grow memory without bound.
 const HISTORY_LIMIT: usize = 500;
 /// The widest row of the keyboard, in quarter keys (a 1u key is 4).
 const ROW_QUARTERS: usize = 60;
+
+/// The few keys the screen binds. All are Ctrl chords, and the shell's leader is one too, because
+/// kanata passes every key typed here on to the system as well, so a plain key must not do
+/// anything by accident.
+pub const ACTIONS: &[ui::keys::Action] = &[
+    basic("quit", "quit", "close kanata-status", &["ctrl-q"]),
+    basic("layer.next", "next layer", "look at the next layer of the config", &["ctrl-n"]),
+    basic("layer.prev", "previous layer", "look at the previous layer of the config", &["ctrl-p"]),
+    basic("layer.live", "live layer", "follow the layer kanata is on again", &["ctrl-l"]),
+    basic("history.clear", "clear history", "empty the history log", &["ctrl-k"]),
+];
 
 /// One line of the history log: a key pressed or a layer entered.
 enum Item {
@@ -33,6 +46,8 @@ pub struct App {
     /// A layer picked by hand to look at; `None` follows the live one.
     browsing: Option<usize>,
     history: Vec<Item>,
+    /// The daemon's events, read on each tick.
+    events: Option<Receiver<Event>>,
 }
 
 impl App {
@@ -48,7 +63,14 @@ impl App {
             base,
             browsing: None,
             history: Vec::new(),
+            events: None,
         }
+    }
+
+    /// Reads the daemon's events from `events` on each tick of the shell.
+    pub fn with_events(mut self, events: Receiver<Event>) -> App {
+        self.events = Some(events);
+        self
     }
 
     /// Takes a state from the daemon; true when something visible changed.
@@ -79,27 +101,6 @@ impl App {
         self.history.drain(..excess);
         self.state = state;
         true
-    }
-
-    /// Handles a terminal event; true to quit. Few keys are bound, and all are Ctrl chords
-    /// that main-layer kanata cannot type by accident, since every key pressed here also
-    /// reaches this tool.
-    pub fn handle_event(&mut self, event: &Term) -> (bool, bool) {
-        let Term::Key(key) = event else { return (false, matches!(event, Term::Resize(..))) };
-        if key.kind != KeyEventKind::Press || !key.modifiers.contains(KeyModifiers::CONTROL) {
-            return (false, false);
-        }
-        let n = self.cfg.layers.len();
-        let shown = self.shown_index();
-        match key.code {
-            KeyCode::Char('q') => return (true, false),
-            KeyCode::Char('n') => self.browsing = Some((shown + 1) % n),
-            KeyCode::Char('p') => self.browsing = Some((shown + n - 1) % n),
-            KeyCode::Char('l') => self.browsing = None,
-            KeyCode::Char('k') => self.history.clear(),
-            _ => return (false, false),
-        }
-        (false, true)
     }
 
     /// Index of the layer kanata reports as active, if the config knows it.
@@ -357,3 +358,36 @@ fn quarters(key: &str) -> usize {
 /// Tests for lighting keys, the history log and rendering.
 #[cfg(test)]
 mod tests;
+
+/// Lets the shared app shell host the screen: it owns the terminal, the keys, the help and the
+/// palette; the screen draws and follows the daemon.
+impl ui::app::Screen for App {
+    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
+        App::render(self, area, buf);
+    }
+
+    fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
+        let n = self.cfg.layers.len();
+        let shown = self.shown_index();
+        match id {
+            "quit" => return Request::Quit,
+            "layer.next" => self.browsing = Some((shown + 1) % n),
+            "layer.prev" => self.browsing = Some((shown + n - 1) % n),
+            "layer.live" => self.browsing = None,
+            "history.clear" => self.history.clear(),
+            _ => {}
+        }
+        Request::None
+    }
+
+    /// Applies what the daemon sent since the last tick; true when something visible changed.
+    fn tick(&mut self) -> bool {
+        let events: Vec<Event> =
+            self.events.as_ref().map(|rx| rx.try_iter().collect()).unwrap_or_default();
+        let mut changed = false;
+        for event in events {
+            changed |= self.apply(event);
+        }
+        changed
+    }
+}

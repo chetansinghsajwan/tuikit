@@ -8,4 +8,4 @@ pub mod kbd;
 /// Follows `kb daemon` over TCP and turns its lines into events.
 pub mod link;
 
-pub use app::App;
+pub use app::{ACTIONS, App};

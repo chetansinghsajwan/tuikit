@@ -64,3 +64,41 @@ fn renders_without_panicking_on_small_screens() {
         app.render(area, &mut buf);
     }
 }
+
+/// Presses a key with the given modifiers through the shell's dispatcher.
+fn press(
+    d: &mut ui::app::Dispatcher,
+    app: &mut App,
+    code: ratatui::crossterm::event::KeyCode,
+    mods: ratatui::crossterm::event::KeyModifiers,
+) -> Request {
+    use ratatui::crossterm::event::{Event, KeyEvent};
+    d.event(app, &Event::Key(KeyEvent::new(code, mods)), &mut ui::app::NoHost)
+}
+
+#[test]
+fn only_ctrl_chords_do_anything_and_ctrl_space_opens_the_menu() {
+    use ratatui::crossterm::event::{KeyCode, KeyModifiers};
+    let mut app = app();
+    let mut d = ui::app::App::new("kanata-status")
+        .leader("ctrl-space")
+        .no_nav()
+        .actions(crate::ACTIONS)
+        .dispatcher(&mut app);
+    let ctrl = KeyModifiers::CONTROL;
+    // Plain keys reach kanata as well, so they must do nothing here (but `?`, the shell's help).
+    for c in ['q', 'n', 'p', 'l', 'k', 'j', ' '] {
+        let before = app.browsing;
+        assert_eq!(press(&mut d, &mut app, KeyCode::Char(c), KeyModifiers::NONE), Request::None);
+        assert_eq!(app.browsing, before, "{c}");
+    }
+    assert_eq!(press(&mut d, &mut app, KeyCode::Char('?'), KeyModifiers::NONE), Request::Help);
+    press(&mut d, &mut app, KeyCode::Char('n'), ctrl);
+    assert!(app.browsing.is_some());
+    press(&mut d, &mut app, KeyCode::Char('l'), ctrl);
+    assert!(app.browsing.is_none());
+    assert_eq!(press(&mut d, &mut app, KeyCode::Char(' '), ctrl), Request::None);
+    assert!(d.menu(0).is_some(), "ctrl-space starts the leader menu");
+    press(&mut d, &mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert_eq!(press(&mut d, &mut app, KeyCode::Char('q'), ctrl), Request::Quit);
+}

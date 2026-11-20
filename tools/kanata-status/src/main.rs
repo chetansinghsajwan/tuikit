@@ -1,21 +1,12 @@
-//! The `kanata-status` binary: wires the config, the daemon link and the terminal into the loop.
+//! The `kanata-status` binary: wires the config and the daemon link into the app shell.
 
 use clap::Parser;
 use kanata_status::kbd::Config;
-use kanata_status::{App, link};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::event;
-use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{
-    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use std::fs::OpenOptions;
-use std::io;
+use kanata_status::{ACTIONS, App, link};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::mpsc;
-use std::thread;
+use std::time::Duration;
 
 /// The keyboard, the active kanata layer, the keys held and the keys pressed.
 #[derive(Parser)]
@@ -28,15 +19,6 @@ struct Cli {
     #[arg(long, default_value = "127.0.0.1:6667")]
     addr: String,
 }
-
-/// Everything the main loop waits on, so it sleeps until something happens.
-enum Msg {
-    Daemon(link::Event),
-    Term(event::Event),
-}
-
-/// The terminal we draw on, backed by `/dev/tty` so stdout stays free.
-type Term = Terminal<CrosstermBackend<std::fs::File>>;
 
 /// Finds the kanata config when `--cfg` is not given, honouring `$KANATA_CFG` and XDG.
 fn default_cfg() -> PathBuf {
@@ -64,58 +46,20 @@ fn main() -> ExitCode {
     }
 }
 
-/// Parses the config, starts the daemon and terminal readers, then redraws on every event
-/// until the user quits. It restores the terminal on the way out, even after an error.
+/// Parses the config, follows the daemon and runs the screen on the shared app shell, which
+/// restores the terminal on the way out, even after an error.
 fn run(cli: Cli) -> Result<(), String> {
     let path = cli.cfg.unwrap_or_else(default_cfg);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let cfg = Config::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut app = App::new(cfg, cli.addr.clone());
     let (tx, rx) = mpsc::channel();
-    let daemon_tx = tx.clone();
-    link::follow(cli.addr, move |e| daemon_tx.send(Msg::Daemon(e)).is_ok());
-    thread::spawn(move || {
-        while let Ok(e) = event::read() {
-            if tx.send(Msg::Term(e)).is_err() {
-                break;
-            }
-        }
-    });
-
-    let tty =
-        OpenOptions::new().read(true).write(true).open("/dev/tty").map_err(|e| e.to_string())?;
-    let mut term: Term = Terminal::new(CrosstermBackend::new(tty)).map_err(|e| e.to_string())?;
-    enable_raw_mode().map_err(|e| e.to_string())?;
-    execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))
-        .map_err(|e| e.to_string())?;
-    let result = (|| -> io::Result<()> {
-        let mut dirty = true;
-        loop {
-            if dirty {
-                term.draw(|f| {
-                    let area = f.area();
-                    app.render(area, f.buffer_mut());
-                })?;
-                dirty = false;
-            }
-            let Ok(first) = rx.recv() else { return Ok(()) };
-            let mut next = Some(first);
-            while let Some(msg) = next {
-                match msg {
-                    Msg::Daemon(e) => dirty |= app.apply(e),
-                    Msg::Term(e) => {
-                        let (quit, redraw) = app.handle_event(&e);
-                        if quit {
-                            return Ok(());
-                        }
-                        dirty |= redraw;
-                    }
-                }
-                next = rx.try_recv().ok();
-            }
-        }
-    })();
-    let _ = disable_raw_mode();
-    let _ = execute!(term.backend_mut(), LeaveAlternateScreen);
-    result.map_err(|e| e.to_string())
+    link::follow(cli.addr.clone(), move |e| tx.send(e).is_ok());
+    let mut app = App::new(cfg, cli.addr).with_events(rx);
+    ui::app::App::new("kanata-status")
+        .leader("ctrl-space")
+        .no_nav()
+        .actions(ACTIONS)
+        .tick(Duration::from_millis(100))
+        .run(&mut app)
+        .map_err(|e| e.to_string())
 }
