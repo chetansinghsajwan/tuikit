@@ -113,7 +113,7 @@ impl Grid {
     }
 
     /// Shows a message in the footer; `error` colours it as a failure.
-    fn say(&mut self, text: impl Into<String>, error: bool) {
+    fn show_message(&mut self, text: impl Into<String>, error: bool) {
         self.message = Some((text.into(), error));
     }
 
@@ -208,13 +208,13 @@ impl Grid {
                 self.change();
                 self.table.delete_row(self.cur.0);
                 self.clamp();
-                self.say("deleted the row", false);
+                self.show_message("deleted the row", false);
             }
             Confirm::DeleteCol => {
                 self.change();
                 self.table.delete_col(self.cur.1);
                 self.clamp();
-                self.say("deleted the column", false);
+                self.show_message("deleted the column", false);
             }
             Confirm::Quit => return Request::Quit,
         }
@@ -222,7 +222,7 @@ impl Grid {
     }
 
     /// Runs one of the editor's own actions by id.
-    fn act(&mut self, id: &'static str) -> Request {
+    fn run_action_id(&mut self, id: &'static str) -> Request {
         match id {
             "nav.left" => self.go_cols(-1),
             "nav.right" => self.go_cols(1),
@@ -238,7 +238,7 @@ impl Grid {
             "cell.copy" => {
                 self.copied = self.table.value(self.cur.0, self.cur.1);
                 let _ = ui::clipboard::copy(&self.copied);
-                self.say("copied", false);
+                self.show_message("copied", false);
             }
             "cell.paste" => {
                 self.change();
@@ -284,11 +284,14 @@ impl Grid {
             "sort.asc" | "sort.desc" => {
                 self.change();
                 self.table.sort_by(self.cur.1, id == "sort.desc", self.header);
-                self.say(format!("sorted by column {}", self.cur.1 + 1), false);
+                self.show_message(format!("sorted by column {}", self.cur.1 + 1), false);
             }
             "view.header" => {
                 self.header = !self.header;
-                self.say(if self.header { "first row is a header" } else { "no header" }, false);
+                self.show_message(
+                    if self.header { "first row is a header" } else { "no header" },
+                    false,
+                );
             }
             "find.start" => self.mode = Mode::Find(Input::new(self.find.clone())),
             "find.next" => self.find_next(true),
@@ -299,7 +302,7 @@ impl Grid {
                     self.cur = cur;
                     self.clamp();
                 }
-                None => self.say("nothing to undo", true),
+                None => self.show_message("nothing to undo", true),
             },
             "redo" => match self.redo.pop() {
                 Some((t, cur)) => {
@@ -307,7 +310,7 @@ impl Grid {
                     self.cur = cur;
                     self.clamp();
                 }
-                None => self.say("nothing to redo", true),
+                None => self.show_message("nothing to redo", true),
             },
             "file.save" => self.save(),
             "quit" => {
@@ -326,22 +329,22 @@ impl Grid {
     /// Writes the table to its file and marks it as saved.
     pub fn save(&mut self) {
         let Some(path) = &self.path else {
-            self.say("no file to save to", true);
+            self.show_message("no file to save to", true);
             return;
         };
         match std::fs::write(path, self.table.to_text()) {
             Ok(()) => {
                 self.saved = self.table.clone();
-                self.say("saved", false);
+                self.show_message("saved", false);
             }
-            Err(e) => self.say(format!("{}: {e}", path.display()), true),
+            Err(e) => self.show_message(format!("{}: {e}", path.display()), true),
         }
     }
 
     /// Jump to the next (or previous) cell, in reading order, whose text contains the find text.
     fn find_next(&mut self, forward: bool) {
         if self.find.is_empty() {
-            self.say("nothing to find (/ to search)", true);
+            self.show_message("nothing to find (/ to search)", true);
             return;
         }
         let needle = self.find.to_lowercase();
@@ -356,7 +359,7 @@ impl Grid {
                 return;
             }
         }
-        self.say(format!("{} not found", self.find), true);
+        self.show_message(format!("{} not found", self.find), true);
     }
 
     /// The drawn width of each column, from its longest cell within sane bounds.
@@ -569,7 +572,7 @@ impl ui::app::Screen for Grid {
     }
 
     fn run_action(&mut self, id: &'static str, _host: &mut dyn ui::app::Host) -> Request {
-        self.act(id)
+        self.run_action_id(id)
     }
 
     fn on_keypress(&mut self) {
@@ -578,7 +581,7 @@ impl ui::app::Screen for Grid {
 
     /// Tells the user the key sequence they typed does nothing.
     fn on_unbound_keys(&mut self, keys: &str) {
-        self.say(format!("{keys} is not bound"), true);
+        self.show_message(format!("{keys} is not bound"), true);
     }
 
     fn nav(&mut self) -> Option<&mut dyn Navigable> {

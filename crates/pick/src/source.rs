@@ -89,8 +89,8 @@ fn walk(
             if entry.depth() == 0 || !((files && ft.is_file()) || (dirs && ft.is_dir())) {
                 continue;
             }
-            let rela: &Path = entry.path().strip_prefix(&root).unwrap_or(entry.path());
-            if let Some(s) = rela.to_str() {
+            let rel_path: &Path = entry.path().strip_prefix(&root).unwrap_or(entry.path());
+            if let Some(s) = rel_path.to_str() {
                 let mut s = s.to_string();
                 if ft.is_dir() {
                     s.push('/');

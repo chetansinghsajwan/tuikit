@@ -74,11 +74,11 @@ impl Panel {
     /// in the footer, and Esc cancels them.
     pub(super) fn paste(&mut self) -> Outcome {
         if self.job.is_some() {
-            self.say("a paste is already running (Esc cancels it)", true);
+            self.show_message("a paste is already running (Esc cancels it)", true);
             return Outcome::None;
         }
         let Some(clip) = self.clip.take() else {
-            self.say("nothing to paste (yank with y, cut with x)", true);
+            self.show_message("nothing to paste (yank with y, cut with x)", true);
             return Outcome::None;
         };
         let dir = self.target_dir();
@@ -125,12 +125,12 @@ impl Panel {
         self.expanded.insert(dir);
         self.refresh();
         if result.failed.is_empty() {
-            self.say(
+            self.show_message(
                 format!("pasted {} item{}", result.done, if result.done == 1 { "" } else { "s" }),
                 false,
             );
         } else {
-            self.say(result.failed.join("; "), true);
+            self.show_message(result.failed.join("; "), true);
         }
         if result.moved.is_empty() { Outcome::None } else { Outcome::Moved(result.moved) }
     }

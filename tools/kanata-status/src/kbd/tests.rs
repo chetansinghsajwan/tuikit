@@ -32,9 +32,12 @@ const SAMPLE: &str = r#"
 )
 "#;
 
-/// Shorthand for the `Action::Keys` the tests expect.
-fn keys(label: &str, outputs: &[&str]) -> Action {
-    Action::Keys { label: label.into(), outputs: outputs.iter().map(|s| s.to_string()).collect() }
+/// Shorthand for the `KeyAction::Keys` the tests expect.
+fn keys(label: &str, outputs: &[&str]) -> KeyAction {
+    KeyAction::Keys {
+        label: label.into(),
+        outputs: outputs.iter().map(|s| s.to_string()).collect(),
+    }
 }
 
 #[test]
@@ -47,11 +50,11 @@ fn rows_follow_source_lines() {
 fn actions_of_main() {
     let cfg = Config::parse(SAMPLE).unwrap();
     assert_eq!(cfg.action("main", "main", "q"), keys("cut", &["lctl", "x"]));
-    assert_eq!(cfg.action("main", "main", "w"), Action::Switch("ins".into()));
-    assert_eq!(cfg.action("main", "main", "e"), Action::Hold("nav".into()));
+    assert_eq!(cfg.action("main", "main", "w"), KeyAction::Switch("ins".into()));
+    assert_eq!(cfg.action("main", "main", "e"), KeyAction::Hold("nav".into()));
     assert_eq!(cfg.action("main", "main", "a"), keys("ctl", &["lctl"]));
     assert_eq!(cfg.action("main", "main", "s"), keys("!", &["lsft", "1"]));
-    assert_eq!(cfg.action("main", "main", "spc"), Action::Blocked);
+    assert_eq!(cfg.action("main", "main", "spc"), KeyAction::Blocked);
 }
 
 #[test]

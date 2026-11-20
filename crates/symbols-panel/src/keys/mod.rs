@@ -52,7 +52,7 @@ pub const ACTIONS: &[Action] = &[
 pub const GROUPS: &[Group] = &[Group { prefix: "leader z", name: "fold" }];
 
 /// The ids of `ACTIONS`, to tell the explorer's own actions from a host's.
-pub fn owns(id: &str) -> bool {
+pub fn is_own_action(id: &str) -> bool {
     ACTIONS.iter().any(|a| a.id == id)
 }
 

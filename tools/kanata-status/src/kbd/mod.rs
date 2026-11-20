@@ -53,7 +53,7 @@ fn parse(text: &str) -> Vec<Node> {
 
 /// What a key does in a layer.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Action {
+pub enum KeyAction {
     /// Falls through to the layer below (or the key itself when nothing is below).
     Transparent,
     /// Does nothing.
@@ -72,8 +72,8 @@ pub enum Action {
 #[derive(Debug, Default)]
 pub struct Layer {
     pub name: String,
-    keys: HashMap<String, Action>,
-    default: Option<Action>,
+    keys: HashMap<String, KeyAction>,
+    default: Option<KeyAction>,
 }
 
 /// The layout and the layers read from a kanata config.
@@ -122,15 +122,15 @@ impl Config {
         self.layers
             .iter()
             .flat_map(|l| l.keys.values().chain(l.default.iter()))
-            .any(|a| matches!(a, Action::Hold(n) if n == name))
+            .any(|a| matches!(a, KeyAction::Hold(n) if n == name))
     }
 
     /// What `key` does in `layer` when `base` is the layer below it.
-    pub fn action(&self, layer: &str, base: &str, key: &str) -> Action {
+    pub fn action(&self, layer: &str, base: &str, key: &str) -> KeyAction {
         let own = self.layer(layer).map(|l| l.action(key));
         match own {
-            Some(Action::Transparent) if layer != base => self.action(base, base, key),
-            Some(Action::Transparent) | None => pass(key),
+            Some(KeyAction::Transparent) if layer != base => self.action(base, base, key),
+            Some(KeyAction::Transparent) | None => pass(key),
             Some(a) => a,
         }
     }
@@ -138,14 +138,14 @@ impl Config {
 
 impl Layer {
     /// What `key` does in this layer, falling back to the `___` default and then to transparent.
-    fn action(&self, key: &str) -> Action {
-        self.keys.get(key).or(self.default.as_ref()).cloned().unwrap_or(Action::Transparent)
+    fn action(&self, key: &str) -> KeyAction {
+        self.keys.get(key).or(self.default.as_ref()).cloned().unwrap_or(KeyAction::Transparent)
     }
 }
 
 /// A key that does what it says.
-fn pass(key: &str) -> Action {
-    Action::Keys { label: key.to_owned(), outputs: vec![key.to_owned()] }
+fn pass(key: &str) -> KeyAction {
+    KeyAction::Keys { label: key.to_owned(), outputs: vec![key.to_owned()] }
 }
 
 /// Gathers `defalias` names and bodies, including those inside `platform` blocks.
@@ -242,18 +242,18 @@ fn layer_of(
 }
 
 /// Works out what a key's body does: an alias, a layer switch, plain keys or something else.
-fn action_of(node: &Node, aliases: &HashMap<String, Node>) -> Action {
+fn action_of(node: &Node, aliases: &HashMap<String, Node>) -> KeyAction {
     match node {
         Node::Atom(a, _) => match a.as_str() {
-            "_" => Action::Transparent,
-            "XX" => Action::Blocked,
+            "_" => KeyAction::Transparent,
+            "XX" => KeyAction::Blocked,
             _ => match a.strip_prefix('@') {
                 Some(name) => match aliases.get(name).map(|n| action_of(n, aliases)) {
-                    Some(Action::Keys { outputs, .. }) => {
-                        Action::Keys { label: name.to_owned(), outputs }
+                    Some(KeyAction::Keys { outputs, .. }) => {
+                        KeyAction::Keys { label: name.to_owned(), outputs }
                     }
-                    Some(Action::Transparent | Action::Blocked) | None => {
-                        Action::Other(name.to_owned())
+                    Some(KeyAction::Transparent | KeyAction::Blocked) | None => {
+                        KeyAction::Other(name.to_owned())
                     }
                     Some(other) => other,
                 },
@@ -262,20 +262,20 @@ fn action_of(node: &Node, aliases: &HashMap<String, Node>) -> Action {
         },
         Node::List(items) => {
             match (items.first().and_then(Node::atom), items.get(1).and_then(Node::atom)) {
-                (Some("layer-switch"), Some(l)) => Action::Switch(l.to_owned()),
-                (Some("layer-while-held"), Some(l)) => Action::Hold(l.to_owned()),
+                (Some("layer-switch"), Some(l)) => KeyAction::Switch(l.to_owned()),
+                (Some("layer-while-held"), Some(l)) => KeyAction::Hold(l.to_owned()),
                 (Some("fork"), _) => {
-                    items.get(1).map_or(Action::Other("fork".into()), |n| action_of(n, aliases))
+                    items.get(1).map_or(KeyAction::Other("fork".into()), |n| action_of(n, aliases))
                 }
-                (Some(head), _) => Action::Other(head.to_owned()),
-                (None, _) => Action::Other("?".into()),
+                (Some(head), _) => KeyAction::Other(head.to_owned()),
+                (None, _) => KeyAction::Other("?".into()),
             }
         }
     }
 }
 
 /// `a`, `lctl`, `S-1`, `C-x`: a key with optional modifier prefixes.
-fn keys_of(atom: &str) -> Action {
+fn keys_of(atom: &str) -> KeyAction {
     let mut mods = Vec::new();
     let mut rest = atom;
     while let Some((m, tail)) = rest.split_once('-')
@@ -291,7 +291,7 @@ fn keys_of(atom: &str) -> Action {
     };
     let mut outputs = mods;
     outputs.push(rest.to_owned());
-    Action::Keys { label, outputs }
+    KeyAction::Keys { label, outputs }
 }
 
 /// Maps a kanata modifier prefix such as `C` or `RS` to the key name it presses.

@@ -6,11 +6,11 @@ impl Panel {
     /// The git letter and kind to show for a row, if it has a change.
     pub(super) fn git_state(&self, row: &Row) -> Option<(char, Kind)> {
         let (repo, status) = self.git.as_ref()?;
-        let rela = repo.relative(&row.path)?;
+        let rel_path = repo.relative(&row.path)?;
         if row.is_dir {
-            status.dir(&rela).map(|k| (k.letter(), k))
+            status.dir(&rel_path).map(|k| (k.letter(), k))
         } else {
-            status.get(&rela)?.sign()
+            status.get(&rel_path)?.sign()
         }
     }
 
@@ -18,7 +18,7 @@ impl Panel {
     pub(super) fn git_dir_kinds(&self, row: &Row) -> Vec<Kind> {
         let Some((repo, status)) = self.git.as_ref() else { return Vec::new() };
         match repo.relative(&row.path) {
-            Some(rela) if row.is_dir => status.dir_kinds(&rela),
+            Some(rel_path) if row.is_dir => status.dir_kinds(&rel_path),
             _ => Vec::new(),
         }
     }

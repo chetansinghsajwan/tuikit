@@ -537,8 +537,8 @@ impl Picker {
     /// The git status letter and kind of the file `cand`, for the sign beside its row.
     fn git_state(&self, cand: &str) -> Option<(char, git_core::Kind)> {
         let (repo, status) = self.git.as_ref()?;
-        let rela = repo.relative(&self.opts.root.join(cand))?;
-        let fs = status.get(&rela)?;
+        let rel_path = repo.relative(&self.opts.root.join(cand))?;
+        let fs = status.get(&rel_path)?;
         let k = fs.unstaged.or(fs.staged)?;
         let c = match (fs.unstaged, k) {
             (Some(git_core::Kind::Untracked), _) => '?',

@@ -34,7 +34,7 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_view(&mut self, id: &str) -> Outcome {
+    pub(super) fn run_view_action(&mut self, id: &str) -> Outcome {
         match id {
             "view.ignored" => {
                 self.show_ignored = !self.show_ignored;
@@ -46,14 +46,14 @@ impl Panel {
             }
             "view.raw" => {
                 pv::set_raw_tables(!pv::raw_tables());
-                self.say(
+                self.show_message(
                     if pv::raw_tables() { "tables show as text" } else { "tables show as tables" },
                     false,
                 );
             }
             "view.columns" => {
                 self.opts.linemode = self.opts.linemode.next();
-                self.say(self.opts.linemode.label(), false);
+                self.show_message(self.opts.linemode.label(), false);
             }
             "view.refresh" => self.refresh(),
             _ => {}

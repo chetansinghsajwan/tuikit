@@ -154,8 +154,8 @@ impl Repo {
 
     /// Changed lines of `path` in the work tree compared to `HEAD`.
     pub fn line_changes(&self, path: &Path) -> Result<Vec<LineChange>, Error> {
-        let rela = self.relative(path).ok_or_else(|| err("path is outside the work tree"))?;
-        lines::compute(&self.repo, &self.root, &rela)
+        let rel_path = self.relative(path).ok_or_else(|| err("path is outside the work tree"))?;
+        lines::compute(&self.repo, &self.root, &rel_path)
     }
 }
 

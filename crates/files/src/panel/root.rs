@@ -17,7 +17,7 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_root(&mut self, id: &str) -> Outcome {
+    pub(super) fn run_root_action(&mut self, id: &str) -> Outcome {
         match id {
             "root.into" => {
                 if let Some(row) = self.rows.get(self.cursor).filter(|r| r.is_dir) {

@@ -113,7 +113,8 @@ pub fn spawn(
                 continue;
             }
             let path = entry.path();
-            let Some(rela) = path.strip_prefix(&root).unwrap_or(path).to_str().map(str::to_string)
+            let Some(rel_path) =
+                path.strip_prefix(&root).unwrap_or(path).to_str().map(str::to_string)
             else {
                 continue;
             };
@@ -136,7 +137,7 @@ pub fn spawn(
                         0..0
                     };
                     let c = Candidate::grep(Loc {
-                        path: rela.clone(),
+                        path: rel_path.clone(),
                         line: lnum as u32,
                         col,
                         text,

@@ -156,7 +156,7 @@ impl App {
     }
 
     /// Shows a message on the status line until the next key; `error` colors it as an error.
-    fn say(&mut self, msg: impl Into<String>, error: bool) {
+    fn show_message(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
@@ -176,9 +176,9 @@ impl App {
         if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
             let job = self.job.take().expect("checked above");
             match job.thread.join() {
-                Ok(Ok(())) => self.say(format!("{} done", job.label), false),
-                Ok(Err(e)) => self.say(e.to_string(), true),
-                Err(_) => self.say("the connection attempt crashed", true),
+                Ok(Ok(())) => self.show_message(format!("{} done", job.label), false),
+                Ok(Err(e)) => self.show_message(e.to_string(), true),
+                Err(_) => self.show_message("the connection attempt crashed", true),
             }
             self.refresh();
             return true;
@@ -211,8 +211,8 @@ impl App {
             Mode::ForgetWifi(ssid) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
                     match self.wifi.forget(&ssid) {
-                        Ok(()) => self.say(format!("forgot {ssid}"), false),
-                        Err(e) => self.say(e.to_string(), true),
+                        Ok(()) => self.show_message(format!("forgot {ssid}"), false),
+                        Err(e) => self.show_message(e.to_string(), true),
                     }
                     self.refresh();
                 }
@@ -220,8 +220,8 @@ impl App {
             Mode::ForgetDevice(address, name) => {
                 if matches!(key.code, KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter) {
                     match self.bt.remove(&address) {
-                        Ok(()) => self.say(format!("forgot {name}"), false),
-                        Err(e) => self.say(e.to_string(), true),
+                        Ok(()) => self.show_message(format!("forgot {name}"), false),
+                        Err(e) => self.show_message(e.to_string(), true),
                     }
                     self.refresh();
                 }
@@ -233,7 +233,7 @@ impl App {
     /// Whether a connection attempt is already running; says so, since only one runs at a time.
     fn busy(&mut self) -> bool {
         if self.job.is_some() {
-            self.say("busy: wait for the current connection attempt", true);
+            self.show_message("busy: wait for the current connection attempt", true);
             return true;
         }
         false
@@ -280,7 +280,7 @@ impl App {
     }
 
     /// Runs an action by id: the focus ones here, the per-pane ones in their own handlers.
-    fn act(&mut self, id: &'static str) -> Request {
+    fn run_action_id(&mut self, id: &'static str) -> Request {
         match id {
             "focus.next" => self.focus_by(1),
             "focus.prev" => self.focus_by(-1),
@@ -313,31 +313,31 @@ impl App {
             }
             "wifi.disconnect" => match self.wifi.disconnect() {
                 Ok(()) => {
-                    self.say("disconnected", false);
+                    self.show_message("disconnected", false);
                     self.refresh();
                 }
-                Err(e) => self.say(e.to_string(), true),
+                Err(e) => self.show_message(e.to_string(), true),
             },
             "wifi.forget" => match self.network() {
                 Some(n) if n.known => self.mode = Mode::ForgetWifi(n.ssid.clone()),
-                Some(_) => self.say("no saved connection for this network", true),
+                Some(_) => self.show_message("no saved connection for this network", true),
                 None => {}
             },
             "wifi.scan" => match self.wifi.scan() {
                 Ok(()) => {
-                    self.say("scanning (the list updates in a few seconds)", false);
+                    self.show_message("scanning (the list updates in a few seconds)", false);
                     self.refresh();
                 }
-                Err(e) => self.say(e.to_string(), true),
+                Err(e) => self.show_message(e.to_string(), true),
             },
             "wifi.power" => {
                 let on = !self.wifi_status.enabled;
                 match self.wifi.set_enabled(on) {
                     Ok(()) => {
-                        self.say(if on { "Wi-Fi on" } else { "Wi-Fi off" }, false);
+                        self.show_message(if on { "Wi-Fi on" } else { "Wi-Fi off" }, false);
                         self.refresh();
                     }
-                    Err(e) => self.say(e.to_string(), true),
+                    Err(e) => self.show_message(e.to_string(), true),
                 }
             }
             _ => {}
@@ -359,10 +359,10 @@ impl App {
                 let Some(d) = self.device().cloned() else { return };
                 match self.bt.disconnect(&d.address) {
                     Ok(()) => {
-                        self.say(format!("disconnected {}", d.name), false);
+                        self.show_message(format!("disconnected {}", d.name), false);
                         self.refresh();
                     }
-                    Err(e) => self.say(e.to_string(), true),
+                    Err(e) => self.show_message(e.to_string(), true),
                 }
             }
             "bt.remove" => {
@@ -374,7 +374,7 @@ impl App {
                 let Some(d) = self.device().cloned() else { return };
                 match self.bt.set_trusted(&d.address, !d.trusted) {
                     Ok(()) => {
-                        self.say(
+                        self.show_message(
                             if d.trusted {
                                 format!("{} is no longer trusted", d.name)
                             } else {
@@ -384,27 +384,30 @@ impl App {
                         );
                         self.refresh();
                     }
-                    Err(e) => self.say(e.to_string(), true),
+                    Err(e) => self.show_message(e.to_string(), true),
                 }
             }
             "bt.scan" => {
                 let on = !self.bt_status.discovering;
                 match self.bt.scan(on) {
                     Ok(()) => {
-                        self.say(if on { "looking for devices" } else { "stopped looking" }, false);
+                        self.show_message(
+                            if on { "looking for devices" } else { "stopped looking" },
+                            false,
+                        );
                         self.refresh();
                     }
-                    Err(e) => self.say(e.to_string(), true),
+                    Err(e) => self.show_message(e.to_string(), true),
                 }
             }
             "bt.power" => {
                 let on = !self.bt_status.powered;
                 match self.bt.set_powered(on) {
                     Ok(()) => {
-                        self.say(if on { "Bluetooth on" } else { "Bluetooth off" }, false);
+                        self.show_message(if on { "Bluetooth on" } else { "Bluetooth off" }, false);
                         self.refresh();
                     }
-                    Err(e) => self.say(e.to_string(), true),
+                    Err(e) => self.show_message(e.to_string(), true),
                 }
             }
             _ => {}
@@ -437,7 +440,7 @@ impl ui::app::Screen for App {
     }
 
     fn run_action(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
-        self.act(id)
+        self.run_action_id(id)
     }
 
     fn on_keypress(&mut self) {
@@ -445,7 +448,7 @@ impl ui::app::Screen for App {
     }
 
     fn on_unbound_keys(&mut self, keys: &str) {
-        self.say(format!("{keys} is not bound"), true);
+        self.show_message(format!("{keys} is not bound"), true);
     }
 
     fn on_tick(&mut self) -> bool {

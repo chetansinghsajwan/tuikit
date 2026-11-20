@@ -66,7 +66,7 @@ pub fn run(opts: Options) -> io::Result<()> {
         shown: None,
         opts,
     };
-    let mut actions = files::keys::hosted();
+    let mut actions = files::keys::hosted_actions();
     actions.extend_from_slice(ACTIONS);
     let result = ui::app::Shell::new("files")
         .actions(actions)
@@ -94,16 +94,16 @@ impl ui::app::Screen for Explorer {
     fn on_event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
         if self.tabs.active().captures_input(ev) {
             let action = self.panel().handle_captured(ev);
-            return self.act(action, host);
+            return self.carry_out(action, host);
         }
         Request::None
     }
 
     /// The panel's actions run on the panel, the app's own (tabs, properties) here.
     fn run_action(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
-        if files::keys::owns(id) {
+        if files::keys::is_own_action(id) {
             let action = self.panel().run(id);
-            self.act(action, host)
+            self.carry_out(action, host)
         } else {
             self.command(id);
             Request::None
@@ -184,8 +184,8 @@ impl Explorer {
     }
 
     /// Carries out what the panel asked for: open, search, rename, close or a command.
-    fn act(&mut self, action: Outcome, host: &mut dyn Host) -> Request {
-        match action {
+    fn carry_out(&mut self, outcome: Outcome, host: &mut dyn Host) -> Request {
+        match outcome {
             Outcome::Open(path) => {
                 if let Some(file) = &self.opts.chooser_file {
                     if let Err(e) = fs::write(file, path.as_os_str().as_encoded_bytes()) {
@@ -196,7 +196,7 @@ impl Explorer {
                 }
                 let result =
                     with_suspended(host, || open(&path)).unwrap_or_else(|e| Err(e.to_string()));
-                self.report(result);
+                self.show_failure(result);
                 self.panel().refresh();
             }
             Outcome::Close => {
@@ -227,7 +227,7 @@ impl Explorer {
             Outcome::OpenWith(path, cmd) => {
                 let result = with_suspended(host, || open_with(&cmd, &path))
                     .unwrap_or_else(|e| Err(e.to_string()));
-                self.report(result);
+                self.show_failure(result);
                 self.panel().refresh();
             }
             Outcome::Command(id) => self.command(id),
@@ -246,7 +246,7 @@ impl Explorer {
     }
 
     /// Shows a failure from an external command as an error notice on the panel.
-    fn report(&mut self, result: Result<(), String>) {
+    fn show_failure(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
             self.panel().notify(e, true);
         }

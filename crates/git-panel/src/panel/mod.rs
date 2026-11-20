@@ -37,7 +37,7 @@ pub enum Outcome {
 /// One changed file: what of it is staged and what is not (`git status -s` columns).
 #[derive(Debug, Clone)]
 struct Change {
-    rela: PathBuf,
+    rel_path: PathBuf,
     staged: Option<Kind>,
     unstaged: Option<Kind>,
     /// A submodule: a folder that is a repository of its own (its change is a moved commit or inner
@@ -212,14 +212,14 @@ impl Panel {
                     (st.staged, st.unstaged)
                 };
                 (staged.is_some() || unstaged.is_some()).then(|| Change {
-                    rela: path.to_path_buf(),
+                    rel_path: path.to_path_buf(),
                     submodule: status.is_submodule(path),
                     staged,
                     unstaged,
                 })
             })
             .collect();
-        self.all.sort_by(|a, b| a.rela.cmp(&b.rela));
+        self.all.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
         self.rows.clear();
         self.items.clear();
         if self.tree {
@@ -228,15 +228,14 @@ impl Panel {
                 // A submodule with changes inside is the folder of those files, not a second row
                 // (staging the folder stages its recorded commit too).
                 if change.submodule
-                    && self
-                        .all
-                        .iter()
-                        .any(|c| c.rela != change.rela && c.rela.starts_with(&change.rela))
+                    && self.all.iter().any(|c| {
+                        c.rel_path != change.rel_path && c.rel_path.starts_with(&change.rel_path)
+                    })
                 {
                     continue;
                 }
                 let mut node = &mut root;
-                if let Some(dir) = change.rela.parent() {
+                if let Some(dir) = change.rel_path.parent() {
                     for part in dir.components() {
                         node = node
                             .dirs
@@ -297,7 +296,7 @@ impl Panel {
     /// Path and whether it is a folder, of the `n`th selectable row.
     fn row_key(&self, n: usize) -> Option<(PathBuf, bool)> {
         match self.rows.get(*self.items.get(n)?)? {
-            Row::File { change, .. } => Some((change.rela.clone(), false)),
+            Row::File { change, .. } => Some((change.rel_path.clone(), false)),
             Row::Folder { path, .. } => Some((path.clone(), true)),
         }
     }
@@ -312,7 +311,7 @@ impl Panel {
 
     /// The changes below the folder `path`.
     fn changes_under(&self, path: &Path) -> Vec<&Change> {
-        self.all.iter().filter(|c| c.rela.starts_with(path)).collect()
+        self.all.iter().filter(|c| c.rel_path.starts_with(path)).collect()
     }
 
     /// The highlighted file.
@@ -324,7 +323,7 @@ impl Panel {
     }
 
     /// Shows a message in the footer; `error` colours it as a failure.
-    fn say(&mut self, msg: impl Into<String>, error: bool) {
+    fn show_message(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
@@ -339,12 +338,12 @@ impl Panel {
     fn finish(&mut self, what: &str, result: Result<(), git_core::Error>) -> Outcome {
         match result {
             Ok(()) => {
-                self.say(what, false);
+                self.show_message(what, false);
                 self.refresh();
                 Outcome::Changed
             }
             Err(e) => {
-                self.say(e.to_string(), true);
+                self.show_message(e.to_string(), true);
                 Outcome::None
             }
         }
@@ -370,9 +369,9 @@ impl Panel {
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Commit(input) => self.commit_key(input, ev, key),
-            Mode::Discard(rela, untracked) => match key.code {
+            Mode::Discard(rel_path, untracked) => match key.code {
                 KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
-                    let r = self.repo.discard(&rela, untracked);
+                    let r = self.repo.discard(&rel_path, untracked);
                     self.finish(if untracked { "deleted" } else { "discarded" }, r)
                 }
                 _ => Outcome::None,
@@ -388,7 +387,7 @@ impl Panel {
 
     /// Shows a message in the footer; `error` colours it as a failure.
     pub fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.say(msg, error);
+        self.show_message(msg, error);
     }
 
     /// Handles a key press: first the commit and discard prompts, else the keymap.
@@ -399,10 +398,10 @@ impl Panel {
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Commit(input) => return self.commit_key(input, ev, key),
-            Mode::Discard(rela, untracked) => {
+            Mode::Discard(rel_path, untracked) => {
                 return match key.code {
                     KeyCode::Char('y' | 'Y' | 'd' | 'D') | KeyCode::Enter => {
-                        let r = self.repo.discard(&rela, untracked);
+                        let r = self.repo.discard(&rel_path, untracked);
                         self.finish(if untracked { "deleted" } else { "discarded" }, r)
                     }
                     _ => Outcome::None,
@@ -415,7 +414,7 @@ impl Panel {
             ui::keys::Feed::Run(id) => self.run(id),
             ui::keys::Feed::NoBinding => {
                 let seq = self.keymap.rejected().to_string();
-                self.say(format!("{seq} is not bound"), true);
+                self.show_message(format!("{seq} is not bound"), true);
                 Outcome::None
             }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
@@ -449,7 +448,7 @@ impl Panel {
 
     /// Run an action by id (what a key, the leader menu or a palette resolves to).
     pub fn run(&mut self, id: &'static str) -> Outcome {
-        if !keys::owns(id) {
+        if !keys::is_own_action(id) {
             return Outcome::Command(id);
         }
         self.message = None;
@@ -475,7 +474,7 @@ impl Panel {
                     return Outcome::None;
                 }
                 if let Some(c) = self.current() {
-                    return Outcome::Open(self.root.join(&c.rela));
+                    return Outcome::Open(self.root.join(&c.rel_path));
                 }
             }
             "change.stage" => {
@@ -489,11 +488,11 @@ impl Panel {
                 }
                 if targets.iter().any(Change::open) {
                     let paths: Vec<PathBuf> =
-                        targets.iter().filter(|c| c.open()).map(|c| c.rela.clone()).collect();
+                        targets.iter().filter(|c| c.open()).map(|c| c.rel_path.clone()).collect();
                     let r = self.repo.stage(&paths);
                     return self.finish("staged", r);
                 }
-                let paths: Vec<PathBuf> = targets.iter().map(|c| c.rela.clone()).collect();
+                let paths: Vec<PathBuf> = targets.iter().map(|c| c.rel_path.clone()).collect();
                 let r = self.repo.unstage(&paths);
                 return self.finish("unstaged", r);
             }
@@ -503,12 +502,12 @@ impl Panel {
                         .changes_under(&path)
                         .into_iter()
                         .filter(|c| c.staged.is_some())
-                        .map(|c| c.rela.clone())
+                        .map(|c| c.rel_path.clone())
                         .collect(),
                     None => self
                         .current()
                         .filter(|c| c.staged.is_some())
-                        .map(|c| c.rela.clone())
+                        .map(|c| c.rel_path.clone())
                         .into_iter()
                         .collect(),
                 };
@@ -528,15 +527,21 @@ impl Panel {
             }
             "change.discard" => {
                 if self.current_folder().is_some() {
-                    self.say("discard works on one file at a time", true);
+                    self.show_message("discard works on one file at a time", true);
                     return Outcome::None;
                 }
                 // Discard: only work-tree changes, never the staged ones.
                 if let Some(c) = self.current().cloned() {
                     match c.unstaged {
-                        Some(Kind::Conflict) => self.say("resolve the conflict first", true),
-                        Some(kind) => self.mode = Mode::Discard(c.rela, kind == Kind::Untracked),
-                        None => self.say("nothing to discard here (unstage it first)", true),
+                        Some(Kind::Conflict) => {
+                            self.show_message("resolve the conflict first", true)
+                        }
+                        Some(kind) => {
+                            self.mode = Mode::Discard(c.rel_path, kind == Kind::Untracked)
+                        }
+                        None => {
+                            self.show_message("nothing to discard here (unstage it first)", true)
+                        }
                     }
                 }
             }
@@ -544,7 +549,7 @@ impl Panel {
                 if self.all.iter().any(|c| c.staged.is_some()) {
                     self.mode = Mode::Commit(Input::default());
                 } else {
-                    self.say("nothing staged to commit (stage with s)", true);
+                    self.show_message("nothing staged to commit (stage with s)", true);
                 }
             }
             "commit.amend" => {
@@ -552,16 +557,16 @@ impl Panel {
                     let r = self.repo.amend(None);
                     return self.finish("amended the last commit", r);
                 }
-                self.say("nothing staged to add to the last commit", true);
+                self.show_message("nothing staged to add to the last commit", true);
             }
             "view.tree" => {
                 self.tree = !self.tree;
                 self.refresh();
-                self.say(if self.tree { "tree view" } else { "list view" }, false);
+                self.show_message(if self.tree { "tree view" } else { "list view" }, false);
             }
             "view.refresh" => {
                 self.refresh();
-                self.say("refreshed", false);
+                self.show_message("refreshed", false);
             }
             "palette" => return Outcome::Palette,
             "help" => return Outcome::Help,
@@ -580,12 +585,12 @@ impl Panel {
                 let message = input.value().to_string();
                 match self.repo.create_commit(&message) {
                     Ok(summary) => {
-                        self.say(format!("committed {summary}"), false);
+                        self.show_message(format!("committed {summary}"), false);
                         self.refresh();
                         Outcome::Changed
                     }
                     Err(e) => {
-                        self.say(e.to_string(), true);
+                        self.show_message(e.to_string(), true);
                         // Keep what was typed so the message is not lost.
                         self.mode = Mode::Commit(input);
                         Outcome::None
@@ -619,10 +624,10 @@ impl Panel {
                 ]);
                 message.into_iter().chain(std::iter::once(prompt)).collect()
             }
-            Mode::Discard(rela, untracked) => {
+            Mode::Discard(rel_path, untracked) => {
                 let what = if *untracked { "Delete" } else { "Discard" };
                 vec![Line::from(Span::styled(
-                    format!("{what} {}? d again", rela.display()),
+                    format!("{what} {}? d again", rel_path.display()),
                     Style::new().fg(c.warning.into()),
                 ))]
             }

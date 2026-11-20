@@ -48,7 +48,7 @@ impl App {
         } else {
             what.to_string()
         };
-        self.say(shown, false);
+        self.show_message(shown, false);
     }
 
     /// Whether commit `i` of the list matches the search.
@@ -73,7 +73,7 @@ impl App {
     pub(super) fn search_step(&mut self, step: isize) {
         let n = self.commits.len();
         if self.search.is_none() || n == 0 {
-            self.say("no search: / starts one", true);
+            self.show_message("no search: / starts one", true);
             return;
         }
         let from = self.lists[1].cursor;
@@ -86,9 +86,9 @@ impl App {
                 self.lists[1].cursor = i;
                 self.preview_scroll = 0;
                 let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
-                self.say(format!("match {nth} of {total}"), false);
+                self.show_message(format!("match {nth} of {total}"), false);
             }
-            None => self.say(
+            None => self.show_message(
                 format!("no commit matches \"{}\"", self.search.clone().unwrap_or_default()),
                 true,
             ),

@@ -83,7 +83,7 @@ fn on(p: &mut Panel, name: &str) {
         .items
         .iter()
         .position(
-            |&i| matches!(&p.rows[i], Row::File { change, .. } if change.rela == Path::new(name)),
+            |&i| matches!(&p.rows[i], Row::File { change, .. } if change.rel_path == Path::new(name)),
         )
         .unwrap_or_else(|| panic!("{name} listed"));
     p.cursor = i;
@@ -107,7 +107,7 @@ fn one_tree_with_two_marks_per_file_and_icons() {
     // A file that is partly staged is one row with both marks (`M M`).
     fs::write(p.root.join("b.txt"), "b1\nmore\n").unwrap();
     p.refresh();
-    assert_eq!(p.all.iter().filter(|c| c.rela == Path::new("b.txt")).count(), 1);
+    assert_eq!(p.all.iter().filter(|c| c.rel_path == Path::new("b.txt")).count(), 1);
     assert!(draw(&mut p).join("\n").contains("M M"));
 }
 
@@ -141,7 +141,7 @@ fn s_toggles_stage_and_unstage_and_the_cursor_stays_on_the_file() {
     on(&mut p, "new.txt");
     assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert_eq!(
-        p.current().map(|c| (c.rela.clone(), c.staged)),
+        p.current().map(|c| (c.rel_path.clone(), c.staged)),
         Some((PathBuf::from("new.txt"), Some(Kind::Added)))
     );
     assert_eq!(press(&mut p, "s"), Outcome::Changed); // all staged: back out
@@ -188,12 +188,12 @@ fn the_tree_groups_by_folder_stages_a_folder_folds_and_toggles_to_a_list() {
     // s on the folder stages everything below it, s again unstages it.
     assert_eq!(press(&mut p, "s"), Outcome::Changed);
     assert!(
-        p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| !c.open()),
+        p.all.iter().filter(|c| c.rel_path.starts_with("src")).all(|c| !c.open()),
         "{:?}",
         p.message
     );
     assert_eq!(press(&mut p, "s"), Outcome::Changed);
-    assert!(p.all.iter().filter(|c| c.rela.starts_with("src")).all(|c| c.staged.is_none()));
+    assert!(p.all.iter().filter(|c| c.rel_path.starts_with("src")).all(|c| c.staged.is_none()));
     // t switches to the flat list with the full paths.
     press(&mut p, "t");
     let text = draw(&mut p).join("\n");

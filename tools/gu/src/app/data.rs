@@ -98,12 +98,12 @@ impl App {
     pub fn edited(&mut self, ok: bool) {
         self.reload_all();
         if !ok {
-            self.say("the editor exited with an error", true);
+            self.show_message("the editor exited with an error", true);
         }
     }
 
     /// Show a message in the status line (an error when `error` is set).
-    pub(super) fn say(&mut self, msg: impl Into<String>, error: bool) {
+    pub(super) fn show_message(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
@@ -132,8 +132,8 @@ impl App {
     /// Run a git change, report the outcome, reload everything.
     pub(super) fn run(&mut self, ok: String, f: impl FnOnce(&Repo) -> Result<(), git_core::Error>) {
         match f(&self.repo) {
-            Ok(()) => self.say(ok, false),
-            Err(e) => self.say(e.to_string(), true),
+            Ok(()) => self.show_message(ok, false),
+            Err(e) => self.show_message(e.to_string(), true),
         }
         self.reload_all();
     }

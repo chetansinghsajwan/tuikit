@@ -25,12 +25,12 @@ fn check_relative(name: &str) -> io::Result<&Path> {
 /// Create `name` inside `dir`: a file, or a folder when `name` ends with `/`.
 /// Missing parent folders are created. Returns the new path and whether it is a folder.
 pub fn create(dir: &Path, name: &str) -> io::Result<(PathBuf, bool)> {
-    let rela = check_relative(name)?;
-    let path = dir.join(rela);
+    let rel_path = check_relative(name)?;
+    let path = dir.join(rel_path);
     if path.symlink_metadata().is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            format!("{} already exists", rela.display()),
+            format!("{} already exists", rel_path.display()),
         ));
     }
     let is_dir = name.ends_with('/');
@@ -48,15 +48,15 @@ pub fn create(dir: &Path, name: &str) -> io::Result<(PathBuf, bool)> {
 /// Rename `from` to `name` inside `from`'s folder (`name` may contain
 /// sub-folders, which are created). Never overwrites.
 pub fn rename(from: &Path, name: &str) -> io::Result<PathBuf> {
-    let rela = check_relative(name)?;
-    let to = from.parent().ok_or_else(|| invalid("no parent folder"))?.join(rela);
+    let rel_path = check_relative(name)?;
+    let to = from.parent().ok_or_else(|| invalid("no parent folder"))?.join(rel_path);
     if to == from {
         return Ok(to);
     }
     if to.symlink_metadata().is_ok() {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            format!("{} already exists", rela.display()),
+            format!("{} already exists", rel_path.display()),
         ));
     }
     if let Some(parent) = to.parent() {
@@ -219,8 +219,8 @@ pub fn plan_bulk_rename(
     let mut moves = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for (old, line) in olds.iter().zip(&lines) {
-        let rela = check_relative(line).map_err(|e| format!("{line:?}: {e}"))?;
-        let new = base.join(rela);
+        let rel_path = check_relative(line).map_err(|e| format!("{line:?}: {e}"))?;
+        let new = base.join(rel_path);
         if !seen.insert(new.clone()) {
             return Err(format!("{line:?} appears twice"));
         }

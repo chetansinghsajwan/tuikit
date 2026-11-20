@@ -60,13 +60,13 @@ pub struct Status {
 
 impl Status {
     /// The status of one repo-relative path, if it changed.
-    pub fn get(&self, rela: &Path) -> Option<&FileStatus> {
-        self.files.get(rela)
+    pub fn get(&self, rel_path: &Path) -> Option<&FileStatus> {
+        self.files.get(rel_path)
     }
 
     /// Every state found beneath a folder, most serious first (conflict, deleted, modified, added,
     /// renamed, untracked), each once: the same order whatever the order of the files is.
-    pub fn dir_kinds(&self, rela: &Path) -> Vec<Kind> {
+    pub fn dir_kinds(&self, rel_path: &Path) -> Vec<Kind> {
         let rank = |k: Kind| match k {
             Kind::Conflict => 0,
             Kind::Deleted => 1,
@@ -78,7 +78,7 @@ impl Status {
         let mut kinds: Vec<Kind> = self
             .files
             .iter()
-            .filter(|(p, _)| p.starts_with(rela))
+            .filter(|(p, _)| p.starts_with(rel_path))
             .filter_map(|(_, s)| s.primary())
             .map(|k| if k == Kind::Typechange { Kind::Modified } else { k })
             .collect();
@@ -88,13 +88,13 @@ impl Status {
     }
 
     /// The most serious state of a folder (the first of `dir_kinds`); `None` if nothing beneath it changed.
-    pub fn dir(&self, rela: &Path) -> Option<Kind> {
-        self.dir_kinds(rela).into_iter().next()
+    pub fn dir(&self, rel_path: &Path) -> Option<Kind> {
+        self.dir_kinds(rel_path).into_iter().next()
     }
 
-    /// Whether `rela` is a submodule: a folder shown and tinted like a file, its change a moved commit or edits inside.
-    pub fn is_submodule(&self, rela: &Path) -> bool {
-        self.submodules.contains(rela)
+    /// Whether `rel_path` is a submodule: a folder shown and tinted like a file, its change a moved commit or edits inside.
+    pub fn is_submodule(&self, rel_path: &Path) -> bool {
+        self.submodules.contains(rel_path)
     }
 
     /// Every changed path with its status.

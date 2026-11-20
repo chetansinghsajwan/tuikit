@@ -108,7 +108,7 @@ impl App {
                 self.preview = None;
                 self.preview_scroll = 0;
             }
-            Err(e) => self.say(e.to_string(), true),
+            Err(e) => self.show_message(e.to_string(), true),
         }
     }
 

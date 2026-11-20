@@ -25,10 +25,10 @@ fn every_action_is_described_and_no_two_share_a_key() {
 
 #[test]
 fn a_host_owning_the_keymap_gets_everything_but_what_the_shell_supplies() {
-    let hosted = hosted();
+    let hosted = hosted_actions();
     for a in &hosted {
         assert!(!a.id.starts_with("nav.") && !matches!(a.id, "palette" | "help"), "{}", a.id);
-        assert!(owns(a.id), "{} is not the panel's", a.id);
+        assert!(is_own_action(a.id), "{} is not the panel's", a.id);
     }
     for id in ["item.rename", "tree.out", "back", "quit", "search.files"] {
         assert!(hosted.iter().any(|a| a.id == id), "{id} is missing");

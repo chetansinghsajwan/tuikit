@@ -342,7 +342,7 @@ pub fn pane_actions(pane: usize) -> Vec<Action> {
 
 /// The actions of the Files pane: the git panel's own and the global ones.
 fn files_actions() -> Vec<Action> {
-    git_panel::keys::hosted().into_iter().chain(GLOBAL.iter().cloned()).collect()
+    git_panel::keys::hosted_actions().into_iter().chain(GLOBAL.iter().cloned()).collect()
 }
 
 /// The actions of each context the shell switches between: Files (0), then Branches, Commits,

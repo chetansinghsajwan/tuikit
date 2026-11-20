@@ -24,19 +24,19 @@ pub struct LineChange {
     pub end: u32,
 }
 
-/// Diff the work-tree file `rela` against its `HEAD` content and list the changed regions.
+/// Diff the work-tree file `rel_path` against its `HEAD` content and list the changed regions.
 pub(crate) fn compute(
     repo: &gix::Repository,
     root: &Path,
-    rela: &Path,
+    rel_path: &Path,
 ) -> Result<Vec<LineChange>, Error> {
-    let after = match std::fs::read(root.join(rela)) {
+    let after = match std::fs::read(root.join(rel_path)) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(err(e)),
     };
     // Content at HEAD; missing (new file, unborn HEAD) counts as empty.
-    let before = head_blob(repo, rela).unwrap_or_default();
+    let before = head_blob(repo, rel_path).unwrap_or_default();
 
     let input = InternedInput::new(before.as_slice(), after.as_slice());
     let diff = Diff::compute(Algorithm::Histogram, &input);
@@ -58,9 +58,9 @@ pub(crate) fn compute(
     Ok(out)
 }
 
-/// The bytes of `rela` at `HEAD`, or `None` for a new file or an unborn `HEAD`.
-pub(crate) fn head_blob(repo: &gix::Repository, rela: &Path) -> Option<Vec<u8>> {
+/// The bytes of `rel_path` at `HEAD`, or `None` for a new file or an unborn `HEAD`.
+pub(crate) fn head_blob(repo: &gix::Repository, rel_path: &Path) -> Option<Vec<u8>> {
     let tree = repo.head_commit().ok()?.tree().ok()?;
-    let entry = tree.lookup_entry_by_path(rela).ok()??;
+    let entry = tree.lookup_entry_by_path(rel_path).ok()??;
     Some(entry.object().ok()?.detach().data)
 }

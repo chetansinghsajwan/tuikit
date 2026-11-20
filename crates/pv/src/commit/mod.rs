@@ -268,27 +268,27 @@ mod tests;
 
 /// Preview of one file's uncommitted change in the repository at `root`:
 /// `side` picks staged (HEAD against the index) or unstaged (index against the
-/// work tree). `rela` is relative to the work tree.
+/// work tree). `rel_path` is relative to the work tree.
 pub fn render_file_diff(
     root: &Path,
-    rela: &Path,
+    rel_path: &Path,
     side: git_core::Side,
     theme: &Theme,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
-    render_file_diff_marked(root, rela, side, theme, opts).map(|(lines, _)| lines)
+    render_file_diff_marked(root, rel_path, side, theme, opts).map(|(lines, _)| lines)
 }
 
 /// `render_file_diff`, with where the hunks start.
 pub fn render_file_diff_marked(
     root: &Path,
-    rela: &Path,
+    rel_path: &Path,
     side: git_core::Side,
     theme: &Theme,
     opts: &Options,
 ) -> Result<(Vec<Line<'static>>, Anchors), Error> {
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
-    let patch = repo.diff_file(rela, side).map_err(|e| Error::Unsupported(e.to_string()))?;
+    let patch = repo.diff_file(rel_path, side).map_err(|e| Error::Unsupported(e.to_string()))?;
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
     let (mut lines, mut anchors) =
         diff::render(std::slice::from_ref(&patch), theme, opts, limit + 1);

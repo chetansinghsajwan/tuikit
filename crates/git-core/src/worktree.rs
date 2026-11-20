@@ -41,23 +41,23 @@ pub enum Side {
 }
 
 impl Repo {
-    /// The bytes of `rela` as staged in the index, or `None` if it is not staged.
-    fn index_blob(&self, rela: &Path) -> Option<Vec<u8>> {
+    /// The bytes of `rel_path` as staged in the index, or `None` if it is not staged.
+    fn index_blob(&self, rel_path: &Path) -> Option<Vec<u8>> {
         let index = self.repo.index_or_empty().ok()?;
-        let entry = index.entry_by_path(rela.to_str()?.into())?;
+        let entry = index.entry_by_path(rel_path.to_str()?.into())?;
         Some(self.repo.find_blob(entry.id).ok()?.detach().data)
     }
 
     /// The diff of one file (path relative to the work tree) on `side`; inside a submodule it is
     /// the submodule's own diff.
-    pub fn diff_file(&self, rela: &Path, side: Side) -> Result<FilePatch, Error> {
-        if let Some((repo, inner)) = self.owner(rela) {
+    pub fn diff_file(&self, rel_path: &Path, side: Side) -> Result<FilePatch, Error> {
+        if let Some((repo, inner)) = self.owner(rel_path) {
             return repo.diff_file(&inner, side);
         }
         let (before, after, kind) = match side {
             Side::Staged => {
-                let before = head_blob(&self.repo, rela);
-                let after = self.index_blob(rela);
+                let before = head_blob(&self.repo, rel_path);
+                let after = self.index_blob(rel_path);
                 let kind = match (&before, &after) {
                     (None, _) => Kind::Added,
                     (_, None) => Kind::Deleted,
@@ -66,8 +66,8 @@ impl Repo {
                 (before.unwrap_or_default(), after.unwrap_or_default(), kind)
             }
             Side::Unstaged => {
-                let before = self.index_blob(rela);
-                let after = std::fs::read(self.root.join(rela)).ok();
+                let before = self.index_blob(rel_path);
+                let after = std::fs::read(self.root.join(rel_path)).ok();
                 let kind = match (&before, &after) {
                     (None, _) => Kind::Untracked,
                     (_, None) => Kind::Deleted,
@@ -78,7 +78,7 @@ impl Repo {
         };
         let binary = before.contains(&0) || after.contains(&0);
         Ok(FilePatch {
-            path: rela.to_string_lossy().into_owned(),
+            path: rel_path.to_string_lossy().into_owned(),
             old_path: None,
             modes: None,
             kind,
@@ -122,15 +122,15 @@ impl Repo {
         self.repo.head_commit().is_ok()
     }
 
-    /// The repo that owns `rela` when it lies inside a submodule (nested ones followed), with the
+    /// The repo that owns `rel_path` when it lies inside a submodule (nested ones followed), with the
     /// path inside that repo. `None` when this repo owns it, which includes the submodule's own
     /// path: that is the recorded commit, a change of this repo.
-    pub fn owner(&self, rela: &Path) -> Option<(Repo, PathBuf)> {
+    pub fn owner(&self, rel_path: &Path) -> Option<(Repo, PathBuf)> {
         let subs = self.repo.submodules().ok()??;
         for sub in subs {
             let Ok(path) = sub.path() else { continue };
             let sub_rela = PathBuf::from(path.to_str_lossy().into_owned());
-            let Ok(inner) = rela.strip_prefix(&sub_rela) else { continue };
+            let Ok(inner) = rel_path.strip_prefix(&sub_rela) else { continue };
             if inner.as_os_str().is_empty() {
                 continue;
             }
@@ -206,12 +206,12 @@ impl Repo {
 
     /// Throw away work-tree changes: tracked files are restored from the index,
     /// untracked files are deleted. Not recoverable.
-    pub fn discard(&self, rela: &Path, untracked: bool) -> Result<(), Error> {
-        if let Some((repo, inner)) = self.owner(rela) {
+    pub fn discard(&self, rel_path: &Path, untracked: bool) -> Result<(), Error> {
+        if let Some((repo, inner)) = self.owner(rel_path) {
             return repo.discard(&inner, untracked);
         }
         if untracked {
-            let path = self.root.join(rela);
+            let path = self.root.join(rel_path);
             let meta = path.symlink_metadata().map_err(err)?;
             return if meta.is_dir() {
                 std::fs::remove_dir_all(path)
@@ -220,7 +220,7 @@ impl Repo {
             }
             .map_err(err);
         }
-        self.git(&["restore"], &[rela.to_path_buf()]).map(|_| ())
+        self.git(&["restore"], &[rel_path.to_path_buf()]).map(|_| ())
     }
 
     /// Switch to a ref: a local branch, a remote branch (a tracking branch is created) or a

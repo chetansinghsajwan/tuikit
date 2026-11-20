@@ -228,9 +228,9 @@ impl Panel {
     /// Expand the folders down to `path` and put the cursor on it.
     pub fn reveal(&mut self, path: &Path) {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        let Ok(rela) = path.strip_prefix(&self.root) else { return };
+        let Ok(rel_path) = path.strip_prefix(&self.root) else { return };
         let mut dir = self.root.clone();
-        for part in rela.parent().into_iter().flat_map(|p| p.components()) {
+        for part in rel_path.parent().into_iter().flat_map(|p| p.components()) {
             dir.push(part);
             self.expanded.insert(dir.clone());
         }
@@ -253,7 +253,7 @@ impl Panel {
 
     /// Show a message (or error) in the footer until the next key.
     pub fn notify(&mut self, msg: impl Into<String>, error: bool) {
-        self.say(msg, error);
+        self.show_message(msg, error);
     }
 
     /// Forget marks and cancel nothing else: call after the host acted on them.
@@ -379,7 +379,7 @@ impl Panel {
     }
 
     /// Set the footer message; `error` makes it show as a failure.
-    fn say(&mut self, msg: impl Into<String>, error: bool) {
+    fn show_message(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some((msg.into(), error));
     }
 
@@ -423,11 +423,11 @@ impl Panel {
         let job = self.job.as_ref()?;
         if key.code == KeyCode::Esc {
             job.progress.cancel.store(true, Ordering::Relaxed);
-            self.say("cancelling the paste", false);
+            self.show_message("cancelling the paste", false);
             return Some(Outcome::None);
         }
         if matches!(key.code, KeyCode::Char('d' | 'D')) {
-            self.say("busy: a paste is running (Esc cancels it)", true);
+            self.show_message("busy: a paste is running (Esc cancels it)", true);
             return Some(Outcome::None);
         }
         None
@@ -469,7 +469,7 @@ impl Panel {
             ui::keys::Feed::Run(id) => self.run(id),
             ui::keys::Feed::NoBinding => {
                 let seq = self.keymap.rejected().to_string();
-                self.say(format!("{seq} is not bound"), true);
+                self.show_message(format!("{seq} is not bound"), true);
                 Outcome::None
             }
             ui::keys::Feed::Pending | ui::keys::Feed::Cancelled | ui::keys::Feed::Unbound => {
@@ -500,22 +500,22 @@ impl Panel {
 
     /// Run an action by id (what a key, the leader menu or a palette resolves to).
     pub fn run(&mut self, id: &'static str) -> Outcome {
-        if !keys::owns(id) {
+        if !keys::is_own_action(id) {
             return Outcome::Command(id);
         }
         match id.split('.').next().unwrap_or(id) {
-            "nav" | "tree" => self.run_nav(id),
-            "item" => self.run_item(id),
-            "search" => self.run_search(id),
-            "view" => self.run_view(id),
-            "root" => self.run_root(id),
-            "bookmark" => self.run_bookmark(id),
-            _ => self.run_general(id),
+            "nav" | "tree" => self.run_nav_action(id),
+            "item" => self.run_item_action(id),
+            "search" => self.run_search_action(id),
+            "view" => self.run_view_action(id),
+            "root" => self.run_root_action(id),
+            "bookmark" => self.run_bookmark_action(id),
+            _ => self.run_general_action(id),
         }
     }
 
     /// Runs one of the actions that belong to no domain: back, the palette, the help and quit.
-    fn run_general(&mut self, id: &str) -> Outcome {
+    fn run_general_action(&mut self, id: &str) -> Outcome {
         match id {
             "back" => {
                 if self.marked.is_empty() {
@@ -565,19 +565,19 @@ impl Panel {
             BookmarkOp::Set => {
                 let dir = self.target_dir();
                 match self.bookmarks.set(c, dir.clone()) {
-                    Ok(()) => self.say(format!("bookmark {c}: {}", dir.display()), false),
-                    Err(e) => self.say(format!("bookmark not saved: {e}"), true),
+                    Ok(()) => self.show_message(format!("bookmark {c}: {}", dir.display()), false),
+                    Err(e) => self.show_message(format!("bookmark not saved: {e}"), true),
                 }
             }
             BookmarkOp::Jump => match self.bookmarks.get(c).map(Path::to_path_buf) {
                 Some(dir) if dir.is_dir() => self.set_root(dir),
-                Some(dir) => self.say(format!("{} is gone", dir.display()), true),
-                None => self.say(format!("no bookmark {c}"), true),
+                Some(dir) => self.show_message(format!("{} is gone", dir.display()), true),
+                None => self.show_message(format!("no bookmark {c}"), true),
             },
             BookmarkOp::Delete => match self.bookmarks.remove(c) {
-                Ok(true) => self.say(format!("removed bookmark {c}"), false),
-                Ok(false) => self.say(format!("no bookmark {c}"), true),
-                Err(e) => self.say(format!("bookmark not saved: {e}"), true),
+                Ok(true) => self.show_message(format!("removed bookmark {c}"), false),
+                Ok(false) => self.show_message(format!("no bookmark {c}"), true),
+                Err(e) => self.show_message(format!("bookmark not saved: {e}"), true),
             },
         }
         Outcome::None
@@ -596,12 +596,12 @@ impl Panel {
     fn create(&mut self, dir: &Path, name: &str) -> Outcome {
         match ops::create(dir, name) {
             Ok((path, is_dir)) => {
-                self.say(format!("created {}", name.trim_end_matches('/')), false);
+                self.show_message(format!("created {}", name.trim_end_matches('/')), false);
                 self.reveal(&path);
                 Outcome::Created(path, is_dir)
             }
             Err(e) => {
-                self.say(e.to_string(), true);
+                self.show_message(e.to_string(), true);
                 Outcome::None
             }
         }
@@ -615,12 +615,12 @@ impl Panel {
             Ok(to) => {
                 self.remap_expanded(from, &to);
                 self.marked.clear();
-                self.say(format!("renamed to {name}"), false);
+                self.show_message(format!("renamed to {name}"), false);
                 self.reveal(&to);
                 Outcome::Moved(vec![(from.to_path_buf(), to)])
             }
             Err(e) => {
-                self.say(e.to_string(), true);
+                self.show_message(e.to_string(), true);
                 Outcome::None
             }
         }
@@ -649,7 +649,7 @@ impl Panel {
         match result {
             Ok(()) => {
                 let n = targets.len();
-                self.say(
+                self.show_message(
                     format!(
                         "{} {n} item{}",
                         if kind == ConfirmKind::Trash { "trashed" } else { "deleted" },
@@ -662,7 +662,7 @@ impl Panel {
                 Outcome::Deleted(targets)
             }
             Err(e) => {
-                self.say(e, true);
+                self.show_message(e, true);
                 self.refresh();
                 Outcome::None
             }

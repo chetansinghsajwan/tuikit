@@ -1,6 +1,6 @@
 //! The screen: the keyboard drawn for the shown layer, the keys held now, and a history log.
 
-use crate::kbd::{self, Action, Config};
+use crate::kbd::{self, Config, KeyAction};
 use crate::link::{Event, State};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Rect};
@@ -122,7 +122,7 @@ impl App {
         let held = &self.state.keys;
         let mut found: Vec<(String, Vec<String>)> = Vec::new();
         for key in self.cfg.rows.iter().flatten() {
-            if let Action::Keys { outputs, .. } = self.cfg.action(layer, &self.base, key)
+            if let KeyAction::Keys { outputs, .. } = self.cfg.action(layer, &self.base, key)
                 && !outputs.is_empty()
                 && outputs.iter().all(|o| held.contains(o))
             {
@@ -229,7 +229,7 @@ impl App {
                 let (x0, x1) = (at(cum), at(cum + q));
                 cum += q;
                 let action = self.cfg.action(&layer, &self.base, key);
-                if action == Action::Blocked {
+                if action == KeyAction::Blocked {
                     continue;
                 }
                 let w = (x1 - x0).saturating_sub(1);
@@ -258,18 +258,18 @@ impl App {
     }
 
     /// The text and color of what a key does.
-    fn label(&self, key: &str, action: &Action) -> (String, ratatui::style::Color) {
+    fn label(&self, key: &str, action: &KeyAction) -> (String, ratatui::style::Color) {
         let c = &self.theme.colors;
         match action {
-            Action::Blocked => ("·".into(), c.muted.into()),
-            Action::Transparent => (kbd::short(key), c.muted.into()),
-            Action::Keys { label, outputs } if outputs.len() == 1 && outputs[0] == key => {
+            KeyAction::Blocked => ("·".into(), c.muted.into()),
+            KeyAction::Transparent => (kbd::short(key), c.muted.into()),
+            KeyAction::Keys { label, outputs } if outputs.len() == 1 && outputs[0] == key => {
                 (kbd::short(label), c.muted.into())
             }
-            Action::Keys { label, .. } => (kbd::short(label), c.fg.into()),
-            Action::Switch(l) => (format!("→{l}"), c.accent.into()),
-            Action::Hold(l) => (format!("{l}↓"), c.accent.into()),
-            Action::Other(o) => (o.clone(), c.info.into()),
+            KeyAction::Keys { label, .. } => (kbd::short(label), c.fg.into()),
+            KeyAction::Switch(l) => (format!("→{l}"), c.accent.into()),
+            KeyAction::Hold(l) => (format!("{l}↓"), c.accent.into()),
+            KeyAction::Other(o) => (o.clone(), c.info.into()),
         }
     }
 

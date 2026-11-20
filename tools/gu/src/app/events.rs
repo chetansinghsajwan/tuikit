@@ -107,7 +107,7 @@ impl App {
             "view.all" => {
                 self.all_branches = !self.all_branches;
                 self.reload_history();
-                self.say(
+                self.show_message(
                     if self.all_branches { "every branch" } else { "the checked-out branch" },
                     false,
                 );
@@ -126,7 +126,7 @@ impl App {
                 let on = !pv::diff_ignoring_whitespace();
                 pv::diff_ignore_whitespace(on);
                 self.preview = None;
-                self.say(
+                self.show_message(
                     if on { "ignoring whitespace changes" } else { "showing whitespace changes" },
                     false,
                 );
@@ -148,7 +148,7 @@ impl App {
         f: impl FnOnce(&Repo) -> Result<(), git_core::Error> + Send + 'static,
     ) {
         if self.job.is_some() {
-            self.say("busy: wait for the current remote command", true);
+            self.show_message("busy: wait for the current remote command", true);
             return;
         }
         let root = self.root.clone();
@@ -168,9 +168,9 @@ impl App {
         if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
             let job = self.job.take().expect("checked above");
             match job.thread.join() {
-                Ok(Ok(())) => self.say(job.done_message, false),
-                Ok(Err(e)) => self.say(e.to_string(), true),
-                Err(_) => self.say("the remote command crashed", true),
+                Ok(Ok(())) => self.show_message(job.done_message, false),
+                Ok(Err(e)) => self.show_message(e.to_string(), true),
+                Err(_) => self.show_message("the remote command crashed", true),
             }
             self.reload_all();
             return true;
@@ -252,7 +252,7 @@ impl App {
                                 )
                             }
                             _ => self
-                                .say("rename a remote branch itself, a remote folder is only part of its name", true),
+                                .show_message("rename a remote branch itself, a remote folder is only part of its name", true),
                         }
                         return;
                     }
@@ -260,7 +260,7 @@ impl App {
                         self.ref_rows.get(self.lists[0].cursor),
                         Some(RefRow::Section { .. })
                     ) {
-                        self.say("pick a ref or a folder to rename", true);
+                        self.show_message("pick a ref or a folder to rename", true);
                         return;
                     }
                 }
@@ -286,7 +286,7 @@ impl App {
                 match id {
                     "branch.checkout" => {
                         if b.is_head {
-                            self.say(format!("already on {}", b.name), false);
+                            self.show_message(format!("already on {}", b.name), false);
                         } else {
                             let (name, kind) = (b.name.clone(), b.kind);
                             self.run(format!("switched to {}", b.name), move |r| {
@@ -301,7 +301,7 @@ impl App {
                         RefKind::Tag => self.mode = Mode::Confirm(Confirm::DeleteTag(b.name)),
                         RefKind::Remote => self.mode = Mode::Confirm(Confirm::DeleteRemote(b.name)),
                         RefKind::Branch if b.is_head => {
-                            self.say("the checked-out branch cannot be deleted", true)
+                            self.show_message("the checked-out branch cannot be deleted", true)
                         }
                         RefKind::Branch => {
                             self.mode = Mode::Confirm(Confirm::DeleteBranch {
@@ -312,7 +312,7 @@ impl App {
                     },
                     "branch.rebase" => {
                         if b.is_head {
-                            self.say("cannot rebase a branch onto itself", true);
+                            self.show_message("cannot rebase a branch onto itself", true);
                         } else {
                             self.mode = Mode::Confirm(Confirm::Rebase(b.name));
                         }
@@ -333,7 +333,7 @@ impl App {
                     }
                     "branch.merge" => {
                         if b.is_head {
-                            self.say("cannot merge a branch into itself", true);
+                            self.show_message("cannot merge a branch into itself", true);
                         } else {
                             self.mode = Mode::Confirm(Confirm::Merge(b.name));
                         }
@@ -345,15 +345,17 @@ impl App {
                 let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
                 match id {
                     "commit.copy_hash" => match ui::clipboard::copy(&k.oid) {
-                        Ok(()) => self.say(format!("copied {} to the clipboard", k.short), false),
-                        Err(e) => self.say(format!("could not copy: {e}"), true),
+                        Ok(()) => {
+                            self.show_message(format!("copied {} to the clipboard", k.short), false)
+                        }
+                        Err(e) => self.show_message(format!("could not copy: {e}"), true),
                     },
                     "commit.files" => self.open_commit_files(),
                     "commit.compare_work" => {
                         self.work = !self.work;
                         self.compare = None;
                         self.detail = true;
-                        self.say(
+                        self.show_message(
                             if self.work {
                                 "diff from the commit to the work tree (M or Esc clears)"
                             } else {
@@ -366,11 +368,11 @@ impl App {
                         self.work = false;
                         if self.compare.as_deref() == Some(k.oid.as_str()) {
                             self.compare = None;
-                            self.say("compare cleared", false);
+                            self.show_message("compare cleared", false);
                         } else {
                             self.compare = Some(k.oid.clone());
                             self.detail = true;
-                            self.say(
+                            self.show_message(
                                 format!(
                                     "comparing with {}: move to another commit (m clears)",
                                     k.short
@@ -561,7 +563,7 @@ impl App {
                                     .filter(|&i| self.commit_matches(i))
                                     .count();
                                 let nth = (0..=at).filter(|&j| self.commit_matches(j)).count();
-                                self.say(format!("match {nth} of {total}"), false);
+                                self.show_message(format!("match {nth} of {total}"), false);
                             } else {
                                 self.search_step(1);
                             }
@@ -613,7 +615,10 @@ impl App {
                         let n = pairs.len();
                         // The names are checked and the renames are all or none (`Repo::rename_many`).
                         if value.is_empty() || value.starts_with('/') || value.contains("//") {
-                            self.say("the folder name is empty or has an empty part", true);
+                            self.show_message(
+                                "the folder name is empty or has an empty part",
+                                true,
+                            );
                         } else {
                             self.run(
                                 format!(
@@ -677,7 +682,7 @@ impl App {
         };
         let pick = by(&typed).or_else(|| self.suggest.current().and_then(|s| by(&s)));
         match pick {
-            Some((name, _, true)) => self.say(format!("already on {name}"), false),
+            Some((name, _, true)) => self.show_message(format!("already on {name}"), false),
             Some((name, kind, false)) => {
                 self.run(format!("switched to {name}"), move |r| r.checkout_ref(&name, kind))
             }
@@ -687,7 +692,9 @@ impl App {
                     let (oid, short) = (k.oid.clone(), k.short.clone());
                     self.run(format!("checked out {short}"), move |r| r.checkout_commit(&oid));
                 }
-                Err(_) => self.say(format!("no branch, tag or commit named {typed}"), true),
+                Err(_) => {
+                    self.show_message(format!("no branch, tag or commit named {typed}"), true)
+                }
             },
         }
     }
@@ -781,11 +788,11 @@ impl App {
         if Repo::discover(&dir)
             .is_none_or(|r| r.root() != dir.canonicalize().unwrap_or(dir.clone()))
         {
-            self.say(format!("{path} is not cloned: u updates it first"), true);
+            self.show_message(format!("{path} is not cloned: u updates it first"), true);
             return;
         }
         let Some(mut app) = App::new(&dir) else {
-            self.say(format!("cannot open {path}"), true);
+            self.show_message(format!("cannot open {path}"), true);
             return;
         };
         app.parents = std::mem::take(&mut self.parents);
@@ -798,7 +805,7 @@ impl App {
     /// Go back to the repository the current one was opened from.
     fn repo_up(&mut self) {
         let Some(parent) = self.parents.pop() else {
-            self.say("this is the top repository", false);
+            self.show_message("this is the top repository", false);
             return;
         };
         let parents = std::mem::take(&mut self.parents);
@@ -812,7 +819,7 @@ impl App {
             None => {
                 self.parents = parents;
                 self.parents.push(parent);
-                self.say("the parent repository is gone", true);
+                self.show_message("the parent repository is gone", true);
             }
         }
     }

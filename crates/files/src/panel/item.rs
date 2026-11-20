@@ -36,7 +36,7 @@ pub(super) const ACTIONS: &[Key] = &[
 
 impl Panel {
     /// Runs one of this domain's actions by id.
-    pub(super) fn run_item(&mut self, id: &str) -> Outcome {
+    pub(super) fn run_item_action(&mut self, id: &str) -> Outcome {
         match id {
             "item.open" => {
                 if let Some(row) = self.rows.get(self.cursor) {
@@ -81,7 +81,7 @@ impl Panel {
                     let (n, cut) = (paths.len(), id == "item.cut");
                     self.clip = Some(Clip { paths, cut });
                     self.marked.clear();
-                    self.say(
+                    self.show_message(
                         format!(
                             "{} {n} item{}",
                             if cut { "cut" } else { "yanked" },

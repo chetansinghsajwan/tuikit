@@ -128,12 +128,12 @@ impl Panel {
                 Row::File { change, depth } => {
                     let name = if self.tree {
                         change
-                            .rela
+                            .rel_path
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default()
                     } else {
-                        change.rela.display().to_string()
+                        change.rel_path.display().to_string()
                     };
                     // Two marks like `git status -s`: what is staged (always in the staged color, green, so a staged file
                     // is told apart at a glance), then what is not (in the color of its change).
@@ -168,8 +168,8 @@ impl Panel {
     }
 
     /// The preview of a submodule: where it is, then the commits that moved it.
-    fn submodule_lines(&self, rela: &Path, theme: &Theme) -> Vec<Line<'static>> {
-        let path = rela.to_string_lossy();
+    fn submodule_lines(&self, rel_path: &Path, theme: &Theme) -> Vec<Line<'static>> {
+        let path = rel_path.to_string_lossy();
         let mut text = String::new();
         if let Some(s) = self.repo.submodules().unwrap_or_default().iter().find(|s| s.path == path)
         {
@@ -191,28 +191,29 @@ impl Panel {
 
     /// Draws the diff of the highlighted file, reusing the cached one while nothing changed.
     pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        let current = self.current().map(|c| (c.unstaged.is_none(), c.rela.clone(), c.submodule));
+        let current =
+            self.current().map(|c| (c.unstaged.is_none(), c.rel_path.clone(), c.submodule));
         let title = current.as_ref().map(|(_, p, _)| p.display().to_string()).unwrap_or_default();
         let name = title.trim_end_matches('/').rsplit('/').next().unwrap_or(&title).to_string();
         let pane = Pane::new(theme).title(&title).icon(theme.icons.file(&name, false));
         let inner = pane.inner(area);
         pane.render(area, buf);
-        let Some((staged, rela, submodule)) = current else {
+        let Some((staged, rel_path, submodule)) = current else {
             self.preview = None;
             return;
         };
         if inner.width == 0 || inner.height == 0 {
             return;
         }
-        let key = (rela.clone(), staged, inner.width, inner.height, self.version);
+        let key = (rel_path.clone(), staged, inner.width, inner.height, self.version);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts =
                 pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let side = if staged { Side::Staged } else { Side::Unstaged };
             let (lines, hunks) = if submodule {
-                (self.submodule_lines(&rela, theme), Vec::new())
+                (self.submodule_lines(&rel_path, theme), Vec::new())
             } else {
-                match pv::preview_diff_marked(&self.root, &rela, side, theme, &opts) {
+                match pv::preview_diff_marked(&self.root, &rel_path, side, theme, &opts) {
                     Ok((l, a)) => (l, a.hunks),
                     Err(e) => (
                         vec![Line::from(Span::styled(

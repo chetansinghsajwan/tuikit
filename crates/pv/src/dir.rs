@@ -317,10 +317,10 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
 /// Git sign for an entry: a file's own state, or a dot for a folder with changes beneath it.
 fn state_of(e: &Entry, ctx: &Option<(Repo, Status)>) -> Option<(char, Kind)> {
     let (repo, status) = ctx.as_ref()?;
-    let rela = repo.relative(&e.path)?;
+    let rel_path = repo.relative(&e.path)?;
     if e.is_dir {
-        status.dir(&rela).map(|k| (k.letter(), k))
+        status.dir(&rel_path).map(|k| (k.letter(), k))
     } else {
-        git::sign(status.get(&rela)?)
+        git::sign(status.get(&rel_path)?)
     }
 }

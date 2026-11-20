@@ -173,7 +173,7 @@ impl ui::app::Screen for App {
 
     /// The Files panel's own actions run on the panel, every other one here.
     fn run_action(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
-        let quit = if self.focus == Focus::Files && git_panel::keys::owns(id) {
+        let quit = if self.focus == Focus::Files && git_panel::keys::is_own_action(id) {
             let action = self.files.run(id);
             self.files_action(action)
         } else {
@@ -192,7 +192,7 @@ impl ui::app::Screen for App {
         if self.focus == Focus::Files {
             self.files.notify(text, true);
         } else {
-            self.say(text, true);
+            self.show_message(text, true);
         }
     }
 
