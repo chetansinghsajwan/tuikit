@@ -31,6 +31,10 @@ for dependencies, gitleaks for secrets, semgrep for SAST.
 - **Errors:** no `unwrap()` in production code; use `?`, or `expect` with the reason it cannot
   fail. Tests may unwrap.
 - **Format:** `rustfmt.toml` sets the width (100) and heuristics; do not override it per file.
+- **Module files:** a module that has a directory keeps its own file inside it as `mod.rs`
+  (`app/mod.rs` next to `app/tests.rs`), never beside it as `app.rs`.
+- **Names:** follow the `naming` skill (`~/.agents/skills/naming`): a count ends in `_count`, a size
+  in `_size`, actions are verb phrases (`move_to_top`), callbacks start with `on_`.
 
 ## Commits
 
