@@ -15,19 +15,12 @@ fn secret_names_are_found_by_part_and_case() {
 }
 
 #[test]
-fn a_secret_row_hides_its_value_but_the_candidate_keeps_it() {
+fn a_row_is_the_name_but_the_candidate_keeps_the_value() {
     let vars = vec![("B_TOKEN".to_string(), "s3cret".to_string()), ("A".to_string(), "1".to_string())];
-    let c = candidates(vars.clone().into_iter(), false);
-    assert_eq!(c[0].display, "A=1");
-    assert_eq!(c[1].display, format!("B_TOKEN={MASK}"));
+    let c = candidates(vars.into_iter());
+    assert_eq!(c[0].display, "A");
+    assert_eq!(c[1].display, "B_TOKEN");
     assert_eq!(c[1].output(), "B_TOKEN=s3cret");
-    let shown = candidates(vars.into_iter(), true);
-    assert_eq!(shown[1].display, "B_TOKEN=s3cret");
-}
-
-#[test]
-fn a_multi_line_value_stays_on_one_row() {
-    assert_eq!(row("X", "a\nb", false), "X=a b");
 }
 
 #[test]

@@ -30,8 +30,6 @@ struct Cli {
 const EXIT_NO_SELECTION: u8 = 1;
 /// Exit code when the user cancelled; 130 is the shell's code for an interrupt.
 const EXIT_CANCEL: u8 = 130;
-/// Shown in place of a secret value.
-const MASK: &str = "********";
 /// Name parts that mark a variable as holding a secret.
 const SECRET_PARTS: [&str; 6] = ["TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "KEY"];
 /// Variables that hold a list of directories although their name does not end in `PATH`.
@@ -51,24 +49,14 @@ fn is_dir_list(name: &str, value: &str) -> bool {
     value.contains(':') && value.split(':').all(|e| e.is_empty() || e.starts_with('/'))
 }
 
-/// The list row of one variable: `NAME=value` with a secret's value hidden and line breaks
-/// flattened, so the row stays one line. What the query matches is what the row shows.
-fn row(name: &str, value: &str, reveal: bool) -> String {
-    if is_secret(name) && !reveal {
-        format!("{name}={MASK}")
-    } else {
-        format!("{name}={}", value.replace('\n', " "))
-    }
-}
-
-/// The variables of this process, sorted by name, as candidates. A row shows the (possibly
-/// hidden) value; the candidate keeps the full `NAME=value` line, which is what is printed
-/// and what the preview reads.
-fn candidates(vars: impl Iterator<Item = (String, String)>, reveal: bool) -> Vec<Candidate> {
+/// The variables of this process, sorted by name, as candidates. A row shows only the name, and
+/// the query matches names only; the candidate keeps the full `NAME=value` line, which is what is
+/// printed and what the preview reads (it hides a secret's value there).
+fn candidates(vars: impl Iterator<Item = (String, String)>) -> Vec<Candidate> {
     let mut vars: Vec<_> = vars.collect();
     vars.sort();
     vars.iter()
-        .map(|(name, value)| Candidate::with_raw(row(name, value, reveal), format!("{name}={value}")))
+        .map(|(name, value)| Candidate::with_raw(name.clone(), format!("{name}={value}")))
         .collect()
 }
 
@@ -172,7 +160,7 @@ fn run(cli: Cli) -> io::Result<u8> {
     picker.set_preview_fn(f);
     let vars = std::env::vars_os()
         .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()));
-    source::push_candidates(&picker.injector(), candidates(vars, reveal));
+    source::push_candidates(&picker.injector(), candidates(vars));
 
     let mut screen = PickScreen::new(picker, wake);
     ui::app::Shell::new("ev")
