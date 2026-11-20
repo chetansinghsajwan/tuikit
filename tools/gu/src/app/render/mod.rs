@@ -18,17 +18,17 @@ impl App {
             ui::tabs::Label::new("Commits"),
             ui::tabs::Label::new("Refs"),
         ];
-        let active = match self.screen {
-            Screen::Status => 0,
-            Screen::Commits => 1,
-            Screen::Refs => 2,
+        let active = match self.tab {
+            Tab::Status => 0,
+            Tab::Commits => 1,
+            Tab::Refs => 2,
         };
         ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, true);
         let rest = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
-        match self.screen {
-            Screen::Status => self.render_panes(rest, buf),
-            Screen::Commits => self.render_commits_tab(rest, buf),
-            Screen::Refs => self.render_refs_tab(rest, buf),
+        match self.tab {
+            Tab::Status => self.render_panes(rest, buf),
+            Tab::Commits => self.render_commits_tab(rest, buf),
+            Tab::Refs => self.render_refs_tab(rest, buf),
         }
     }
 

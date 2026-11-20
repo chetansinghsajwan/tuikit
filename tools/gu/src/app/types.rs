@@ -9,11 +9,13 @@ pub(super) const GRAPH_MAX: usize = 24;
 /// Most cells the refs column of the Commits table may take.
 pub(super) const REFS_COL: usize = 24;
 
-/// What the host should do after an event.
+/// What the screen decided after an event, for `finish` to turn into a shell request.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Quit {
-    No,
-    Yes,
+pub enum Outcome {
+    /// Nothing more to do.
+    Continue,
+    /// Leave the screen.
+    Quit,
     /// Open this file in the editor (the host suspends the screen), then call `edited`.
     Edit(PathBuf),
     /// The user asked for the command palette: the shell lists the focused pane's actions.
@@ -93,13 +95,13 @@ pub(super) enum Confirm {
 /// A git command talking to a remote, running on its own thread.
 pub(super) struct Job {
     pub(super) label: String,
-    pub(super) done: String,
-    pub(super) handle: std::thread::JoinHandle<Result<(), git_core::Error>>,
+    pub(super) done_message: String,
+    pub(super) thread: std::thread::JoinHandle<Result<(), git_core::Error>>,
 }
 
 /// The tabs: the changed files, the full commit graph, and the refs (branches, tags, stashes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Screen {
+pub(super) enum Tab {
     Status,
     Commits,
     Refs,

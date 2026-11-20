@@ -98,7 +98,7 @@ impl App {
 
     /// The key hints for the focused pane, shown when nothing else is in the status line.
     pub(in crate::app) fn hints(&self) -> &'static str {
-        if self.screen == Screen::Commits {
+        if self.tab == Tab::Commits {
             if self.commit_files.is_some() {
                 return "j k move  l h fold  ctrl-d/u scroll diff  } { hunks  ) ( files  esc back to the commits";
             }

@@ -8,5 +8,5 @@ mod app;
 /// The actions of each pane and their default keys.
 mod keys;
 
-pub use app::{App, Quit};
+pub use app::{App, Outcome};
 pub use keys::{GROUPS, contexts};

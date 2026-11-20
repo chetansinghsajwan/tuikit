@@ -24,7 +24,7 @@ impl App {
         self.branches = refs;
         // The commits are only loaded while their tab is shown.
         let limit = TAB_LOG_LIMIT;
-        let commits = if self.screen != Screen::Commits {
+        let commits = if self.tab != Tab::Commits {
             Ok(Vec::new())
         } else if self.filter.branches.len() == 1 {
             self.repo.commits_from(&self.filter.branches[0], limit)
@@ -94,7 +94,7 @@ impl App {
         self.reload_history();
     }
 
-    /// Call after the editor the host opened for `Quit::Edit` returns.
+    /// Call after the editor the host opened for `Outcome::Edit` returns.
     pub fn edited(&mut self, ok: bool) {
         self.reload_all();
         if !ok {

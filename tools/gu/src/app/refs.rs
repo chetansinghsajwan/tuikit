@@ -106,21 +106,21 @@ impl App {
                 self.commit_files = Some(CommitFiles::new(k.oid, k.short, k.subject, changes));
                 self.detail = true;
                 self.preview = None;
-                self.pscroll = 0;
+                self.preview_scroll = 0;
             }
             Err(e) => self.say(e.to_string(), true),
         }
     }
 
     /// Keys while the files of a commit show: the tree moves and folds, esc goes back to the commits.
-    pub(super) fn commit_files_key(&mut self, key: &KeyEvent) -> Quit {
+    pub(super) fn commit_files_key(&mut self, key: &KeyEvent) -> Outcome {
         use ratatui::crossterm::event::KeyModifiers;
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let page = self.pheight.max(2);
-        let Some(cf) = self.commit_files.as_mut() else { return Quit::No };
+        let page = self.preview_height.max(2);
+        let Some(cf) = self.commit_files.as_mut() else { return Outcome::Continue };
         let before = cf.cursor;
         match key.code {
-            KeyCode::Char('c') if ctrl => return Quit::Yes,
+            KeyCode::Char('c') if ctrl => return Outcome::Quit,
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => self.commit_files = None,
             KeyCode::Char('j') | KeyCode::Down if !ctrl => cf.move_by(1),
             KeyCode::Char('k') | KeyCode::Up if !ctrl => cf.move_by(-1),
@@ -161,9 +161,10 @@ impl App {
                     _ => self.commit_files = None,
                 }
             }
-            KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
+            KeyCode::Char('d') if ctrl => self.preview_scroll += (self.preview_height / 2).max(1),
             KeyCode::Char('u') if ctrl => {
-                self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1))
+                self.preview_scroll =
+                    self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
             }
             KeyCode::Char('}') => self.jump_diff(true, false),
             KeyCode::Char('{') => self.jump_diff(false, false),
@@ -172,9 +173,9 @@ impl App {
             _ => {}
         }
         if self.commit_files.as_ref().is_some_and(|cf| cf.cursor != before) {
-            self.pscroll = 0;
+            self.preview_scroll = 0;
         }
-        Quit::No
+        Outcome::Continue
     }
 
     /// Fold or unfold the file whose header is at (or above) the top of the diff.
@@ -184,7 +185,7 @@ impl App {
             .anchors
             .files
             .iter()
-            .rposition(|&m| m <= self.pscroll)
+            .rposition(|&m| m <= self.preview_scroll)
             .or(if p.anchors.files.is_empty() { None } else { Some(0) });
         if let Some(path) = at.and_then(|i| p.anchors.paths.get(i)).cloned() {
             pv::diff_toggle_fold(&path);
@@ -197,12 +198,12 @@ impl App {
         let Some(p) = &self.preview else { return };
         let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
         let target = if forward {
-            pv::Anchors::next(marks, self.pscroll)
+            pv::Anchors::next(marks, self.preview_scroll)
         } else {
-            pv::Anchors::prev(marks, self.pscroll)
+            pv::Anchors::prev(marks, self.preview_scroll)
         };
         if let Some(t) = target {
-            self.pscroll = t;
+            self.preview_scroll = t;
         }
     }
 }

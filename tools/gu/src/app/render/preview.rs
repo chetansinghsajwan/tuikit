@@ -45,10 +45,10 @@ impl App {
         let key = (which, rev.clone(), inner.width);
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             // A different commit starts with the files folded the way they fold by themselves.
-            let same_rev = self.fold_rev.as_deref() == Some(rev.as_str());
+            let same_rev = self.folded_commit.as_deref() == Some(rev.as_str());
             if !same_rev {
                 pv::diff_reset_folds();
-                self.fold_rev = Some(rev.clone());
+                self.folded_commit = Some(rev.clone());
             }
             let opts =
                 pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
@@ -118,16 +118,16 @@ impl App {
             };
             self.preview = Some(Preview { key, lines, anchors });
             if !same_rev {
-                self.pscroll = 0;
+                self.preview_scroll = 0;
             }
         }
-        self.pheight = usize::from(inner.height);
+        self.preview_height = usize::from(inner.height);
         if let Some(p) = &self.preview {
-            self.pscroll = self.pscroll.min(p.lines.len().saturating_sub(1));
+            self.preview_scroll = self.preview_scroll.min(p.lines.len().saturating_sub(1));
             let shown: Vec<Line<'static>> = p
                 .lines
                 .iter()
-                .skip(self.pscroll)
+                .skip(self.preview_scroll)
                 .take(usize::from(inner.height))
                 .cloned()
                 .collect();

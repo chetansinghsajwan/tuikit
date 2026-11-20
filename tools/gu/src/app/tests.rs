@@ -62,23 +62,23 @@ struct Rig {
 }
 
 impl Rig {
-    /// Turns what the shell would do into the `Quit` the tests were written against.
-    fn quit(request: Request) -> Quit {
+    /// Turns what the shell would do into the `Outcome` the tests were written against.
+    fn quit(request: Request) -> Outcome {
         match request {
-            Request::None => Quit::No,
-            Request::Quit => Quit::Yes,
-            Request::Palette => Quit::Palette,
-            Request::Help => Quit::Help,
+            Request::None => Outcome::Continue,
+            Request::Quit => Outcome::Quit,
+            Request::Palette => Outcome::Palette,
+            Request::Help => Outcome::Help,
         }
     }
 
     /// Sends one event through the dispatcher.
-    fn handle_event(&mut self, ev: &Event) -> Quit {
+    fn handle_event(&mut self, ev: &Event) -> Outcome {
         Self::quit(self.dispatcher.handle_event(&mut self.app, ev, &mut ui::app::NoHost))
     }
 
     /// Runs the action the palette picked.
-    fn run_palette(&mut self, id: &'static str) -> Quit {
+    fn run_palette(&mut self, id: &'static str) -> Outcome {
         Self::quit(self.dispatcher.run_action(&mut self.app, id, &mut ui::app::NoHost))
     }
 
@@ -121,7 +121,7 @@ fn key(code: KeyCode) -> Event {
 /// Press each character of `keys` as a key and check none of them quits.
 fn press(app: &mut Rig, keys: &str) {
     for c in keys.chars() {
-        assert_eq!(app.handle_event(&key(KeyCode::Char(c))), Quit::No);
+        assert_eq!(app.handle_event(&key(KeyCode::Char(c))), Outcome::Continue);
     }
 }
 
@@ -352,12 +352,12 @@ fn focus_moves_with_tab_and_digits_and_q_quits() {
     let d = repo("focus");
     let mut app = rig(&d);
     press(&mut app, "2");
-    assert_eq!((app.screen, app.focus), (Screen::Commits, Focus::Commits));
+    assert_eq!((app.tab, app.focus), (Tab::Commits, Focus::Commits));
     // Commits has one pane: Tab stays. Refs has three: Tab and Shift-Tab move between them.
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Commits);
     press(&mut app, "3");
-    assert_eq!((app.screen, app.focus), (Screen::Refs, Focus::Branches));
+    assert_eq!((app.tab, app.focus), (Tab::Refs, Focus::Branches));
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Stashes);
     app.handle_event(&key(KeyCode::Tab));
@@ -367,8 +367,8 @@ fn focus_moves_with_tab_and_digits_and_q_quits() {
     app.handle_event(&Event::Key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)));
     assert_eq!(app.focus, Focus::Submodules);
     press(&mut app, "1");
-    assert_eq!((app.screen, app.focus), (Screen::Status, Focus::Files));
-    assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Quit::Yes);
+    assert_eq!((app.tab, app.focus), (Tab::Status, Focus::Files));
+    assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Outcome::Quit);
 }
 
 // macOS file systems ignore case, so git cannot keep `Feature/a` and `feature/b` apart there.
@@ -652,7 +652,7 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     // Files pane: its own table; Space then Space asks the host for the palette.
     press_raw(&mut app, ' ');
     assert!(app.dispatcher.leader_menu(0).is_some());
-    assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Quit::Palette);
+    assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Outcome::Palette);
     let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
     assert!(ids.contains(&"commit.new") && ids.contains(&"focus.branches"), "{ids:?}");
     // Branches pane: the leader menu lists the branch actions, a leader key runs one.
@@ -677,10 +677,10 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
             && rows.iter().any(|r| r.id == "branch.merge" && !r.basic)
     );
     // The palette's pick runs in the pane; `?` opens the help, any other key closes it with Esc.
-    assert_eq!(app.run_palette("branch.new"), Quit::No);
+    assert_eq!(app.run_palette("branch.new"), Outcome::Continue);
     assert!(matches!(app.mode, Mode::Prompt(PromptKind::NewBranch, _)));
     app.handle_event(&key(KeyCode::Esc));
-    assert_eq!(app.handle_event(&key(KeyCode::Char('?'))), Quit::Help);
+    assert_eq!(app.handle_event(&key(KeyCode::Char('?'))), Outcome::Help);
     // Stash pane has its own actions.
     press(&mut app, "4");
     let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();

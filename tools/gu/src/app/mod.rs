@@ -31,7 +31,7 @@ mod search;
 /// The kinds of things the screen holds: focus, modes, prompts, rows, filters.
 mod types;
 use pills::*;
-pub use types::Quit;
+pub use types::Outcome;
 use types::*;
 
 /// The whole git screen: the repository, what is loaded from it, and the UI state of every tab.
@@ -52,10 +52,10 @@ pub struct App {
     mode: Mode,
     message: Option<(String, bool)>,
     preview: Option<Preview>,
-    pscroll: usize,
+    preview_scroll: usize,
     /// The commit whose files were folded by hand (another commit starts with none).
-    fold_rev: Option<String>,
-    pheight: usize,
+    folded_commit: Option<String>,
+    preview_height: usize,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
     /// The commit graph column in the Commits pane, and whether it covers every branch.
@@ -75,7 +75,7 @@ pub struct App {
     folded: std::collections::HashSet<String>,
     /// The refs (branches, tags) pointing at each commit, by hash, for the labels.
     labels: std::collections::HashMap<String, Vec<RefInfo>>,
-    screen: Screen,
+    tab: Tab,
     /// The Commits tab shows the diff of the commit under the cursor beside the list.
     detail: bool,
     /// The commit marked to compare with: the preview shows its diff against the highlighted commit.
@@ -117,9 +117,9 @@ impl App {
             mode: Mode::Normal,
             message: None,
             preview: None,
-            pscroll: 0,
-            fold_rev: None,
-            pheight: 10,
+            preview_scroll: 0,
+            folded_commit: None,
+            preview_height: 10,
             job: None,
             graph: true,
             all_branches: true,
@@ -132,7 +132,7 @@ impl App {
             ref_rows: Vec::new(),
             folded: Default::default(),
             labels: Default::default(),
-            screen: Screen::Status,
+            tab: Tab::Status,
             detail: false,
             compare: None,
             work: false,
@@ -217,13 +217,13 @@ impl ui::app::Screen for App {
 impl App {
     /// Turns what the screen decided into what the shell understands; an edit hands the terminal
     /// to the editor and reloads when it returns.
-    fn finish(&mut self, quit: Quit, host: &mut dyn Host) -> Request {
+    fn finish(&mut self, quit: Outcome, host: &mut dyn Host) -> Request {
         match quit {
-            Quit::No => Request::None,
-            Quit::Yes => Request::Quit,
-            Quit::Palette => Request::Palette,
-            Quit::Help => Request::Help,
-            Quit::Edit(path) => {
+            Outcome::Continue => Request::None,
+            Outcome::Quit => Request::Quit,
+            Outcome::Palette => Request::Palette,
+            Outcome::Help => Request::Help,
+            Outcome::Edit(path) => {
                 let ok = ui::app::with_suspended(host, || {
                     let editor = std::env::var("VISUAL")
                         .or_else(|_| std::env::var("EDITOR"))
@@ -246,26 +246,26 @@ impl App {
 /// The Status, Commits and Refs tabs are fixed: they are visited, never opened or closed.
 impl Tabbed for App {
     fn tab_next(&mut self) {
-        self.set_screen(match self.screen {
-            Screen::Status => Screen::Commits,
-            Screen::Commits => Screen::Refs,
-            Screen::Refs => Screen::Status,
+        self.select_tab(match self.tab {
+            Tab::Status => Tab::Commits,
+            Tab::Commits => Tab::Refs,
+            Tab::Refs => Tab::Status,
         });
     }
 
     fn tab_prev(&mut self) {
-        self.set_screen(match self.screen {
-            Screen::Status => Screen::Refs,
-            Screen::Commits => Screen::Status,
-            Screen::Refs => Screen::Commits,
+        self.select_tab(match self.tab {
+            Tab::Status => Tab::Refs,
+            Tab::Commits => Tab::Status,
+            Tab::Refs => Tab::Commits,
         });
     }
 
     fn tab_select(&mut self, index: usize) {
         match index {
-            0 => self.set_screen(Screen::Status),
-            1 => self.set_screen(Screen::Commits),
-            2 => self.set_screen(Screen::Refs),
+            0 => self.select_tab(Tab::Status),
+            1 => self.select_tab(Tab::Commits),
+            2 => self.select_tab(Tab::Refs),
             _ => {}
         }
     }
@@ -280,7 +280,7 @@ impl Navigable for App {
                 let last = self.len(self.focus).saturating_sub(1) as isize;
                 let st = &mut self.lists[li];
                 st.cursor = (st.cursor as isize + delta).clamp(0, last) as usize;
-                self.pscroll = 0;
+                self.preview_scroll = 0;
             }
             None => self.files.move_by(delta),
         }
@@ -297,7 +297,7 @@ impl Navigable for App {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = 0;
-                self.pscroll = 0;
+                self.preview_scroll = 0;
             }
             None => self.files.move_to_top(),
         }
@@ -307,7 +307,7 @@ impl Navigable for App {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = self.len(self.focus).saturating_sub(1);
-                self.pscroll = 0;
+                self.preview_scroll = 0;
             }
             None => self.files.move_to_bottom(),
         }

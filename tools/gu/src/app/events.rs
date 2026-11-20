@@ -5,46 +5,46 @@ use super::*;
 impl App {
     /// Handles an event the screen claimed (see `captures`): a prompt, a question, a popup, the
     /// files of a commit or the Files panel's own prompts. Tells the host what to do next.
-    pub(super) fn typing(&mut self, ev: &Event) -> Quit {
-        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Quit::No };
+    pub(super) fn typing(&mut self, ev: &Event) -> Outcome {
+        let Event::Key(key @ KeyEvent { kind, .. }) = ev else { return Outcome::Continue };
         if *kind == KeyEventKind::Release {
-            return Quit::No;
+            return Outcome::Continue;
         }
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Prompt(kind, input) => {
                 self.prompt_key(kind, input, ev, key);
-                return Quit::No;
+                return Outcome::Continue;
             }
             Mode::Confirm(c) => {
                 self.confirm_key(c, key);
-                return Quit::No;
+                return Outcome::Continue;
             }
             Mode::Popup(p) => {
                 self.popup_key(p, key);
-                return Quit::No;
+                return Outcome::Continue;
             }
             Mode::Normal => {}
         }
-        if self.screen == Screen::Commits && self.commit_files.is_some() {
+        if self.tab == Tab::Commits && self.commit_files.is_some() {
             return self.commit_files_key(key);
         }
         if self.focus == Focus::Files && self.files.captures_input(ev) {
             let action = self.files.handle_captured(ev);
             return self.files_action(action);
         }
-        Quit::No
+        Outcome::Continue
     }
 
     /// Whether the screen takes this event itself: a prompt, a question or a popup is open, the
     /// files of a commit show, or the Files panel is asking something.
     pub(super) fn takes(&self, ev: &Event) -> bool {
         !matches!(self.mode, Mode::Normal)
-            || (self.screen == Screen::Commits && self.commit_files.is_some())
+            || (self.tab == Tab::Commits && self.commit_files.is_some())
             || (self.focus == Focus::Files && self.files.captures_input(ev))
     }
 
     /// Run an action by id: what a key, the leader menu or the palette resolves to.
-    pub fn run_id(&mut self, id: &'static str) -> Quit {
+    pub fn run_id(&mut self, id: &'static str) -> Outcome {
         let mut moved = true;
         match id {
             "search.start" => {
@@ -78,10 +78,10 @@ impl App {
                 } else if self.search.is_some() {
                     self.search = None;
                 } else {
-                    self.set_screen(Screen::Status);
+                    self.select_tab(Tab::Status);
                 }
             }
-            "quit" => return Quit::Yes,
+            "quit" => return Outcome::Quit,
             "switch.to" => {
                 let names = self.branches.iter().map(|b| b.name.clone()).collect();
                 self.suggest = ui::prompt::Suggest::new(names);
@@ -112,8 +112,11 @@ impl App {
                     false,
                 );
             }
-            "preview.down" => self.pscroll += (self.pheight / 2).max(1),
-            "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "preview.down" => self.preview_scroll += (self.preview_height / 2).max(1),
+            "preview.up" => {
+                self.preview_scroll =
+                    self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
+            }
             "preview.next_hunk" => self.jump_diff(true, false),
             "preview.prev_hunk" => self.jump_diff(false, false),
             "preview.next_file" => self.jump_diff(true, true),
@@ -133,7 +136,7 @@ impl App {
         if !moved {
             self.pane_action(id);
         }
-        Quit::No
+        Outcome::Continue
     }
 
     /// Run a git command that talks to a remote on its own thread; the screen shows `label …`
@@ -149,11 +152,11 @@ impl App {
             return;
         }
         let root = self.root.clone();
-        let handle = std::thread::spawn(move || match Repo::discover(&root) {
+        let thread = std::thread::spawn(move || match Repo::discover(&root) {
             Some(repo) => f(&repo),
             None => Err(git_core::Error("the repository is gone".into())),
         });
-        self.job = Some(Job { label: label.to_string(), done: done.to_string(), handle });
+        self.job = Some(Job { label: label.to_string(), done_message: done.to_string(), thread });
     }
 
     /// Call between events: finishes a remote command that ended. `true` when the screen should be redrawn.
@@ -162,10 +165,10 @@ impl App {
             self.reload_all();
             return true;
         }
-        if self.job.as_ref().is_some_and(|j| j.handle.is_finished()) {
+        if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
             let job = self.job.take().expect("checked above");
-            match job.handle.join() {
-                Ok(Ok(())) => self.say(job.done, false),
+            match job.thread.join() {
+                Ok(Ok(())) => self.say(job.done_message, false),
                 Ok(Err(e)) => self.say(e.to_string(), true),
                 Err(_) => self.say("the remote command crashed", true),
             }
@@ -188,34 +191,34 @@ impl App {
     /// Focus `focus` and show its preview from the top.
     pub(super) fn set_focus(&mut self, focus: Focus) {
         self.focus = focus;
-        self.pscroll = 0;
+        self.preview_scroll = 0;
     }
 
     /// Move the focus to the next or previous pane of the tab (only the Refs tab has two).
     pub(super) fn focus_by(&mut self, delta: isize) {
-        let panes: &[Focus] = match self.screen {
-            Screen::Status => &STATUS_PANES,
-            Screen::Commits => &COMMITS_PANES,
-            Screen::Refs => &REFS_PANES,
+        let panes: &[Focus] = match self.tab {
+            Tab::Status => &STATUS_PANES,
+            Tab::Commits => &COMMITS_PANES,
+            Tab::Refs => &REFS_PANES,
         };
         let at = panes.iter().position(|f| *f == self.focus).unwrap_or(0) as isize;
         self.focus = panes[(at + delta).rem_euclid(panes.len() as isize) as usize];
-        self.pscroll = 0;
+        self.preview_scroll = 0;
     }
 
-    /// Turn what the Files panel asked for into a reload, a screen change or a `Quit` for the host.
-    pub(super) fn files_action(&mut self, action: PanelOutcome) -> Quit {
+    /// Turn what the Files panel asked for into a reload, a screen change or a `Outcome` for the host.
+    pub(super) fn files_action(&mut self, action: PanelOutcome) -> Outcome {
         match action {
-            PanelOutcome::Close => Quit::Yes,
-            PanelOutcome::Open(path) => Quit::Edit(path),
+            PanelOutcome::Close => Outcome::Quit,
+            PanelOutcome::Open(path) => Outcome::Edit(path),
             PanelOutcome::Changed => {
                 self.reload_history();
-                Quit::No
+                Outcome::Continue
             }
-            PanelOutcome::Palette => Quit::Palette,
-            PanelOutcome::Help => Quit::Help,
+            PanelOutcome::Palette => Outcome::Palette,
+            PanelOutcome::Help => Outcome::Help,
             PanelOutcome::Command(id) => self.run_id(id),
-            PanelOutcome::None => Quit::No,
+            PanelOutcome::None => Outcome::Continue,
         }
     }
 
@@ -787,7 +790,7 @@ impl App {
         };
         app.parents = std::mem::take(&mut self.parents);
         app.parents.push(self.root.clone());
-        app.screen = Screen::Refs;
+        app.tab = Tab::Refs;
         app.focus = Focus::Branches;
         *self = app;
     }
@@ -802,7 +805,7 @@ impl App {
         match App::new(&parent) {
             Some(mut app) => {
                 app.parents = parents;
-                app.screen = Screen::Refs;
+                app.tab = Tab::Refs;
                 app.focus = Focus::Submodules;
                 *self = app;
             }

@@ -43,7 +43,7 @@ enum Mode {
 /// A connection attempt, on its own thread (it waits for the network or the device).
 struct Job {
     label: String,
-    handle: std::thread::JoinHandle<nu_core::Result<()>>,
+    thread: std::thread::JoinHandle<nu_core::Result<()>>,
 }
 
 /// Where the cursor is in a list and how far the list is scrolled.
@@ -173,9 +173,9 @@ impl App {
     /// Call between events: finishes a connection attempt that ended and rereads the lists now
     /// and then. `true` when the screen should be redrawn.
     pub fn tick(&mut self) -> bool {
-        if self.job.as_ref().is_some_and(|j| j.handle.is_finished()) {
+        if self.job.as_ref().is_some_and(|j| j.thread.is_finished()) {
             let job = self.job.take().expect("checked above");
-            match job.handle.join() {
+            match job.thread.join() {
                 Ok(Ok(())) => self.say(format!("{} done", job.label), false),
                 Ok(Err(e)) => self.say(e.to_string(), true),
                 Err(_) => self.say("the connection attempt crashed", true),
@@ -247,7 +247,7 @@ impl App {
         let backend = self.wifi.clone();
         let label = format!("connecting to {ssid}");
         let handle = std::thread::spawn(move || backend.connect(&ssid, password.as_deref()));
-        self.job = Some(Job { label, handle });
+        self.job = Some(Job { label, thread: handle });
     }
 
     /// Connects (pairing first if new) to a device on a thread, so the screen stays alive.
@@ -265,7 +265,7 @@ impl App {
             },
         );
         let handle = std::thread::spawn(move || backend.connect(&address));
-        self.job = Some(Job { label, handle });
+        self.job = Some(Job { label, thread: handle });
     }
 
     /// Moves the focus to a pane.

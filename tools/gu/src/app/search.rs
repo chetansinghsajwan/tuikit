@@ -4,43 +4,43 @@ use super::*;
 
 impl App {
     /// The tab that shows `focus`.
-    pub(super) fn screen_of(focus: Focus) -> Screen {
+    pub(super) fn tab_of(focus: Focus) -> Tab {
         match focus {
-            Focus::Files => Screen::Status,
-            Focus::Commits => Screen::Commits,
-            Focus::Branches | Focus::Stashes | Focus::Submodules => Screen::Refs,
+            Focus::Files => Tab::Status,
+            Focus::Commits => Tab::Commits,
+            Focus::Branches | Focus::Stashes | Focus::Submodules => Tab::Refs,
         }
     }
 
     /// Switch tab (and focus its first pane).
-    pub(super) fn set_screen(&mut self, screen: Screen) {
-        if screen == self.screen {
+    pub(super) fn select_tab(&mut self, tab: Tab) {
+        if tab == self.tab {
             return;
         }
-        self.screen = screen;
-        self.focus = match screen {
-            Screen::Status => Focus::Files,
-            Screen::Commits => Focus::Commits,
-            Screen::Refs => Focus::Branches,
+        self.tab = tab;
+        self.focus = match tab {
+            Tab::Status => Focus::Files,
+            Tab::Commits => Focus::Commits,
+            Tab::Refs => Focus::Branches,
         };
-        if screen != Screen::Commits {
+        if tab != Tab::Commits {
             self.search = None;
         }
-        self.pscroll = 0;
+        self.preview_scroll = 0;
         // The commits are only loaded while their tab is shown.
         self.reload_history();
     }
 
     /// Show `focus`'s pane: its tab, and it focused.
     pub(super) fn show(&mut self, focus: Focus) {
-        self.set_screen(Self::screen_of(focus));
+        self.select_tab(Self::tab_of(focus));
         self.set_focus(focus);
     }
 
     /// Reload the list after a filter changed and say how many commits are left.
     pub(super) fn refilter(&mut self, what: &str) {
         self.lists[1] = ListState::default();
-        self.pscroll = 0;
+        self.preview_scroll = 0;
         self.reload_history();
         let n = self.commits.len();
         let shown = if self.filter.active() {
@@ -84,7 +84,7 @@ impl App {
         match found {
             Some(i) => {
                 self.lists[1].cursor = i;
-                self.pscroll = 0;
+                self.preview_scroll = 0;
                 let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
                 self.say(format!("match {nth} of {total}"), false);
             }
