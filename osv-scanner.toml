@@ -46,3 +46,39 @@ reason = "see deny.toml"
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0543"
 reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0574"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0575"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0576"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0577"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0578"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0579"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0580"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0581"
+reason = "see deny.toml"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0582"
+reason = "see deny.toml"

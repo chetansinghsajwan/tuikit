@@ -19,6 +19,15 @@ ignore = [
   # Vulnerabilities in parsers of files the user opens themselves; fixed in 0.41 but typst pins 0.38.
   { id = "RUSTSEC-2026-0194", reason = "quick-xml: via typst (mdexport); fixed in 0.41 but typst pins 0.38" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml: via typst (mdexport); fixed in 0.41 but typst pins 0.38" },
+  { id = "RUSTSEC-2026-0574", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0575", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0576", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0577", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0578", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0579", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0580", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0581", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
+  { id = "RUSTSEC-2026-0582", reason = "heapless: via faster-hex in gix-hash (git-core); fixed in 0.9.4 but gix 0.90 pins faster-hex 0.10, which needs 0.8" },
 ]
 
 [licenses]
