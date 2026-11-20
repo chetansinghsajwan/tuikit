@@ -16,6 +16,7 @@ workspace = true
 name = "ui"
 
 [dependencies]
+ignore.workspace = true
 notify = { version = "8", default-features = false, features = [
   "macos_fsevent",
 ] }

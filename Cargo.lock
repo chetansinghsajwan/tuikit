@@ -5852,6 +5852,7 @@ dependencies = [
 name = "tuikit-ui"
 version = "0.1.0"
 dependencies = [
+ "ignore",
  "notify",
  "ratatui",
  "serde",
