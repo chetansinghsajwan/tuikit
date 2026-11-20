@@ -13,7 +13,7 @@ struct Rig {
 impl Rig {
     /// Puts `grid` behind a dispatcher built the way `tb` builds its app.
     fn new(mut grid: Grid) -> Rig {
-        let dispatcher = ui::app::App::new("tb")
+        let dispatcher = ui::app::Shell::new("tb")
             .actions(crate::keys::ACTIONS)
             .groups(crate::keys::GROUPS)
             .dispatcher(&mut grid);
@@ -22,7 +22,7 @@ impl Rig {
 
     /// Sends one event through the dispatcher.
     fn handle_event(&mut self, ev: &Event) -> Request {
-        self.dispatcher.event(&mut self.grid, ev, &mut ui::app::NoHost)
+        self.dispatcher.handle_event(&mut self.grid, ev, &mut ui::app::NoHost)
     }
 }
 

@@ -55,11 +55,11 @@ fn run(cli: Cli) -> Result<(), String> {
     let (tx, rx) = mpsc::channel();
     link::follow(cli.addr.clone(), move |e| tx.send(e).is_ok());
     let mut app = App::new(cfg, cli.addr).with_events(rx);
-    ui::app::App::new("kanata-status")
+    ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
-        .no_nav()
+        .nav(false)
         .actions(ACTIONS)
-        .tick(Duration::from_millis(100))
+        .tick_interval(Duration::from_millis(100))
         .run(&mut app)
         .map_err(|e| e.to_string())
 }

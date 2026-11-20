@@ -435,7 +435,7 @@ impl Panel {
 
     /// Whether this event is the panel's own even though the host owns the keymap: a prompt, a
     /// question or a bookmark wait is open, or a paste runs and the key cancels or refuses it.
-    pub fn captures(&self, ev: &Event) -> bool {
+    pub fn captures_input(&self, ev: &Event) -> bool {
         if self.is_busy() {
             return true;
         }

@@ -560,24 +560,24 @@ impl ui::app::Screen for Grid {
     }
 
     /// A cell, the find box or a question is open: the keys are theirs.
-    fn captures(&self, _ev: &Event) -> bool {
+    fn captures_input(&self, _ev: &Event) -> bool {
         !matches!(self.mode, Mode::Normal)
     }
 
-    fn event(&mut self, ev: &Event, _host: &mut dyn ui::app::Host) -> Request {
+    fn on_event(&mut self, ev: &Event, _host: &mut dyn ui::app::Host) -> Request {
         self.typing(ev)
     }
 
-    fn run(&mut self, id: &'static str, _host: &mut dyn ui::app::Host) -> Request {
+    fn run_action(&mut self, id: &'static str, _host: &mut dyn ui::app::Host) -> Request {
         self.act(id)
     }
 
-    fn keypress(&mut self) {
+    fn on_keypress(&mut self) {
         self.message = None;
     }
 
     /// Tells the user the key sequence they typed does nothing.
-    fn unbound(&mut self, keys: &str) {
+    fn on_unbound_keys(&mut self, keys: &str) {
         self.say(format!("{keys} is not bound"), true);
     }
 

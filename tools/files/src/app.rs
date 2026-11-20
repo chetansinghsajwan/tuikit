@@ -14,7 +14,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use ui::app::{Host, Navigable, Request, Tabbed, overlay, suspended};
+use ui::app::{Host, Navigable, Request, Tabbed, with_overlay, with_suspended};
 use ui::keys::{Action as Key, action};
 use ui::{Pane, Theme};
 
@@ -68,10 +68,10 @@ pub fn run(opts: Options) -> io::Result<()> {
     };
     let mut actions = files::keys::hosted();
     actions.extend_from_slice(ACTIONS);
-    let result = ui::app::App::new("files")
+    let result = ui::app::Shell::new("files")
         .actions(actions)
         .groups(files::keys::GROUPS)
-        .tick(Duration::from_millis(100))
+        .tick_interval(Duration::from_millis(100))
         .run(&mut explorer);
     if let Some(file) = &explorer.opts.cwd_file {
         fs::write(file, explorer.tabs.active().root().as_os_str().as_encoded_bytes())?;
@@ -86,13 +86,13 @@ impl ui::app::Screen for Explorer {
     }
 
     /// A prompt, a question or a bookmark wait is open, or a paste runs and the key cancels it.
-    fn captures(&self, ev: &Event) -> bool {
-        self.tabs.active().captures(ev)
+    fn captures_input(&self, ev: &Event) -> bool {
+        self.tabs.active().captures_input(ev)
     }
 
     /// The panel's own keys while it captures them.
-    fn event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
-        if self.tabs.active().captures(ev) {
+    fn on_event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
+        if self.tabs.active().captures_input(ev) {
             let action = self.panel().handle_captured(ev);
             return self.act(action, host);
         }
@@ -100,7 +100,7 @@ impl ui::app::Screen for Explorer {
     }
 
     /// The panel's actions run on the panel, the app's own (tabs, properties) here.
-    fn run(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
+    fn run_action(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
         if files::keys::owns(id) {
             let action = self.panel().run(id);
             self.act(action, host)
@@ -110,16 +110,16 @@ impl ui::app::Screen for Explorer {
         }
     }
 
-    fn keypress(&mut self) {
+    fn on_keypress(&mut self) {
         self.panel().clear_message();
     }
 
-    fn unbound(&mut self, keys: &str) {
+    fn on_unbound_keys(&mut self, keys: &str) {
         self.panel().notify(format!("{keys} is not bound"), true);
     }
 
     /// Lets the panel finish background work, and says when a folder count moved.
-    fn tick(&mut self) -> bool {
+    fn on_tick(&mut self) -> bool {
         let props = self.dirsize.as_ref().map(DirSize::state) != self.shown;
         self.panel().tick() || props
     }
@@ -143,15 +143,15 @@ impl Tabbed for Explorer {
         self.tabs.prev();
     }
 
-    fn tab_goto(&mut self, index: usize) {
+    fn tab_select(&mut self, index: usize) {
         self.tabs.goto(index);
     }
 
-    fn dynamic(&self) -> bool {
+    fn can_open_close_tabs(&self) -> bool {
         true
     }
 
-    fn tab_new(&mut self) {
+    fn tab_open(&mut self) {
         let root = self.panel().root().to_path_buf();
         self.tabs.open(Panel::new(root, panel_opts(&self.opts)));
     }
@@ -163,7 +163,7 @@ impl Tabbed for Explorer {
     }
 
     fn tab_duplicate(&mut self) {
-        self.tab_new();
+        self.tab_open();
     }
 
     fn tab_move(&mut self, delta: isize) {
@@ -194,7 +194,8 @@ impl Explorer {
                     }
                     return Request::Quit;
                 }
-                let result = suspended(host, || open(&path)).unwrap_or_else(|e| Err(e.to_string()));
+                let result =
+                    with_suspended(host, || open(&path)).unwrap_or_else(|e| Err(e.to_string()));
                 self.report(result);
                 self.panel().refresh();
             }
@@ -205,13 +206,13 @@ impl Explorer {
             }
             Outcome::Search(kind) => {
                 let root = self.panel().root().to_path_buf();
-                if let Ok(Some(found)) = overlay(host, || search(&kind, &root)) {
+                if let Ok(Some(found)) = with_overlay(host, || search(&kind, &root)) {
                     self.panel().reveal(&found);
                 }
             }
             Outcome::BulkRename(paths) => {
                 let root = self.panel().root().to_path_buf();
-                let result = suspended(host, || bulk_rename(&root, &paths))
+                let result = with_suspended(host, || bulk_rename(&root, &paths))
                     .unwrap_or_else(|e| Err(e.to_string()));
                 self.panel().clear_marks();
                 self.panel().refresh();
@@ -224,7 +225,7 @@ impl Explorer {
                 }
             }
             Outcome::OpenWith(path, cmd) => {
-                let result = suspended(host, || open_with(&cmd, &path))
+                let result = with_suspended(host, || open_with(&cmd, &path))
                     .unwrap_or_else(|e| Err(e.to_string()));
                 self.report(result);
                 self.panel().refresh();

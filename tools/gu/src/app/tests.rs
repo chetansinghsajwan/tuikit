@@ -74,18 +74,18 @@ impl Rig {
 
     /// Sends one event through the dispatcher.
     fn handle_event(&mut self, ev: &Event) -> Quit {
-        Self::quit(self.dispatcher.event(&mut self.app, ev, &mut ui::app::NoHost))
+        Self::quit(self.dispatcher.handle_event(&mut self.app, ev, &mut ui::app::NoHost))
     }
 
     /// Runs the action the palette picked.
     fn run_palette(&mut self, id: &'static str) -> Quit {
-        Self::quit(self.dispatcher.run(&mut self.app, id, &mut ui::app::NoHost))
+        Self::quit(self.dispatcher.run_action(&mut self.app, id, &mut ui::app::NoHost))
     }
 
     /// Every action of the focused pane with its keys, as the palette and the help list them.
     fn keys_rows(&self) -> Vec<ui::keys::Row> {
         use ui::app::Screen;
-        self.dispatcher.rows(self.app.context())
+        self.dispatcher.palette_rows(self.app.context())
     }
 }
 
@@ -106,7 +106,7 @@ impl std::ops::DerefMut for Rig {
 /// The screen on a repository, behind a dispatcher built the way `gu` builds its app.
 fn rig(dir: &Path) -> Rig {
     let mut app = App::new(dir).unwrap();
-    let dispatcher = ui::app::App::new("gu")
+    let dispatcher = ui::app::Shell::new("gu")
         .contexts(crate::keys::contexts())
         .groups(crate::keys::GROUPS)
         .dispatcher(&mut app);
@@ -651,7 +651,7 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     let mut app = rig(&d);
     // Files pane: its own table; Space then Space asks the host for the palette.
     press_raw(&mut app, ' ');
-    assert!(app.dispatcher.menu(0).is_some());
+    assert!(app.dispatcher.leader_menu(0).is_some());
     assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Quit::Palette);
     let ids: Vec<&str> = app.keys_rows().iter().map(|r| r.id).collect();
     assert!(ids.contains(&"commit.new") && ids.contains(&"focus.branches"), "{ids:?}");
@@ -659,7 +659,7 @@ fn the_leader_menu_palette_and_help_work_in_every_pane() {
     press(&mut app, "3");
     press_raw(&mut app, ' ');
     let menu = match app.focus {
-        Focus::Branches => app.dispatcher.menu(1).unwrap(),
+        Focus::Branches => app.dispatcher.leader_menu(1).unwrap(),
         _ => panic!(),
     };
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();

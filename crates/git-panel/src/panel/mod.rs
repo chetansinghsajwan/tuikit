@@ -357,7 +357,7 @@ impl Panel {
 
     /// Whether the commit prompt or the discard question is open, so the keys are the panel's own
     /// even though the host owns the keymap.
-    pub fn captures(&self, _ev: &Event) -> bool {
+    pub fn captures_input(&self, _ev: &Event) -> bool {
         !matches!(self.mode, Mode::Normal)
     }
 

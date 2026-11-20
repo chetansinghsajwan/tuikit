@@ -26,27 +26,27 @@ struct Fake {
 impl Screen for Fake {
     fn render(&mut self, _: Rect, _: &mut Buffer, _: &Theme) {}
 
-    fn captures(&self, _ev: &Event) -> bool {
+    fn captures_input(&self, _ev: &Event) -> bool {
         self.typing
     }
 
-    fn event(&mut self, ev: &Event, _host: &mut dyn Host) -> Request {
+    fn on_event(&mut self, ev: &Event, _host: &mut dyn Host) -> Request {
         if let Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) = ev {
             self.got.push(*c);
         }
         Request::None
     }
 
-    fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
+    fn run_action(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
         self.ran.push(id);
         Request::None
     }
 
-    fn keypress(&mut self) {
+    fn on_keypress(&mut self) {
         self.presses += 1;
     }
 
-    fn unbound(&mut self, keys: &str) {
+    fn on_unbound_keys(&mut self, keys: &str) {
         self.unbound.push(keys.to_string());
     }
 
@@ -72,15 +72,15 @@ impl Tabbed for Fake {
         self.tab = self.tab.saturating_sub(1);
     }
 
-    fn tab_goto(&mut self, index: usize) {
+    fn tab_select(&mut self, index: usize) {
         self.tab = index;
     }
 
-    fn dynamic(&self) -> bool {
+    fn can_open_close_tabs(&self) -> bool {
         self.dynamic
     }
 
-    fn tab_new(&mut self) {
+    fn tab_open(&mut self) {
         self.opened += 1;
     }
 }
@@ -113,11 +113,11 @@ fn press(d: &mut Dispatcher, s: &mut Fake, key: &str) -> Request {
             None => (KeyCode::Char(key.chars().next().unwrap()), KeyModifiers::NONE),
         },
     };
-    d.event(s, &Event::Key(KeyEvent::new(code, mods)), &mut NoHost)
+    d.handle_event(s, &Event::Key(KeyEvent::new(code, mods)), &mut NoHost)
 }
 
-fn app() -> App {
-    App::new("fake").actions(OWN)
+fn app() -> Shell {
+    Shell::new("fake").actions(OWN)
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn a_screen_without_movement_or_with_no_nav_gets_no_nav_keys() {
     assert_eq!(s.got, vec!['j'], "an unbound key goes to the screen");
 
     let mut s = Fake::default();
-    let mut d = app().no_nav().dispatcher(&mut s);
+    let mut d = app().nav(false).dispatcher(&mut s);
     press(&mut d, &mut s, "j");
     assert_eq!((s.cursor, s.got.as_slice()), (0, &['j'][..]));
 }
@@ -168,7 +168,7 @@ fn the_tools_own_actions_reach_the_screen_and_the_shell_ones_the_loop() {
     assert_eq!(s.ran, vec!["thing.do"]);
     assert_eq!(press(&mut d, &mut s, "?"), Request::Help);
     assert_eq!(press(&mut d, &mut s, "space"), Request::None, "the leader opens the menu");
-    assert!(d.menu(0).is_some());
+    assert!(d.leader_menu(0).is_some());
     assert_eq!(press(&mut d, &mut s, "space"), Request::Palette);
 }
 
@@ -180,7 +180,7 @@ fn a_screen_that_takes_text_gets_every_key_the_leader_included() {
         press(&mut d, &mut s, k);
     }
     assert_eq!(s.got, vec!['j', ' ', '?']);
-    assert!(d.menu(0).is_none());
+    assert!(d.leader_menu(0).is_none());
     assert_eq!(s.cursor, 0);
 }
 
@@ -197,7 +197,7 @@ fn a_sequence_nothing_is_bound_to_is_reported_to_the_screen() {
 fn the_help_lists_the_shared_and_the_own_actions() {
     let mut s = Fake::default();
     let d = app().dispatcher(&mut s);
-    let rows = d.rows(0);
+    let rows = d.palette_rows(0);
     let text = format!("{rows:?}");
     for want in ["up", "page down", "commands", "keys", "do"] {
         assert!(text.contains(want), "{want} is missing from the help");
@@ -209,7 +209,7 @@ fn the_help_lists_the_shared_and_the_own_actions() {
 fn an_action_id_registered_twice_fails_at_startup() {
     const CLASH: &[Action] = &[crate::keys::action("nav.up", "up", "again", &["x"])];
     let mut s = Fake::default();
-    let _ = App::new("fake").actions(CLASH).dispatcher(&mut s);
+    let _ = Shell::new("fake").actions(CLASH).dispatcher(&mut s);
 }
 
 #[test]
@@ -217,14 +217,18 @@ fn each_context_has_its_own_keymap() {
     const ONE: &[Action] = &[crate::keys::action("one.do", "one", "in the first", &["x"])];
     const TWO: &[Action] = &[crate::keys::action("two.do", "two", "in the second", &["x"])];
     let mut s = Fake::default();
-    let mut d = App::new("fake").contexts(vec![ONE.to_vec(), TWO.to_vec()]).dispatcher(&mut s);
+    let mut d = Shell::new("fake").contexts(vec![ONE.to_vec(), TWO.to_vec()]).dispatcher(&mut s);
     press(&mut d, &mut s, "x");
     s.ctx = 1;
     press(&mut d, &mut s, "x");
     assert_eq!(s.ran, vec!["one.do", "two.do"]);
     let ids = |rows: Vec<Row>| rows.iter().map(|r| r.id).collect::<Vec<_>>();
-    assert!(ids(d.rows(0)).contains(&"one.do") && !ids(d.rows(0)).contains(&"two.do"));
-    assert!(ids(d.rows(1)).contains(&"two.do") && !ids(d.rows(1)).contains(&"one.do"));
+    assert!(
+        ids(d.palette_rows(0)).contains(&"one.do") && !ids(d.palette_rows(0)).contains(&"two.do")
+    );
+    assert!(
+        ids(d.palette_rows(1)).contains(&"two.do") && !ids(d.palette_rows(1)).contains(&"one.do")
+    );
 }
 
 #[test]
@@ -251,7 +255,7 @@ fn tabs_get_the_shared_keys_and_the_number_keys() {
     press(&mut d, &mut s, "4");
     assert_eq!(s.tab, 3, "an unbound number key goes to that tab");
     assert!(s.got.is_empty(), "the screen never saw it");
-    let ids: Vec<_> = d.rows(0).iter().map(|r| r.id).collect();
+    let ids: Vec<_> = d.palette_rows(0).iter().map(|r| r.id).collect();
     assert!(!ids.contains(&"tab.new"), "fixed tabs cannot be opened: {ids:?}");
 }
 
@@ -259,7 +263,7 @@ fn tabs_get_the_shared_keys_and_the_number_keys() {
 fn dynamic_tabs_can_be_opened_and_a_bound_number_key_stays_the_screens() {
     const ONE: &[Action] = &[crate::keys::action("focus.one", "one", "focus one", &["1"])];
     let mut s = Fake { tabs: true, dynamic: true, ..Fake::default() };
-    let mut d = App::new("fake").actions(ONE).dispatcher(&mut s);
+    let mut d = Shell::new("fake").actions(ONE).dispatcher(&mut s);
     press(&mut d, &mut s, "space");
     press(&mut d, &mut s, "t");
     press(&mut d, &mut s, "n");
@@ -276,7 +280,7 @@ fn a_screen_without_tabs_or_with_no_tabs_gets_no_tab_keys() {
     assert_eq!(s.got, vec![']']);
 
     let mut s = Fake { tabs: true, ..Fake::default() };
-    let mut d = app().no_tabs().dispatcher(&mut s);
+    let mut d = app().tabs(false).dispatcher(&mut s);
     press(&mut d, &mut s, "]");
     assert_eq!((s.tab, s.got.as_slice()), (0, &[']'][..]));
 }

@@ -162,17 +162,17 @@ impl ui::app::Screen for App {
         App::render(self, area, buf);
     }
 
-    fn captures(&self, ev: &Event) -> bool {
+    fn captures_input(&self, ev: &Event) -> bool {
         self.takes(ev)
     }
 
-    fn event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
+    fn on_event(&mut self, ev: &Event, host: &mut dyn Host) -> Request {
         let quit = self.typing(ev);
         self.finish(quit, host)
     }
 
     /// The Files panel's own actions run on the panel, every other one here.
-    fn run(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
+    fn run_action(&mut self, id: &'static str, host: &mut dyn Host) -> Request {
         let quit = if self.focus == Focus::Files && git_panel::keys::owns(id) {
             let action = self.files.run(id);
             self.files_action(action)
@@ -182,12 +182,12 @@ impl ui::app::Screen for App {
         self.finish(quit, host)
     }
 
-    fn keypress(&mut self) {
+    fn on_keypress(&mut self) {
         self.message = None;
         self.files.clear_message();
     }
 
-    fn unbound(&mut self, keys: &str) {
+    fn on_unbound_keys(&mut self, keys: &str) {
         let text = format!("{keys} is not bound");
         if self.focus == Focus::Files {
             self.files.notify(text, true);
@@ -196,7 +196,7 @@ impl ui::app::Screen for App {
         }
     }
 
-    fn tick(&mut self) -> bool {
+    fn on_tick(&mut self) -> bool {
         App::tick(self)
     }
 
@@ -224,7 +224,7 @@ impl App {
             Quit::Palette => Request::Palette,
             Quit::Help => Request::Help,
             Quit::Edit(path) => {
-                let ok = ui::app::suspended(host, || {
+                let ok = ui::app::with_suspended(host, || {
                     let editor = std::env::var("VISUAL")
                         .or_else(|_| std::env::var("EDITOR"))
                         .unwrap_or_else(|_| "vi".into());
@@ -261,7 +261,7 @@ impl Tabbed for App {
         });
     }
 
-    fn tab_goto(&mut self, index: usize) {
+    fn tab_select(&mut self, index: usize) {
         match index {
             0 => self.set_screen(Screen::Status),
             1 => self.set_screen(Screen::Commits),

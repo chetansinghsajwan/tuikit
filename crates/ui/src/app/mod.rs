@@ -1,6 +1,6 @@
 //! The app shell: the terminal, the keymap, the event loop and the overlays every full-screen
 //! tool shares (leader menu, keys help, command palette). A tool implements `Screen`, lists its
-//! own actions on an `App` and runs it, so none of them writes its own setup, loop, help or
+//! own actions on an `Shell` and runs it, so none of them writes its own setup, loop, help or
 //! suspend logic. The shell registers the shared actions itself (movement, palette, help), so the
 //! help and the palette look the same everywhere.
 
@@ -48,7 +48,7 @@ pub trait Host {
 }
 
 /// Gives the terminal to `f` and takes it back afterwards.
-pub fn suspended<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T> {
+pub fn with_suspended<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T> {
     let mut f = Some(f);
     let mut out = None;
     host.suspend(&mut || out = f.take().map(|f| f()))?;
@@ -56,7 +56,7 @@ pub fn suspended<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T>
 }
 
 /// Runs `f`, which opens the picker, over the screen where the terminal allows it.
-pub fn overlay<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T> {
+pub fn with_overlay<T>(host: &mut dyn Host, f: impl FnOnce() -> T) -> io::Result<T> {
     let mut f = Some(f);
     let mut out = None;
     host.overlay(&mut || out = f.take().map(|f| f()))?;
@@ -127,16 +127,16 @@ pub trait Tabbed {
     fn tab_prev(&mut self);
 
     /// Switches to the tab at `index` (0 for the first); out of range does nothing.
-    fn tab_goto(&mut self, index: usize);
+    fn tab_select(&mut self, index: usize);
 
     /// Whether the user opens and closes tabs (a file explorer) or the tabs are fixed (the Status,
     /// Commits and Refs tabs of a git screen). Only dynamic tabs get the actions below.
-    fn dynamic(&self) -> bool {
+    fn can_open_close_tabs(&self) -> bool {
         false
     }
 
     /// Opens a new tab where this one is.
-    fn tab_new(&mut self) {}
+    fn tab_open(&mut self) {}
 
     /// Brings back the tab closed last.
     fn tab_reopen(&mut self) {}
@@ -159,29 +159,29 @@ pub trait Screen {
 
     /// Whether this event is the screen's own and the keymap, leader included, stays out of it:
     /// typed text in a prompt, an answer to a question.
-    fn captures(&self, _ev: &Event) -> bool {
+    fn captures_input(&self, _ev: &Event) -> bool {
         false
     }
 
     /// Reacts to an event the keymap did not turn into an action: events `captures` claimed,
     /// keys nothing is bound to, and every other event.
-    fn event(&mut self, _ev: &Event, _host: &mut dyn Host) -> Request {
+    fn on_event(&mut self, _ev: &Event, _host: &mut dyn Host) -> Request {
         Request::None
     }
 
     /// Runs one of the tool's own actions by id (also what a palette pick resolves to).
-    fn run(&mut self, id: &'static str, host: &mut dyn Host) -> Request;
+    fn run_action(&mut self, id: &'static str, host: &mut dyn Host) -> Request;
 
     /// Called for each key press the keymap is about to decide on (not for keys the screen
     /// captures): a place to clear a message left by the last action.
-    fn keypress(&mut self) {}
+    fn on_keypress(&mut self) {}
 
     /// A key sequence ended on a key nothing is bound to; `keys` names the sequence.
-    fn unbound(&mut self, _keys: &str) {}
+    fn on_unbound_keys(&mut self, _keys: &str) {}
 
     /// Called when no input came for a tick: background work and clocks go here. Returns whether
     /// the screen changed and must be drawn again.
-    fn tick(&mut self) -> bool {
+    fn on_tick(&mut self) -> bool {
         false
     }
 
@@ -195,7 +195,7 @@ pub trait Screen {
         None
     }
 
-    /// Which set of `App::contexts` is active (the focused pane): its actions and keys apply now.
+    /// Which set of `Shell::contexts` is active (the focused pane): its actions and keys apply now.
     fn context(&self) -> usize {
         0
     }
@@ -240,7 +240,7 @@ const SHELL: &[Action] = &[
 ];
 
 /// How a tool wants its app set up: its name, its own actions and which shared parts it uses.
-pub struct App {
+pub struct Shell {
     tool: &'static str,
     leader: &'static str,
     actions: Vec<Action>,
@@ -251,11 +251,11 @@ pub struct App {
     tick: Duration,
 }
 
-impl App {
+impl Shell {
     /// An app for `tool` (it names the palette) with the default leader, no actions of its own,
     /// the shared movement on and a tick of 250 ms.
-    pub fn new(tool: &'static str) -> App {
-        App {
+    pub fn new(tool: &'static str) -> Shell {
+        Shell {
             tool,
             leader: "space",
             actions: Vec::new(),
@@ -268,13 +268,13 @@ impl App {
     }
 
     /// The key that starts the leader menu, unless the user's configuration sets another.
-    pub fn leader(mut self, leader: &'static str) -> App {
+    pub fn leader(mut self, leader: &'static str) -> Shell {
         self.leader = leader;
         self
     }
 
     /// The tool's own actions.
-    pub fn actions(mut self, actions: impl Into<Vec<Action>>) -> App {
+    pub fn actions(mut self, actions: impl Into<Vec<Action>>) -> Shell {
         self.actions = actions.into();
         self
     }
@@ -282,31 +282,31 @@ impl App {
     /// Extra actions that apply only while a context is active (a focused pane), one set each;
     /// `Screen::context` picks the set. Each context gets its own keymap, so the same key may mean
     /// different things in different contexts.
-    pub fn contexts(mut self, contexts: impl Into<Vec<Vec<Action>>>) -> App {
+    pub fn contexts(mut self, contexts: impl Into<Vec<Vec<Action>>>) -> Shell {
         self.contexts = contexts.into();
         self
     }
 
     /// Names for the tool's leader-menu prefixes.
-    pub fn groups(mut self, groups: &'static [Group]) -> App {
+    pub fn groups(mut self, groups: &'static [Group]) -> Shell {
         self.groups = groups;
         self
     }
 
     /// Leaves the shared movement out, even for a screen that offers it.
-    pub fn no_nav(mut self) -> App {
-        self.nav = false;
+    pub fn nav(mut self, on: bool) -> Shell {
+        self.nav = on;
         self
     }
 
     /// Leaves the shared tab actions out, even for a screen that offers tabs.
-    pub fn no_tabs(mut self) -> App {
-        self.tabs = false;
+    pub fn tabs(mut self, on: bool) -> Shell {
+        self.tabs = on;
         self
     }
 
     /// How long the loop waits for input before it calls `Screen::tick`.
-    pub fn tick(mut self, tick: Duration) -> App {
+    pub fn tick_interval(mut self, tick: Duration) -> Shell {
         self.tick = tick;
         self
     }
@@ -323,7 +323,7 @@ impl App {
         }
         if tabs {
             all.extend_from_slice(TABS);
-            if screen.tabs().is_some_and(|t| t.dynamic()) {
+            if screen.tabs().is_some_and(|t| t.can_open_close_tabs()) {
                 all.extend_from_slice(DYNAMIC_TABS);
             }
         }
@@ -375,20 +375,25 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     /// Handles one event: a screen that claims it gets it as is, else keys go through the keymap.
-    pub fn event<S: Screen>(&mut self, screen: &mut S, ev: &Event, host: &mut dyn Host) -> Request {
-        let Event::Key(key) = ev else { return screen.event(ev, host) };
+    pub fn handle_event<S: Screen>(
+        &mut self,
+        screen: &mut S,
+        ev: &Event,
+        host: &mut dyn Host,
+    ) -> Request {
+        let Event::Key(key) = ev else { return screen.on_event(ev, host) };
         if key.kind == KeyEventKind::Release {
             return Request::None;
         }
-        if screen.captures(ev) {
-            return screen.event(ev, host);
+        if screen.captures_input(ev) {
+            return screen.on_event(ev, host);
         }
-        screen.keypress();
-        let ctx = self.index(screen.context());
+        screen.on_keypress();
+        let ctx = self.context_index(screen.context());
         match self.keymaps[ctx].feed(key) {
-            Feed::Run(id) => self.run(screen, id, host),
+            Feed::Run(id) => self.run_action(screen, id, host),
             Feed::NoBinding => {
-                screen.unbound(self.keymaps[ctx].rejected());
+                screen.on_unbound_keys(self.keymaps[ctx].rejected());
                 Request::None
             }
             Feed::Unbound => {
@@ -397,17 +402,17 @@ impl Dispatcher {
                     && !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
                     && let Some(tabs) = screen.tabs()
                 {
-                    tabs.tab_goto(c as usize - '1' as usize);
+                    tabs.tab_select(c as usize - '1' as usize);
                     return Request::None;
                 }
-                screen.event(ev, host)
+                screen.on_event(ev, host)
             }
             Feed::Pending | Feed::Cancelled => Request::None,
         }
     }
 
     /// Runs an action by id: the shared ones here, the tool's own on the screen.
-    pub fn run<S: Screen>(
+    pub fn run_action<S: Screen>(
         &mut self,
         screen: &mut S,
         id: &'static str,
@@ -428,24 +433,24 @@ impl Dispatcher {
                 }
                 Request::None
             }
-            _ => screen.run(id, host),
+            _ => screen.run_action(id, host),
         }
     }
 
     /// The keymap of a context, clamped so a screen reporting a context it did not register still
     /// gets one.
-    fn index(&self, ctx: usize) -> usize {
+    fn context_index(&self, ctx: usize) -> usize {
         ctx.min(self.keymaps.len() - 1)
     }
 
     /// The pending key-prefix menu of a context, to draw over the screen.
-    pub fn menu(&self, ctx: usize) -> Option<Menu> {
-        self.keymaps[self.index(ctx)].menu()
+    pub fn leader_menu(&self, ctx: usize) -> Option<Menu> {
+        self.keymaps[self.context_index(ctx)].menu()
     }
 
     /// Every action of a context with its keys, for the help and the palette.
-    pub fn rows(&self, ctx: usize) -> Vec<Row> {
-        self.keymaps[self.index(ctx)].rows()
+    pub fn palette_rows(&self, ctx: usize) -> Vec<Row> {
+        self.keymaps[self.context_index(ctx)].rows()
     }
 }
 
@@ -454,7 +459,7 @@ fn switch(tabs: &mut dyn Tabbed, id: &str) {
     match id {
         "tab.next" => tabs.tab_next(),
         "tab.prev" => tabs.tab_prev(),
-        "tab.new" => tabs.tab_new(),
+        "tab.new" => tabs.tab_open(),
         "tab.reopen" => tabs.tab_reopen(),
         "tab.duplicate" => tabs.tab_duplicate(),
         "tab.move_left" => tabs.tab_move(-1),
@@ -503,7 +508,7 @@ fn leave(term: &mut Term) -> io::Result<()> {
 /// Draws the screen and the overlays when something changed, then handles input until the screen
 /// asks to quit.
 fn event_loop<S: Screen>(
-    app: &App,
+    app: &Shell,
     dispatcher: &mut Dispatcher,
     term: &mut Term,
     screen: &mut S,
@@ -517,17 +522,17 @@ fn event_loop<S: Screen>(
             term.draw(|f| {
                 let area = f.area();
                 screen.render(area, f.buffer_mut(), &theme);
-                if let Some(menu) = dispatcher.menu(ctx) {
+                if let Some(menu) = dispatcher.leader_menu(ctx) {
                     render_menu(area, f.buffer_mut(), &theme, &menu);
                 }
                 if let Some(h) = help.as_mut() {
-                    h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.rows(ctx));
+                    h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.palette_rows(ctx));
                 }
                 crate::anim::finish(f.buffer_mut(), &theme);
             })?;
         }
         if !event::poll(crate::anim::poll_timeout(app.tick))? {
-            dirty = screen.tick() || crate::anim::take_redraw();
+            dirty = screen.on_tick() || crate::anim::take_redraw();
             continue;
         }
         let ev = event::read()?;
@@ -542,13 +547,13 @@ fn event_loop<S: Screen>(
             }
             continue;
         }
-        match dispatcher.event(screen, &ev, term) {
+        match dispatcher.handle_event(screen, &ev, term) {
             Request::Quit => return Ok(()),
             Request::Help => help = Some(Help::default()),
             Request::Palette => {
-                let rows = dispatcher.rows(screen.context());
-                if let Some(id) = overlay(term, || choose(app.tool, &rows, "Commands"))?
-                    && dispatcher.run(screen, id, term) == Request::Quit
+                let rows = dispatcher.palette_rows(screen.context());
+                if let Some(id) = with_overlay(term, || choose(app.tool, &rows, "Commands"))?
+                    && dispatcher.run_action(screen, id, term) == Request::Quit
                 {
                     return Ok(());
                 }

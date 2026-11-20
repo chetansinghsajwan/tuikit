@@ -22,7 +22,7 @@ struct Rig {
 impl Rig {
     /// Sends one event through the dispatcher.
     fn handle_event(&mut self, ev: &Event) -> Request {
-        self.dispatcher.event(&mut self.app, ev, &mut ui::app::NoHost)
+        self.dispatcher.handle_event(&mut self.app, ev, &mut ui::app::NoHost)
     }
 }
 
@@ -51,7 +51,7 @@ fn press(app: &mut Rig, keys: &str) {
 fn app() -> (Rig, Arc<Fake>, Arc<FakeBluetooth>) {
     let (w, b) = (Arc::new(Fake::new()), Arc::new(FakeBluetooth::new()));
     let mut app = App::new(w.clone(), b.clone());
-    let dispatcher = ui::app::App::new("nu")
+    let dispatcher = ui::app::Shell::new("nu")
         .actions(crate::keys::common())
         .contexts(crate::keys::panes())
         .dispatcher(&mut app);
@@ -229,17 +229,17 @@ fn focus_leader_menu_palette_help_and_quit() {
     app.handle_event(&key(KeyCode::Tab));
     assert_eq!(app.focus, Focus::Wifi);
     press(&mut app, " ");
-    let menu = app.dispatcher.menu(0).unwrap();
+    let menu = app.dispatcher.leader_menu(0).unwrap();
     let names: Vec<&str> = menu.entries.iter().map(|e| e.name.as_str()).collect();
     for want in ["connect", "disconnect", "forget", "scan", "toggle Wi-Fi", "commands"] {
         assert!(names.contains(&want), "{want} in {names:?}");
     }
     assert_eq!(app.handle_event(&key(KeyCode::Char(' '))), Request::Palette);
     // The palette lists the focused pane's actions.
-    let ids: Vec<&str> = app.dispatcher.rows(app.context()).iter().map(|r| r.id).collect();
+    let ids: Vec<&str> = app.dispatcher.palette_rows(app.context()).iter().map(|r| r.id).collect();
     assert!(ids.contains(&"wifi.scan") && !ids.contains(&"bt.scan"), "{ids:?}");
     press(&mut app, "2");
-    let ids: Vec<&str> = app.dispatcher.rows(app.context()).iter().map(|r| r.id).collect();
+    let ids: Vec<&str> = app.dispatcher.palette_rows(app.context()).iter().map(|r| r.id).collect();
     assert!(ids.contains(&"bt.trust") && !ids.contains(&"wifi.scan"), "{ids:?}");
     assert_eq!(app.handle_event(&key(KeyCode::Char('?'))), Request::Help);
     assert_eq!(app.handle_event(&key(KeyCode::Char('q'))), Request::Quit);

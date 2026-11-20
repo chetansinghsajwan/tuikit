@@ -26,7 +26,10 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    match ui::app::App::new("tb").actions(tb::keys::ACTIONS).groups(tb::keys::GROUPS).run(&mut grid)
+    match ui::app::Shell::new("tb")
+        .actions(tb::keys::ACTIONS)
+        .groups(tb::keys::GROUPS)
+        .run(&mut grid)
     {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

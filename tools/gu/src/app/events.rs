@@ -28,7 +28,7 @@ impl App {
         if self.screen == Screen::Commits && self.commit_files.is_some() {
             return self.commit_files_key(key);
         }
-        if self.focus == Focus::Files && self.files.captures(ev) {
+        if self.focus == Focus::Files && self.files.captures_input(ev) {
             let action = self.files.handle_captured(ev);
             return self.files_action(action);
         }
@@ -40,7 +40,7 @@ impl App {
     pub(super) fn takes(&self, ev: &Event) -> bool {
         !matches!(self.mode, Mode::Normal)
             || (self.screen == Screen::Commits && self.commit_files.is_some())
-            || (self.focus == Focus::Files && self.files.captures(ev))
+            || (self.focus == Focus::Files && self.files.captures_input(ev))
     }
 
     /// Run an action by id: what a key, the leader menu or the palette resolves to.

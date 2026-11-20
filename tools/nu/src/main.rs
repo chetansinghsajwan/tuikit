@@ -64,10 +64,10 @@ fn run(cli: Cli) -> io::Result<u8> {
         real_backends()
     };
     let mut app = App::new(wifi, bt);
-    ui::app::App::new("nu")
+    ui::app::Shell::new("nu")
         .actions(nu::common())
         .contexts(nu::panes())
-        .tick(Duration::from_millis(200))
+        .tick_interval(Duration::from_millis(200))
         .run(&mut app)?;
     Ok(0)
 }

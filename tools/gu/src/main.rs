@@ -36,10 +36,10 @@ fn run(cli: Cli) -> io::Result<u8> {
         eprintln!("gu: not a git repository: {}", dir.display());
         return Ok(2);
     };
-    ui::app::App::new("gu")
+    ui::app::Shell::new("gu")
         .contexts(gu::contexts())
         .groups(gu::GROUPS)
-        .tick(Duration::from_millis(200))
+        .tick_interval(Duration::from_millis(200))
         .run(&mut app)?;
     Ok(0)
 }

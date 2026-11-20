@@ -73,16 +73,16 @@ fn press(
     mods: ratatui::crossterm::event::KeyModifiers,
 ) -> Request {
     use ratatui::crossterm::event::{Event, KeyEvent};
-    d.event(app, &Event::Key(KeyEvent::new(code, mods)), &mut ui::app::NoHost)
+    d.handle_event(app, &Event::Key(KeyEvent::new(code, mods)), &mut ui::app::NoHost)
 }
 
 #[test]
 fn only_ctrl_chords_do_anything_and_ctrl_space_opens_the_menu() {
     use ratatui::crossterm::event::{KeyCode, KeyModifiers};
     let mut app = app();
-    let mut d = ui::app::App::new("kanata-status")
+    let mut d = ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
-        .no_nav()
+        .nav(false)
         .actions(crate::ACTIONS)
         .dispatcher(&mut app);
     let ctrl = KeyModifiers::CONTROL;
@@ -98,7 +98,7 @@ fn only_ctrl_chords_do_anything_and_ctrl_space_opens_the_menu() {
     press(&mut d, &mut app, KeyCode::Char('l'), ctrl);
     assert!(app.browsing.is_none());
     assert_eq!(press(&mut d, &mut app, KeyCode::Char(' '), ctrl), Request::None);
-    assert!(d.menu(0).is_some(), "ctrl-space starts the leader menu");
+    assert!(d.leader_menu(0).is_some(), "ctrl-space starts the leader menu");
     press(&mut d, &mut app, KeyCode::Esc, KeyModifiers::NONE);
     assert_eq!(press(&mut d, &mut app, KeyCode::Char('q'), ctrl), Request::Quit);
 }

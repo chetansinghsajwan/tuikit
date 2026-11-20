@@ -366,7 +366,7 @@ impl ui::app::Screen for App {
         App::render(self, area, buf);
     }
 
-    fn run(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
+    fn run_action(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
         let n = self.cfg.layers.len();
         let shown = self.shown_index();
         match id {
@@ -381,7 +381,7 @@ impl ui::app::Screen for App {
     }
 
     /// Applies what the daemon sent since the last tick; true when something visible changed.
-    fn tick(&mut self) -> bool {
+    fn on_tick(&mut self) -> bool {
         let events: Vec<Event> =
             self.events.as_ref().map(|rx| rx.try_iter().collect()).unwrap_or_default();
         let mut changed = false;
