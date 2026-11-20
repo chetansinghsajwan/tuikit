@@ -166,10 +166,10 @@ impl App {
                 self.preview_scroll =
                     self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
             }
-            KeyCode::Char('}') => self.jump_diff(true, false),
-            KeyCode::Char('{') => self.jump_diff(false, false),
-            KeyCode::Char(')') => self.jump_diff(true, true),
-            KeyCode::Char('(') => self.jump_diff(false, true),
+            KeyCode::Char('}') => self.jump_to_next_mark(DiffMark::Hunk),
+            KeyCode::Char('{') => self.jump_to_prev_mark(DiffMark::Hunk),
+            KeyCode::Char(')') => self.jump_to_next_mark(DiffMark::File),
+            KeyCode::Char('(') => self.jump_to_prev_mark(DiffMark::File),
             _ => {}
         }
         if self.commit_files.as_ref().is_some_and(|cf| cf.cursor != before) {
@@ -193,17 +193,27 @@ impl App {
         }
     }
 
-    /// Move the diff scroll to the next or previous hunk, or file when `files` is set.
-    pub(super) fn jump_diff(&mut self, forward: bool, files: bool) {
+    /// Moves the diff scroll to the next hunk or file after the current scroll position.
+    pub(super) fn jump_to_next_mark(&mut self, mark: DiffMark) {
         let Some(p) = &self.preview else { return };
-        let marks = if files { &p.anchors.files } else { &p.anchors.hunks };
-        let target = if forward {
-            pv::Anchors::next(marks, self.preview_scroll)
-        } else {
-            pv::Anchors::prev(marks, self.preview_scroll)
+        let marks = match mark {
+            DiffMark::Hunk => &p.anchors.hunks,
+            DiffMark::File => &p.anchors.files,
         };
-        if let Some(t) = target {
-            self.preview_scroll = t;
+        if let Some(row) = pv::Anchors::next(marks, self.preview_scroll) {
+            self.preview_scroll = row;
+        }
+    }
+
+    /// Moves the diff scroll to the previous hunk or file before the current scroll position.
+    pub(super) fn jump_to_prev_mark(&mut self, mark: DiffMark) {
+        let Some(p) = &self.preview else { return };
+        let marks = match mark {
+            DiffMark::Hunk => &p.anchors.hunks,
+            DiffMark::File => &p.anchors.files,
+        };
+        if let Some(row) = pv::Anchors::prev(marks, self.preview_scroll) {
+            self.preview_scroll = row;
         }
     }
 }

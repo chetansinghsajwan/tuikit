@@ -736,11 +736,11 @@ fn the_refs_column_fits_the_widest_commit_and_the_free_space_goes_to_what_is_lef
     app.fit_columns(120);
     assert!(app.refs_w > 24, "the refs of the widest commit all fit: {}", app.refs_w);
     // Without the message the refs take the rest of the row.
-    app.cols.subject = false;
+    app.cols.show_subject = false;
     app.fit_columns(120);
     assert!(app.refs_w > app.refs_need, "{} vs {}", app.refs_w, app.refs_need);
     // In a narrow list the message keeps its room and the refs give way.
-    app.cols.subject = true;
+    app.cols.show_subject = true;
     app.fit_columns(60);
     assert!(app.refs_w <= 60 - 24, "{}", app.refs_w);
 }

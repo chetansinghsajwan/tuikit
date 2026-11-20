@@ -73,10 +73,10 @@ impl App {
             return;
         }
         let page = usize::from(inner.height);
-        if cf.cursor < cf.offset {
-            cf.offset = cf.cursor;
-        } else if cf.cursor >= cf.offset + page {
-            cf.offset = cf.cursor + 1 - page;
+        if cf.cursor < cf.first_visible_row {
+            cf.first_visible_row = cf.cursor;
+        } else if cf.cursor >= cf.first_visible_row + page {
+            cf.first_visible_row = cf.cursor + 1 - page;
         }
         let geo = ui::list::Rows::new(area, inner);
         let counts = ui::tree::CountWidths::of(
@@ -90,8 +90,8 @@ impl App {
             })
             .collect();
         let scope = ui::tree::active_scope(&depths, cf.cursor);
-        for (n, row) in cf.rows.iter().enumerate().skip(cf.offset).take(page) {
-            let y = inner.y + (n - cf.offset) as u16;
+        for (n, row) in cf.rows.iter().enumerate().skip(cf.first_visible_row).take(page) {
+            let y = inner.y + (n - cf.first_visible_row) as u16;
             let selected = n == cf.cursor;
             let file_row = match row {
                 FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow {

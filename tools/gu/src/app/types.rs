@@ -141,26 +141,26 @@ pub(super) enum RefRow {
 /// Which columns of the Commits table show (`v` menu).
 #[derive(Clone, Copy)]
 pub(super) struct Columns {
-    pub(super) hash: bool,
-    pub(super) author: bool,
+    pub(super) show_hash: bool,
+    pub(super) show_author: bool,
     /// Authors as full names instead of two initials.
-    pub(super) author_name: bool,
-    pub(super) refs: bool,
-    pub(super) subject: bool,
-    pub(super) rel_time: bool,
-    pub(super) abs_time: bool,
+    pub(super) show_author_name: bool,
+    pub(super) show_refs: bool,
+    pub(super) show_subject: bool,
+    pub(super) show_relative_time: bool,
+    pub(super) show_absolute_time: bool,
 }
 
 impl Default for Columns {
     fn default() -> Self {
         Columns {
-            hash: true,
-            author: true,
-            author_name: false,
-            refs: true,
-            subject: true,
-            rel_time: true,
-            abs_time: false,
+            show_hash: true,
+            show_author: true,
+            show_author_name: false,
+            show_refs: true,
+            show_subject: true,
+            show_relative_time: true,
+            show_absolute_time: false,
         }
     }
 }
@@ -174,7 +174,7 @@ pub(super) struct CommitFiles {
     pub(super) changes: Vec<git_core::FileChange>,
     pub(super) rows: Vec<FileRow>,
     pub(super) cursor: usize,
-    pub(super) offset: usize,
+    pub(super) first_visible_row: usize,
     pub(super) folded: std::collections::HashSet<String>,
 }
 
@@ -224,7 +224,7 @@ impl CommitFiles {
             changes,
             rows: Vec::new(),
             cursor: 0,
-            offset: 0,
+            first_visible_row: 0,
             folded: Default::default(),
         };
         cf.rebuild();
@@ -396,11 +396,18 @@ pub(super) fn parse_since(text: &str, now: i64) -> Option<i64> {
     Some((era * 146_097 + doe - 719_468) * 86_400)
 }
 
+/// What a diff jump moves to: the next or previous hunk, or the next or previous file.
+#[derive(Clone, Copy)]
+pub(super) enum DiffMark {
+    Hunk,
+    File,
+}
+
 /// The cursor and the first visible row of a list pane.
 #[derive(Default, Clone, Copy)]
 pub(super) struct ListState {
     pub(super) cursor: usize,
-    pub(super) offset: usize,
+    pub(super) first_visible_row: usize,
 }
 
 /// The diff text drawn in the preview, kept until another entry is highlighted or the width

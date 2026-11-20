@@ -68,12 +68,12 @@ impl App {
         }
         let page = usize::from(inner.height);
         let st = &mut self.lists[li];
-        if st.cursor < st.offset {
-            st.offset = st.cursor;
-        } else if st.cursor >= st.offset + page {
-            st.offset = st.cursor + 1 - page;
+        if st.cursor < st.first_visible_row {
+            st.first_visible_row = st.cursor;
+        } else if st.cursor >= st.first_visible_row + page {
+            st.first_visible_row = st.cursor + 1 - page;
         }
-        let (cursor, offset) = (st.cursor, st.offset);
+        let (cursor, offset) = (st.cursor, st.first_visible_row);
         let rows = ui::list::Rows::new(area, inner);
         for (row, i) in (offset..(offset + page).min(n)).enumerate() {
             let y = inner.y + row as u16;
@@ -98,23 +98,23 @@ impl App {
         const MIN_SUBJECT: usize = 24;
         let width = usize::from(width);
         let mut fixed = if self.graph { self.graph_w + 1 } else { 0 };
-        if self.cols.hash {
+        if self.cols.show_hash {
             fixed += HASH_W + 1;
         }
-        if self.cols.rel_time {
+        if self.cols.show_relative_time {
             fixed += 9;
         }
-        if self.cols.abs_time {
+        if self.cols.show_absolute_time {
             fixed += 18;
         }
-        let name_w = if self.cols.author_name { AUTHOR_COL } else { 2 };
-        if self.cols.author {
+        let name_w = if self.cols.show_author_name { AUTHOR_COL } else { 2 };
+        if self.cols.show_author {
             fixed += name_w + 1;
         }
         self.author_w = name_w;
         let free = width.saturating_sub(fixed);
-        let refs_on = self.cols.refs && self.refs_need > 0;
-        self.refs_w = match (refs_on, self.cols.subject) {
+        let refs_on = self.cols.show_refs && self.refs_need > 0;
+        self.refs_w = match (refs_on, self.cols.show_subject) {
             (false, _) => 0,
             (true, true) => {
                 self.refs_need.min(free.saturating_sub(MIN_SUBJECT)).max(8.min(self.refs_need))
@@ -122,7 +122,11 @@ impl App {
             // No message: the refs take the rest of the row.
             (true, false) => free.saturating_sub(1).max(self.refs_need.min(free)),
         };
-        if !self.cols.subject && !refs_on && self.cols.author && self.cols.author_name {
+        if !self.cols.show_subject
+            && !refs_on
+            && self.cols.show_author
+            && self.cols.show_author_name
+        {
             // Only names are left to fill the row.
             self.author_w = free.max(AUTHOR_COL);
         }
@@ -183,7 +187,7 @@ impl App {
             Focus::Commits => {
                 let k = &self.commits[i];
                 // `hash AB subject`: the author as two initials in a color of their own, like lazygit.
-                let who = if self.cols.author_name {
+                let who = if self.cols.show_author_name {
                     let mut n: String = k.author.chars().take(self.author_w).collect();
                     n.push_str(&" ".repeat(self.author_w.saturating_sub(n.chars().count())));
                     n
@@ -201,10 +205,10 @@ impl App {
                 }
                 // A table: graph, author, hash, refs (pills; the checked-out branch is the solid one
                 // with the branch icon), subject; every column starts at the same place in every row.
-                if self.cols.author {
+                if self.cols.show_author {
                     spans.push(author);
                 }
-                if self.cols.hash {
+                if self.cols.show_hash {
                     spans.push(Span::styled(
                         format!("{:<w$} ", k.short, w = HASH_W),
                         if self.compare.as_deref() == Some(k.oid.as_str()) {
@@ -216,7 +220,7 @@ impl App {
                         },
                     ));
                 }
-                if self.cols.refs && self.refs_w > 0 {
+                if self.cols.show_refs && self.refs_w > 0 {
                     let mut used = 0;
                     let refs =
                         pills(self.labels.get(&k.oid).map(Vec::as_slice).unwrap_or_default());
@@ -236,7 +240,7 @@ impl App {
                     }
                     spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
                 }
-                if !self.cols.subject {
+                if !self.cols.show_subject {
                 } else if hit {
                     spans.push(Span::styled(
                         k.subject.clone(),
@@ -246,10 +250,10 @@ impl App {
                     spans.extend(ui::subject::spans(theme, &k.subject, fg));
                 }
                 let mut when = Vec::new();
-                if self.cols.abs_time {
+                if self.cols.show_absolute_time {
                     when.push(format!("{:<16}", pv::format_utc(k.time)));
                 }
-                if self.cols.rel_time {
+                if self.cols.show_relative_time {
                     when.push(format!("{:>8}", ago(k.time)));
                 }
                 (Line::from(spans), when.join("  "))

@@ -97,13 +97,13 @@ impl App {
                 self.graph = !self.graph;
                 self.reload_history();
             }
-            "view.hash" => self.cols.hash = !self.cols.hash,
-            "view.author" => self.cols.author = !self.cols.author,
-            "view.author_name" => self.cols.author_name = !self.cols.author_name,
-            "view.refs" => self.cols.refs = !self.cols.refs,
-            "view.subject" => self.cols.subject = !self.cols.subject,
-            "view.rel_time" => self.cols.rel_time = !self.cols.rel_time,
-            "view.abs_time" => self.cols.abs_time = !self.cols.abs_time,
+            "view.hash" => self.cols.show_hash = !self.cols.show_hash,
+            "view.author" => self.cols.show_author = !self.cols.show_author,
+            "view.author_name" => self.cols.show_author_name = !self.cols.show_author_name,
+            "view.refs" => self.cols.show_refs = !self.cols.show_refs,
+            "view.subject" => self.cols.show_subject = !self.cols.show_subject,
+            "view.rel_time" => self.cols.show_relative_time = !self.cols.show_relative_time,
+            "view.abs_time" => self.cols.show_absolute_time = !self.cols.show_absolute_time,
             "view.all" => {
                 self.all_branches = !self.all_branches;
                 self.reload_history();
@@ -117,10 +117,10 @@ impl App {
                 self.preview_scroll =
                     self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
             }
-            "preview.next_hunk" => self.jump_diff(true, false),
-            "preview.prev_hunk" => self.jump_diff(false, false),
-            "preview.next_file" => self.jump_diff(true, true),
-            "preview.prev_file" => self.jump_diff(false, true),
+            "preview.next_hunk" => self.jump_to_next_mark(DiffMark::Hunk),
+            "preview.prev_hunk" => self.jump_to_prev_mark(DiffMark::Hunk),
+            "preview.next_file" => self.jump_to_next_mark(DiffMark::File),
+            "preview.prev_file" => self.jump_to_prev_mark(DiffMark::File),
             "preview.fold" => self.fold_file(),
             "preview.whitespace" => {
                 let on = !pv::diff_ignoring_whitespace();
