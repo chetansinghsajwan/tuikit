@@ -92,13 +92,16 @@
       );
 
       # Tests run in the dev loop and in `checks`, not here.
-      mkTool = name: crate:
+      mkTool = name: _crate:
         craneLib.buildPackage (
           common
           // {
             cargoArtifacts = workspaceArtifacts;
             pname = name;
-            cargoExtraArgs = "--locked -p ${crate}";
+            # `--workspace --bin` and not `-p`: cargo unifies features over the selected packages,
+            # so `-p` would resolve different features than the workspace layer and recompile every
+            # dependency for each tool. The binary has the tool's name.
+            cargoExtraArgs = "--locked --workspace --bin ${name}";
             doCheck = false;
           }
         );
