@@ -76,12 +76,27 @@
       # editing our code does not rebuild them.
       cargoArtifacts = craneLib.buildDepsOnly (common // {cargoExtraArgs = "--locked --workspace";});
 
+      # Every crate of the workspace compiled once on top of the dependencies, kept as build
+      # artifacts: a tool below then only compiles its own crate and links, instead of
+      # compiling the shared crates (`ui`, `pv`, `git-core`...) again for each of the tools.
+      # Editing a tool recompiles that tool alone.
+      workspaceArtifacts = craneLib.buildPackage (
+        common
+        // {
+          inherit cargoArtifacts;
+          pname = "tuikit-workspace";
+          cargoExtraArgs = "--locked --workspace";
+          doInstallCargoArtifacts = true;
+          doCheck = false;
+        }
+      );
+
       # Tests run in the dev loop and in `checks`, not here.
       mkTool = name: crate:
         craneLib.buildPackage (
           common
           // {
-            inherit cargoArtifacts;
+            cargoArtifacts = workspaceArtifacts;
             pname = name;
             cargoExtraArgs = "--locked -p ${crate}";
             doCheck = false;
