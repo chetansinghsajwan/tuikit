@@ -3,6 +3,10 @@
 
 /// The explorer itself: terminal setup, tabs, preview and the actions around the shared panel.
 mod app;
+/// The default keys of the explorer's own actions.
+mod binds;
+/// The standalone explorer's own actions.
+mod commands;
 
 use clap::Parser;
 use std::path::PathBuf;

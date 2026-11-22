@@ -1,10 +1,13 @@
 //! Tests for the app shell.
 
 use super::*;
+use crate::keys::{Action, DefaultBinding};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// The tool's own action in the tests.
-const OWN: &[Action] = &[crate::keys::action("thing.do", "do", "do the thing", &["t"])];
+const OWN: &[Action] = &[Action { id: "thing.do", name: "do", desc: "do the thing", basic: false }];
+/// The default keys of [`OWN`].
+const OWN_KEYS: &[DefaultBinding] = &[DefaultBinding { id: "thing.do", keys: &["t"] }];
 
 /// A screen with a cursor over ten rows, that can pretend to be typing.
 #[derive(Default)]
@@ -117,7 +120,7 @@ fn press(d: &mut Dispatcher, s: &mut Fake, key: &str) -> Request {
 }
 
 fn app() -> Shell {
-    Shell::new("fake").actions(OWN)
+    Shell::new("fake").commands(Commands::of(OWN, OWN_KEYS))
 }
 
 #[test]
@@ -207,17 +210,24 @@ fn the_help_lists_the_shared_and_the_own_actions() {
 #[test]
 #[should_panic(expected = "registered twice")]
 fn an_action_id_registered_twice_fails_at_startup() {
-    const CLASH: &[Action] = &[crate::keys::action("nav.up", "up", "again", &["x"])];
+    const CLASH: &[Action] = &[Action { id: "nav.up", name: "up", desc: "again", basic: false }];
+    const KEYS: &[DefaultBinding] = &[DefaultBinding { id: "nav.up", keys: &["x"] }];
     let mut s = Fake::default();
-    let _ = Shell::new("fake").actions(CLASH).dispatcher(&mut s);
+    let _ = Shell::new("fake").commands(Commands::of(CLASH, KEYS)).dispatcher(&mut s);
 }
 
 #[test]
 fn each_context_has_its_own_keymap() {
-    const ONE: &[Action] = &[crate::keys::action("one.do", "one", "in the first", &["x"])];
-    const TWO: &[Action] = &[crate::keys::action("two.do", "two", "in the second", &["x"])];
+    const ONE: &[Action] =
+        &[Action { id: "one.do", name: "one", desc: "in the first", basic: false }];
+    const ONE_KEYS: &[DefaultBinding] = &[DefaultBinding { id: "one.do", keys: &["x"] }];
+    const TWO: &[Action] =
+        &[Action { id: "two.do", name: "two", desc: "in the second", basic: false }];
+    const TWO_KEYS: &[DefaultBinding] = &[DefaultBinding { id: "two.do", keys: &["x"] }];
     let mut s = Fake::default();
-    let mut d = Shell::new("fake").contexts(vec![ONE.to_vec(), TWO.to_vec()]).dispatcher(&mut s);
+    let mut d = Shell::new("fake")
+        .contexts(vec![Commands::of(ONE, ONE_KEYS), Commands::of(TWO, TWO_KEYS)])
+        .dispatcher(&mut s);
     press(&mut d, &mut s, "x");
     s.ctx = 1;
     press(&mut d, &mut s, "x");
@@ -261,9 +271,11 @@ fn tabs_get_the_shared_keys_and_the_number_keys() {
 
 #[test]
 fn dynamic_tabs_can_be_opened_and_a_bound_number_key_stays_the_screens() {
-    const ONE: &[Action] = &[crate::keys::action("focus.one", "one", "focus one", &["1"])];
+    const ONE: &[Action] =
+        &[Action { id: "focus.one", name: "one", desc: "focus one", basic: false }];
+    const KEYS: &[DefaultBinding] = &[DefaultBinding { id: "focus.one", keys: &["1"] }];
     let mut s = Fake { tabs: true, dynamic: true, ..Fake::default() };
-    let mut d = Shell::new("fake").actions(ONE).dispatcher(&mut s);
+    let mut d = Shell::new("fake").commands(Commands::of(ONE, KEYS)).dispatcher(&mut s);
     press(&mut d, &mut s, "space");
     press(&mut d, &mut s, "t");
     press(&mut d, &mut s, "n");

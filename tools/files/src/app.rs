@@ -15,12 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 use ui::app::{Host, Navigable, Request, Tabbed, with_overlay, with_suspended};
-use ui::keys::{Action as Key, action};
 use ui::{Pane, Theme};
-
-/// The standalone app's own actions, registered next to the panel's. The tabs come from the shell.
-const ACTIONS: &[Key] =
-    &[action("view.properties", "properties", "show or hide the properties pane", &["leader v i"])];
 
 /// What the command line asked for, passed from `main` so this module does not parse arguments.
 pub struct Options {
@@ -66,10 +61,10 @@ pub fn run(opts: Options) -> io::Result<()> {
         shown: None,
         opts,
     };
-    let mut actions = files::keys::hosted_actions();
-    actions.extend_from_slice(ACTIONS);
+    let mut commands = files::keys::hosted_commands();
+    commands.add(crate::commands::ACTIONS, crate::binds::DEFAULT_BINDINGS);
     let result = ui::app::Shell::new("files")
-        .actions(actions)
+        .commands(commands)
         .groups(files::keys::GROUPS)
         .tick_interval(Duration::from_millis(100))
         .run(&mut explorer);

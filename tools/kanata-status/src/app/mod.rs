@@ -9,7 +9,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::sync::mpsc::Receiver;
 use ui::app::{Host, Request};
-use ui::keys::basic;
 use ui::{Pane, Theme, mix};
 
 /// Cap on the history log, so a long session does not grow memory without bound.
@@ -17,16 +16,15 @@ const HISTORY_LIMIT: usize = 500;
 /// The widest row of the keyboard, in quarter keys (a 1u key is 4).
 const ROW_QUARTERS: usize = 60;
 
-/// The few keys the screen binds. All are Ctrl chords, and the shell's leader is one too, because
-/// kanata passes every key typed here on to the system as well, so a plain key must not do
-/// anything by accident.
-pub const ACTIONS: &[ui::keys::Action] = &[
-    basic("quit", "quit", "close kanata-status", &["ctrl-q"]),
-    basic("layer.next", "next layer", "look at the next layer of the config", &["ctrl-n"]),
-    basic("layer.prev", "previous layer", "look at the previous layer of the config", &["ctrl-p"]),
-    basic("layer.live", "live layer", "follow the layer kanata is on again", &["ctrl-l"]),
-    basic("history.clear", "clear history", "empty the history log", &["ctrl-k"]),
-];
+/// The default keys of the screen's actions.
+mod binds;
+/// The screen's actions.
+mod commands;
+
+/// The actions and their default keys together, as a keymap takes them.
+pub fn commands() -> ui::keys::Commands {
+    ui::keys::Commands::of(commands::ACTIONS, binds::DEFAULT_BINDINGS)
+}
 
 /// One line of the history log: a key pressed or a layer entered.
 enum Item {

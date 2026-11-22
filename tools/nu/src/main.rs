@@ -56,7 +56,7 @@ fn run(cli: Cli) -> io::Result<u8> {
     };
     let mut app = App::new(wifi, bt);
     ui::app::Shell::new("nu")
-        .actions(nu::common())
+        .commands(nu::common())
         .contexts(nu::panes())
         .tick_interval(Duration::from_millis(200))
         .run(&mut app)?;

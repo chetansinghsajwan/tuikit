@@ -14,7 +14,7 @@ impl Rig {
     /// Puts `grid` behind a dispatcher built the way `tb` builds its app.
     fn new(mut grid: Grid) -> Rig {
         let dispatcher = ui::app::Shell::new("tb")
-            .actions(crate::keys::ACTIONS)
+            .commands(crate::keys::commands())
             .groups(crate::keys::GROUPS)
             .dispatcher(&mut grid);
         Rig { grid, dispatcher }

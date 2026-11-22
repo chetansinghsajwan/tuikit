@@ -7,38 +7,28 @@ fn k(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
-/// A small set of actions with single keys, aliases and leader sequences.
+/// A small set of actions: some with single keys and aliases, some with leader sequences.
 const ACTIONS: [Action; 5] = [
-    Action { id: "nav.down", name: "down", desc: "move down", basic: false, keys: &["j", "down"] },
-    Action {
-        id: "view.columns",
-        name: "columns",
-        desc: "cycle the columns",
-        basic: false,
-        keys: &["leader v c"],
-    },
-    Action {
-        id: "view.hidden",
-        name: "hidden",
-        desc: "toggle hidden files",
-        basic: false,
-        keys: &[".", "leader v h"],
-    },
-    Action { id: "find", name: "find", desc: "find files", basic: false, keys: &["/", "leader f"] },
-    Action {
-        id: "page.down",
-        name: "page down",
-        desc: "half a page",
-        basic: false,
-        keys: &["ctrl-d"],
-    },
+    Action { id: "nav.down", name: "down", desc: "move down", basic: false },
+    Action { id: "view.columns", name: "columns", desc: "cycle the columns", basic: false },
+    Action { id: "view.hidden", name: "hidden", desc: "toggle hidden files", basic: false },
+    Action { id: "find", name: "find", desc: "find files", basic: false },
+    Action { id: "page.down", name: "page down", desc: "half a page", basic: false },
+];
+/// The default keys of [`ACTIONS`].
+const DEFAULT_BINDINGS: [DefaultBinding; 5] = [
+    DefaultBinding { id: "nav.down", keys: &["j", "down"] },
+    DefaultBinding { id: "view.columns", keys: &["leader v c"] },
+    DefaultBinding { id: "view.hidden", keys: &[".", "leader v h"] },
+    DefaultBinding { id: "find", keys: &["/", "leader f"] },
+    DefaultBinding { id: "page.down", keys: &["ctrl-d"] },
 ];
 /// The one group the test actions use: `leader v` is "view".
 const GROUPS: [Group; 1] = [Group { prefix: "leader v", name: "view" }];
 
 /// A keymap over the test actions with `space` as the leader.
 fn map() -> Keymap {
-    Keymap::new("space", &ACTIONS, &GROUPS)
+    Keymap::new("space", &Commands::of(&ACTIONS, &DEFAULT_BINDINGS), &GROUPS)
 }
 
 #[test]
@@ -86,7 +76,7 @@ fn leader_sequences_pend_run_and_cancel() {
     assert_eq!(m.feed(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)), Feed::Cancelled);
     assert!(!m.is_pending());
     // The leader itself is bindable: another leader key works.
-    let mut m = Keymap::new(",", &ACTIONS, &GROUPS);
+    let mut m = Keymap::new(",", &Commands::of(&ACTIONS, &DEFAULT_BINDINGS), &GROUPS);
     assert_eq!(m.feed(&k(',')), Feed::Pending);
     assert_eq!(m.feed(&k('f')), Feed::Run("find"));
     assert_eq!(m.feed(&k(' ')), Feed::Unbound);

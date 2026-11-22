@@ -47,7 +47,7 @@ fn panel(d: &Path) -> Panel {
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         },
     )
 }
@@ -88,7 +88,7 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         },
     );
     let theme = Theme::default();
@@ -460,7 +460,7 @@ fn columns_show_size_and_time_for_files_when_wide() {
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         },
     );
     let area = Rect::new(0, 0, 70, 8);
@@ -491,7 +491,7 @@ fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
             bookmarks: None,
             background_bytes: None,
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         },
     );
     let area = Rect::new(0, 0, 70, 8);
@@ -537,7 +537,7 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
             bookmarks: None,
             background_bytes: Some(0),
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         },
     );
     let find = |p: &mut Panel, name: &str| {
@@ -618,13 +618,10 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     p.handle_event(&key(KeyCode::Esc));
     assert!(p.menu().is_none());
     // Host actions come back as commands; the leader key is configurable.
-    let acts = vec![ui::keys::Action {
-        id: "tab.new",
-        name: "new tab",
-        desc: "x",
-        basic: false,
-        keys: &["leader t n"],
-    }];
+    let acts = ui::keys::Commands::of(
+        &[ui::keys::Action { id: "tab.new", name: "new tab", desc: "x", basic: false }],
+        &[ui::keys::DefaultBinding { id: "tab.new", keys: &["leader t n"] }],
+    );
     let mut p = Panel::new(
         &d,
         PanelOptions {
@@ -634,7 +631,7 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
             bookmarks: None,
             background_bytes: None,
             leader: ",".into(),
-            actions: acts,
+            commands: acts,
         },
     );
     p.handle_event(&key(KeyCode::Char(',')));

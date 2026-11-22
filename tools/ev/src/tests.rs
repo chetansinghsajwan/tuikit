@@ -16,7 +16,8 @@ fn secret_names_are_found_by_part_and_case() {
 
 #[test]
 fn a_row_is_the_name_but_the_candidate_keeps_the_value() {
-    let vars = vec![("B_TOKEN".to_string(), "s3cret".to_string()), ("A".to_string(), "1".to_string())];
+    let vars =
+        vec![("B_TOKEN".to_string(), "s3cret".to_string()), ("A".to_string(), "1".to_string())];
     let c = candidates(vars.into_iter());
     assert_eq!(c[0].display, "A");
     assert_eq!(c[1].display, "B_TOKEN");

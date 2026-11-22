@@ -19,7 +19,7 @@ pub struct PanelOptions {
     pub leader: String,
     /// Actions of the host (tabs, a properties pane, ...) added to the keymap; the panel
     /// returns `Outcome::Command(id)` when one runs.
-    pub actions: Vec<ui::keys::Action>,
+    pub commands: ui::keys::Commands,
 }
 
 impl Default for PanelOptions {
@@ -31,7 +31,7 @@ impl Default for PanelOptions {
             bookmarks: bookmarks::default_path(),
             background_bytes: Some(8 << 20),
             leader: "space".into(),
-            actions: Vec::new(),
+            commands: ui::keys::Commands::default(),
         }
     }
 }
@@ -101,7 +101,7 @@ pub enum Outcome {
     Palette,
     /// The user asked for the keys help: the host shows `ui::keys::Help`.
     Help,
-    /// An action the panel does not own (a host registered it in `PanelOptions::actions`): the host runs it.
+    /// An action the panel does not own (a host registered it in `PanelOptions::commands`): the host runs it.
     Command(&'static str),
     /// Rename these paths together by editing their names in a text editor.
     BulkRename(Vec<PathBuf>),

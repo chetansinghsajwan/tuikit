@@ -1,19 +1,6 @@
 //! Which folder is the root of the tree.
 
 use super::*;
-use ui::keys::{Action as Key, action};
-
-/// The actions of this domain with their default keys.
-pub(super) const ACTIONS: &[Key] = &[
-    action("root.into", "cd into", "make the folder under the cursor the root", &["leader c l"]),
-    action(
-        "root.focus",
-        "focus folder",
-        "make the folder the cursor row sits in the root, so only its own entries show",
-        &["leader c f"],
-    ),
-    action("root.up", "cd up", "make the parent folder the root", &["leader c h"]),
-];
 
 impl Panel {
     /// Runs one of this domain's actions by id.

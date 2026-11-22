@@ -5,9 +5,7 @@
 //! help and the palette look the same everywhere.
 
 use crate::Theme;
-use crate::keys::{
-    Action, Feed, Group, Help, Keymap, Menu, Row, action, basic, choose, render_menu,
-};
+use crate::keys::{Commands, Feed, Group, Help, Keymap, Menu, Row, choose, render_menu};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
@@ -220,50 +218,18 @@ pub trait Screen {
     }
 }
 
-/// The shared movement actions, registered when the screen is `Navigable`. The keys follow
-/// `docs/usage-design.md`: `ctrl-d` and `ctrl-u` are left to the preview scroll.
-const NAV: &[Action] = &[
-    basic("nav.up", "up", "move the cursor up", &["k", "up", "ctrl-p"]),
-    basic("nav.down", "down", "move the cursor down", &["j", "down", "ctrl-n"]),
-    basic("nav.up_step", "up a step", "move the cursor up several rows", &["ctrl-k"]),
-    basic("nav.down_step", "down a step", "move the cursor down several rows", &["ctrl-j"]),
-    basic("nav.page_up", "page up", "move a page up", &["pageup"]),
-    basic("nav.page_down", "page down", "move a page down", &["pagedown"]),
-    basic("nav.top", "top", "go to the first row", &["g", "home"]),
-    basic("nav.bottom", "bottom", "go to the last row", &["G", "end"]),
-];
-
-/// The tab actions of every screen with tabs.
-const TABS: &[Action] = &[
-    basic("tab.next", "next tab", "switch to the next tab", &["]", "leader t l"]),
-    basic("tab.prev", "previous tab", "switch to the previous tab", &["[", "leader t h"]),
-];
-
-/// The extra tab actions of a screen whose tabs the user opens and closes.
-const DYNAMIC_TABS: &[Action] = &[
-    action("tab.new", "new tab", "open a new tab in the same place", &["leader t n"]),
-    action("tab.reopen", "reopen tab", "bring back the tab closed last", &["leader t r"]),
-    action("tab.duplicate", "duplicate tab", "open a copy of this tab next to it", &["leader t d"]),
-    action("tab.move_left", "move tab left", "move this tab one place left", &["leader t ["]),
-    action("tab.move_right", "move tab right", "move this tab one place right", &["leader t ]"]),
-    action("tab.close", "close tab", "close this tab", &["leader t c"]),
-];
-
-/// The name of the leader menu behind `leader t`.
-const TAB_GROUP: Group = Group { prefix: "leader t", name: "tabs" };
-
-/// The actions of the shell itself, on every screen.
-const SHELL: &[Action] = &[
-    basic("palette", "commands", "search every action by name and run it", &["leader space"]),
-    basic("help", "keys", "list every action with its keys", &["?"]),
-];
+/// The default keys of the shell's own actions.
+mod binds;
+/// The shell's own actions.
+mod commands;
+use commands::{DYNAMIC_TABS, NAV, SHELL, TAB_GROUP, TABS};
 
 /// How a tool wants its app set up: its name, its own actions and which shared parts it uses.
 pub struct Shell {
     tool: &'static str,
     leader: &'static str,
-    actions: Vec<Action>,
-    contexts: Vec<Vec<Action>>,
+    commands: Commands,
+    contexts: Vec<Commands>,
     groups: &'static [Group],
     nav: bool,
     tabs: bool,
@@ -277,7 +243,7 @@ impl Shell {
         Shell {
             tool,
             leader: "space",
-            actions: Vec::new(),
+            commands: Commands::default(),
             contexts: Vec::new(),
             groups: &[],
             nav: true,
@@ -292,17 +258,17 @@ impl Shell {
         self
     }
 
-    /// The tool's own actions.
-    pub fn actions(mut self, actions: impl Into<Vec<Action>>) -> Shell {
-        self.actions = actions.into();
+    /// The tool's own actions and their default keys.
+    pub fn commands(mut self, commands: Commands) -> Shell {
+        self.commands = commands;
         self
     }
 
-    /// Extra actions that apply only while a context is active (a focused pane), one set each;
+    /// Extra commands that apply only while a context is active (a focused pane), one set each;
     /// `Screen::context` picks the set. Each context gets its own keymap, so the same key may mean
     /// different things in different contexts.
-    pub fn contexts(mut self, contexts: impl Into<Vec<Vec<Action>>>) -> Shell {
-        self.contexts = contexts.into();
+    pub fn contexts(mut self, contexts: Vec<Commands>) -> Shell {
+        self.contexts = contexts;
         self
     }
 
@@ -336,32 +302,32 @@ impl Shell {
     pub fn dispatcher<S: Screen>(&self, screen: &mut S) -> Dispatcher {
         let nav = self.nav && screen.navigable().is_some();
         let tabs = self.tabs && screen.tabbed().is_some();
-        let mut all: Vec<Action> = Vec::new();
+        let mut all = Commands::default();
         if nav {
-            all.extend_from_slice(NAV);
+            all.add(NAV, binds::NAV);
         }
         if tabs {
-            all.extend_from_slice(TABS);
+            all.add(TABS, binds::TABS);
             if screen.tabbed().is_some_and(|t| t.can_open_close_tabs()) {
-                all.extend_from_slice(DYNAMIC_TABS);
+                all.add(DYNAMIC_TABS, binds::DYNAMIC_TABS);
             }
         }
         let mut groups = self.groups.to_vec();
         if tabs && groups.iter().all(|g| g.prefix != TAB_GROUP.prefix) {
             groups.push(TAB_GROUP);
         }
-        all.extend_from_slice(SHELL);
-        all.extend(self.actions.iter().cloned());
-        let none = [Vec::new()];
+        all.add(SHELL, binds::SHELL);
+        all.extend(&self.commands);
+        let none = [Commands::default()];
         let contexts = if self.contexts.is_empty() { &none[..] } else { &self.contexts };
         let keymaps = contexts
             .iter()
             .map(|own| {
                 let mut all = all.clone();
-                all.extend(own.iter().cloned());
-                for (i, a) in all.iter().enumerate() {
+                all.extend(own);
+                for (i, a) in all.actions.iter().enumerate() {
                     assert!(
-                        all[..i].iter().all(|b| b.id != a.id),
+                        all.actions[..i].iter().all(|b| b.id != a.id),
                         "action {} is registered twice",
                         a.id
                     );

@@ -78,7 +78,10 @@ fn preview(line: &str, width: u16, theme: &Theme, reveal: bool) -> Vec<Line<'sta
     let mut out = Vec::new();
     if is_secret(name) && !reveal {
         out.push(Line::from(Span::styled(
-            format!("{} chars, hidden (secret name; run `ev --reveal` to show)", value.chars().count()),
+            format!(
+                "{} chars, hidden (secret name; run `ev --reveal` to show)",
+                value.chars().count()
+            ),
             muted,
         )));
         return out;

@@ -83,7 +83,7 @@ fn only_ctrl_chords_do_anything_and_ctrl_space_opens_the_menu() {
     let mut d = ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
         .with_navigation(false)
-        .actions(crate::ACTIONS)
+        .commands(crate::commands())
         .dispatcher(&mut app);
     let ctrl = KeyModifiers::CONTROL;
     // Plain keys reach kanata as well, so they must do nothing here (but `?`, the shell's help).

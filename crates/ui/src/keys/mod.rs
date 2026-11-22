@@ -1,6 +1,6 @@
 //! The action registry behind every tool's keys (see `docs/usage-design.md`).
 //!
-//! A tool declares its actions (id, name, description, default keys) and feeds key
+//! A tool declares its actions (id, name, description) and, apart from them, the default keys that run them, and feeds key
 //! events to a [`Keymap`]; the keymap resolves single keys and sequences such as
 //! `leader v c`, and describes what can follow a started sequence ([`Menu`], the
 //! which-key popup drawn by [`render_menu`]). Names and descriptions are what a
@@ -107,7 +107,8 @@ impl Chord {
     }
 }
 
-/// A named thing a tool can do, with its default keys.
+/// A named thing a tool can do. Which keys run it is a separate matter (see [`DefaultBinding`]): an
+/// action with no binding stays reachable from the command palette.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Action {
     /// Stable id, `area.verb`: what the tool matches on and what config refers to.
@@ -118,8 +119,78 @@ pub struct Action {
     /// Navigation and other keys everyone knows: left out of the command palette (the `?`
     /// help still lists them).
     pub basic: bool,
-    /// Default bindings (see the module docs for the syntax).
+}
+
+/// The default binding of an action: the keys that run it, by its id (see the module docs for the syntax). A binding
+/// whose id names no registered action is ignored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultBinding {
+    pub id: &'static str,
     pub keys: &'static [&'static str],
+}
+
+/// The actions a keymap offers and the default bindings of some of them. Tools and shells build
+/// one from their tables, so actions and bindings travel together without being one thing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Commands {
+    pub actions: Vec<Action>,
+    pub default_bindings: Vec<DefaultBinding>,
+}
+
+impl Commands {
+    /// A set from one table of actions and one of bindings.
+    pub fn of(actions: &[Action], bindings: &[DefaultBinding]) -> Commands {
+        let mut set = Commands::default();
+        set.add(actions, bindings);
+        set
+    }
+
+    /// Adds a table of actions and a table of bindings to the set.
+    pub fn add(&mut self, actions: &[Action], bindings: &[DefaultBinding]) {
+        self.actions.extend_from_slice(actions);
+        self.default_bindings.extend_from_slice(bindings);
+    }
+
+    /// What is wrong with the set, one line each (empty when it is sound): an action with no name or
+    /// description or an id used twice, a binding for no action or with no keys, a key that does not
+    /// parse, or a key bound twice. Every tool's tests assert it is empty.
+    pub fn problems(&self) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut ids = std::collections::HashSet::new();
+        for a in &self.actions {
+            if a.name.is_empty() || a.desc.is_empty() {
+                found.push(format!("{} has no name or description", a.id));
+            }
+            if !ids.insert(a.id) {
+                found.push(format!("duplicate action {}", a.id));
+            }
+        }
+        let mut shown = std::collections::HashSet::new();
+        for b in &self.default_bindings {
+            if !ids.contains(b.id) {
+                found.push(format!("binding for unknown action {}", b.id));
+            }
+            if b.keys.is_empty() {
+                found.push(format!("{} has no keys", b.id));
+            }
+            for k in b.keys {
+                let parsable =
+                    k.split_whitespace().all(|w| w == "leader" || Chord::parse(w).is_some());
+                if !parsable {
+                    found.push(format!("{} has an unparsable key {k}", b.id));
+                }
+                if !shown.insert(*k) {
+                    found.push(format!("key {k} bound twice"));
+                }
+            }
+        }
+        found
+    }
+
+    /// Adds everything of `other` to the set.
+    pub fn extend(&mut self, other: &Commands) {
+        self.add(&other.actions, &other.default_bindings);
+    }
 }
 
 /// Action ids that were renamed, as `(old, new)`: a user's config that still names the old id keeps
@@ -136,26 +207,6 @@ const RENAMED_IDS: &[(&str, &str)] = &[
 /// The current id for `id`, which may be one that was renamed.
 fn current_id(id: &str) -> &str {
     RENAMED_IDS.iter().find(|(old, _)| *old == id).map_or(id, |(_, new)| new)
-}
-
-/// An action that shows in the command palette.
-pub const fn action(
-    id: &'static str,
-    name: &'static str,
-    desc: &'static str,
-    keys: &'static [&'static str],
-) -> Action {
-    Action { id, name, desc, basic: false, keys }
-}
-
-/// A basic action (movement and keys everyone knows): left out of the palette, kept in `?`.
-pub const fn basic(
-    id: &'static str,
-    name: &'static str,
-    desc: &'static str,
-    keys: &'static [&'static str],
-) -> Action {
-    Action { id, name, desc, basic: true, keys }
 }
 
 /// A name for the menu behind a key prefix: `leader v` is "view".
@@ -213,9 +264,9 @@ pub struct Keymap {
 }
 
 impl Keymap {
-    /// A keymap for `actions`, with `leader` (a key name) standing for `leader` in bindings; the
+    /// A keymap for `commands`, with `leader` (a key name) standing for `leader` in bindings; the
     /// user's configuration (`ui::config`) overrides the leader and the keys.
-    pub fn new(leader: &str, actions: &[Action], groups: &[Group]) -> Keymap {
+    pub fn new(leader: &str, commands: &Commands, groups: &[Group]) -> Keymap {
         let leader = crate::config::get()
             .leader
             .as_deref()
@@ -224,7 +275,7 @@ impl Keymap {
             .unwrap_or(Chord { code: KeyCode::Char(' '), ctrl: false, alt: false });
         let mut map = Keymap {
             leader,
-            actions: actions.to_vec(),
+            actions: commands.actions.to_vec(),
             groups: Vec::new(),
             bindings: Vec::new(),
             pending: Vec::new(),
@@ -235,10 +286,13 @@ impl Keymap {
                 map.groups.push((seq, g.name));
             }
         }
-        for a in actions {
-            for k in a.keys {
+        for b in &commands.default_bindings {
+            if !map.actions.iter().any(|a| a.id == b.id) {
+                continue;
+            }
+            for k in b.keys {
                 if let Some(seq) = map.sequence(k) {
-                    map.bindings.push((seq, a.id));
+                    map.bindings.push((seq, b.id));
                 }
             }
         }

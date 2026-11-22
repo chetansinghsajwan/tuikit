@@ -2,37 +2,6 @@
 //! copy, cut, paste, open with and bulk rename.
 
 use super::*;
-use ui::keys::{Action as Key, action, basic};
-
-/// The actions of this domain with their default keys.
-pub(super) const ACTIONS: &[Key] = &[
-    basic("item.open", "open", "open the file, or expand the folder", &["enter", "l", "right"]),
-    basic("item.mark", "mark", "mark or unmark the row for a multi-row action", &["tab"]),
-    action("item.create", "new", "create a file (a trailing / makes a folder)", &["a", "leader n"]),
-    action("item.rename", "rename", "rename the row", &["r", "leader r"]),
-    action(
-        "item.delete",
-        "delete",
-        "move the marked rows to the trash (asks first)",
-        &["d", "leader d"],
-    ),
-    action(
-        "item.delete_forever",
-        "delete forever",
-        "delete the marked rows permanently (asks first)",
-        &["D"],
-    ),
-    action("item.copy", "copy", "copy the marked rows", &["y", "leader y"]),
-    action("item.cut", "cut", "cut the marked rows", &["x", "leader x"]),
-    action("item.paste", "paste", "paste into the folder under the cursor", &["p", "leader p"]),
-    action("item.open_with", "open with", "open the row with a command you type", &["leader o"]),
-    action(
-        "item.bulk_rename",
-        "bulk rename",
-        "rename the marked rows together in your editor",
-        &["leader B"],
-    ),
-];
 
 impl Panel {
     /// Runs one of this domain's actions by id.

@@ -19,12 +19,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use tui_input::Input;
 use ui::footer::Footer;
-use ui::keys::{action, basic};
 use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
+/// The default keys of every domain's actions.
+mod binds;
 /// Bookmarks: folders saved under a key.
 mod bookmark;
+/// Every domain's actions.
+mod commands;
 /// Actions on the row under the cursor or the marked rows.
 mod item;
 /// Movement: the cursor keys and folding.
@@ -45,26 +48,22 @@ use paste::*;
 use types::*;
 pub use types::{Columns, Outcome, PanelOptions, Search};
 
-/// The actions that belong to no domain: the palette, the help, back and quit.
-const GENERAL: &[ui::keys::Action] = &[
-    basic("palette", "commands", "search every action by name and run it", &["leader space"]),
-    action("help", "keys", "list every action with its keys", &["?"]),
-    basic("back", "back", "clear the marks, else close", &["esc"]),
-    basic("quit", "quit", "close the explorer", &["q", "ctrl-c", "leader q"]),
-];
-
-/// Every action of the panel in the order the help lists them: each domain's own table.
-pub(crate) fn actions() -> Vec<ui::keys::Action> {
-    [
-        nav::ACTIONS,
-        item::ACTIONS,
-        search::ACTIONS,
-        view::ACTIONS,
-        root::ACTIONS,
-        bookmark::ACTIONS,
-        GENERAL,
-    ]
-    .concat()
+/// Every action of the panel and its default keys, in the order the help lists them: each
+/// domain's own table.
+pub(crate) fn commands() -> ui::keys::Commands {
+    let mut set = ui::keys::Commands::default();
+    for (actions, bindings) in [
+        (commands::NAV, binds::NAV),
+        (commands::ITEM, binds::ITEM),
+        (commands::SEARCH, binds::SEARCH),
+        (commands::VIEW, binds::VIEW),
+        (commands::ROOT, binds::ROOT),
+        (commands::BOOKMARK, binds::BOOKMARK),
+        (commands::GENERAL, binds::GENERAL),
+    ] {
+        set.add(actions, bindings);
+    }
+    set
 }
 
 #[cfg(test)]
@@ -107,8 +106,8 @@ impl Panel {
         let root = root.into();
         let root = root.canonicalize().unwrap_or(root);
         let opts_bookmarks = opts.bookmarks.clone();
-        let all: Vec<ui::keys::Action> =
-            keys::ACTIONS.iter().cloned().chain(opts.actions.iter().cloned()).collect();
+        let mut all = keys::COMMANDS.clone();
+        all.extend(&opts.commands);
         let keymap = ui::keys::Keymap::new(&opts.leader, &all, keys::GROUPS);
         let mut p = Panel {
             root,

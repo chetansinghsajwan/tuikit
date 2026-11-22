@@ -302,14 +302,11 @@ fn space_opens_the_leader_menu_with_the_actions_and_the_palette_and_help_ask_the
     // Space then Space is the palette; `?` is the help; the host's own actions come back as commands.
     assert_eq!(press(&mut p, " "), Outcome::Palette);
     assert_eq!(press(&mut p, "?"), Outcome::Help);
-    let extra = vec![ui::keys::Action {
-        id: "pane.next",
-        name: "next pane",
-        desc: "x",
-        basic: true,
-        keys: &["tab"],
-    }];
-    let mut p = Panel::with_actions(&d, "space", extra, &[]).unwrap();
+    let extra = ui::keys::Commands::of(
+        &[ui::keys::Action { id: "pane.next", name: "next pane", desc: "x", basic: true }],
+        &[ui::keys::DefaultBinding { id: "pane.next", keys: &["tab"] }],
+    );
+    let mut p = Panel::with_commands(&d, "space", extra, &[]).unwrap();
     assert_eq!(
         p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))),
         Outcome::Command("pane.next")

@@ -28,7 +28,7 @@ pub enum Outcome {
     Palette,
     /// The user asked for the keys help: the host shows `ui::keys::Help`.
     Help,
-    /// An action the panel does not own (the host registered it with `Panel::with_actions`).
+    /// An action the panel does not own (the host registered it with `Panel::with_commands`).
     Command(&'static str),
     /// The repository changed (stage, unstage, discard, commit): hosts may want
     /// to refresh their own views.
@@ -152,19 +152,20 @@ fn kind_char(k: Kind) -> char {
 impl Panel {
     /// The panel for the repository containing `path`; `None` if there is none.
     pub fn new(path: &Path) -> Option<Panel> {
-        Panel::with_actions(path, "space", Vec::new(), &[])
+        Panel::with_commands(path, "space", ui::keys::Commands::default(), &[])
     }
 
-    /// The panel with a leader key and the host's own `actions` added to its keymap (they come
+    /// The panel with a leader key and the host's own `commands` added to its keymap (they come
     /// back as `Outcome::Command(id)`).
-    pub fn with_actions(
+    pub fn with_commands(
         path: &Path,
         leader: &str,
-        actions: Vec<ui::keys::Action>,
+        commands: ui::keys::Commands,
         groups: &[ui::keys::Group],
     ) -> Option<Panel> {
         let repo = Repo::discover(path)?;
-        let all: Vec<ui::keys::Action> = keys::ACTIONS.iter().cloned().chain(actions).collect();
+        let mut all = keys::commands();
+        all.extend(&commands);
         let all_groups: Vec<ui::keys::Group> = keys::GROUPS.iter().chain(groups).cloned().collect();
         let keymap = ui::keys::Keymap::new(leader, &all, &all_groups);
         let root = repo.root().to_path_buf();

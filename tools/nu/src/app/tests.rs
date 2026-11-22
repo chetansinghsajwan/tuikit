@@ -52,7 +52,7 @@ fn app() -> (Rig, Arc<Fake>, Arc<FakeBluetooth>) {
     let (w, b) = (Arc::new(Fake::new()), Arc::new(FakeBluetooth::new()));
     let mut app = App::new(w.clone(), b.clone());
     let dispatcher = ui::app::Shell::new("nu")
-        .actions(crate::keys::common())
+        .commands(crate::keys::common())
         .contexts(crate::keys::panes())
         .dispatcher(&mut app);
     (Rig { app, dispatcher }, w, b)

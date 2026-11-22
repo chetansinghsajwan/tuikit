@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use kanata_status::kbd::Config;
-use kanata_status::{ACTIONS, App, link};
+use kanata_status::{App, commands, link};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::mpsc;
@@ -49,7 +49,7 @@ fn run(cli: Cli) -> Result<(), String> {
     ui::app::Shell::new("kanata-status")
         .leader("ctrl-space")
         .with_navigation(false)
-        .actions(ACTIONS)
+        .commands(commands())
         .tick_interval(Duration::from_millis(100))
         .run(&mut app)
         .map_err(|e| e.to_string())

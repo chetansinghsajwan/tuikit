@@ -5,10 +5,8 @@ use super::*;
 /// The file format round-trips, including multi-line text.
 #[test]
 fn history_round_trips() {
-    let entries = vec![
-        Entry { time: 1, text: "one".into() },
-        Entry { time: 2, text: "two\nlines".into() },
-    ];
+    let entries =
+        vec![Entry { time: 1, text: "one".into() }, Entry { time: 2, text: "two\nlines".into() }];
     let back = parse(&serialize(&entries));
     assert_eq!(back.len(), 2);
     assert_eq!(back[1].text, "two\nlines");

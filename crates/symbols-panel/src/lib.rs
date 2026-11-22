@@ -106,7 +106,7 @@ impl Panel {
             filter: String::new(),
             mode: Mode::Normal,
             following: None,
-            keymap: ui::keys::Keymap::new(leader, keys::ACTIONS, keys::GROUPS),
+            keymap: ui::keys::Keymap::new(leader, &keys::commands(), keys::GROUPS),
             message: None,
         }
     }

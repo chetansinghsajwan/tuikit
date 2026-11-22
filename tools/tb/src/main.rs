@@ -19,7 +19,7 @@ fn main() -> ExitCode {
         let cli = Cli::parse();
         let mut grid = Grid::open(&cli.file).map_err(|e| e.to_string())?;
         ui::app::Shell::new("tb")
-            .actions(tb::keys::ACTIONS)
+            .commands(tb::keys::commands())
             .groups(tb::keys::GROUPS)
             .run(&mut grid)
             .map(|()| 0)
