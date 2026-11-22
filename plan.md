@@ -613,4 +613,13 @@ Decision (user): one tool for connections (Wi-Fi now; Bluetooth, wired, VPN, hot
 - Tool `tools/cb` (`tuikit-cb`), picker-style like `ev`: `cb` browses (Enter copies through `wl-copy`, ctrl-x deletes), `cb watch` records, `cb store` records stdin.
 - Store: `$XDG_STATE_HOME/cb/history` (`time\ntext` records split by NUL), newest wins on repeats, 1000 entries, text only.
 - `watch` polls `wl-paste` every 500 ms instead of `wl-paste --watch`: WSLg's compositor lacks the data-control protocol, so cliphist never worked there (the old `fcp` failure). Home runs it as the systemd user service `cb-watch` (home/programs/clipboard).
-- Open: images, pinning, a Windows-side source on WSL.
+- Open: images, pinning.
+
+### `cb` backends (2026-11-23)
+
+- Why it was broken on WSL: the `cb-watch` user service had no `WAYLAND_DISPLAY`, `wl-paste` failed to connect, and `watch` swallowed the error, so no history file was ever written.
+- Code is split by responsibility in `tools/cb/src`: `store/` (file format, push rules), `backend/` (the `Backend` trait, backend choice), `browse/` (picker), `record.rs` (`store` and `watch`), `main.rs` (CLI only). Tests sit in each module's `tests.rs`.
+- `Backend { read() -> Result<Option<String>, String>, write }`: `Err` means the clipboard is unreachable (logged once by `watch`), `Ok(None)` means empty or not text.
+- Backends: `wl-paste`/`wl-copy` (Wayland and WSLg), `xclip` (X11), `pbpaste`/`pbcopy` (macOS), OSC 52 (write only). Chosen by `backend::choose`: macOS, then `WAYLAND_DISPLAY`, then a `wayland-0` socket in `XDG_RUNTIME_DIR` (the WSLg service case), then `DISPLAY`, then the terminal.
+- Wayland on WSLg is the WSL backend: its clipboard is bridged to Windows, so no PowerShell. Checked: text put on the Windows clipboard with `clip.exe` shows in `wl-paste`. WSLg's weston can die (seen 2026-11-23); `wsl --shutdown` restarts it.
+- macOS: `launchd.agents.cb-watch` in `home/programs/clipboard`. Untested (no Mac here); needs `cb` built for darwin.

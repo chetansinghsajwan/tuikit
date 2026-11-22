@@ -1,4 +1,4 @@
-//! Tests for the clipboard history store and rows.
+//! Tests for the clipboard history store.
 
 use super::*;
 
@@ -41,10 +41,4 @@ fn push_caps_the_history() {
     }
     assert_eq!(e.len(), MAX_ENTRIES);
     assert_eq!(e[0].text, "5");
-}
-
-/// A multi-line copy is one row.
-#[test]
-fn row_is_one_line() {
-    assert_eq!(row("  a\n  b \n"), "a b");
 }
