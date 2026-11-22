@@ -18,6 +18,7 @@ struct Entry {
     is_dir: bool,
     mode: u32,
     mtime: Option<SystemTime>,
+    size: u64,
     path: std::path::PathBuf,
 }
 
@@ -42,6 +43,7 @@ fn entries(dir: &Path) -> Vec<Entry> {
                 is_dir: md.is_dir(),
                 mode,
                 mtime: md.modified().ok(),
+                size: md.len(),
                 path: e.into_path(),
             })
         })
@@ -95,6 +97,15 @@ fn perm_spans(mode: u32, theme: &Theme) -> Vec<Span<'static>> {
     out
 }
 
+/// What a row shows beyond the entry itself.
+#[derive(Clone, Copy, Default)]
+struct Extra<'a> {
+    /// A muted remark after the name.
+    note: Option<&'a str>,
+    /// A size column before the age (the flat list has one, the tree does not).
+    size: bool,
+}
+
 /// One entry as the common file-tree row (`ui::tree::file_row`): guides, icon, git-colored name, and with a
 /// width the right column (permissions, age) and the git sign. The name shrinks to leave them room.
 fn row(
@@ -104,12 +115,16 @@ fn row(
     opts: &Options,
     state: Option<(char, Kind)>,
     theme: &Theme,
-    note: Option<&str>,
+    extra: Extra,
 ) -> Line<'static> {
     let c = &theme.colors;
     let (mut trailing, mut signs) = (Vec::new(), Vec::new());
     if opts.width.is_some() {
         trailing = perm_spans(e.mode, theme);
+        if extra.size {
+            let size = if e.is_dir { "-".to_string() } else { human_size(e.size) };
+            trailing.push(Span::styled(format!("  {size:>6}"), Style::new().fg(c.muted.into())));
+        }
         trailing.push(Span::styled(
             format!("  {:>8}", relative(e.mtime)),
             Style::new().fg(c.muted.into()),
@@ -128,7 +143,7 @@ fn row(
         is_executable: e.mode & 0o111 != 0,
         tint: state.map(|(_, kind)| git::kind_color(theme, kind)),
         is_focused: true,
-        note,
+        note: extra.note,
         trailing,
         signs,
         ..Default::default()
@@ -269,7 +284,7 @@ fn flatten(
             cx.opts,
             state_of(e, cx.git),
             cx.theme,
-            if n.empty { Some("(empty)") } else { None },
+            Extra { note: if n.empty { Some("(empty)") } else { None }, size: false },
         ));
         if open {
             flatten(cx, &n.kids, n.unread, level + 1, cap, depth, out);
@@ -323,4 +338,45 @@ fn state_of(e: &Entry, ctx: &Option<(Repo, Status)>) -> Option<(char, Kind)> {
     } else {
         git::sign(status.get(&rel_path)?)
     }
+}
+
+/// A size in bytes as `512 B`, `3.4 K`, `12 M`, `1.2 G` (powers of 1024).
+fn human_size(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
+    let mut v = n as f64;
+    let mut u = 0;
+    while v >= 1024.0 && u < UNITS.len() - 1 {
+        v /= 1024.0;
+        u += 1;
+    }
+    if u == 0 || v >= 10.0 { format!("{v:.0} {}", UNITS[u]) } else { format!("{v:.1} {}", UNITS[u]) }
+}
+
+/// The folder's own entries as a flat list, `ls -l` style: every entry (dot files and git-ignored ones too,
+/// never `.git`), folders first, with permissions, size, age and the git sign. Rows through the common file row.
+pub fn list(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+    let git = if opts.git { git::load(path) } else { None };
+    let mut v: Vec<Entry> = fs::read_dir(path)?
+        .flatten()
+        .filter(|e| e.file_name() != ".git")
+        .filter_map(|e| {
+            let md = e.metadata().ok()?;
+            #[cfg(unix)]
+            let mode = std::os::unix::fs::PermissionsExt::mode(&md.permissions());
+            #[cfg(not(unix))]
+            let mode = 0;
+            Some(Entry {
+                name: e.file_name().to_string_lossy().into_owned(),
+                is_dir: md.is_dir(),
+                mode,
+                mtime: md.modified().ok(),
+                size: md.len(),
+                path: e.path(),
+            })
+        })
+        .collect();
+    v.sort_by(|a, b| {
+        b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(v.iter().map(|e| row(0, false, e, opts, state_of(e, &git), theme, Extra { note: None, size: true })).collect())
 }

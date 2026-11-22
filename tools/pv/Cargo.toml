@@ -17,3 +17,4 @@ path = "src/main.rs"
 [dependencies]
 tuikit-pv.workspace = true
 tuikit-ui.workspace = true
+ratatui.workspace = true

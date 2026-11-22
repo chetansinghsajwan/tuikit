@@ -3,6 +3,10 @@
 //! the changed words of a changed line marked stronger, trailing whitespace on added lines and conflict markers
 //! called out, and a side-by-side layout when there is room.
 
+mod unified;
+
+pub use unified::render_unified;
+
 use crate::Options;
 use crate::git::{self, PatchKind};
 use crate::text::{syntax_set, syntax_theme};

@@ -209,3 +209,34 @@ fn a_file_too_big_to_keep_whole_is_still_highlighted_per_hunk() {
     assert!(colours.len() >= 5, "{colours:?}");
     let _ = PatchLine { kind: PatchKind::Context, text: String::new() };
 }
+
+#[test]
+fn unified_text_is_split_into_files_hunks_and_plain_text() {
+    let input = "commit abc\n\n    message\n\n\
+diff --git a/old.rs b/new.rs\nsimilarity index 90%\nrename from old.rs\nrename to new.rs\n\
+index 1..2 100644\n--- a/old.rs\n+++ b/new.rs\n@@ -1,2 +1,2 @@ fn a\n keep\n-gone\n+came\n\
+diff --git a/img.png b/img.png\nBinary files a/img.png and b/img.png differ\n";
+    let chunks = unified::parse(input);
+    assert!(matches!(&chunks[0], unified::Chunk::Text(t) if t.starts_with("commit abc")));
+    let files: Vec<&FilePatch> = chunks
+        .iter()
+        .filter_map(|c| if let unified::Chunk::File(f) = c { Some(f) } else { None })
+        .collect();
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].path, "new.rs");
+    assert_eq!(files[0].old_path.as_deref(), Some("old.rs"));
+    assert_eq!(files[0].kind, Kind::Renamed);
+    let lines = &files[0].hunks[0].lines;
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[1].kind, git_core::PatchKind::Removed);
+    assert!(files[1].binary);
+}
+
+#[test]
+fn unified_render_keeps_the_header_and_draws_the_patch() {
+    let theme = Theme::default();
+    let opts = Options { width: Some(80), height: None, git: false, focus: None };
+    let out = text(&render_unified("commit abc\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n", &theme, &opts));
+    assert_eq!(out[0], "commit abc");
+    assert!(out.iter().any(|l| l.contains('b')) && out.iter().any(|l| l.contains("x")));
+}

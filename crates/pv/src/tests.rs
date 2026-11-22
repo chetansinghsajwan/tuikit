@@ -471,3 +471,20 @@ fn markdown_is_highlighted_and_flake_lock_is_json() {
         lines.iter().flat_map(|l| l.spans.iter()).filter_map(|s| s.style.fg).collect();
     assert!(plain_colors.len() < colors.len(), "other .lock files stay plain");
 }
+
+#[test]
+fn list_is_flat_shows_dot_and_ignored_files_with_sizes() {
+    let d = tmp("list");
+    fs::write(d.join(".gitignore"), "build\n").unwrap();
+    fs::create_dir(d.join("build")).unwrap();
+    fs::create_dir(d.join("src")).unwrap();
+    fs::write(d.join("src/inner.rs"), "x").unwrap();
+    fs::write(d.join(".env"), vec![b'x'; 2048]).unwrap();
+    let opts = Options { width: Some(80), height: None, git: false, focus: None };
+    let rows: Vec<String> =
+        list_dir(&d, &ui::Theme::default(), &opts).unwrap().iter().map(flat).collect();
+    assert_eq!(rows.len(), 4, "{rows:?}");
+    assert!(rows[0].contains("build") && rows[1].contains("src"), "folders first: {rows:?}");
+    assert!(rows[2].contains(".env") && rows[2].contains("2.0 K"), "{rows:?}");
+    assert!(!rows.iter().any(|r| r.contains("inner.rs")), "not a tree: {rows:?}");
+}
