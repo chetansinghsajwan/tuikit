@@ -307,9 +307,12 @@ impl Picker {
             return;
         }
         // Keep the cursor inside the window.
-        self.offset =
-            ui::list::follow_cursor(self.cursor as usize, self.offset as usize, self.page as usize)
-                as u32;
+        self.offset = ui::list::follow_cursor(
+            self.cursor as usize,
+            self.offset as usize,
+            self.page as usize,
+            snap_matched as usize,
+        ) as u32;
 
         let end = (self.offset + self.page).min(snap_matched);
         for (row, idx) in (self.offset..end).enumerate() {
@@ -361,10 +364,12 @@ impl Picker {
                     .max(1) as u32
             };
             let crow = tree.row_of.get(&self.cursor).copied().unwrap_or(0) as u32;
-            if crow < self.offset {
-                self.offset = crow;
+            let margin = ui::list::scroll_margin(self.page as usize) as u32;
+            if crow < self.offset + margin {
+                self.offset = crow.saturating_sub(margin);
             } else {
-                while crow >= self.offset + room(self.offset) {
+                let want = (crow + margin).min(tree.rows.len().saturating_sub(1) as u32);
+                while want >= self.offset + room(self.offset) {
                     self.offset += 1;
                 }
             }

@@ -207,16 +207,29 @@ pub fn move_cursor(cursor: usize, delta: isize, len: usize) -> usize {
     (cursor as isize + delta).clamp(0, last) as usize
 }
 
-/// The first visible row that keeps `cursor` inside a window of `page` rows, scrolling as little as
-/// possible from `first_visible_row`. The one rule every list scrolls by.
-pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize) -> usize {
-    if cursor < first_visible_row {
-        cursor
-    } else if cursor >= first_visible_row + page {
-        cursor + 1 - page
+/// The first visible row that keeps `cursor` inside a window of `page` rows of a list of `len`
+/// rows, `scroll_margin` rows from both edges (except at the ends of the list), scrolling as little
+/// as possible from `first_visible_row`. The one rule every list scrolls by.
+pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize, len: usize) -> usize {
+    let margin = scroll_margin(page);
+    let last = len.saturating_sub(1);
+    if cursor < first_visible_row + margin {
+        cursor.saturating_sub(margin)
+    } else if (cursor + margin).min(last) >= first_visible_row + page {
+        (cursor + margin).min(last) + 1 - page
     } else {
         first_visible_row
     }
+}
+
+/// How many rows stay visible between the cursor and the edge of a list while it scrolls (vim's
+/// `scrolloff`), so there is always context ahead of the cursor.
+pub const SCROLL_OFF: usize = 4;
+
+/// The rows kept between the cursor and the edge of a window of `page` rows: `SCROLL_OFF`, less in a
+/// window too small to hold it on both sides of the cursor.
+pub fn scroll_margin(page: usize) -> usize {
+    SCROLL_OFF.min(page.saturating_sub(1) / 2)
 }
 
 /// The row that is current while its pane does not have the focus (the file open in the editor): a

@@ -104,6 +104,10 @@ Every pane has a border and, when titles are on, a title with an icon. The focus
 
 Wherever columns are drawn aligned (file rows, lists, tables, prompts beside counts), at least 1 blank cell separates adjacent columns, even when the row is narrow: the shrinking element (the name, the query, the message) gives way, never the gap.
 
+## Scrolling
+
+Every list keeps 4 rows between the cursor and the top or bottom edge while it scrolls (`ui::list::SCROLL_OFF`, like vim's `scrolloff`), so there is always context ahead of the cursor. The margin does not apply at the first and last rows of the list, and shrinks in a pane too small for it (`ui::list::scroll_margin`). A list scrolls only through `ui::list::follow_cursor`, which applies it; a tree that pins its enclosing folders uses `scroll_margin` the same way. A tool never scrolls a list by its own rule.
+
 ## Motion
 
 The toolkit owns animation (`ui::anim`); a tool never animates. The cursor row fades in (140 ms) when it lands on a new line, and `ui::anim::spinner()` replaces `…` while something runs. A tool's event loop calls `ui::anim::finish` after drawing, waits with `poll_timeout`, and redraws on `take_redraw`; a still screen costs no CPU. Config: `animations = "on" | "reduced" | "off"` (`reduced`: spinner only). Also in `ui::anim`, all drawn after the tool and without tool code: a list that scrolls by 2+ rows glides (160 ms; single steps are instant), rows a fold opens reveal one by one, rows whose content changed flash, popups, menus and help fade in over what they cover, and the content of a new tab fades in. Every list row is drawn by `ui::list::ListRow` (bar, highlight, left content that shrinks, right column, signs, one blank cell between, motion): `files`, git panel, `gu`, `nu`, `pick`, diagnostics and symbols all use it, so the motion covers every list.

@@ -32,8 +32,24 @@ fn the_cursor_stops_at_the_first_and_the_last_row() {
 
 #[test]
 fn the_window_scrolls_only_as_far_as_the_cursor_needs() {
-    assert_eq!(follow_cursor(5, 0, 10), 0);
-    assert_eq!(follow_cursor(12, 0, 10), 3);
-    assert_eq!(follow_cursor(1, 4, 10), 1);
-    assert_eq!(follow_cursor(13, 4, 10), 4);
+    assert_eq!(follow_cursor(5, 0, 10, 50), 0);
+    assert_eq!(follow_cursor(12, 0, 10, 50), 7);
+    assert_eq!(follow_cursor(1, 4, 10, 50), 0);
+    assert_eq!(follow_cursor(13, 4, 10, 50), 8);
+}
+
+#[test]
+fn the_window_keeps_the_margin_but_not_past_the_ends() {
+    assert_eq!(follow_cursor(5, 0, 10, 50), 0);
+    assert_eq!(follow_cursor(6, 0, 10, 50), 1);
+    assert_eq!(follow_cursor(7, 5, 10, 50), 3);
+    assert_eq!(follow_cursor(49, 0, 10, 50), 40);
+    assert_eq!(follow_cursor(0, 3, 10, 50), 0);
+}
+
+#[test]
+fn the_scroll_margin_shrinks_in_a_small_window() {
+    assert_eq!(scroll_margin(30), 4);
+    assert_eq!(scroll_margin(5), 2);
+    assert_eq!(scroll_margin(1), 0);
 }

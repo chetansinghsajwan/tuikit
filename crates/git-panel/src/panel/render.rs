@@ -88,7 +88,7 @@ impl Panel {
 
         self.page = usize::from(inner.height).max(1);
         let crow = self.items.get(self.cursor).copied().unwrap_or(0);
-        self.offset = ui::list::follow_cursor(crow, self.offset, self.page);
+        self.offset = ui::list::follow_cursor(crow, self.offset, self.page, self.rows.len());
         let depths: Vec<usize> = self
             .rows
             .iter()

@@ -480,7 +480,7 @@ fn columns_show_size_and_time_for_files_when_wide() {
 
 #[test]
 fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
-    let d = tree("columns");
+    let d = tree("linemodes");
     std::fs::write(d.join("src/main.rs"), vec![b'x'; 3000]).unwrap();
     let mut p = Panel::new(
         &d,

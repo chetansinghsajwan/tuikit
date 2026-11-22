@@ -161,10 +161,14 @@ impl Panel {
         self.page = usize::from(inner.height).max(1);
         // The folders above the top row stay pinned at the top while scrolling, so the path is
         // never lost; they take rows from the window, which the scrolling accounts for.
-        if self.cursor < self.offset {
-            self.offset = self.cursor;
+        // The cursor keeps `scroll_margin` rows from the edges, except at the ends of the list.
+        let margin = ui::list::scroll_margin(self.page);
+        let last = self.rows.len().saturating_sub(1);
+        if self.cursor < self.offset + margin {
+            self.offset = self.cursor.saturating_sub(margin);
         } else {
-            while self.cursor >= self.offset + self.page - self.pinned(self.offset).len() {
+            let want = (self.cursor + margin).min(last);
+            while want >= self.offset + self.page - self.pinned(self.offset).len() {
                 self.offset += 1;
             }
         }

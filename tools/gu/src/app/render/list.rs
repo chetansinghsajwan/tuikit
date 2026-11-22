@@ -68,7 +68,7 @@ impl App {
         }
         let page = usize::from(inner.height);
         let st = &mut self.lists[li];
-        st.first_visible_row = ui::list::follow_cursor(st.cursor, st.first_visible_row, page);
+        st.first_visible_row = ui::list::follow_cursor(st.cursor, st.first_visible_row, page, n);
         let (cursor, offset) = (st.cursor, st.first_visible_row);
         let rows = ui::list::Rows::new(area, inner);
         for (row, i) in (offset..(offset + page).min(n)).enumerate() {

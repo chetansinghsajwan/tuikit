@@ -374,7 +374,7 @@ impl Panel {
             self.cursor = i;
         }
         self.page = usize::from(inner.height).max(1);
-        self.offset = ui::list::follow_cursor(self.cursor, self.offset, self.page);
+        self.offset = ui::list::follow_cursor(self.cursor, self.offset, self.page, self.rows.len());
         let geo = ui::list::Rows::new(area, inner);
         for (n, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (n - self.offset) as u16;

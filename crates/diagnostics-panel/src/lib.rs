@@ -279,7 +279,7 @@ impl Panel {
 
         self.page = usize::from(inner.height).max(1);
         let crow = self.selectable.get(self.cursor).copied().unwrap_or(0);
-        self.offset = ui::list::follow_cursor(crow, self.offset, self.page);
+        self.offset = ui::list::follow_cursor(crow, self.offset, self.page, self.rows.len());
         let geo = ui::list::Rows::new(area, inner);
         for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
             let y = inner.y + (i - self.offset) as u16;

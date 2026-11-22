@@ -61,7 +61,7 @@ impl App {
         }
         let page = usize::from(inner.height);
         let st = &mut self.lists[Self::pane(focus)];
-        st.offset = ui::list::follow_cursor(st.cursor, st.offset, page);
+        st.offset = ui::list::follow_cursor(st.cursor, st.offset, page, rows.len());
         let (cursor, offset) = (st.cursor, st.offset);
         let geo = ui::list::Rows::new(area, inner);
         for (row, i) in (offset..(offset + page).min(rows.len())).enumerate() {
