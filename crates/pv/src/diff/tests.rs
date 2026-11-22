@@ -236,7 +236,8 @@ diff --git a/img.png b/img.png\nBinary files a/img.png and b/img.png differ\n";
 fn unified_render_keeps_the_header_and_draws_the_patch() {
     let theme = Theme::default();
     let opts = Options { width: Some(80), height: None, git: false, focus: None };
-    let out = text(&render_unified("commit abc\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n", &theme, &opts));
+    let out =
+        text(&render_unified("commit abc\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n", &theme, &opts));
     assert_eq!(out[0], "commit abc");
     assert!(out.iter().any(|l| l.contains('b')) && out.iter().any(|l| l.contains("x")));
 }

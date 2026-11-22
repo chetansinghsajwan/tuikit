@@ -79,7 +79,10 @@ pub(super) fn parse(text: &str) -> Vec<Chunk> {
     let (mut old_left, mut new_left) = (0u32, 0u32);
     let (mut old_mode, mut new_mode) = (None::<String>, None::<String>);
 
-    let finish = |file: &mut Option<FilePatch>, chunks: &mut Vec<Chunk>, om: &mut Option<String>, nm: &mut Option<String>| {
+    let finish = |file: &mut Option<FilePatch>,
+                  chunks: &mut Vec<Chunk>,
+                  om: &mut Option<String>,
+                  nm: &mut Option<String>| {
         if let Some(mut f) = file.take() {
             if let (Some(a), Some(b)) = (om.take(), nm.take())
                 && a != b
@@ -160,7 +163,8 @@ pub(super) fn parse(text: &str) -> Vec<Chunk> {
                 f.path = p.to_string();
             } else if line.starts_with("Binary files") || line.starts_with("GIT binary patch") {
                 f.binary = true;
-            } else if !(line.starts_with("index ") || line.starts_with("similarity index ")
+            } else if !(line.starts_with("index ")
+                || line.starts_with("similarity index ")
                 || line.starts_with("dissimilarity index "))
             {
                 // Anything else ends the file diff (the next commit's header in `git log -p`).

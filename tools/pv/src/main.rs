@@ -7,7 +7,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: pv [--no-git] [--raw] <path>\n       pv [--name <file>] -\n       pv --diff";
+const USAGE: &str =
+    "usage: pv [--no-git] [--raw] <path>\n       pv [--name <file>] -\n       pv --diff";
 
 /// Reads a number from an environment variable, or `None` when unset or not a number.
 fn env_num(name: &str) -> Option<u16> {

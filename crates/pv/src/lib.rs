@@ -37,11 +37,12 @@ pub use commit::render_marked as preview_commit_marked;
 pub use commit::render_range_marked as preview_range_marked;
 pub use commit::utc as format_utc;
 pub use config::Config;
-pub use dir::list as list_dir;
 pub use diff::{
-    Anchors, render_unified as preview_unified, ignoring_whitespace as diff_ignoring_whitespace, reset_folds as diff_reset_folds,
-    set_ignore_whitespace as diff_ignore_whitespace, toggle_fold as diff_toggle_fold,
+    Anchors, ignoring_whitespace as diff_ignoring_whitespace, render_unified as preview_unified,
+    reset_folds as diff_reset_folds, set_ignore_whitespace as diff_ignore_whitespace,
+    toggle_fold as diff_toggle_fold,
 };
+pub use dir::list as list_dir;
 pub use tabular::{raw as raw_tables, set_raw as set_raw_tables};
 
 /// The most lines of a file preview a pane scrolls through: pass it as `Options::height` for a preview

@@ -5,8 +5,8 @@
 //! help and the palette look the same everywhere.
 
 use crate::Theme;
-use crate::scroll::{self, PreviewScroll};
 use crate::keys::{Commands, Feed, Group, Help, Keymap, Menu, Row, choose, render_menu};
+use crate::scroll::{self, PreviewScroll};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;

@@ -349,7 +349,11 @@ fn human_size(n: u64) -> String {
         v /= 1024.0;
         u += 1;
     }
-    if u == 0 || v >= 10.0 { format!("{v:.0} {}", UNITS[u]) } else { format!("{v:.1} {}", UNITS[u]) }
+    if u == 0 || v >= 10.0 {
+        format!("{v:.0} {}", UNITS[u])
+    } else {
+        format!("{v:.1} {}", UNITS[u])
+    }
 }
 
 /// The folder's own entries as a flat list, `ls -l` style: every entry (dot files and git-ignored ones too,
@@ -378,5 +382,7 @@ pub fn list(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'stat
     v.sort_by(|a, b| {
         b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
-    Ok(v.iter().map(|e| row(0, false, e, opts, state_of(e, &git), theme, Extra { note: None, size: true })).collect())
+    Ok(v.iter()
+        .map(|e| row(0, false, e, opts, state_of(e, &git), theme, Extra { note: None, size: true }))
+        .collect())
 }

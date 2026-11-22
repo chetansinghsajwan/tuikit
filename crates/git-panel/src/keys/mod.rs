@@ -16,8 +16,7 @@ pub fn commands() -> ui::keys::Commands {
 /// except the movement, the preview scroll, the palette and the help, which the shell registers itself.
 pub fn hosted_commands() -> ui::keys::Commands {
     let shell_owned = |id: &str| {
-        id.starts_with("nav.")
-            || matches!(id, "palette" | "help" | "preview.up" | "preview.down")
+        id.starts_with("nav.") || matches!(id, "palette" | "help" | "preview.up" | "preview.down")
     };
     let all = commands();
     ui::keys::Commands {
