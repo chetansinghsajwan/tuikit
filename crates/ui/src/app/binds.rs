@@ -14,6 +14,12 @@ pub(super) const NAV: &[DefaultBinding] = &[
     DefaultBinding { id: "nav.bottom", keys: &["G", "end"] },
 ];
 
+/// The default keys of the shared preview actions.
+pub(super) const PREVIEW: &[DefaultBinding] = &[
+    DefaultBinding { id: "preview.up", keys: &["ctrl-u"] },
+    DefaultBinding { id: "preview.down", keys: &["ctrl-d"] },
+];
+
 /// The default keys of [`TABS`].
 pub(super) const TABS: &[DefaultBinding] = &[
     DefaultBinding { id: "tab.next", keys: &["]", "leader t l"] },

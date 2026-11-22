@@ -521,7 +521,13 @@ impl Picker {
         if self.preview.as_ref().map(|p| &p.key) != Some(&key) {
             let opts = pv::Options {
                 width: Some(inner.width),
-                height: if cand.git.is_some() { None } else { Some(inner.height) },
+                height: if cand.git.is_some() {
+                    None
+                } else if self.opts.root.join(cand.path()).is_dir() || cand.loc.is_some() {
+                    Some(inner.height)
+                } else {
+                    Some(pv::SCROLLABLE_LINES)
+                },
                 git: self.opts.git,
                 focus: cand
                     .loc
@@ -560,21 +566,12 @@ impl Picker {
                 ))],
             };
             self.preview = Some(Preview { key, lines });
-            self.pscroll = 0;
+            self.scroll.reset();
         }
-        self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
-            // Commit and command previews scroll; the rest are already windowed to the pane.
-            let scrolls = cand.git.is_some()
-                || ((self.preview_cmd.is_some() || self.preview_fn.is_some())
-                    && cand.loc.is_none()
-                    && cand.buffer.is_none());
-            let skip = if scrolls { self.pscroll.min(p.lines.len().saturating_sub(1)) } else { 0 };
-            if scrolls {
-                self.pscroll = skip;
-            }
-            let shown: Vec<Line<'static>> =
-                p.lines.iter().skip(skip).take(usize::from(inner.height)).cloned().collect();
+            // Previews windowed to the pane (a grep match, a buffer) are no longer than it, so they stay put.
+            self.scroll.view(inner, p.lines.len());
+            let shown = self.scroll.window(&p.lines).to_vec();
             Paragraph::new(shown).render(inner, buf);
         }
     }

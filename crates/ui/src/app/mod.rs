@@ -5,11 +5,15 @@
 //! help and the palette look the same everywhere.
 
 use crate::Theme;
+use crate::scroll::{self, PreviewScroll};
 use crate::keys::{Commands, Feed, Group, Help, Keymap, Menu, Row, choose, render_menu};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    MouseEventKind,
+};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -207,6 +211,12 @@ pub trait Screen {
         None
     }
 
+    /// The scroll state of the screen's preview pane, if it has one. The shell then runs the shared
+    /// `preview.*` actions on it and scrolls it with the mouse wheel over the pane.
+    fn preview_scroll(&mut self) -> Option<&mut PreviewScroll> {
+        None
+    }
+
     /// The tabs the screen offers, if any.
     fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         None
@@ -233,6 +243,7 @@ pub struct Shell {
     groups: &'static [Group],
     nav: bool,
     tabs: bool,
+    preview: bool,
     tick: Duration,
 }
 
@@ -248,6 +259,7 @@ impl Shell {
             groups: &[],
             nav: true,
             tabs: true,
+            preview: true,
             tick: Duration::from_millis(250),
         }
     }
@@ -290,6 +302,12 @@ impl Shell {
         self
     }
 
+    /// Leaves the shared preview scroll out, even for a screen that has a preview.
+    pub fn with_preview(mut self, on: bool) -> Shell {
+        self.preview = on;
+        self
+    }
+
     /// How long the loop waits for input before it calls `Screen::tick`.
     pub fn tick_interval(mut self, tick: Duration) -> Shell {
         self.tick = tick;
@@ -302,6 +320,7 @@ impl Shell {
     pub fn dispatcher<S: Screen>(&self, screen: &mut S) -> Dispatcher {
         let nav = self.nav && screen.navigable().is_some();
         let tabs = self.tabs && screen.tabbed().is_some();
+        let preview = self.preview && screen.preview_scroll().is_some();
         let mut all = Commands::default();
         if nav {
             all.add(NAV, binds::NAV);
@@ -311,6 +330,9 @@ impl Shell {
             if screen.tabbed().is_some_and(|t| t.can_open_close_tabs()) {
                 all.add(DYNAMIC_TABS, binds::DYNAMIC_TABS);
             }
+        }
+        if preview {
+            all.add(scroll::ACTIONS, binds::PREVIEW);
         }
         let mut groups = self.groups.to_vec();
         if tabs && groups.iter().all(|g| g.prefix != TAB_GROUP.prefix) {
@@ -335,7 +357,7 @@ impl Shell {
                 Keymap::new(self.leader, &all, &groups)
             })
             .collect();
-        Dispatcher { keymaps, nav, tabs }
+        Dispatcher { keymaps, nav, tabs, preview }
     }
 
     /// Runs the screen until it quits and always restores the terminal afterwards.
@@ -356,6 +378,7 @@ pub struct Dispatcher {
     keymaps: Vec<Keymap>,
     nav: bool,
     tabs: bool,
+    preview: bool,
 }
 
 impl Dispatcher {
@@ -366,6 +389,12 @@ impl Dispatcher {
         ev: &Event,
         host: &mut dyn Host,
     ) -> Request {
+        if self.preview
+            && matches!(ev, Event::Mouse(_))
+            && screen.preview_scroll().is_some_and(|p| p.wheel(ev))
+        {
+            return Request::None;
+        }
         let Event::Key(key) = ev else { return screen.on_event(ev, host) };
         if key.kind == KeyEventKind::Release {
             return Request::None;
@@ -409,6 +438,12 @@ impl Dispatcher {
             _ if self.nav && NAV.iter().any(|a| a.id == id) => {
                 if let Some(nav) = screen.navigable() {
                     run_nav_action(nav, id);
+                }
+                Request::None
+            }
+            _ if self.preview && scroll::ACTIONS.iter().any(|a| a.id == id) => {
+                if let Some(p) = screen.preview_scroll() {
+                    p.run(id);
                 }
                 Request::None
             }
@@ -480,7 +515,7 @@ fn open() -> io::Result<Term> {
 /// Puts the terminal into the full-screen raw mode the tools draw in.
 fn enter(term: &mut Term) -> io::Result<()> {
     enable_raw_mode()?;
-    execute!(term.backend_mut(), EnterAlternateScreen, Clear(ClearType::All))?;
+    execute!(term.backend_mut(), EnterAlternateScreen, EnableMouseCapture, Clear(ClearType::All))?;
     // Not `Terminal::clear`: it asks the terminal for the cursor position, and that question goes
     // to stdout, which a tool that prints its result there (`pick`) has redirected.
     let area = term.size()?;
@@ -490,7 +525,7 @@ fn enter(term: &mut Term) -> io::Result<()> {
 /// Gives the terminal back to the shell.
 fn leave(term: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
-    execute!(term.backend_mut(), LeaveAlternateScreen)
+    execute!(term.backend_mut(), DisableMouseCapture, LeaveAlternateScreen)
 }
 
 /// Draws the screen and the overlays when something changed, then handles input until the screen
@@ -526,6 +561,14 @@ fn event_loop<S: Screen>(
         let ev = event::read()?;
         dirty = true;
         if matches!(ev, Event::Resize(..)) {
+            continue;
+        }
+        // Mouse capture reports every move and click too; only the wheel means something, and the rest
+        // must not cost a redraw.
+        if let Event::Mouse(m) = &ev
+            && !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+        {
+            dirty = false;
             continue;
         }
         // The help is modal: it takes the keys until it closes.

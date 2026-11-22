@@ -99,13 +99,6 @@ pub const GLOBAL: &[Action] = &[
 /// Movement, the diff scroll and quitting, for the list panes.
 pub(super) const COMMON: &[Action] = &[
     Action {
-        id: "preview.down",
-        name: "scroll diff down",
-        desc: "scroll the preview down",
-        basic: true,
-    },
-    Action { id: "preview.up", name: "scroll diff up", desc: "scroll the preview up", basic: true },
-    Action {
         id: "preview.next_hunk",
         name: "next hunk",
         desc: "scroll the diff to the next hunk",

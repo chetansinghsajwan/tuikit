@@ -24,6 +24,7 @@ struct Fake {
     unbound: Vec<String>,
     no_nav: bool,
     ctx: usize,
+    scroll: Option<PreviewScroll>,
 }
 
 impl Screen for Fake {
@@ -63,6 +64,10 @@ impl Screen for Fake {
 
     fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         if self.tabs { Some(self) } else { None }
+    }
+
+    fn preview_scroll(&mut self) -> Option<&mut PreviewScroll> {
+        self.scroll.as_mut()
     }
 }
 
@@ -161,6 +166,32 @@ fn ctrl_d_and_ctrl_u_are_not_movement() {
     press(&mut d, &mut s, "ctrl-d");
     press(&mut d, &mut s, "ctrl-u");
     assert_eq!(s.cursor, 0, "they are left to the preview scroll");
+}
+
+#[test]
+fn a_screen_with_a_preview_gets_the_shared_scroll_keys_and_the_wheel() {
+    use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
+    let mut scroll = PreviewScroll::default();
+    scroll.view(Rect::new(20, 0, 30, 10), 100);
+    let mut s = Fake { scroll: Some(scroll), ..Fake::default() };
+    let mut d = app().dispatcher(&mut s);
+    press(&mut d, &mut s, "ctrl-d");
+    assert_eq!(s.scroll.as_ref().unwrap().offset(), 5);
+    press(&mut d, &mut s, "ctrl-u");
+    assert_eq!(s.scroll.as_ref().unwrap().offset(), 0);
+    let wheel = |column| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column,
+            row: 3,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    d.handle_event(&mut s, &wheel(25), &mut NoHost);
+    assert_eq!(s.scroll.as_ref().unwrap().offset(), 3);
+    d.handle_event(&mut s, &wheel(2), &mut NoHost);
+    assert_eq!(s.scroll.as_ref().unwrap().offset(), 3, "over the list, not the preview");
+    assert!(s.ran.is_empty(), "the shared actions never reach the tool");
 }
 
 #[test]

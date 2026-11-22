@@ -23,8 +23,6 @@ pub(super) const GLOBAL: &[DefaultBinding] = &[
 
 /// The default keys of [`COMMON`].
 pub(super) const COMMON: &[DefaultBinding] = &[
-    DefaultBinding { id: "preview.down", keys: &["ctrl-d"] },
-    DefaultBinding { id: "preview.up", keys: &["ctrl-u"] },
     DefaultBinding { id: "preview.next_hunk", keys: &["}"] },
     DefaultBinding { id: "preview.prev_hunk", keys: &["{"] },
     DefaultBinding { id: "preview.next_file", keys: &[")"] },

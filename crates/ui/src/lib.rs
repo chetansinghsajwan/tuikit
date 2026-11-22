@@ -21,6 +21,7 @@ pub mod pill;
 pub mod popup;
 pub mod prompt;
 pub mod recent;
+pub mod scroll;
 pub mod subject;
 pub mod symbol;
 pub mod tabs;

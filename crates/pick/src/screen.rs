@@ -56,6 +56,11 @@ impl Screen for PickScreen {
         Request::None
     }
 
+    /// The picker's preview, for the mouse wheel.
+    fn preview_scroll(&mut self) -> Option<&mut ui::scroll::PreviewScroll> {
+        Some(self.picker.preview_scroll())
+    }
+
     /// The picker has no shell actions.
     fn run_action(&mut self, _id: &'static str, _host: &mut dyn Host) -> Request {
         Request::None

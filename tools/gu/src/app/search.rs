@@ -26,7 +26,7 @@ impl App {
         if tab != Tab::Commits {
             self.search = None;
         }
-        self.preview_scroll = 0;
+        self.preview_scroll.reset();
         // The commits are only loaded while their tab is shown.
         self.reload_history();
     }
@@ -40,7 +40,7 @@ impl App {
     /// Reload the list after a filter changed and say how many commits are left.
     pub(super) fn refilter(&mut self, what: &str) {
         self.lists[1] = ListState::default();
-        self.preview_scroll = 0;
+        self.preview_scroll.reset();
         self.reload_history();
         let n = self.commits.len();
         let shown = if self.filter.active() {
@@ -84,7 +84,7 @@ impl App {
         match found {
             Some(i) => {
                 self.lists[1].cursor = i;
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
                 let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
                 self.show_message(format!("match {nth} of {total}"), false);
             }

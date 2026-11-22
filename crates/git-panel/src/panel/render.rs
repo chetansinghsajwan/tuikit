@@ -221,19 +221,11 @@ impl Panel {
                 }
             };
             self.preview = Some(Preview { key, lines, hunks });
-            self.pscroll = 0;
+            self.scroll.reset();
         }
-        self.pheight = usize::from(inner.height);
         if let Some(p) = &self.preview {
-            self.pscroll = self.pscroll.min(p.lines.len().saturating_sub(1));
-            let shown: Vec<Line<'static>> = p
-                .lines
-                .iter()
-                .skip(self.pscroll)
-                .take(usize::from(inner.height))
-                .cloned()
-                .collect();
-            Paragraph::new(shown).render(inner, buf);
+            self.scroll.view(inner, p.lines.len());
+            Paragraph::new(self.scroll.window(&p.lines).to_vec()).render(inner, buf);
         }
     }
 }

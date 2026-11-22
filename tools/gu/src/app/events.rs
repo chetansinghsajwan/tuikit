@@ -109,11 +109,6 @@ impl App {
                     false,
                 );
             }
-            "preview.down" => self.preview_scroll += (self.preview_height / 2).max(1),
-            "preview.up" => {
-                self.preview_scroll =
-                    self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
-            }
             "preview.next_hunk" => self.jump_to_next_mark(DiffMark::Hunk),
             "preview.prev_hunk" => self.jump_to_prev_mark(DiffMark::Hunk),
             "preview.next_file" => self.jump_to_next_mark(DiffMark::File),
@@ -186,7 +181,7 @@ impl App {
     /// Focus `focus` and show its preview from the top.
     pub(super) fn set_focus(&mut self, focus: Focus) {
         self.focus = focus;
-        self.preview_scroll = 0;
+        self.preview_scroll.reset();
     }
 
     /// Move the focus to the next or previous pane of the tab (only the Refs tab has two).
@@ -198,7 +193,7 @@ impl App {
         };
         let at = panes.iter().position(|f| *f == self.focus).unwrap_or(0) as isize;
         self.focus = panes[(at + delta).rem_euclid(panes.len() as isize) as usize];
-        self.preview_scroll = 0;
+        self.preview_scroll.reset();
     }
 
     /// Turn what the Files panel asked for into a reload, a screen change or a `Outcome` for the host.

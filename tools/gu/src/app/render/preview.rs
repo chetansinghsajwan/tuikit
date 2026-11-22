@@ -118,20 +118,12 @@ impl App {
             };
             self.preview = Some(Preview { key, lines, anchors });
             if !same_rev {
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
             }
         }
-        self.preview_height = usize::from(inner.height);
         if let Some(p) = &self.preview {
-            self.preview_scroll = self.preview_scroll.min(p.lines.len().saturating_sub(1));
-            let shown: Vec<Line<'static>> = p
-                .lines
-                .iter()
-                .skip(self.preview_scroll)
-                .take(usize::from(inner.height))
-                .cloned()
-                .collect();
-            Paragraph::new(shown).render(inner, buf);
+            self.preview_scroll.view(inner, p.lines.len());
+            Paragraph::new(self.preview_scroll.window(&p.lines).to_vec()).render(inner, buf);
         }
     }
 }

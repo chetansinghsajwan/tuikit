@@ -56,8 +56,8 @@ pub struct Picker {
     page: u32,
     /// Stops the running grep search.
     cancel: Arc<AtomicBool>,
-    /// First visible preview row (commit previews scroll).
-    pscroll: usize,
+    /// Where the preview is scrolled to.
+    scroll: ui::scroll::PreviewScroll,
     /// Pane title override (`--title`).
     title: Option<String>,
     /// Icon before the title (git pickers).
@@ -72,8 +72,6 @@ pub struct Picker {
     header: Vec<String>,
     /// A rule between the prompt and what is under it (`--separator`).
     separator: bool,
-    /// Preview rows visible at the last render, for paging.
-    pheight: usize,
     /// Show path candidates as a directory hierarchy (see `set_tree`).
     tree_on: bool,
     /// The hierarchy of the current results; `None` when the list is flat.
@@ -113,7 +111,7 @@ impl Picker {
             preview: None,
             page: 10,
             cancel: Arc::new(AtomicBool::new(false)),
-            pscroll: 0,
+            scroll: Default::default(),
             title: None,
             icon: None,
             preview_cmd: None,
@@ -127,7 +125,6 @@ impl Picker {
             tree: None,
             tree_dirty: true,
             tree_limit: 20_000,
-            pheight: 10,
             opts,
         };
         picker.reparse();
@@ -476,6 +473,11 @@ impl Picker {
     }
 
     /// Handle one terminal event and tell the host what to do next (nothing, accept or cancel).
+    /// The scroll state of the preview, for a host that owns the mouse wheel.
+    pub fn preview_scroll(&mut self) -> &mut ui::scroll::PreviewScroll {
+        &mut self.scroll
+    }
+
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Some(KeyEvent { code, modifiers, .. }) = ui::keys::pressed(ev) else {
             return Action::None;
@@ -515,10 +517,8 @@ impl Picker {
             KeyCode::Char('n') if ctrl => self.move_by(1),
             KeyCode::Char('k') if ctrl => self.move_by(-5),
             KeyCode::Char('j') if ctrl => self.move_by(5),
-            KeyCode::Char('d') if ctrl => self.pscroll += (self.pheight / 2).max(1),
-            KeyCode::Char('u') if ctrl => {
-                self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1))
-            }
+            KeyCode::Char('d') if ctrl => self.scroll.half_down(),
+            KeyCode::Char('u') if ctrl => self.scroll.half_up(),
             // Tables (CSV, spreadsheets) show as text and back.
             KeyCode::Char('t') if ctrl => {
                 pv::set_raw_tables(!pv::raw_tables());

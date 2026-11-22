@@ -39,6 +39,7 @@ struct Explorer {
     theme: Theme,
     tabs: ui::tabs::Tabs<Panel>,
     preview: Option<Preview>,
+    scroll: ui::scroll::PreviewScroll,
     show_meta: bool,
     meta: Option<(PathBuf, Option<Meta>)>,
     dirsize: Option<DirSize>,
@@ -55,6 +56,7 @@ pub fn run(opts: Options) -> io::Result<()> {
         theme: Theme::load(),
         tabs: ui::tabs::Tabs::new(Panel::new(dir, panel_opts)),
         preview: None,
+        scroll: Default::default(),
         show_meta: true,
         meta: None,
         dirsize: None,
@@ -125,6 +127,10 @@ impl ui::app::Screen for Explorer {
 
     fn tabbed(&mut self) -> Option<&mut dyn Tabbed> {
         Some(self)
+    }
+
+    fn preview_scroll(&mut self) -> Option<&mut ui::scroll::PreviewScroll> {
+        Some(&mut self.scroll)
     }
 }
 
@@ -302,13 +308,17 @@ impl Explorer {
         }
         let key = (path.clone(), inner.width, inner.height, pv::raw_tables());
         if self.preview.as_ref().is_none_or(|p| p.key != key) {
+            // A file is drawn whole (up to `pv::SCROLLABLE_LINES`) so the pane can scroll; a folder is fitted to the pane.
             let opts = pv::Options {
                 width: Some(inner.width),
-                height: Some(inner.height),
+                height: Some(if path.is_dir() { inner.height } else { pv::SCROLLABLE_LINES }),
                 git: self.opts.git,
                 focus: None,
             };
             let lines = pv::preview(&path, &theme, &opts).map_err(|e| e.to_string());
+            if self.preview.as_ref().is_none_or(|p| p.key.0 != key.0) {
+                self.scroll.reset();
+            }
             self.preview = Some(Preview { key, lines });
         }
         let lines = match &self.preview.as_ref().expect("set above").lines {
@@ -318,7 +328,8 @@ impl Explorer {
                 Style::new().fg(theme.colors.muted.into()),
             ))],
         };
-        Paragraph::new(lines).render(inner, buf);
+        self.scroll.view(inner, lines.len());
+        Paragraph::new(self.scroll.window(&lines).to_vec()).render(inner, buf);
     }
 }
 

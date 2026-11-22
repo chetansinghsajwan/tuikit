@@ -106,7 +106,7 @@ impl App {
                 self.commit_files = Some(CommitFiles::new(k.oid, k.short, k.subject, changes));
                 self.detail = true;
                 self.preview = None;
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
             }
             Err(e) => self.show_message(e.to_string(), true),
         }
@@ -116,7 +116,7 @@ impl App {
     pub(super) fn commit_files_key(&mut self, key: &KeyEvent) -> Outcome {
         use ratatui::crossterm::event::KeyModifiers;
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let page = self.preview_height.max(2);
+        let page = self.preview_scroll.height().max(2);
         let Some(cf) = self.commit_files.as_mut() else { return Outcome::Continue };
         let before = cf.cursor;
         match key.code {
@@ -161,11 +161,8 @@ impl App {
                     _ => self.commit_files = None,
                 }
             }
-            KeyCode::Char('d') if ctrl => self.preview_scroll += (self.preview_height / 2).max(1),
-            KeyCode::Char('u') if ctrl => {
-                self.preview_scroll =
-                    self.preview_scroll.saturating_sub((self.preview_height / 2).max(1))
-            }
+            KeyCode::Char('d') if ctrl => self.preview_scroll.half_down(),
+            KeyCode::Char('u') if ctrl => self.preview_scroll.half_up(),
             KeyCode::Char('}') => self.jump_to_next_mark(DiffMark::Hunk),
             KeyCode::Char('{') => self.jump_to_prev_mark(DiffMark::Hunk),
             KeyCode::Char(')') => self.jump_to_next_mark(DiffMark::File),
@@ -173,7 +170,7 @@ impl App {
             _ => {}
         }
         if self.commit_files.as_ref().is_some_and(|cf| cf.cursor != before) {
-            self.preview_scroll = 0;
+            self.preview_scroll.reset();
         }
         Outcome::Continue
     }
@@ -185,7 +182,7 @@ impl App {
             .anchors
             .files
             .iter()
-            .rposition(|&m| m <= self.preview_scroll)
+            .rposition(|&m| m <= self.preview_scroll.offset())
             .or(if p.anchors.files.is_empty() { None } else { Some(0) });
         if let Some(path) = at.and_then(|i| p.anchors.paths.get(i)).cloned() {
             pv::diff_toggle_fold(&path);
@@ -200,8 +197,8 @@ impl App {
             DiffMark::Hunk => &p.anchors.hunks,
             DiffMark::File => &p.anchors.files,
         };
-        if let Some(row) = pv::Anchors::next(marks, self.preview_scroll) {
-            self.preview_scroll = row;
+        if let Some(row) = pv::Anchors::next(marks, self.preview_scroll.offset()) {
+            self.preview_scroll.to(row);
         }
     }
 
@@ -212,8 +209,8 @@ impl App {
             DiffMark::Hunk => &p.anchors.hunks,
             DiffMark::File => &p.anchors.files,
         };
-        if let Some(row) = pv::Anchors::prev(marks, self.preview_scroll) {
-            self.preview_scroll = row;
+        if let Some(row) = pv::Anchors::prev(marks, self.preview_scroll.offset()) {
+            self.preview_scroll.to(row);
         }
     }
 }

@@ -123,8 +123,7 @@ pub struct Panel {
     preview: Option<Preview>,
     /// Bumped when the repository changes, so cached diffs are dropped.
     version: u64,
-    pscroll: usize,
-    pheight: usize,
+    scroll: ui::scroll::PreviewScroll,
     /// The changed files as a tree of directories (the default) or one flat list; the folded
     /// folders.
     tree: bool,
@@ -182,8 +181,7 @@ impl Panel {
             message: None,
             preview: None,
             version: 0,
-            pscroll: 0,
-            pheight: 10,
+            scroll: Default::default(),
             tree: true,
             folded: Default::default(),
             all: Vec::new(),
@@ -263,7 +261,7 @@ impl Panel {
             .unwrap_or(self.cursor)
             .min(self.items.len().saturating_sub(1));
         self.version += 1;
-        self.pscroll = 0;
+        self.scroll.reset();
     }
 
     /// Add `node` (a directory) to the rows: its folders first, then its files.
@@ -421,16 +419,21 @@ impl Panel {
         self.keymap.rows()
     }
 
+    /// The scroll state of the diff, for a host that owns the keys and the wheel.
+    pub fn preview_scroll(&mut self) -> &mut ui::scroll::PreviewScroll {
+        &mut self.scroll
+    }
+
     /// Scroll the diff to the next or previous hunk.
     fn jump_hunk(&mut self, forward: bool) {
         let Some(p) = &self.preview else { return };
         let target = if forward {
-            pv::Anchors::next(&p.hunks, self.pscroll)
+            pv::Anchors::next(&p.hunks, self.scroll.offset())
         } else {
-            pv::Anchors::prev(&p.hunks, self.pscroll)
+            pv::Anchors::prev(&p.hunks, self.scroll.offset())
         };
         if let Some(t) = target {
-            self.pscroll = t;
+            self.scroll.to(t);
         }
     }
 
@@ -449,8 +452,9 @@ impl Panel {
             "nav.page_down" => self.move_by(self.page as isize),
             "nav.top" => self.cursor = 0,
             "nav.bottom" => self.cursor = self.items.len().saturating_sub(1),
-            "preview.down" => self.pscroll += (self.pheight / 2).max(1),
-            "preview.up" => self.pscroll = self.pscroll.saturating_sub((self.pheight / 2).max(1)),
+            "preview.down" | "preview.up" => {
+                self.scroll.run(id);
+            }
             "preview.next_hunk" => self.jump_hunk(true),
             "preview.prev_hunk" => self.jump_hunk(false),
             "item.open" => {

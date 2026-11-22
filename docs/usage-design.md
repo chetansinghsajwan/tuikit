@@ -33,7 +33,7 @@ Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu`,
 | `j` `k`, arrows, `ctrl-n` `ctrl-p` | move one                                                                   | every list                                   |
 | `ctrl-j` `ctrl-k`                  | move five                                                                  | everywhere `j` `k` move                      |
 | `g` `G`, `home` `end`              | top, bottom                                                                | every list                                   |
-| `ctrl-d` `ctrl-u`                  | scroll the preview half a page                                             | wherever a preview shows                     |
+| `ctrl-d` `ctrl-u`                  | scroll the preview half a page (the mouse wheel over the preview scrolls it too; `ui::scroll::PreviewScroll`) | wherever a preview shows                     |
 | `Enter`                            | the primary action: open, accept, check out                                | all                                          |
 | `l` `h`                            | go in or expand, go out or collapse                                        | trees (files, symbols, commit files, status) |
 | `Tab`                              | mark for multi-select                                                      | files, pick                                  |

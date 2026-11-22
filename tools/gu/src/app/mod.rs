@@ -53,10 +53,9 @@ pub struct App {
     mode: Mode,
     message: Option<ui::footer::Notice>,
     preview: Option<Preview>,
-    preview_scroll: usize,
+    preview_scroll: ui::scroll::PreviewScroll,
     /// The commit whose files were folded by hand (another commit starts with none).
     folded_commit: Option<String>,
-    preview_height: usize,
     /// A fetch, pull or push in progress.
     job: Option<Job>,
     /// The commit graph column in the Commits pane, and whether it covers every branch.
@@ -118,9 +117,8 @@ impl App {
             mode: Mode::Normal,
             message: None,
             preview: None,
-            preview_scroll: 0,
+            preview_scroll: Default::default(),
             folded_commit: None,
-            preview_height: 10,
             job: None,
             graph: true,
             all_branches: true,
@@ -209,6 +207,15 @@ impl ui::app::Screen for App {
         Some(self)
     }
 
+    /// The diff of the pane that has the focus.
+    fn preview_scroll(&mut self) -> Option<&mut ui::scroll::PreviewScroll> {
+        if self.focus == Focus::Files {
+            Some(self.files.preview_scroll())
+        } else {
+            Some(&mut self.preview_scroll)
+        }
+    }
+
     /// The focused pane: Files is context 0, the list panes follow.
     fn context(&self) -> usize {
         Self::list_index(self.focus).map_or(0, |i| i + 1)
@@ -281,7 +288,7 @@ impl Navigable for App {
                 let len = self.len(self.focus);
                 let st = &mut self.lists[li];
                 st.cursor = ui::list::move_cursor(st.cursor, delta, len);
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
             }
             None => self.files.move_by(delta),
         }
@@ -298,7 +305,7 @@ impl Navigable for App {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = 0;
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
             }
             None => self.files.move_to_top(),
         }
@@ -308,7 +315,7 @@ impl Navigable for App {
         match Self::list_index(self.focus) {
             Some(li) => {
                 self.lists[li].cursor = self.len(self.focus).saturating_sub(1);
-                self.preview_scroll = 0;
+                self.preview_scroll.reset();
             }
             None => self.files.move_to_bottom(),
         }

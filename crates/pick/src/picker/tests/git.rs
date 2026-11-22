@@ -146,7 +146,7 @@ fn commit_preview_scrolls_with_ctrl_d_and_u() {
     draw(&mut p);
     p.handle_event(&Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)));
     draw(&mut p);
-    assert_eq!(p.pscroll, 0);
+    assert_eq!(p.scroll.offset(), 0);
 }
 
 #[test]

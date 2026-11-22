@@ -13,9 +13,12 @@ pub fn commands() -> ui::keys::Commands {
 }
 
 /// The commands for a host that owns the keymap (the shared app shell): all of `commands()`
-/// except the movement, the palette and the help, which the shell registers itself.
+/// except the movement, the preview scroll, the palette and the help, which the shell registers itself.
 pub fn hosted_commands() -> ui::keys::Commands {
-    let shell_owned = |id: &str| id.starts_with("nav.") || matches!(id, "palette" | "help");
+    let shell_owned = |id: &str| {
+        id.starts_with("nav.")
+            || matches!(id, "palette" | "help" | "preview.up" | "preview.down")
+    };
     let all = commands();
     ui::keys::Commands {
         actions: all.actions.into_iter().filter(|a| !shell_owned(a.id)).collect(),
