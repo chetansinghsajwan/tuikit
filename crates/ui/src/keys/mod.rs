@@ -193,22 +193,6 @@ impl Commands {
     }
 }
 
-/// Action ids that were renamed, as `(old, new)`: a user's config that still names the old id keeps
-/// working. Drop an entry once nobody can still have it in a config.
-const RENAMED_IDS: &[(&str, &str)] = &[
-    ("nav.up5", "nav.up_step"),
-    ("nav.down5", "nav.down_step"),
-    ("tree.out", "tree.collapse"),
-    ("item.yank", "item.copy"),
-    ("item.new", "item.create"),
-    ("view.raw", "view.tables_as_text"),
-];
-
-/// The current id for `id`, which may be one that was renamed.
-fn current_id(id: &str) -> &str {
-    RENAMED_IDS.iter().find(|(old, _)| *old == id).map_or(id, |(_, new)| new)
-}
-
 /// A name for the menu behind a key prefix: `leader v` is "view".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Group {
@@ -300,12 +284,12 @@ impl Keymap {
         map
     }
 
-    /// The user's leader and bindings (`ui::config`). An id that was renamed still works.
+    /// The user's leader and bindings (`ui::config`).
     fn apply_config(&mut self) {
         let cfg = crate::config::get();
         for (id, keys) in &cfg.keys {
             let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-            self.rebind(current_id(id), &keys);
+            self.rebind(id, &keys);
         }
     }
 
