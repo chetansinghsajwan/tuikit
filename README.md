@@ -39,11 +39,10 @@ cargo run -p tuikit-pick-cli      # any tool: tuikit-<name>-cli, tuikit-gu, tuik
 
 With Nix, every tool is a package of the flake: `nix build .#pick` (also `pv`, `files`, `gu`, `tb`, `nu`, `mdexport`).
 
-## Design and plan
+## Design
 
 - [`docs/ui-design.md`](docs/ui-design.md): the look every tool follows.
 - [`docs/usage-design.md`](docs/usage-design.md): keys, menus, shared verbs.
-- [`plan.md`](plan.md): decisions and open questions.
 
 ## Used by
 

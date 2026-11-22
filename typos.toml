@@ -18,5 +18,5 @@ propert = "propert"
 fo = "fo"
 
 [default.extend-identifiers]
-# Hex digits of a powerline glyph code point in plan.md.
+# Hex digits of a powerline glyph code point in the glyph tables.
 e0ba = "e0ba"
