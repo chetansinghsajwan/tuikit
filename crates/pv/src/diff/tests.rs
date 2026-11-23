@@ -1,7 +1,10 @@
 //! Tests for the diff view.
 
+use super::cells::{Cell, spans_of};
 use super::*;
+use crate::git::PatchKind;
 use git_core::{Kind, PatchLine};
+use ratatui::style::Modifier;
 
 /// A patch of `src/lib.rs` going from `old` to `new`.
 fn patch(old: &str, new: &str) -> FilePatch {

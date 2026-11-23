@@ -94,4 +94,42 @@ impl App {
             ),
         }
     }
+
+    /// The actions that start the search or step through its matches.
+    pub(super) fn search_action(&mut self, id: &str) -> bool {
+        match id {
+            "search.start" => {
+                self.mode = Mode::Prompt(
+                    PromptKind::Search,
+                    Input::new(self.search.clone().unwrap_or_default()),
+                )
+            }
+            "search.next" => self.search_step(1),
+            "search.prev" => self.search_step(-1),
+            _ => return false,
+        }
+        true
+    }
+
+    /// Apply a finished search prompt.
+    pub(super) fn search_submit(&mut self, kind: PromptKind, value: String) {
+        match kind {
+            PromptKind::Search => {
+                self.search = if value.is_empty() { None } else { Some(value) };
+                if self.search.is_some() {
+                    // The commit under the cursor counts if it matches.
+                    let at = self.lists[1].cursor;
+                    if self.commit_matches(at) {
+                        let total =
+                            (0..self.commits.len()).filter(|&i| self.commit_matches(i)).count();
+                        let nth = (0..=at).filter(|&j| self.commit_matches(j)).count();
+                        self.show_message(format!("match {nth} of {total}"), false);
+                    } else {
+                        self.search_step(1);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }

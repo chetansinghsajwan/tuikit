@@ -1,6 +1,8 @@
 //! Tests for rendered Markdown.
 
 use super::*;
+use ui::Theme;
+use unicode_width::UnicodeWidthStr;
 
 /// The text of each of `lines`, with the styles dropped.
 fn text(lines: &[Line]) -> Vec<String> {

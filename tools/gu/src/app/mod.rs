@@ -17,20 +17,40 @@ use ui::footer::Footer;
 use ui::prompt::Typed;
 use ui::{Pane, Theme};
 
+/// Running actions by id.
+mod actions;
+/// Branches, tags and remote branches.
+mod branches;
+/// Commits.
+mod commits;
 /// Loading history, status, refs and the commit list.
 mod data;
-/// Keys in each mode (normal, prompt, confirm, popup).
-mod events;
+/// The commit filter popup.
+mod filter;
+/// Which pane has the focus.
+mod focus;
+/// Remote commands on their own thread and the status line's operation.
+mod jobs;
+/// The input modes: prompt, question, popup.
+mod modes;
 /// Small drawing helpers: ref pills, author colors, widths.
 mod pills;
 /// The Refs tab's tree and the files of a commit.
 mod refs;
+/// Fetch, pull and push.
+mod remote;
 /// Drawing the tabs and their panes.
 mod render;
 /// Tabs, focus and commit search.
 mod search;
+/// Stashes.
+mod stashes;
+/// The actions of the Submodules pane.
+mod submodule;
 /// The kinds of things the screen holds: focus, modes, prompts, rows, filters.
 mod types;
+/// How the list and the preview are drawn.
+mod view;
 use pills::*;
 pub use types::Outcome;
 use types::*;

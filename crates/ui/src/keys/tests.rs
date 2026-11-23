@@ -1,6 +1,10 @@
 //! Tests for key parsing, sequences, the which-key menu and the help popup.
 
 use super::*;
+use crate::theme::Theme;
+use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::layout::Rect;
 
 /// A plain key press of the character `c`.
 fn k(c: char) -> KeyEvent {
