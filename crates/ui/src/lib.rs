@@ -7,6 +7,7 @@ pub mod ansi;
 pub mod app;
 pub mod bigtext;
 pub mod clipboard;
+pub mod columns;
 pub mod config;
 pub mod dim;
 pub mod footer;

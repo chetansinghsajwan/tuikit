@@ -47,6 +47,16 @@ impl Sort {
         }
     }
 
+    /// The title of the column this order sorts by.
+    pub fn column(self) -> &'static str {
+        match self {
+            Sort::Cpu => "CPU%",
+            Sort::Memory => "MEM",
+            Sort::Pid => "PID",
+            Sort::Name => "NAME",
+        }
+    }
+
     /// Whether the largest comes first by default (load) or the smallest (pid, name).
     fn is_descending(self) -> bool {
         matches!(self, Sort::Cpu | Sort::Memory)
@@ -60,6 +70,13 @@ pub struct Options {
     pub is_reversed: bool,
     pub filter: String,
     pub is_tree: bool,
+}
+
+impl Options {
+    /// Whether the list now runs from the largest to the smallest, for the sort marker.
+    pub fn is_descending(&self) -> bool {
+        self.sort.is_descending() != self.is_reversed
+    }
 }
 
 /// A row of the list: the process (an index into the slice given to [`rows`]) and its depth.

@@ -2,6 +2,7 @@
 //! bar, so every tool that shows a load (CPU, memory, a transfer rate) draws it the same way.
 
 use crate::anim;
+use crate::theme::{Theme, mix};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -9,6 +10,24 @@ use std::time::{Duration, Instant};
 
 /// How long a bar takes to glide to a new value.
 const GLIDE: Duration = Duration::from_millis(400);
+
+/// The heat color of a load between 0 and 1: green (`success`) through yellow (`warning`) to red
+/// (`error`), blended smoothly, so a bar or graph shows how hot it is by its color alone. Without
+/// truecolor the theme's colors are not blendable and the nearer of the three is used.
+pub fn heat(theme: &Theme, load: f32) -> Color {
+    let c = &theme.colors;
+    let load = if load.is_finite() { load.clamp(0.0, 1.0) } else { 0.0 };
+    let (from, to, share) = if load < 0.5 {
+        (c.success.into(), c.warning.into(), load * 2.0)
+    } else {
+        (c.warning.into(), c.error.into(), (load - 0.5) * 2.0)
+    };
+    match mix(to, from, (share * 100.0).round() as u8) {
+        blended @ Color::Rgb(..) => blended,
+        _ if share < 0.5 => from,
+        _ => to,
+    }
+}
 
 /// A value that glides to each new target instead of jumping, for bars that are fed a reading now and
 /// then. The tool sets the target when a reading arrives and draws [`Eased::value`] each frame; while
@@ -70,8 +89,9 @@ pub fn filled_eighths(value: f32, height: u16) -> usize {
 
 /// Draws `values` (each 0 to 1, oldest first) as columns in `area`, the newest at the right edge.
 /// Older values that do not fit are dropped; when there are fewer values than columns the left
-/// part stays empty.
-pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: Color) {
+/// part stays empty. `color` gives the color of a column from its value (`heat` for a gradient, a
+/// constant for a flat color).
+pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: impl Fn(f32) -> Color) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -86,15 +106,16 @@ pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: Color) {
             if here == 0 {
                 break;
             }
-            buf[(x, y)].set_char(glyph(here)).set_style(Style::new().fg(color));
+            buf[(x, y)].set_char(glyph(here)).set_style(Style::new().fg(color(*value)));
             left -= here;
         }
     }
 }
 
-/// Draws a bar of `ratio` (0 to 1) across one row of `area`: the filled part in `color`, the rest
-/// as a faint track in `track`.
-pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: Color, track: Color) {
+/// Draws a bar of `ratio` (0 to 1) across one row of `area`: the filled part, each cell colored by
+/// `color` from its place along the bar (0 at the left edge, 1 at the right: `heat` makes it a
+/// gradient), the rest as a faint track in `track`.
+pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: impl Fn(f32) -> Color, track: Color) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -106,7 +127,8 @@ pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: Color, track: Colo
         if here == 0 {
             cell.set_char('▁').set_style(Style::new().fg(track));
         } else {
-            cell.set_char(glyph(here)).set_style(Style::new().fg(color));
+            let place = (f32::from(i) + 0.5) / f32::from(area.width);
+            cell.set_char(glyph(here)).set_style(Style::new().fg(color(place)));
         }
     }
 }

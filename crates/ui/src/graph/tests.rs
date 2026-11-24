@@ -14,7 +14,7 @@ fn a_small_load_still_shows_one_eighth() {
 fn history_puts_the_newest_value_at_the_right_edge() {
     let area = Rect::new(0, 0, 4, 1);
     let mut buf = Buffer::empty(area);
-    history(&mut buf, area, &[1.0, 0.5], Color::Red);
+    history(&mut buf, area, &[1.0, 0.5], |_| Color::Red);
     assert_eq!(buf[(2, 0)].symbol(), "█");
     assert_eq!(buf[(3, 0)].symbol(), "▄");
     assert_eq!(buf[(0, 0)].symbol(), " ");
@@ -24,7 +24,7 @@ fn history_puts_the_newest_value_at_the_right_edge() {
 fn history_stacks_rows_for_a_tall_area() {
     let area = Rect::new(0, 0, 1, 2);
     let mut buf = Buffer::empty(area);
-    history(&mut buf, area, &[0.75], Color::Red);
+    history(&mut buf, area, &[0.75], |_| Color::Red);
     assert_eq!(buf[(0, 1)].symbol(), "█");
     assert_eq!(buf[(0, 0)].symbol(), "▄");
 }
@@ -33,7 +33,7 @@ fn history_stacks_rows_for_a_tall_area() {
 fn history_drops_the_oldest_values_that_do_not_fit() {
     let area = Rect::new(0, 0, 1, 1);
     let mut buf = Buffer::empty(area);
-    history(&mut buf, area, &[1.0, 0.0, 0.5], Color::Red);
+    history(&mut buf, area, &[1.0, 0.0, 0.5], |_| Color::Red);
     assert_eq!(buf[(0, 0)].symbol(), "▄");
 }
 
@@ -41,7 +41,7 @@ fn history_drops_the_oldest_values_that_do_not_fit() {
 fn meter_fills_from_the_left_and_leaves_a_track() {
     let area = Rect::new(0, 0, 4, 1);
     let mut buf = Buffer::empty(area);
-    meter(&mut buf, area, 0.5, Color::Green, Color::DarkGray);
+    meter(&mut buf, area, 0.5, |_| Color::Green, Color::DarkGray);
     assert_eq!(buf[(0, 0)].symbol(), "█");
     assert_eq!(buf[(1, 0)].symbol(), "█");
     assert_eq!(buf[(2, 0)].symbol(), "▁");
@@ -78,4 +78,35 @@ fn eased_with_the_same_target_does_not_restart() {
     let mut e = Eased::new(0.5);
     e.set(0.5, t0);
     assert!(!e.is_moving(t0));
+}
+
+#[test]
+fn heat_runs_from_success_through_warning_to_error() {
+    let theme = Theme::default();
+    let c = &theme.colors;
+    assert_eq!(heat(&theme, 0.0), c.success.into());
+    assert_eq!(heat(&theme, 0.5), c.warning.into());
+    assert_eq!(heat(&theme, 1.0), c.error.into());
+    assert_eq!(heat(&theme, f32::NAN), c.success.into());
+    let mid = heat(&theme, 0.25);
+    assert_ne!(mid, c.success.into());
+    assert_ne!(mid, c.warning.into());
+}
+
+#[test]
+fn meter_colors_each_cell_by_its_place() {
+    let area = Rect::new(0, 0, 2, 1);
+    let mut buf = Buffer::empty(area);
+    meter(&mut buf, area, 1.0, |p| if p < 0.5 { Color::Green } else { Color::Red }, Color::Gray);
+    assert_eq!(buf[(0, 0)].fg, Color::Green);
+    assert_eq!(buf[(1, 0)].fg, Color::Red);
+}
+
+#[test]
+fn history_colors_each_column_by_its_value() {
+    let area = Rect::new(0, 0, 2, 1);
+    let mut buf = Buffer::empty(area);
+    history(&mut buf, area, &[0.2, 0.9], |v| if v < 0.5 { Color::Green } else { Color::Red });
+    assert_eq!(buf[(0, 0)].fg, Color::Green);
+    assert_eq!(buf[(1, 0)].fg, Color::Red);
 }

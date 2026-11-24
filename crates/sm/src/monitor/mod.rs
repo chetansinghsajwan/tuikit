@@ -8,13 +8,14 @@ use crate::sample::{Sampler, Snapshot, ratio};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::time::{Duration, Instant};
 use sysinfo::Signal;
 use tui_input::Input;
 use ui::app::{Host, Navigable, Request, Screen};
+use ui::columns::{Column, Columns};
 use ui::footer::{Footer, Notice};
 use ui::graph::Eased;
 use ui::list::{ListRow, Rows};
@@ -185,18 +186,6 @@ impl Monitor {
         self.mode = Mode::Confirm { pid: p.pid, name: p.name.clone(), signal };
     }
 
-    /// The color of a load: calm, busy or critical.
-    fn load_color(theme: &Theme, ratio: f32) -> Color {
-        let c = &theme.colors;
-        if ratio < 0.5 {
-            c.success.into()
-        } else if ratio < 0.8 {
-            c.warning.into()
-        } else {
-            c.error.into()
-        }
-    }
-
     /// A pane titled `title` over `area`, returning its inner area (the pane is drawn).
     fn pane(theme: &Theme, buf: &mut Buffer, area: Rect, title: &str, focused: bool) -> Rect {
         let mut pane = Pane::new(theme).title(title).focused(focused);
@@ -225,8 +214,9 @@ impl Monitor {
         }
         let core_rows = (s.cores.len() as u16).div_ceil(2).min(inner.height / 2);
         let graph_area = Rect { height: inner.height - core_rows, ..inner };
-        let color = Self::load_color(theme, s.cpu / 100.0);
-        graph::history(buf, graph_area, &self.sampler.cpu_history.values(), color);
+        graph::history(buf, graph_area, &self.sampler.cpu_history.values(), |v| {
+            graph::heat(theme, v)
+        });
         let half = inner.width / 2;
         for (i, load) in s.cores.iter().enumerate() {
             let row = i as u16 % core_rows.max(1);
@@ -256,8 +246,14 @@ impl Monitor {
         buf.set_string(area.x, area.y, &label, muted);
         let meter = Rect { x: area.x + label.len() as u16, width: area.width - used, ..area };
         let ratio = shown(&self.glide.cores, i, self.frame_time, load / 100.0);
-        let color = Self::load_color(theme, ratio);
-        graph::meter(buf, meter, ratio, color, theme.colors.border.into());
+        let color = graph::heat(theme, ratio);
+        graph::meter(
+            buf,
+            meter,
+            ratio,
+            |place| graph::heat(theme, place),
+            theme.colors.border.into(),
+        );
         buf.set_string(meter.right(), area.y, &value, Style::new().fg(color));
     }
 
@@ -268,7 +264,6 @@ impl Monitor {
             return area.bottom();
         }
         let r = ratio(used, total);
-        let color = Self::load_color(theme, shown);
         let line = Line::from(vec![
             Span::raw(label.to_string()),
             Span::styled(
@@ -278,7 +273,13 @@ impl Monitor {
         ]);
         let row = |y| Rect { y, height: 1, ..area };
         Paragraph::new(line).render(row(y), buf);
-        graph::meter(buf, row(y + 1), shown, color, theme.colors.border.into());
+        graph::meter(
+            buf,
+            row(y + 1),
+            shown,
+            |place| graph::heat(theme, place),
+            theme.colors.border.into(),
+        );
         y + 2
     }
 
@@ -331,8 +332,19 @@ impl Monitor {
             let label = format!("{sign} {}", format::rate(now));
             buf.set_string(inner.x, top, label, Style::new().fg(color.into()));
             let graph_area = Rect { y: top + 1, height: height - 1, ..inner };
-            graph::history(buf, graph_area, &history.scaled(4096.0), color.into());
+            graph::history(buf, graph_area, &history.scaled(4096.0), |_| color.into());
         }
+    }
+
+    /// The columns of the process list, the sorted one marked.
+    fn process_columns(options: &Options) -> Columns {
+        Columns::new(
+            vec![Column::right("PID", 7)],
+            "NAME",
+            vec![Column::right("CPU%", 5), Column::right("MEM", 7), Column::left("STATE", 8)],
+            20,
+        )
+        .sorted_by(options.sort.column(), options.is_descending())
     }
 
     /// The process pane: a header, then the rows with the cursor.
@@ -356,11 +368,8 @@ impl Monitor {
             return;
         }
         let muted = Style::new().fg(theme.colors.muted.into());
-        let header = Rect { height: 1, ..inner };
-        Paragraph::new(Line::from(Span::styled("    PID  NAME", muted))).render(header, buf);
-        let right = " CPU%     MEM STATE";
-        let x = inner.right().saturating_sub(right.len() as u16);
-        buf.set_string(x.max(inner.x), inner.y, right, muted);
+        let columns = Self::process_columns(&self.options);
+        columns.draw_header(theme, buf, inner);
 
         let list = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
         self.page = usize::from(list.height).max(1);
@@ -371,10 +380,10 @@ impl Monitor {
         let scope = tree::active_scope(&depths, self.cursor);
         for (i, row) in rows.iter().skip(self.top).take(self.page).enumerate() {
             let p = &procs[row.index];
-            let cpu_color = Self::load_color(theme, p.cpu / 100.0);
+            let cpu_color = graph::heat(theme, p.cpu / 100.0);
             let guides =
                 tree::guides_marked(theme, row.depth, scope.and_then(|s| s.col_at(self.top + i)));
-            let mut left = vec![Span::styled(format!("{:>7}  ", p.pid), muted)];
+            let mut left = columns.lead_cells(vec![Span::styled(p.pid.to_string(), muted)]);
             left.extend(guides);
             left.push(Span::raw(p.name.clone()));
             // The row keeps its identity (the pid) and never flashes when the numbers change.
@@ -382,11 +391,12 @@ impl Monitor {
                 id: u64::from(p.pid) + 1,
                 content: 1,
                 left,
-                right: vec![
-                    Span::styled(format!("{:>5.1}", p.cpu), Style::new().fg(cpu_color)),
-                    Span::styled(format!(" {:>7} {:<5}", format::bytes(p.memory), p.status), muted),
-                ],
-                min_left: 20,
+                right: columns.trail_cells(vec![
+                    Span::styled(format!("{:.1}", p.cpu), Style::new().fg(cpu_color)),
+                    Span::raw(format::bytes(p.memory)),
+                    Span::raw(p.status.clone()),
+                ]),
+                min_left: columns.min_left(),
                 is_selected: self.top + i == self.cursor,
                 is_focused: true,
                 ..ListRow::default()
