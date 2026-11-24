@@ -47,6 +47,25 @@ pub const ACTIONS: &[Action] = &[
         desc: "stop the process at once (SIGKILL; asks first)",
         basic: false,
     },
+    Action { id: "panel.cpu", name: "toggle cpu", desc: "show or hide the cpu pane", basic: false },
+    Action {
+        id: "panel.memory",
+        name: "toggle memory",
+        desc: "show or hide the memory and disks pane",
+        basic: false,
+    },
+    Action {
+        id: "panel.network",
+        name: "toggle network",
+        desc: "show or hide the network pane",
+        basic: false,
+    },
+    Action {
+        id: "panel.processes",
+        name: "toggle processes",
+        desc: "show or hide the process list",
+        basic: false,
+    },
     Action { id: "quit", name: "quit", desc: "close the monitor", basic: true },
 ];
 
@@ -54,5 +73,6 @@ pub const ACTIONS: &[Action] = &[
 pub const GROUPS: &[Group] = &[
     Group { prefix: "leader p", name: "process" },
     Group { prefix: "leader s", name: "sort" },
+    Group { prefix: "leader w", name: "panels" },
     Group { prefix: "leader v", name: "view" },
 ];

@@ -46,3 +46,36 @@ fn meter_fills_from_the_left_and_leaves_a_track() {
     assert_eq!(buf[(1, 0)].symbol(), "█");
     assert_eq!(buf[(2, 0)].symbol(), "▁");
 }
+
+#[test]
+fn eased_starts_at_the_old_value_and_ends_at_the_target() {
+    let t0 = Instant::now();
+    let mut e = Eased::new(0.0);
+    e.set(1.0, t0);
+    assert!(e.is_moving(t0));
+    assert_eq!(e.value(t0), 0.0);
+    let mid = e.value(t0 + GLIDE / 2);
+    assert!(mid > 0.0 && mid < 1.0);
+    assert!(!e.is_moving(t0 + GLIDE));
+    assert_eq!(e.value(t0 + GLIDE), 1.0);
+}
+
+#[test]
+fn eased_retargets_from_where_it_is() {
+    let t0 = Instant::now();
+    let mut e = Eased::new(0.0);
+    e.set(1.0, t0);
+    let half = t0 + GLIDE / 2;
+    let at = e.value(half);
+    e.set(0.0, half);
+    assert_eq!(e.value(half), at);
+    assert_eq!(e.value(half + GLIDE), 0.0);
+}
+
+#[test]
+fn eased_with_the_same_target_does_not_restart() {
+    let t0 = Instant::now();
+    let mut e = Eased::new(0.5);
+    e.set(0.5, t0);
+    assert!(!e.is_moving(t0));
+}

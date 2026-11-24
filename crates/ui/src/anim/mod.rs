@@ -82,7 +82,7 @@ pub fn take_redraw() -> bool {
 }
 
 /// Easing curve that starts fast and settles slowly, so motion feels soft where it stops.
-fn ease_out(t: f32) -> f32 {
+pub fn ease_out(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
 }
 
@@ -144,6 +144,17 @@ thread_local! {
 /// Ask for another frame soon, because something is still moving.
 fn want() {
     STATE.with(|s| s.borrow_mut().wanted = true);
+}
+
+/// Whether motion is fully on (not reduced or off). A component that moves on its own, such as a
+/// bar gliding to a new value, jumps straight to the value when this is false.
+pub fn is_on() -> bool {
+    mode() == Mode::On
+}
+
+/// Asks for the next frame, for a component that is still moving (see [`is_on`]).
+pub fn request_frame() {
+    want();
 }
 
 /// A stable number for `v`, for a row's identity and content.

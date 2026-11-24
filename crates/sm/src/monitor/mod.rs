@@ -2,21 +2,24 @@
 //! user's (cursor, sort, filter, tree, a signal waiting for a yes).
 
 use crate::format;
+use crate::panels::{Panel, Panels};
 use crate::procs::{self, Options, Row, Sort};
-use crate::sample::{Sampler, ratio};
+use crate::sample::{Sampler, Snapshot, ratio};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use std::time::{Duration, Instant};
 use sysinfo::Signal;
 use tui_input::Input;
 use ui::app::{Host, Navigable, Request, Screen};
 use ui::footer::{Footer, Notice};
+use ui::graph::Eased;
 use ui::list::{ListRow, Rows};
 use ui::prompt::Typed;
-use ui::{Pane, Theme, graph};
+use ui::{Pane, Theme, anim, graph, tree};
 
 /// What the footer is busy with: nothing, a filter being typed, or a signal waiting for a yes.
 enum Mode {
@@ -25,22 +28,80 @@ enum Mode {
     Confirm { pid: u32, name: String, signal: Signal },
 }
 
-/// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar.
+/// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar filled to
+/// `shown` (0 to 1), which glides to the true ratio.
 struct Gauge<'a> {
     label: &'a str,
     used: u64,
     total: u64,
+    shown: f32,
 }
 
 impl<'a> Gauge<'a> {
-    fn new(label: &'a str, used: u64, total: u64) -> Self {
-        Gauge { label, used, total }
+    fn new(label: &'a str, used: u64, total: u64, shown: f32) -> Self {
+        Gauge { label, used, total, shown }
     }
+}
+
+/// The values the bars show, each gliding to the latest reading instead of jumping.
+#[derive(Default)]
+struct Glide {
+    cores: Vec<Eased>,
+    memory: Option<Eased>,
+    swap: Option<Eased>,
+    disks: Vec<Eased>,
+}
+
+impl Glide {
+    /// Sends every bar toward the readings of `s`.
+    fn retarget(&mut self, s: &Snapshot, now: Instant) {
+        let cores: Vec<f32> = s.cores.iter().map(|c| c / 100.0).collect();
+        let disks: Vec<f32> = s.disks.iter().map(|d| ratio(d.used, d.total)).collect();
+        Self::follow(&mut self.cores, &cores, now);
+        Self::follow(&mut self.disks, &disks, now);
+        let memory = ratio(s.memory_used, s.memory_total);
+        self.memory.get_or_insert(Eased::new(memory)).set(memory, now);
+        let swap = ratio(s.swap_used, s.swap_total);
+        self.swap.get_or_insert(Eased::new(swap)).set(swap, now);
+    }
+
+    /// Makes `bars` as many as `targets` (new ones start at their target) and sets each target.
+    fn follow(bars: &mut Vec<Eased>, targets: &[f32], now: Instant) {
+        bars.truncate(targets.len());
+        for (i, target) in targets.iter().enumerate() {
+            match bars.get_mut(i) {
+                Some(bar) => bar.set(*target, now),
+                None => bars.push(Eased::new(*target)),
+            }
+        }
+    }
+
+    /// Whether any bar is still on its way.
+    fn is_moving(&self, now: Instant) -> bool {
+        self.cores
+            .iter()
+            .chain(&self.disks)
+            .chain(self.memory.iter())
+            .chain(self.swap.iter())
+            .any(|bar| bar.is_moving(now))
+    }
+}
+
+/// The value of bar `i` of `bars` at `now`, or `fallback` when there is no such bar.
+fn shown(bars: &[Eased], i: usize, now: Instant, fallback: f32) -> f32 {
+    bars.get(i).map_or(fallback, |bar| bar.value(now))
 }
 
 /// The monitor: readings plus what the user chose to see.
 pub struct Monitor {
     sampler: Sampler,
+    /// How often the machine is read.
+    interval: Duration,
+    last_refresh: Instant,
+    panels: Panels,
+    glide: Glide,
+    /// When the frame being drawn started, so every bar of a frame is at the same point of its glide.
+    frame_time: Instant,
     options: Options,
     mode: Mode,
     message: Option<Notice>,
@@ -52,10 +113,19 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    /// Opens the monitor with its first reading.
-    pub fn new() -> Result<Monitor, String> {
+    /// Opens the monitor with its first reading, reading the machine every `interval`, with the
+    /// `hidden` panels off.
+    pub fn new(interval: Duration, hidden: &[Panel]) -> Result<Monitor, String> {
+        let sampler = Sampler::new()?;
+        let mut glide = Glide::default();
+        glide.retarget(&sampler.snapshot, Instant::now());
         Ok(Monitor {
-            sampler: Sampler::new()?,
+            sampler,
+            interval,
+            last_refresh: Instant::now(),
+            panels: Panels::without(hidden),
+            glide,
+            frame_time: Instant::now(),
             options: Options {
                 sort: Sort::Cpu,
                 is_reversed: false,
@@ -93,6 +163,13 @@ impl Monitor {
     /// Notes which process the cursor is on.
     fn remember(&mut self, rows: &[Row]) {
         self.selected = rows.get(self.cursor).map(|r| self.sampler.snapshot.procs[r.index].pid);
+    }
+
+    /// Shows or hides `panel`; the last panel on stays on, and the message says so.
+    fn toggle_panel(&mut self, panel: Panel) {
+        if !self.panels.toggle(panel) {
+            self.say(format!("{} is the last panel on", panel.label()), true);
+        }
     }
 
     /// Shows a message until the next key press.
@@ -178,19 +255,20 @@ impl Monitor {
         let muted = Style::new().fg(theme.colors.muted.into());
         buf.set_string(area.x, area.y, &label, muted);
         let meter = Rect { x: area.x + label.len() as u16, width: area.width - used, ..area };
-        let color = Self::load_color(theme, load / 100.0);
-        graph::meter(buf, meter, load / 100.0, color, theme.colors.border.into());
+        let ratio = shown(&self.glide.cores, i, self.frame_time, load / 100.0);
+        let color = Self::load_color(theme, ratio);
+        graph::meter(buf, meter, ratio, color, theme.colors.border.into());
         buf.set_string(meter.right(), area.y, &value, Style::new().fg(color));
     }
 
     /// One labeled meter over two rows (the label with its numbers, then the bar); returns the next row.
     fn draw_meter(area: Rect, buf: &mut Buffer, theme: &Theme, y: u16, gauge: Gauge) -> u16 {
-        let Gauge { label, used, total } = gauge;
+        let Gauge { label, used, total, shown } = gauge;
         if y + 1 >= area.bottom() {
             return area.bottom();
         }
         let r = ratio(used, total);
-        let color = Self::load_color(theme, r);
+        let color = Self::load_color(theme, shown);
         let line = Line::from(vec![
             Span::raw(label.to_string()),
             Span::styled(
@@ -200,7 +278,7 @@ impl Monitor {
         ]);
         let row = |y| Rect { y, height: 1, ..area };
         Paragraph::new(line).render(row(y), buf);
-        graph::meter(buf, row(y + 1), r, color, theme.colors.border.into());
+        graph::meter(buf, row(y + 1), shown, color, theme.colors.border.into());
         y + 2
     }
 
@@ -211,31 +289,27 @@ impl Monitor {
         if inner.height == 0 || inner.width == 0 {
             return;
         }
+        let now = self.frame_time;
+        let mem_ratio = ratio(s.memory_used, s.memory_total);
+        let swap_ratio = ratio(s.swap_used, s.swap_total);
+        let memory = self.glide.memory.map_or(mem_ratio, |bar| bar.value(now));
+        let swap = self.glide.swap.map_or(swap_ratio, |bar| bar.value(now));
         let mut y = inner.y;
-        y = Self::draw_meter(
-            inner,
-            buf,
-            theme,
-            y,
-            Gauge::new("mem", s.memory_used, s.memory_total),
-        );
+        let gauge = Gauge::new("mem", s.memory_used, s.memory_total, memory);
+        y = Self::draw_meter(inner, buf, theme, y, gauge);
         if s.swap_total > 0 {
-            y = Self::draw_meter(
-                inner,
-                buf,
-                theme,
-                y,
-                Gauge::new("swap", s.swap_used, s.swap_total),
-            );
+            let gauge = Gauge::new("swap", s.swap_used, s.swap_total, swap);
+            y = Self::draw_meter(inner, buf, theme, y, gauge);
         }
-        for disk in &s.disks {
-            y = Self::draw_meter(
-                inner,
-                buf,
-                theme,
-                y,
-                Gauge::new(&disk.mount, disk.used, disk.total),
+        for (i, disk) in s.disks.iter().enumerate() {
+            let fallback = ratio(disk.used, disk.total);
+            let gauge = Gauge::new(
+                &disk.mount,
+                disk.used,
+                disk.total,
+                shown(&self.glide.disks, i, now, fallback),
             );
+            y = Self::draw_meter(inner, buf, theme, y, gauge);
         }
     }
 
@@ -293,15 +367,21 @@ impl Monitor {
         self.top = ui::list::follow_cursor(self.cursor, self.top, self.page, rows.len());
         let geometry = Rows::new(area, list);
         let procs = &self.sampler.snapshot.procs;
+        let depths: Vec<usize> = rows.iter().map(|r| r.depth).collect();
+        let scope = tree::active_scope(&depths, self.cursor);
         for (i, row) in rows.iter().skip(self.top).take(self.page).enumerate() {
             let p = &procs[row.index];
-            let indent = "  ".repeat(row.depth);
             let cpu_color = Self::load_color(theme, p.cpu / 100.0);
+            let guides =
+                tree::guides_marked(theme, row.depth, scope.and_then(|s| s.col_at(self.top + i)));
+            let mut left = vec![Span::styled(format!("{:>7}  ", p.pid), muted)];
+            left.extend(guides);
+            left.push(Span::raw(p.name.clone()));
+            // The row keeps its identity (the pid) and never flashes when the numbers change.
             ListRow {
-                left: vec![
-                    Span::styled(format!("{:>7}  ", p.pid), muted),
-                    Span::raw(format!("{indent}{}", p.name)),
-                ],
+                id: u64::from(p.pid) + 1,
+                content: 1,
+                left,
                 right: vec![
                     Span::styled(format!("{:>5.1}", p.cpu), Style::new().fg(cpu_color)),
                     Span::styled(format!(" {:>7} {:<5}", format::bytes(p.memory), p.status), muted),
@@ -329,10 +409,10 @@ impl Monitor {
             )),
             Mode::Normal => match &self.message {
                 Some(notice) => Footer::Notice(notice),
-                None => Footer::Hint(
-                    "s sort  r reverse  t tree  / filter  x terminate  X kill  ? help  q quit"
-                        .into(),
-                ),
+                None => Footer::Hint(format!(
+                    "s sort  r reverse  t tree  / filter  x terminate  X kill  1-4 panels  ? help  q quit  every {}ms",
+                    self.interval.as_millis()
+                )),
             },
         };
         footer.render(area, buf, theme);
@@ -381,24 +461,25 @@ impl Screen for Monitor {
         if area.height < 6 || area.width < 20 {
             return;
         }
+        self.frame_time = Instant::now();
         let footer = Rect { y: area.bottom() - 1, height: 1, ..area };
         let body = Rect { height: area.height - 1, ..area };
-        let top_height = (body.height * 2 / 5).clamp(6, 18).min(body.height - 3);
-        let top = Rect { height: top_height, ..body };
-        let bottom = Rect { y: top.bottom(), height: body.height - top_height, ..body };
-
-        let left_width = top.width * 11 / 20;
-        let cpu = Rect { width: left_width, ..top };
-        let side = Rect { x: top.x + left_width, width: top.width - left_width, ..top };
-        let memory_height = side.height * 3 / 5;
-        let memory = Rect { height: memory_height, ..side };
-        let network =
-            Rect { y: side.y + memory_height, height: side.height - memory_height, ..side };
-
-        self.draw_cpu(cpu, buf, theme);
-        self.draw_memory(memory, buf, theme);
-        self.draw_network(network, buf, theme);
-        self.draw_procs(bottom, buf, theme);
+        let placed = self.panels.place(body);
+        if let Some(rect) = placed.cpu {
+            self.draw_cpu(rect, buf, theme);
+        }
+        if let Some(rect) = placed.memory {
+            self.draw_memory(rect, buf, theme);
+        }
+        if let Some(rect) = placed.network {
+            self.draw_network(rect, buf, theme);
+        }
+        if let Some(rect) = placed.processes {
+            self.draw_procs(rect, buf, theme);
+        }
+        if self.glide.is_moving(self.frame_time) {
+            anim::request_frame();
+        }
         self.draw_footer(footer, buf, theme);
     }
 
@@ -430,6 +511,10 @@ impl Screen for Monitor {
                 self.options.filter.clear();
                 self.follow_selected();
             }
+            "panel.cpu" => self.toggle_panel(Panel::Cpu),
+            "panel.memory" => self.toggle_panel(Panel::Memory),
+            "panel.network" => self.toggle_panel(Panel::Network),
+            "panel.processes" => self.toggle_panel(Panel::Processes),
             "proc.term" => self.ask_signal(Signal::Term),
             "proc.kill" => self.ask_signal(Signal::Kill),
             "quit" => return Request::Quit,
@@ -447,10 +532,15 @@ impl Screen for Monitor {
         self.say(format!("{keys} is not bound"), true);
     }
 
-    /// Reads the machine again; the screen is drawn again.
+    /// Reads the machine once the interval has passed. A tick also comes for every frame of a
+    /// glide, so most ticks only draw again.
     fn on_tick(&mut self) -> bool {
-        self.sampler.refresh();
-        self.follow_selected();
+        if self.last_refresh.elapsed() >= self.interval {
+            self.last_refresh = Instant::now();
+            self.sampler.refresh();
+            self.glide.retarget(&self.sampler.snapshot, self.last_refresh);
+            self.follow_selected();
+        }
         true
     }
 

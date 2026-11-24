@@ -8,6 +8,8 @@ pub mod format;
 pub mod keys;
 /// The screen: panes of graphs and the process list.
 pub mod monitor;
+/// Which panes are shown and where they go.
+pub mod panels;
 /// The process list: sorting, filtering and the tree order.
 pub mod procs;
 /// Readings of the machine and their history.

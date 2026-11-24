@@ -1,6 +1,7 @@
 //! `sm`: the system monitor.
 
 use clap::Parser;
+use sm::panels::Panel;
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -8,30 +9,37 @@ use std::time::Duration;
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
-    /// Seconds between readings.
-    #[arg(short, long, default_value_t = 1.0, value_parser = parse_interval)]
-    interval: f64,
+    /// Milliseconds between readings.
+    #[arg(short, long, default_value_t = 1000, value_name = "MS", value_parser = parse_interval)]
+    interval: u64,
+
+    /// Panels that start hidden: cpu, memory, network, processes (1 to 4 toggle them while running).
+    #[arg(long, value_delimiter = ',', value_parser = parse_panel)]
+    hide: Vec<Panel>,
 }
 
-/// An interval of at least a quarter second: CPU use needs time between two readings to mean anything.
-fn parse_interval(text: &str) -> Result<f64, String> {
-    let value: f64 = text.parse().map_err(|_| format!("{text} is not a number"))?;
-    if value.is_finite() && value >= 0.25 {
-        Ok(value)
-    } else {
-        Err("the interval must be at least 0.25 seconds".into())
-    }
+/// An interval of at least 250 ms: CPU use needs time between two readings to mean anything.
+fn parse_interval(text: &str) -> Result<u64, String> {
+    let value: u64 = text.parse().map_err(|_| format!("{text} is not a number of milliseconds"))?;
+    if value >= 250 { Ok(value) } else { Err("the interval must be at least 250 ms".into()) }
+}
+
+/// A panel by name.
+fn parse_panel(text: &str) -> Result<Panel, String> {
+    Panel::parse(text)
+        .ok_or_else(|| format!("{text} is not a panel (cpu, memory, network, processes)"))
 }
 
 /// Opens the monitor and runs it. Failures exit with code 2.
 fn main() -> ExitCode {
     ui::app::main("sm", || {
         let cli = Cli::parse();
-        let mut monitor = sm::monitor::Monitor::new()?;
+        let interval = Duration::from_millis(cli.interval);
+        let mut monitor = sm::monitor::Monitor::new(interval, &cli.hide)?;
         ui::app::Shell::new("sm")
             .commands(sm::keys::commands())
             .groups(sm::keys::GROUPS)
-            .tick_interval(Duration::from_secs_f64(cli.interval))
+            .tick_interval(interval)
             .run(&mut monitor)
             .map(|()| 0)
             .map_err(|e| e.to_string())

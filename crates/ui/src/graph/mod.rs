@@ -1,9 +1,55 @@
 //! Graphs and meters: the one place that draws a history of values as bars and a ratio as a filled
 //! bar, so every tool that shows a load (CPU, memory, a transfer rate) draws it the same way.
 
+use crate::anim;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
+use std::time::{Duration, Instant};
+
+/// How long a bar takes to glide to a new value.
+const GLIDE: Duration = Duration::from_millis(400);
+
+/// A value that glides to each new target instead of jumping, for bars that are fed a reading now and
+/// then. The tool sets the target when a reading arrives and draws [`Eased::value`] each frame; while
+/// [`Eased::is_moving`] it asks for the next frame with `anim::request_frame`.
+#[derive(Debug, Clone, Copy)]
+pub struct Eased {
+    from: f32,
+    to: f32,
+    since: Instant,
+}
+
+impl Eased {
+    /// A value at rest at `value`.
+    pub fn new(value: f32) -> Eased {
+        Eased { from: value, to: value, since: Instant::now() }
+    }
+
+    /// Glides from where the value is at `now` to `target`; the same target again changes nothing.
+    pub fn set(&mut self, target: f32, now: Instant) {
+        if target == self.to {
+            return;
+        }
+        self.from = self.value(now);
+        self.to = target;
+        self.since = now;
+    }
+
+    /// The value at `now`: the target itself when motion is off.
+    pub fn value(&self, now: Instant) -> f32 {
+        if !self.is_moving(now) {
+            return self.to;
+        }
+        let t = now.saturating_duration_since(self.since).as_secs_f32() / GLIDE.as_secs_f32();
+        self.from + (self.to - self.from) * anim::ease_out(t)
+    }
+
+    /// Whether the value is still on its way at `now`.
+    pub fn is_moving(&self, now: Instant) -> bool {
+        anim::is_on() && self.from != self.to && now.saturating_duration_since(self.since) < GLIDE
+    }
+}
 
 /// The block glyphs from one eighth of a cell up to a full cell.
 const EIGHTHS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
