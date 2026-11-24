@@ -39,7 +39,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let backend = backend::detect();
     let result = match cli.command {
-        Some(Cmd::Watch) => record::watch(backend.as_ref()),
+        Some(Cmd::Watch) => record::watch(backend),
         Some(Cmd::Store) => record::store(),
         None => browse::run(cli.query, backend.as_ref()),
     };
