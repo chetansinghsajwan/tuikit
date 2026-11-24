@@ -32,6 +32,7 @@
       cb = "tuikit-cb";
       kanata-status = "tuikit-kanata-status";
       tb = "tuikit-tb-cli";
+      sm = "tuikit-sm-cli";
       nu = "tuikit-nu";
       mdexport = "tuikit-mdexport";
     };

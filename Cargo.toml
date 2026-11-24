@@ -20,6 +20,7 @@ tuikit-git-panel = { version = "0.1.0", path = "crates/git-panel" }
 tuikit-nu-core = { version = "0.1.0", path = "tools/nu/core" }
 tuikit-pick = { version = "0.1.0", path = "crates/pick" }
 tuikit-pv = { version = "0.1.0", path = "crates/pv" }
+tuikit-sm = { version = "0.1.0", path = "crates/sm" }
 tuikit-symbols-panel = { version = "0.1.0", path = "crates/symbols-panel" }
 tuikit-tb = { version = "0.1.0", path = "crates/tb" }
 tuikit-ui = { version = "0.1.0", path = "crates/ui" }
@@ -31,6 +32,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sysinfo = { version = "0.40.4", default-features = false, features = ["system", "disk", "network"] }
 toml = "1.1.8"
 tui-input = "0.15.5"
 unicode-width = "0.2.2"

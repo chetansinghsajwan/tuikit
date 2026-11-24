@@ -1,0 +1,24 @@
+[package]
+name = "tuikit-sm"
+description = "System monitor for tuikit: CPU, memory, disks, network and a process list"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "sm"
+path = "src/lib.rs"
+
+[dependencies]
+ratatui.workspace = true
+sysinfo.workspace = true
+tui-input.workspace = true
+tuikit-ui.workspace = true
+unicode-width.workspace = true

@@ -1,0 +1,70 @@
+//! Graphs and meters: the one place that draws a history of values as bars and a ratio as a filled
+//! bar, so every tool that shows a load (CPU, memory, a transfer rate) draws it the same way.
+
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Style};
+
+/// The block glyphs from one eighth of a cell up to a full cell.
+const EIGHTHS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+/// The glyph of a column that is `eighths` eighths of a cell full (1 to 8).
+fn glyph(eighths: usize) -> char {
+    EIGHTHS[eighths.clamp(1, 8) - 1]
+}
+
+/// How many eighths of the `height` rows a `value` between 0 and 1 fills; a value above 0 always
+/// shows at least one eighth, so a small load is not mistaken for none.
+pub fn filled_eighths(value: f32, height: u16) -> usize {
+    let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
+    let total = usize::from(height) * 8;
+    let filled = (value * total as f32).round() as usize;
+    if value > 0.0 { filled.max(1) } else { 0 }
+}
+
+/// Draws `values` (each 0 to 1, oldest first) as columns in `area`, the newest at the right edge.
+/// Older values that do not fit are dropped; when there are fewer values than columns the left
+/// part stays empty.
+pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: Color) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let shown = &values[values.len().saturating_sub(usize::from(area.width))..];
+    let first = area.right() - shown.len() as u16;
+    for (i, value) in shown.iter().enumerate() {
+        let x = first + i as u16;
+        let mut left = filled_eighths(*value, area.height);
+        for row in 0..area.height {
+            let y = area.bottom() - 1 - row;
+            let here = left.min(8);
+            if here == 0 {
+                break;
+            }
+            buf[(x, y)].set_char(glyph(here)).set_style(Style::new().fg(color));
+            left -= here;
+        }
+    }
+}
+
+/// Draws a bar of `ratio` (0 to 1) across one row of `area`: the filled part in `color`, the rest
+/// as a faint track in `track`.
+pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: Color, track: Color) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let ratio = if ratio.is_finite() { ratio.clamp(0.0, 1.0) } else { 0.0 };
+    let eighths = (ratio * f32::from(area.width) * 8.0).round() as usize;
+    for i in 0..area.width {
+        let here = eighths.saturating_sub(usize::from(i) * 8).min(8);
+        let cell = &mut buf[(area.x + i, area.y)];
+        if here == 0 {
+            cell.set_char('▁').set_style(Style::new().fg(track));
+        } else {
+            cell.set_char(glyph(here)).set_style(Style::new().fg(color));
+        }
+    }
+}
+
+/// Tests for the graph and the meter.
+#[cfg(test)]
+mod tests;

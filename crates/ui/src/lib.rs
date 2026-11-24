@@ -10,6 +10,7 @@ pub mod clipboard;
 pub mod config;
 pub mod dim;
 pub mod footer;
+pub mod graph;
 pub mod icons;
 pub mod job;
 pub mod keys;
