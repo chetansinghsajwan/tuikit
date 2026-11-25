@@ -44,12 +44,7 @@ enum Mode {
 /// A connection attempt, on its own thread (it waits for the network or the device).
 type Job = ui::job::Job<nu_core::Result<()>>;
 
-/// Where the cursor is in a list and how far the list is scrolled.
-#[derive(Default, Clone, Copy)]
-struct ListState {
-    cursor: usize,
-    offset: usize,
-}
+use ui::list::ListState;
 
 /// The whole screen: both radios, their lists, the focus and any prompt or running job.
 pub struct App {

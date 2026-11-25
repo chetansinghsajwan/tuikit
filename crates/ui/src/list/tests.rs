@@ -53,3 +53,58 @@ fn the_scroll_margin_shrinks_in_a_small_window() {
     assert_eq!(scroll_margin(5), 2);
     assert_eq!(scroll_margin(1), 0);
 }
+
+/// Draws a list of `len` rows named by index into a 10 by `height` area, with its own motion.
+fn draw_list(
+    len: usize,
+    height: u16,
+    state: &mut ListState,
+    focused: bool,
+) -> ratatui::buffer::Buffer {
+    use crate::component::{Component, Context};
+    let theme = Theme::default();
+    let motion = crate::anim::Motion::new();
+    let area = Rect::new(0, 0, 10, height);
+    let mut buf = ratatui::buffer::Buffer::empty(area);
+    let row = |i: usize| ListRow { left: vec![Span::raw(format!("r{i}"))], ..Default::default() };
+    List::new(len, state, row).focused(focused).empty("none").render(
+        &Context::with_motion(&theme, &motion),
+        area,
+        &mut buf,
+    );
+    buf
+}
+
+/// The text on line `y` of `buf`, trimmed.
+fn line(buf: &ratatui::buffer::Buffer, y: u16) -> String {
+    (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect::<String>().trim().to_string()
+}
+
+#[test]
+fn a_list_scrolls_to_keep_the_cursor_in_view() {
+    let mut state = ListState { cursor: 15, first_visible_row: 0 };
+    let buf = draw_list(20, 10, &mut state, true);
+    assert_eq!(state.first_visible_row, 10, "the cursor keeps its margin from the bottom");
+    assert_eq!(line(&buf, 0), "r10");
+    assert_eq!(line(&buf, 5), "r15");
+}
+
+#[test]
+fn a_list_marks_the_cursor_row_and_the_focus() {
+    let theme = Theme::default();
+    let mut state = ListState { cursor: 1, first_visible_row: 0 };
+    let focused = draw_list(3, 3, &mut state, true);
+    assert_eq!(focused[(0, 1)].bg, style(&theme, true, None).bg.unwrap());
+    assert_ne!(focused[(0, 0)].bg, focused[(0, 1)].bg);
+    let unfocused = draw_list(3, 3, &mut state, false);
+    assert_eq!(unfocused[(0, 1)].bg, active(&theme).bg.unwrap());
+}
+
+#[test]
+fn a_list_clamps_a_stale_cursor_and_shows_its_empty_text() {
+    let mut state = ListState { cursor: 9, first_visible_row: 7 };
+    draw_list(3, 3, &mut state, true);
+    assert_eq!(state, ListState { cursor: 2, first_visible_row: 0 });
+    let buf = draw_list(0, 3, &mut ListState::default(), true);
+    assert_eq!(line(&buf, 0), "none");
+}

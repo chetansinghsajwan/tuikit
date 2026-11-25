@@ -12,6 +12,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+/// The `List` component and the state it scrolls.
+mod view;
+pub use view::{List, ListState};
+
 /// The geometry of one list: where its row bars and row contents go, so every tool lines up alike.
 #[derive(Debug, Clone, Copy)]
 pub struct Rows {
@@ -216,10 +220,12 @@ pub fn move_cursor(cursor: usize, delta: isize, len: usize) -> usize {
 
 /// The first visible row that keeps `cursor` inside a window of `page` rows of a list of `len`
 /// rows, `scroll_margin` rows from both edges (except at the ends of the list), scrolling as little
-/// as possible from `first_visible_row`. The one rule every list scrolls by.
+/// as possible from `first_visible_row`, and never so far that the window runs past the last row (a
+/// list that shrank under its old scroll). The one rule every list scrolls by.
 pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize, len: usize) -> usize {
     let margin = scroll_margin(page);
     let last = len.saturating_sub(1);
+    let first_visible_row = first_visible_row.min(len.saturating_sub(page));
     if cursor < first_visible_row + margin {
         cursor.saturating_sub(margin)
     } else if (cursor + margin).min(last) >= first_visible_row + page {

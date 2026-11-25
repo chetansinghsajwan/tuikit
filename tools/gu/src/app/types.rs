@@ -399,12 +399,7 @@ pub(super) enum DiffMark {
     File,
 }
 
-/// The cursor and the first visible row of a list pane.
-#[derive(Default, Clone, Copy)]
-pub(super) struct ListState {
-    pub(super) cursor: usize,
-    pub(super) first_visible_row: usize,
-}
+pub(super) use ui::list::ListState;
 
 /// The diff text drawn in the preview, kept until another entry is highlighted or the width
 /// changes.

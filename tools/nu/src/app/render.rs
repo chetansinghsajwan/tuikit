@@ -59,25 +59,20 @@ impl App {
                 .render(inner, buf);
             return;
         }
-        let page = usize::from(inner.height);
-        let st = &mut self.lists[Self::pane(focus)];
-        st.offset = ui::list::follow_cursor(st.cursor, st.offset, page, rows.len());
-        let (cursor, offset) = (st.cursor, st.offset);
-        let geo = ui::list::Rows::new(area, inner);
-        for (row, i) in (offset..(offset + page).min(rows.len())).enumerate() {
+        let row = |i: usize| {
             let (left, right, active) = &rows[i];
-            let y = inner.y + row as u16;
             ui::list::ListRow {
                 left: left.spans.clone(),
                 right: vec![Span::raw(right.clone())],
                 min_left: 12,
                 tint: active.then(|| c.success.into()),
-                is_selected: i == cursor,
-                is_focused: focused,
                 ..Default::default()
             }
-            .draw(theme, buf, &geo, y);
-        }
+        };
+        let list = ui::list::List::new(rows.len(), &mut self.lists[Self::pane(focus)], row)
+            .pane(area)
+            .focused(focused);
+        ui::Component::render(list, &ui::Context::new(theme), inner, buf);
     }
 
     /// The Wi-Fi pane: its networks, or the reason there are none to show.

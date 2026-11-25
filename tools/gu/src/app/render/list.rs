@@ -57,33 +57,23 @@ impl App {
         if which == Focus::Commits {
             self.fit_columns(inner.width);
         }
-        if n == 0 {
-            buf.set_string(
-                inner.x + 1,
-                inner.y,
-                "nothing here",
-                Style::new().fg(theme.colors.muted.into()),
-            );
-            return;
-        }
-        let page = usize::from(inner.height);
-        let st = &mut self.lists[li];
-        st.first_visible_row = ui::list::follow_cursor(st.cursor, st.first_visible_row, page, n);
-        let (cursor, offset) = (st.cursor, st.first_visible_row);
-        let rows = ui::list::Rows::new(area, inner);
-        for (row, i) in (offset..(offset + page).min(n)).enumerate() {
-            let y = inner.y + row as u16;
+        // The state is copied out so the rows can borrow `self` while the list scrolls it.
+        let mut state = self.lists[li];
+        let row = |i| {
             let (left, right) = self.row(which, i, theme);
             ui::list::ListRow {
                 left: left.spans,
                 right: vec![Span::raw(right)],
                 min_left: 12,
-                is_selected: i == cursor,
-                is_focused: focused,
                 ..Default::default()
             }
-            .draw(theme, buf, &rows, y);
-        }
+        };
+        let list = ui::list::List::new(n, &mut state, row)
+            .pane(area)
+            .focused(focused)
+            .empty("nothing here");
+        ui::Component::render(list, &ui::Context::new(theme), inner, buf);
+        self.lists[li] = state;
     }
 
     /// Give the flexible columns their widths for a list `width` wide: the refs column as wide as the most
