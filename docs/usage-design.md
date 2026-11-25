@@ -28,26 +28,26 @@ Applies to `files`, `tb` (table editor), `pick`, `pv` (where interactive), `gu`,
 
 ## Shared keys
 
-| Key                                | Meaning                                                                    | Where                                        |
-| ---------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------- |
-| `j` `k`, arrows, `ctrl-n` `ctrl-p` | move one                                                                   | every list                                   |
-| `ctrl-j` `ctrl-k`                  | move five                                                                  | everywhere `j` `k` move                      |
-| `g` `G`, `home` `end`              | top, bottom                                                                | every list                                   |
+| Key                                | Meaning                                                                                                       | Where                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `j` `k`, arrows, `ctrl-n` `ctrl-p` | move one                                                                                                      | every list                                   |
+| `ctrl-j` `ctrl-k`                  | move five                                                                                                     | everywhere `j` `k` move                      |
+| `g` `G`, `home` `end`              | top, bottom                                                                                                   | every list                                   |
 | `ctrl-d` `ctrl-u`                  | scroll the preview half a page (the mouse wheel over the preview scrolls it too; `ui::scroll::PreviewScroll`) | wherever a preview shows                     |
-| `Enter`                            | the primary action: open, accept, check out                                | all                                          |
-| `l` `h`                            | go in or expand, go out or collapse                                        | trees (files, symbols, commit files, status) |
-| `Tab`                              | mark for multi-select                                                      | files, pick                                  |
-| `/`                                | filter or search this list                                                 | all lists                                    |
-| `a`                                | add, new                                                                   | files, branches, stashes                     |
-| `d`                                | delete or discard (asks, `d` again confirms; `y` and `Enter` too)          | all                                          |
-| `r`                                | rename                                                                     | files, refs; reword in the commit list       |
-| `y`                                | copy (hash, path)                                                          | files, commits                               |
-| `s` `u` `a`                        | stage or unstage (toggle), unstage, stage or unstage all                   | git                                          |
-| `1`-`9`                            | jump to a pane or tab                                                      | tools with tabs                              |
-| `[` `]`                            | previous or next tab or panel                                              | tools with tabs, docks                       |
-| `Esc`                              | back out one level: prompt, confirmation, filter, focus to the list, marks | all                                          |
-| `q`                                | close the tool                                                             | standalone tools                             |
-| `?`                                | keys of this pane                                                          | all                                          |
+| `Enter`                            | the primary action: open, accept, check out                                                                   | all                                          |
+| `l` `h`                            | go in or expand, go out or collapse                                                                           | trees (files, symbols, commit files, status) |
+| `Tab`                              | mark for multi-select                                                                                         | files, pick                                  |
+| `/`                                | filter or search this list                                                                                    | all lists                                    |
+| `a`                                | add, new                                                                                                      | files, branches, stashes                     |
+| `d`                                | delete or discard (asks, `d` again confirms; `y` and `Enter` too)                                             | all                                          |
+| `r`                                | rename                                                                                                        | files, refs; reword in the commit list       |
+| `y`                                | copy (hash, path)                                                                                             | files, commits                               |
+| `s` `u` `a`                        | stage or unstage (toggle), unstage, stage or unstage all                                                      | git                                          |
+| `1`-`9`                            | jump to a pane or tab                                                                                         | tools with tabs                              |
+| `[` `]`                            | previous or next tab or panel                                                                                 | tools with tabs, docks                       |
+| `Esc`                              | back out one level: prompt, confirmation, filter, focus to the list, marks                                    | all                                          |
+| `q`                                | close the tool                                                                                                | standalone tools                             |
+| `?`                                | keys of this pane                                                                                             | all                                          |
 
 In text, `ctrl-h` `ctrl-l` jump by words and stop at the end of a line first.
 
