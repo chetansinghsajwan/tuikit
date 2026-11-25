@@ -82,11 +82,11 @@ impl Out {
     pub(super) fn inline_code(&mut self, t: &str, theme: &Theme) {
         let c = &theme.colors;
         if let Some((_, alt)) = self.image.as_mut() {
-            alt.push_str(&t);
+            alt.push_str(t);
         } else {
             let style = Style::new().fg(Color::from(c.syntax.string)).bg(Color::from(c.selection));
             // A pill: the text on its tint between rounded caps.
-            self.words.push((ui::pill::word(&theme.icons, &t), style));
+            self.words.push((ui::pill::word(&theme.icons, t), style));
         }
     }
 

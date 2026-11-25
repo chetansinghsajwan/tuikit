@@ -77,30 +77,24 @@ impl App {
 
     /// Run a finished submodule prompt.
     pub(super) fn submodule_submit(&mut self, kind: PromptKind, value: String) {
-        match kind {
-            PromptKind::AddSubmodule => {
-                let mut parts = value.split_whitespace();
-                let Some(url) = parts.next().map(str::to_string) else { return };
-                // Without a path, the last part of the URL names the folder, as `git submodule add` does.
-                let path = parts.next().map(str::to_string).unwrap_or_else(|| {
-                    let tail = url.trim_end_matches('/').rsplit(['/', ':']).next();
-                    tail.unwrap_or("").trim_end_matches(".git").to_string()
-                });
-                let done = format!("added {path}");
-                self.remote("adding the submodule", &done, move |r| r.submodule_add(&url, &path));
-            }
-            _ => {}
+        if let PromptKind::AddSubmodule = kind {
+            let mut parts = value.split_whitespace();
+            let Some(url) = parts.next().map(str::to_string) else { return };
+            // Without a path, the last part of the URL names the folder, as `git submodule add` does.
+            let path = parts.next().map(str::to_string).unwrap_or_else(|| {
+                let tail = url.trim_end_matches('/').rsplit(['/', ':']).next();
+                tail.unwrap_or("").trim_end_matches(".git").to_string()
+            });
+            let done = format!("added {path}");
+            self.remote("adding the submodule", &done, move |r| r.submodule_add(&url, &path));
         }
     }
 
     /// Run a confirmed submodule change.
     pub(super) fn submodule_confirmed(&mut self, c: Confirm) {
-        match c {
-            Confirm::RemoveSubmodule(path) => {
-                let p = path.clone();
-                self.run(format!("removed {path}"), move |r| r.submodule_remove(&p));
-            }
-            _ => {}
+        if let Confirm::RemoveSubmodule(path) = c {
+            let p = path.clone();
+            self.run(format!("removed {path}"), move |r| r.submodule_remove(&p));
         }
     }
 }

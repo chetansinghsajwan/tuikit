@@ -8,13 +8,13 @@ impl Out {
     /// Text goes to the code block, the front matter, the image alt text or the paragraph, whichever is open.
     pub(super) fn text(&mut self, t: &str) {
         if self.in_code {
-            self.code.push_str(&t);
+            self.code.push_str(t);
         } else if let Some(meta) = self.meta.as_mut() {
-            meta.push_str(&t);
+            meta.push_str(t);
         } else if let Some((_, alt)) = self.image.as_mut() {
-            alt.push_str(&t);
+            alt.push_str(t);
         } else {
-            self.push_text(&t);
+            self.push_text(t);
         }
     }
 

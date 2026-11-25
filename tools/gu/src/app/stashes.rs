@@ -21,22 +21,16 @@ impl App {
 
     /// Run a finished stash prompt.
     pub(super) fn stash_submit(&mut self, kind: PromptKind, value: String) {
-        match kind {
-            PromptKind::NewStash => {
-                let v = value.clone();
-                self.run("stashed the changes".to_string(), move |r| r.stash_push(&v));
-            }
-            _ => {}
+        if let PromptKind::NewStash = kind {
+            let v = value.clone();
+            self.run("stashed the changes".to_string(), move |r| r.stash_push(&v));
         }
     }
 
     /// Run a confirmed stash change.
     pub(super) fn stash_confirmed(&mut self, c: Confirm) {
-        match c {
-            Confirm::DropStash(i) => {
-                self.run(format!("dropped stash@{{{i}}}"), move |r| r.stash_drop(i))
-            }
-            _ => {}
+        if let Confirm::DropStash(i) = c {
+            self.run(format!("dropped stash@{{{i}}}"), move |r| r.stash_drop(i))
         }
     }
 }

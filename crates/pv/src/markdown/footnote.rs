@@ -12,7 +12,7 @@ impl Out {
         let muted = Color::from(theme.colors.muted);
         self.flush();
         self.blank();
-        let n = self.note(&name);
+        let n = self.note(name);
         let marker = format!("[{n}] ");
         let pad = " ".repeat(marker.width());
         self.bullet = Some(Span::styled(marker, Style::new().fg(muted)));
@@ -29,7 +29,7 @@ impl Out {
     /// A reference to a footnote, as its number.
     pub(super) fn footnote_reference(&mut self, name: &str, theme: &Theme) {
         let accent = Color::from(theme.colors.accent);
-        let n = self.note(&name);
+        let n = self.note(name);
         match self.words.last_mut() {
             Some(last) if !last.0.is_empty() => last.0.push_str(&format!("[{n}]")),
             _ => self.words.push((format!("[{n}]"), Style::new().fg(accent))),

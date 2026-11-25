@@ -17,9 +17,8 @@ impl App {
 
     /// Run a confirmed push.
     pub(super) fn remote_confirmed(&mut self, c: Confirm) {
-        match c {
-            Confirm::ForcePush => self.remote("force-pushing", "force-pushed", |r| r.push(true)),
-            _ => {}
+        if let Confirm::ForcePush = c {
+            self.remote("force-pushing", "force-pushed", |r| r.push(true))
         }
     }
 }
