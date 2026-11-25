@@ -309,7 +309,7 @@ impl Explorer {
                 git: self.opts.git,
                 focus: None,
             };
-            let lines = pv::preview(&path, theme, &opts).map_err(|e| e.to_string());
+            let lines = pv::preview(&path, cx, &opts).map_err(|e| e.to_string());
             if self.preview.as_ref().is_none_or(|p| p.key.0 != key.0) {
                 self.scroll.reset();
             }

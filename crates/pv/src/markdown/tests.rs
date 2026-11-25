@@ -29,7 +29,7 @@ fn conceal_finds_the_syntax_to_hide() {
 #[test]
 fn headings_lists_quotes_and_code_lose_their_markup() {
     let md = "# Title\n\nSome *emphasis* and `code` here.\n\n- one\n- two\n\n1. first\n\n> quoted\n\n```rust\nlet x = 1;\n```\n";
-    let lines = text(&render(md, &Theme::default(), 60));
+    let lines = text(&render(md, &ui::Context::new(&Theme::default()), 60));
     let all = lines.join("\n");
     assert!(!all.contains("# Title"), "{all}");
     // A level one heading is big text (see `h1_is_three_rows_of_blocks`), not the words.
@@ -43,7 +43,7 @@ fn headings_lists_quotes_and_code_lose_their_markup() {
 
 #[test]
 fn h1_is_three_rows_of_blocks() {
-    let lines = text(&render("# Hi\n\nafter\n", &Theme::default(), 40));
+    let lines = text(&render("# Hi\n\nafter\n", &ui::Context::new(&Theme::default()), 40));
     assert_eq!(lines[0], "█ █ ▀█▀", "{lines:#?}");
     assert_eq!(lines[1].chars().count(), 7);
     assert_eq!(lines[2].chars().count(), 7);
@@ -52,7 +52,11 @@ fn h1_is_three_rows_of_blocks() {
 
 #[test]
 fn h1_that_does_not_fit_or_has_no_glyphs_stays_one_row() {
-    let wide = text(&render("# A long heading that cannot fit\n", &Theme::default(), 20));
+    let wide = text(&render(
+        "# A long heading that cannot fit\n",
+        &ui::Context::new(&Theme::default()),
+        20,
+    ));
     assert_eq!(
         wide[0],
         "█ A long heading that cannot fit"
@@ -61,27 +65,27 @@ fn h1_that_does_not_fit_or_has_no_glyphs_stays_one_row() {
             .collect::<String>(),
         "{wide:#?}"
     );
-    let code = text(&render("# With `code`\n", &Theme::default(), 40));
+    let code = text(&render("# With `code`\n", &ui::Context::new(&Theme::default()), 40));
     assert!(code[0].starts_with("█ With"), "{code:#?}");
 }
 
 #[test]
 fn h2_and_below_stay_one_row() {
-    let lines = text(&render("## Title\n", &Theme::default(), 40));
+    let lines = text(&render("## Title\n", &ui::Context::new(&Theme::default()), 40));
     assert_eq!(lines[0], "▌ Title", "{lines:#?}");
 }
 
 #[test]
 fn tables_are_bordered_aligned_and_fit_the_width() {
     let md = "| name | n |\n|:-----|--:|\n| alpha | 1 |\n| b | 22 |\n";
-    let lines = text(&render(md, &Theme::default(), 40));
+    let lines = text(&render(md, &ui::Context::new(&Theme::default()), 40));
     assert_eq!(lines[0], "╭───────┬─────╮", "{lines:#?}");
     assert!(lines[1].contains("name") && lines[1].starts_with('│'), "{lines:#?}");
     assert!(lines.iter().any(|l| l == "│ alpha │   1 │"), "numbers align right: {lines:#?}");
     assert!(lines.last().unwrap().starts_with('╰'));
     // Too wide: the columns shrink and the cells wrap, nothing sticks out.
     let wide = format!("| a | b |\n|---|---|\n| {} | y |\n", "word ".repeat(30));
-    let lines = text(&render(&wide, &Theme::default(), 40));
+    let lines = text(&render(&wide, &ui::Context::new(&Theme::default()), 40));
     assert!(lines.iter().all(|l| l.width() <= 40), "{lines:#?}");
     assert!(lines.len() > 6, "the long cell wrapped: {lines:#?}");
 }
@@ -89,7 +93,7 @@ fn tables_are_bordered_aligned_and_fit_the_width() {
 #[test]
 fn alerts_footnotes_front_matter_math_and_headings() {
     let md = "---\ntitle: T\n---\n\n# One\n\n> [!WARNING]\n> careful\n\nA note[^a] and $x^2$.\n\n[^a]: the footnote\n\n## Two\n";
-    let r = render_in(md, &Theme::default(), 60, None);
+    let r = render_in(md, &ui::Context::new(&Theme::default()), 60, None);
     let all = text(&r.lines).join("\n");
     assert!(all.contains("title: T") && all.contains("┈"), "{all}");
     assert!(all.contains("⚠ Warning") && all.contains("▏ careful"), "{all}");
@@ -101,8 +105,11 @@ fn alerts_footnotes_front_matter_math_and_headings() {
 
 #[test]
 fn code_blocks_are_highlighted_and_images_fall_back_to_their_alt_text() {
-    let lines =
-        render("```rust\nfn main() {}\n```\n\n![a cat](missing.png)\n", &Theme::default(), 50);
+    let lines = render(
+        "```rust\nfn main() {}\n```\n\n![a cat](missing.png)\n",
+        &ui::Context::new(&Theme::default()),
+        50,
+    );
     let code = lines.iter().find(|l| l.spans.iter().any(|s| s.content.contains("fn"))).unwrap();
     let colors: std::collections::HashSet<_> =
         code.spans.iter().filter_map(|s| s.style.fg).collect();
@@ -114,7 +121,7 @@ fn code_blocks_are_highlighted_and_images_fall_back_to_their_alt_text() {
     image::RgbaImage::from_pixel(8, 8, image::Rgba([200, 0, 0, 255]))
         .save(d.join("p.png"))
         .unwrap();
-    let r = render_in("![red](p.png)\n", &Theme::default(), 50, Some(&d));
+    let r = render_in("![red](p.png)\n", &ui::Context::new(&Theme::default()), 50, Some(&d));
     assert!(
         r.lines.iter().any(|l| l.spans.iter().any(|s| s.content == "▀")),
         "{:?}",
@@ -124,8 +131,11 @@ fn code_blocks_are_highlighted_and_images_fall_back_to_their_alt_text() {
 
 #[test]
 fn code_blocks_are_tinted_blocks_with_rounded_corners_and_the_language_inside() {
-    let lines =
-        text(&render("```rust\nfn main() {}\nlet a_long_line = 1;\n```\n", &Theme::default(), 40));
+    let lines = text(&render(
+        "```rust\nfn main() {}\nlet a_long_line = 1;\n```\n",
+        &ui::Context::new(&Theme::default()),
+        40,
+    ));
     // No frame: half blocks along the top and bottom, quarter blocks as the corners.
     assert!(lines[0].starts_with('▗') && lines[0].ends_with('▖'), "{lines:#?}");
     assert!(lines[0]['▗'.len_utf8()..lines[0].len() - '▖'.len_utf8()].chars().all(|c| c == '▄'));
@@ -142,7 +152,7 @@ fn code_blocks_are_tinted_blocks_with_rounded_corners_and_the_language_inside() 
     );
     // The edge rows and corners are the tint drawn as a foreground, on the terminal background; only
     // the rows between carry it as a background, so no colour shows outside the rounded corners.
-    let styled = render("```rust\nfn main() {}\n```\n", &Theme::default(), 40);
+    let styled = render("```rust\nfn main() {}\n```\n", &ui::Context::new(&Theme::default()), 40);
     let row = |i: usize| &styled[i].spans;
     let tint = row(2)[0].style.bg;
     assert!(tint.is_some(), "the inside is tinted");
@@ -156,7 +166,7 @@ fn code_blocks_are_tinted_blocks_with_rounded_corners_and_the_language_inside() 
 
 #[test]
 fn inline_code_is_a_pill_between_rounded_caps() {
-    let r = render("use `a b` here, or `x`.\n", &Theme::default(), 60);
+    let r = render("use `a b` here, or `x`.\n", &ui::Context::new(&Theme::default()), 60);
     let line = &r[0];
     let shown: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
     assert!(shown.windows(3).any(|w| w == ["", "a b", ""]), "a cap, the code, a cap: {shown:?}");
@@ -168,12 +178,17 @@ fn inline_code_is_a_pill_between_rounded_caps() {
 #[test]
 fn paragraphs_wrap_to_the_width() {
     let md = "word ".repeat(40);
-    let lines = text(&render(&md, &Theme::default(), 30));
+    let lines = text(&render(&md, &ui::Context::new(&Theme::default()), 30));
     assert!(lines.len() > 3 && lines.iter().all(|l| l.width() <= 30), "{lines:?}");
 }
 
 #[test]
 fn links_show_their_target() {
-    let all = text(&render("see [the docs](https://x.y/z) now", &Theme::default(), 80)).join("\n");
+    let all = text(&render(
+        "see [the docs](https://x.y/z) now",
+        &ui::Context::new(&Theme::default()),
+        80,
+    ))
+    .join("\n");
     assert!(all.contains("the docs (https://x.y/z) now"), "{all}");
 }

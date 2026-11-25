@@ -59,7 +59,7 @@ fn list(dir: PathBuf, git: bool) -> Result<u8, String> {
         .or_else(|| ratatui::crossterm::terminal::size().ok().map(|(w, _)| w))
         .unwrap_or(100);
     let opts = pv::Options { width: Some(width), height: None, git, focus: None };
-    let lines = pv::list_dir(&dir, &ui::Theme::load(), &opts)
+    let lines = pv::list_dir(&dir, &ui::Context::new(&ui::Theme::load()), &opts)
         .map_err(|e| format!("{}: {e}", dir.display()))?;
     print!("{}", pv::to_ansi(&lines));
     Ok(0)

@@ -3,17 +3,17 @@ use super::rows::Row;
 use crate::git::PatchKind;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 /// A hunk side by side: removed lines on the left, added on the right, context on both, rows of a change paired in order.
 pub(super) fn side_rows(
     rows: &[Row],
     digits: usize,
     width: usize,
-    theme: &Theme,
+    cx: &ui::Context,
     out: &mut Vec<Line<'static>>,
     limit: usize,
 ) {
+    let theme = cx.theme;
     let c = &theme.colors;
     let half = width.saturating_sub(1) / 2;
     let code_w = half.saturating_sub(digits + 3);

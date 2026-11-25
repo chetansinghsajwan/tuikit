@@ -6,7 +6,6 @@ use crate::Options;
 use crate::git::PatchKind;
 use git_core::{FilePatch, Hunk, Kind, PatchLine};
 use ratatui::text::Line;
-use ui::Theme;
 
 /// A run of the input: plain text, or one file's patch.
 pub(super) enum Chunk {
@@ -190,12 +189,12 @@ fn push_text(chunks: &mut Vec<Chunk>, line: &str) {
 }
 
 /// The unified diff in `text` drawn like the patch views draw it; text between file diffs is kept as is.
-pub fn render_unified(text: &str, theme: &Theme, opts: &Options) -> Vec<Line<'static>> {
+pub fn render_unified(text: &str, cx: &ui::Context, opts: &Options) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut files: Vec<FilePatch> = Vec::new();
     let flush = |files: &mut Vec<FilePatch>, out: &mut Vec<Line<'static>>| {
         if !files.is_empty() {
-            let (lines, _) = render(files, theme, opts, usize::MAX);
+            let (lines, _) = render(files, cx, opts, usize::MAX);
             out.extend(lines);
             files.clear();
         }

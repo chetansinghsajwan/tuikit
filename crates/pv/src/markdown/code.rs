@@ -4,7 +4,6 @@ use super::state::Out;
 use pulldown_cmark::CodeBlockKind;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 impl Out {
@@ -20,7 +19,8 @@ impl Out {
     }
 
     /// Close a code block: a tinted, rounded block with the highlighted code.
-    pub(super) fn end_code_block(&mut self, theme: &Theme) {
+    pub(super) fn end_code_block(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let muted = Color::from(theme.colors.muted);
         self.in_code = false;
@@ -48,7 +48,7 @@ impl Out {
             let spans = vec![Span::styled(label, tint.fg(muted).add_modifier(Modifier::ITALIC))];
             self.push_line(row(spans, used));
         }
-        for pieces in crate::text::highlight_code(code, &lang, theme) {
+        for pieces in crate::text::highlight_code(code, &lang, cx) {
             // Long lines are cut at the width.
             let mut spans = Vec::new();
             let mut used = 0;
@@ -79,7 +79,8 @@ impl Out {
     }
 
     /// Inline code, a pill.
-    pub(super) fn inline_code(&mut self, t: &str, theme: &Theme) {
+    pub(super) fn inline_code(&mut self, t: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         if let Some((_, alt)) = self.image.as_mut() {
             alt.push_str(t);
@@ -91,7 +92,8 @@ impl Out {
     }
 
     /// Inline math.
-    pub(super) fn inline_math(&mut self, t: &str, theme: &Theme) {
+    pub(super) fn inline_math(&mut self, t: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         self.words.push((
             t.to_string(),
@@ -100,7 +102,8 @@ impl Out {
     }
 
     /// Display math, an indented block.
-    pub(super) fn display_math(&mut self, t: &str, theme: &Theme) {
+    pub(super) fn display_math(&mut self, t: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         self.flush();
         for l in t.trim().lines() {

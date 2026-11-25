@@ -4,7 +4,6 @@ use crate::{Error, Options};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::path::Path;
-use ui::Theme;
 
 /// How many pages are read for the preview at most.
 const PAGES: u32 = 6;
@@ -43,7 +42,8 @@ fn info(doc: &lopdf::Document, key: &[u8]) -> Option<String> {
 }
 
 /// Preview of the PDF at `path`: title, author, page count and the text of the first pages.
-pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn render(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+    let theme = cx.theme;
     let size = std::fs::metadata(path)?.len();
     let doc = lopdf::Document::load(path).map_err(|e| Error::Unsupported(format!("pdf: {e}")))?;
     let pages = doc.get_pages();

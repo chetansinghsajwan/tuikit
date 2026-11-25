@@ -3,7 +3,6 @@
 use super::state::Out;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 impl Out {
     /// Open the front matter.
@@ -12,7 +11,8 @@ impl Out {
     }
 
     /// Close the front matter: draw it between rules.
-    pub(super) fn end_front_matter(&mut self, theme: &Theme) {
+    pub(super) fn end_front_matter(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         if let Some(meta) = self.meta.take() {
             let rule = Span::styled(

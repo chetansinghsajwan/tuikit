@@ -3,7 +3,6 @@
 use super::state::Out;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 impl Out {
@@ -13,7 +12,8 @@ impl Out {
     }
 
     /// Open a list item with its marker.
-    pub(super) fn start_item(&mut self, theme: &Theme) {
+    pub(super) fn start_item(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let accent = Color::from(theme.colors.accent);
         self.flush();
         let depth = self.lists.len().saturating_sub(1);
@@ -46,7 +46,8 @@ impl Out {
     }
 
     /// The checkbox of a task list item.
-    pub(super) fn task_marker(&mut self, done: bool, theme: &Theme) {
+    pub(super) fn task_marker(&mut self, done: bool, cx: &ui::Context) {
+        let theme = cx.theme;
         let accent = Color::from(theme.colors.accent);
         self.bullet = Some(Span::styled(if done { "☑ " } else { "☐ " }, Style::new().fg(accent)));
     }

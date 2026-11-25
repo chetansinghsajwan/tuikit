@@ -91,7 +91,7 @@ impl App {
                             Some(base),
                             &snap,
                             Some("work tree"),
-                            theme,
+                            cx,
                             &opts,
                         ),
                         Err(e) => Err(pv::Error::Unsupported(e)),
@@ -99,12 +99,12 @@ impl App {
                 }
                 _ if rev.contains('\u{2}') => {
                     let (base, oid) = rev.split_once('\u{2}').unwrap_or_default();
-                    pv::preview_range_marked(&self.root, Some(base), oid, None, theme, &opts)
+                    pv::preview_range_marked(&self.root, Some(base), oid, None, cx, &opts)
                 }
                 Some((oid, path)) => {
-                    pv::preview_commit_files_marked(&self.root, oid, path, theme, &opts)
+                    pv::preview_commit_files_marked(&self.root, oid, path, cx, &opts)
                 }
-                None => pv::preview_commit_marked(&self.root, &rev, theme, &opts),
+                None => pv::preview_commit_marked(&self.root, &rev, cx, &opts),
             };
             let (lines, anchors) = match result {
                 Ok(r) => r,

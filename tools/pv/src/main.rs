@@ -57,12 +57,13 @@ fn main() -> ExitCode {
         }
     }
     let theme = ui::Theme::load();
+    let cx = &ui::Context::new(&theme);
 
     if diff {
         let (width, height) = size(true);
         let opts = Options { width, height, git, focus: None };
         let text = String::from_utf8_lossy(&read_stdin()).into_owned();
-        print!("{}", to_ansi(&preview_unified(&text, &theme, &opts)));
+        print!("{}", to_ansi(&preview_unified(&text, cx, &opts)));
         return ExitCode::SUCCESS;
     }
 
@@ -74,7 +75,7 @@ fn main() -> ExitCode {
         let (width, height) = size(false);
         let opts = Options { width, height, git: false, focus: None };
         let name = name.unwrap_or_else(|| PathBuf::from("stdin"));
-        return match preview_text(&name, &read_stdin(), &theme, &opts) {
+        return match preview_text(&name, &read_stdin(), cx, &opts) {
             Ok(lines) => {
                 print!("{}", to_ansi(&lines));
                 ExitCode::SUCCESS
@@ -89,7 +90,7 @@ fn main() -> ExitCode {
     // yazi's piper sets $w and $h to the preview pane size.
     let (width, height) = size(false);
     let opts = Options { width, height, git, focus: None };
-    match preview(path, &theme, &opts) {
+    match preview(path, cx, &opts) {
         Ok(lines) => {
             print!("{}", to_ansi(&lines));
             ExitCode::SUCCESS

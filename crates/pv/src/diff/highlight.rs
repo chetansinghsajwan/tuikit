@@ -3,14 +3,13 @@ use ratatui::style::{Color, Modifier, Style};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::FontStyle;
 use syntect::util::LinesWithEndings;
-use ui::Theme;
 
 /// The highlighted pieces of each line of a text: `(style, text)`.
 pub(super) type Highlighted = Vec<Vec<(Style, String)>>;
 
 /// Highlight `text` as the language of `path`, line by line.
-pub(super) fn highlight(text: &str, path: &str, theme: &Theme, upto: usize) -> Highlighted {
-    highlight_window(text, path, theme, 0, upto)
+pub(super) fn highlight(text: &str, path: &str, cx: &ui::Context, upto: usize) -> Highlighted {
+    highlight_window(text, path, cx, 0, upto)
 }
 
 /// How many lines before a window are parsed (and not kept) so the window starts in the right state.
@@ -32,10 +31,11 @@ thread_local! {
 pub(super) fn highlight_window(
     text: &str,
     path: &str,
-    theme: &Theme,
+    cx: &ui::Context,
     from: usize,
     upto: usize,
 ) -> Highlighted {
+    let theme = cx.theme;
     let start = from.saturating_sub(LEAD_IN);
     let syntaxes = syntax_set();
     let name = std::path::Path::new(path);

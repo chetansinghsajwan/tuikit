@@ -3,15 +3,15 @@ use super::rows::Row;
 use crate::git::PatchKind;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 /// One row of the unified view: both line numbers, the sign, the code, the tint to the edge.
 pub(super) fn unified_row(
     r: &Row,
     digits: usize,
     width: Option<usize>,
-    theme: &Theme,
+    cx: &ui::Context,
 ) -> Line<'static> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let num = |n: Option<u32>| match n {
         Some(n) => format!("{n:>digits$}"),

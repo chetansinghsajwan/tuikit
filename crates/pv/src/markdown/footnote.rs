@@ -3,12 +3,12 @@
 use super::state::Out;
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 impl Out {
     /// Open a footnote definition with its number.
-    pub(super) fn start_footnote(&mut self, name: &str, theme: &Theme) {
+    pub(super) fn start_footnote(&mut self, name: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         self.flush();
         self.blank();
@@ -27,7 +27,8 @@ impl Out {
     }
 
     /// A reference to a footnote, as its number.
-    pub(super) fn footnote_reference(&mut self, name: &str, theme: &Theme) {
+    pub(super) fn footnote_reference(&mut self, name: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let accent = Color::from(theme.colors.accent);
         let n = self.note(name);
         match self.words.last_mut() {

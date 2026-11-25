@@ -3,6 +3,7 @@
 
 use super::*;
 use std::fs;
+use ui::Theme;
 
 /// A fresh empty temp folder unique to `name`.
 fn tmp(name: &str) -> std::path::PathBuf {
@@ -19,7 +20,7 @@ fn text_has_gutter_and_respects_height() {
     fs::write(&f, "fn main() {}\nlet x = 1;\nlet y = 2;\n").unwrap();
     let lines = preview(
         &f,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: Some(2), git: false, focus: None },
     )
     .unwrap();
@@ -34,7 +35,7 @@ fn code_shows_indent_guides_also_through_blank_lines() {
     fs::write(&f, "fn main() {\n    if x {\n        y();\n\n        z();\n    }\n}\n").unwrap();
     let lines = preview(
         &f,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: None },
     )
     .unwrap();
@@ -50,7 +51,7 @@ fn binary_is_unsupported() {
     let f = d.join("b");
     fs::write(&f, [0u8, 1, 2, 3]).unwrap();
     assert!(matches!(
-        preview(&f, &Theme::default(), &Options::default()),
+        preview(&f, &ui::Context::new(&Theme::default()), &Options::default()),
         Err(Error::Unsupported(_))
     ));
 }
@@ -64,11 +65,15 @@ fn dir_lists_dirs_first_and_caps_children() {
         fs::write(d.join("sub").join(n), "x").unwrap();
     }
     let text = |h| -> Vec<String> {
-        preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None })
-            .unwrap()
-            .iter()
-            .map(flat)
-            .collect()
+        preview(
+            &d,
+            &ui::Context::new(&Theme::default()),
+            &Options { width: None, height: h, git: false, focus: None },
+        )
+        .unwrap()
+        .iter()
+        .map(flat)
+        .collect()
     };
     // Room for everything: all three files show, no marker.
     let all = text(None);
@@ -91,11 +96,15 @@ fn deeper_levels_show_when_there_is_room_and_fewer_when_not() {
         fs::write(d.join(f), "x").unwrap();
     }
     let text = |h| -> Vec<String> {
-        preview(&d, &Theme::default(), &Options { width: None, height: h, git: false, focus: None })
-            .unwrap()
-            .iter()
-            .map(flat)
-            .collect()
+        preview(
+            &d,
+            &ui::Context::new(&Theme::default()),
+            &Options { width: None, height: h, git: false, focus: None },
+        )
+        .unwrap()
+        .iter()
+        .map(flat)
+        .collect()
     };
     let all = text(Some(40));
     assert!(
@@ -127,7 +136,7 @@ fn single_folder_chains_merge_and_empty_folders_collapse() {
     fs::write(d.join("file.txt"), "x").unwrap();
     let text: Vec<String> = preview(
         &d,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: None },
     )
     .unwrap()
@@ -154,7 +163,7 @@ fn a_huge_folder_is_cut_and_says_so() {
     }
     let text: Vec<String> = preview(
         &d,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: None },
     )
     .unwrap()
@@ -200,7 +209,7 @@ fn text_marks_changed_rows_and_no_git_disables() {
     fs::write(d.join("a.txt"), "1\nX\n3\n").unwrap();
     let on = preview(
         &d.join("a.txt"),
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(20), height: None, git: true, focus: None },
     )
     .unwrap();
@@ -209,7 +218,7 @@ fn text_marks_changed_rows_and_no_git_disables() {
     assert!(flat(&on[0]).starts_with(' ') && on[0].spans.iter().all(|s| s.style.bg.is_none()));
     let off = preview(
         &d.join("a.txt"),
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(20), height: None, git: false, focus: None },
     )
     .unwrap();
@@ -234,8 +243,11 @@ fn dir_shows_dot_files_but_not_ignored_ones_and_a_long_name_shrinks() {
     let long = format!("{}.txt", "n".repeat(60));
     fs::write(d.join(&long), "x").unwrap();
     let opts = Options { width: Some(50), height: None, git: false, focus: None };
-    let text: Vec<String> =
-        preview(&d, &Theme::default(), &opts).unwrap().iter().map(flat).collect();
+    let text: Vec<String> = preview(&d, &ui::Context::new(&Theme::default()), &opts)
+        .unwrap()
+        .iter()
+        .map(flat)
+        .collect();
     let all = text.join("\n");
     assert!(all.contains(".env") && all.contains(".gitignore"), "dot files show: {all}");
     assert!(
@@ -258,7 +270,7 @@ fn dir_shows_git_signs() {
     fs::write(d.join("sub/new.txt"), "n\n").unwrap();
     let on = preview(
         &d,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(80), height: None, git: true, focus: None },
     )
     .unwrap();
@@ -267,7 +279,7 @@ fn dir_shows_git_signs() {
     assert!(text.iter().any(|l| l.contains("a.txt") && l.trim_end().ends_with('M')), "{text:?}");
     let off = preview(
         &d,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(80), height: None, git: false, focus: None },
     )
     .unwrap();
@@ -281,7 +293,7 @@ fn focus_centers_window_and_highlights_row() {
     let body: String = (1..=100).map(|n| format!("line {n}\n")).collect();
     fs::write(&f, body).unwrap();
     let o = Options { width: Some(20), height: Some(10), git: false, focus: Some(50) };
-    let lines = preview(&f, &Theme::default(), &o).unwrap();
+    let lines = preview(&f, &ui::Context::new(&Theme::default()), &o).unwrap();
     assert_eq!(lines.len(), 10);
     let text: Vec<String> = lines.iter().map(flat).collect();
     assert!(text.iter().any(|l| l.contains("line 50")), "{text:?}");
@@ -291,7 +303,8 @@ fn focus_centers_window_and_highlights_row() {
     assert_eq!(lines.iter().filter(|l| l.spans.iter().any(|s| s.style.bg.is_some())).count(), 1);
     // Near the end the window is clamped, not padded.
     let o = Options { focus: Some(100), ..o };
-    let text: Vec<String> = preview(&f, &Theme::default(), &o).unwrap().iter().map(flat).collect();
+    let text: Vec<String> =
+        preview(&f, &ui::Context::new(&Theme::default()), &o).unwrap().iter().map(flat).collect();
     assert!(text.last().unwrap().contains("line 100"), "{text:?}");
     assert_eq!(text.len(), 10);
 }
@@ -301,7 +314,7 @@ fn commit_preview_has_header_message_and_files() {
     let lines = preview_commit(
         &d,
         "HEAD",
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(60), ..Options::default() },
     )
     .unwrap();
@@ -319,14 +332,22 @@ fn commit_preview_has_header_message_and_files() {
         "{text:?}"
     );
     assert!(text.iter().any(|l| l.contains("sub/s.txt")), "{text:?}");
-    assert!(preview_commit(&d, "nonexistent-ref", &Theme::default(), &Options::default()).is_err());
+    assert!(
+        preview_commit(
+            &d,
+            "nonexistent-ref",
+            &ui::Context::new(&Theme::default()),
+            &Options::default()
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn commit_preview_shows_the_patch() {
     let d = git_repo("patch");
     let o = Options { width: Some(50), ..Options::default() };
-    let lines = preview_commit(&d, "HEAD", &Theme::default(), &o).unwrap();
+    let lines = preview_commit(&d, "HEAD", &ui::Context::new(&Theme::default()), &o).unwrap();
     let text: Vec<String> = lines.iter().map(flat).collect();
     let at = |s: &str| {
         text.iter().position(|l| l.contains(s)).unwrap_or_else(|| panic!("{s} in {text:?}"))
@@ -336,8 +357,13 @@ fn commit_preview_shows_the_patch() {
     assert!(lines[row].spans.iter().all(|s| s.style.bg.is_some()), "added rows are tinted");
     assert!(flat(&lines[row]).len() >= 49, "padded to the pane width");
     // A height clamps the whole preview, patch included.
-    let short =
-        preview_commit(&d, "HEAD", &Theme::default(), &Options { height: Some(12), ..o }).unwrap();
+    let short = preview_commit(
+        &d,
+        "HEAD",
+        &ui::Context::new(&Theme::default()),
+        &Options { height: Some(12), ..o },
+    )
+    .unwrap();
     assert_eq!(short.len(), 12);
 }
 
@@ -348,7 +374,7 @@ fn preview_text_renders_given_text_not_the_file() {
     let lines = preview_text(
         &d.join("a.txt"),
         b"one\nedited line\nthree\n",
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(30), focus: Some(2), ..Options::default() },
     )
     .unwrap();
@@ -362,7 +388,12 @@ fn preview_text_renders_given_text_not_the_file() {
     );
     assert!(!flat(&lines[1]).contains('▎'));
     assert!(matches!(
-        preview_text(Path::new("x"), &[0, 1, 2], &Theme::default(), &Options::default()),
+        preview_text(
+            Path::new("x"),
+            &[0, 1, 2],
+            &ui::Context::new(&Theme::default()),
+            &Options::default()
+        ),
         Err(Error::Unsupported(_))
     ));
 }
@@ -388,7 +419,7 @@ fn file_diff_preview_shows_the_chosen_side() {
     fs::write(d.join("a.txt"), "1\nSTAGED\n3\nUNSTAGED\n").unwrap();
     let o = Options { width: Some(40), ..Options::default() };
     let text = |side| -> Vec<String> {
-        preview_diff(&d, Path::new("a.txt"), side, &Theme::default(), &o)
+        preview_diff(&d, Path::new("a.txt"), side, &ui::Context::new(&Theme::default()), &o)
             .unwrap()
             .iter()
             .map(flat)
@@ -409,9 +440,14 @@ fn file_diff_preview_shows_the_chosen_side() {
         "{unstaged:?}"
     );
     // A file with no change on that side says so.
-    let none =
-        preview_diff(&d, Path::new("sub/s.txt"), git_core::Side::Staged, &Theme::default(), &o)
-            .unwrap();
+    let none = preview_diff(
+        &d,
+        Path::new("sub/s.txt"),
+        git_core::Side::Staged,
+        &ui::Context::new(&Theme::default()),
+        &o,
+    )
+    .unwrap();
     assert!(flat(none.last().unwrap()).contains("no changes"));
 }
 
@@ -431,7 +467,7 @@ fn markdown_is_highlighted_and_flake_lock_is_json() {
     fs::write(&md, "# Title\n\nsome **bold** and `code` text\n\n- item\n").unwrap();
     let lines = preview(
         &md,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: Some(1) },
     )
     .unwrap();
@@ -452,7 +488,7 @@ fn markdown_is_highlighted_and_flake_lock_is_json() {
         .unwrap();
     let lines = preview(
         &lock,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: None },
     )
     .unwrap();
@@ -463,7 +499,7 @@ fn markdown_is_highlighted_and_flake_lock_is_json() {
     fs::write(&plain, "{\n  \"nodes\": 1\n}\n").unwrap();
     let lines = preview(
         &plain,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: None, height: None, git: false, focus: None },
     )
     .unwrap();
@@ -481,8 +517,11 @@ fn list_is_flat_shows_dot_and_ignored_files_with_sizes() {
     fs::write(d.join("src/inner.rs"), "x").unwrap();
     fs::write(d.join(".env"), vec![b'x'; 2048]).unwrap();
     let opts = Options { width: Some(80), height: None, git: false, focus: None };
-    let rows: Vec<String> =
-        list_dir(&d, &ui::Theme::default(), &opts).unwrap().iter().map(flat).collect();
+    let rows: Vec<String> = list_dir(&d, &ui::Context::new(&ui::Theme::default()), &opts)
+        .unwrap()
+        .iter()
+        .map(flat)
+        .collect();
     assert_eq!(rows.len(), 4, "{rows:?}");
     assert!(rows[0].contains("build") && rows[1].contains("src"), "folders first: {rows:?}");
     assert!(rows[2].contains(".env") && rows[2].contains("2.0 K"), "{rows:?}");

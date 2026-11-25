@@ -4,10 +4,10 @@ use super::state::Out;
 use pulldown_cmark::BlockQuoteKind;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use ui::Theme;
 
 /// The color and name of an alert (`> [!NOTE]`).
-fn alert(kind: BlockQuoteKind, theme: &Theme) -> (Color, &'static str) {
+fn alert(kind: BlockQuoteKind, cx: &ui::Context) -> (Color, &'static str) {
+    let theme = cx.theme;
     let c = &theme.colors;
     match kind {
         BlockQuoteKind::Note => (c.info.into(), "ⓘ Note"),
@@ -20,12 +20,13 @@ fn alert(kind: BlockQuoteKind, theme: &Theme) -> (Color, &'static str) {
 
 impl Out {
     /// Open a block quote, or an alert (`> [!NOTE]`) with its title.
-    pub(super) fn start_quote(&mut self, kind: Option<BlockQuoteKind>, theme: &Theme) {
+    pub(super) fn start_quote(&mut self, kind: Option<BlockQuoteKind>, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         self.flush();
         match kind {
             Some(k) => {
-                let (color, title) = alert(k, theme);
+                let (color, title) = alert(k, cx);
                 self.indent.push(Span::styled("▏ ", Style::new().fg(color)));
                 self.push_line(vec![Span::styled(
                     title,

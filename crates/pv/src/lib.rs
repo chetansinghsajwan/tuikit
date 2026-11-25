@@ -17,7 +17,6 @@ mod text;
 use ratatui::text::Line;
 use std::io;
 use std::path::Path;
-use ui::Theme;
 
 pub use ansi::to_ansi;
 
@@ -25,9 +24,9 @@ pub use ansi::to_ansi;
 pub fn highlight_line(
     code: &str,
     lang: &str,
-    theme: &Theme,
+    cx: &ui::Context,
 ) -> Vec<(ratatui::style::Style, String)> {
-    text::highlight_code(code, lang, theme).into_iter().next().unwrap_or_default()
+    text::highlight_code(code, lang, cx).into_iter().next().unwrap_or_default()
 }
 pub use commit::render as preview_commit;
 pub use commit::render_file_diff as preview_diff;
@@ -99,14 +98,14 @@ impl std::fmt::Display for Error {
 fn rendered_markdown(
     name: &Path,
     text: &[u8],
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Option<Vec<Line<'static>>> {
     if !markdown::is_markdown(name) || opts.focus.is_some() {
         return None;
     }
     let text = std::str::from_utf8(text).ok()?;
-    let mut lines = markdown::render_in(text, theme, opts.width.unwrap_or(80), name.parent()).lines;
+    let mut lines = markdown::render_in(text, cx, opts.width.unwrap_or(80), name.parent()).lines;
     if let Some(h) = opts.height {
         lines.truncate(usize::from(h));
     }
@@ -118,29 +117,29 @@ fn rendered_markdown(
 pub fn preview_text(
     name: &Path,
     text: &[u8],
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
-    if let Some(lines) = rendered_markdown(name, text, theme, opts) {
+    if let Some(lines) = rendered_markdown(name, text, cx, opts) {
         return Ok(lines);
     }
-    text::render_bytes(name, text, theme, opts, false)
+    text::render_bytes(name, text, cx, opts, false)
 }
 
 /// Render a preview of `path`.
-pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn preview(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let meta = std::fs::metadata(path)?;
     if meta.is_dir() {
-        dir::render(path, theme, opts)
+        dir::render(path, cx, opts)
     } else if meta.is_file() {
         if let Some(kind) = media::kind(path) {
-            return media::render(path, kind, theme, opts);
+            return media::render(path, kind, cx, opts);
         }
         if pdf::is_pdf(path) {
-            return pdf::render(path, theme, opts);
+            return pdf::render(path, cx, opts);
         }
         if let Some(kind) = tabular::kind(path).filter(|_| !tabular::raw()) {
-            return tabular::render(path, kind, theme, opts);
+            return tabular::render(path, kind, cx, opts);
         }
         if markdown::is_markdown(path) && opts.focus.is_none() {
             let mut buf = Vec::new();
@@ -148,11 +147,11 @@ pub fn preview(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'s
                 &mut std::io::Read::take(std::fs::File::open(path)?, 1 << 20),
                 &mut buf,
             )?;
-            if let Some(lines) = rendered_markdown(path, &buf, theme, opts) {
+            if let Some(lines) = rendered_markdown(path, &buf, cx, opts) {
                 return Ok(lines);
             }
         }
-        text::render(path, theme, opts)
+        text::render(path, cx, opts)
     } else {
         Err(Error::NotFound)
     }

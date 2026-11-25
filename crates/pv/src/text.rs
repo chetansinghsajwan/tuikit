@@ -132,10 +132,10 @@ fn line_marks(path: &Path, total: usize) -> Vec<Option<(LineKind, char)>> {
 }
 
 /// Preview of the text file at `path`, highlighted, with a line-number gutter and git marks.
-pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn render(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let mut buf = Vec::new();
     std::fs::File::open(path)?.take(MAX_BYTES).read_to_end(&mut buf)?;
-    render_bytes(path, &buf, theme, opts, opts.git)
+    render_bytes(path, &buf, cx, opts, opts.git)
 }
 
 /// Render `buf` as the contents of `path` (which only picks the syntax and,
@@ -144,10 +144,11 @@ pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'st
 pub fn render_bytes(
     path: &Path,
     buf: &[u8],
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
     git_marks: bool,
 ) -> Result<Vec<Line<'static>>, Error> {
+    let theme = cx.theme;
     let buf = &buf[..buf.len().min(MAX_BYTES as usize)];
     if is_binary(buf) {
         return Err(Error::Unsupported("binary".into()));
@@ -230,7 +231,7 @@ pub fn render_bytes(
         if code.is_empty() && depth > 0 {
             code.push(Span::raw(" ".repeat(depth)));
         }
-        spans.extend(ui::tree::mark_indent(&ui::Context::new(theme), code, depth, unit));
+        spans.extend(ui::tree::mark_indent(cx, code, depth, unit));
         // The focus line wins over a git tint; both span the full width.
         let row_bg = if opts.focus == Some(i as u32 + 1) {
             Some(Color::from(theme.colors.selection))
@@ -254,7 +255,12 @@ pub fn render_bytes(
 }
 
 /// `code` highlighted as the language `lang` (a name or an extension; plain when unknown), by line.
-pub(crate) fn highlight_code(code: &str, lang: &str, theme: &Theme) -> Vec<Vec<(Style, String)>> {
+pub(crate) fn highlight_code(
+    code: &str,
+    lang: &str,
+    cx: &ui::Context,
+) -> Vec<Vec<(Style, String)>> {
+    let theme = cx.theme;
     use syntect::util::LinesWithEndings;
     let syntaxes = syntax_set();
     let syntax =

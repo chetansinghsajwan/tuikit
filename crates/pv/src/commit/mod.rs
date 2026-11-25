@@ -6,7 +6,6 @@ use crate::{Error, Options};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::path::Path;
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 /// `YYYY-MM-DD HH:MM` in UTC from seconds since the epoch.
@@ -57,20 +56,20 @@ pub(crate) fn sign(kind: Kind) -> char {
 pub fn render(
     root: &Path,
     rev: &str,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
-    render_marked(root, rev, theme, opts).map(|(lines, _)| lines)
+    render_marked(root, rev, cx, opts).map(|(lines, _)| lines)
 }
 
 /// `render`, with where the files and hunks of the patch start.
 pub fn render_marked(
     root: &Path,
     rev: &str,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<(Vec<Line<'static>>, Anchors), Error> {
-    render_range_marked(root, None, rev, None, theme, opts)
+    render_range_marked(root, None, rev, None, cx, opts)
 }
 
 /// The difference between two commits: `base` against `rev` (with `None`, `rev` against its parent). `to_label` names the
@@ -80,9 +79,10 @@ pub fn render_range_marked(
     base: Option<&str>,
     rev: &str,
     to_label: Option<&str>,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+    let theme = cx.theme;
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let info = repo.commit(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
     let changes = match base {
@@ -116,7 +116,7 @@ pub fn render_range_marked(
                         ),
                     ];
                     s.extend(ui::subject::spans(
-                        &ui::Context::new(theme),
+                        cx,
                         i.message.lines().next().unwrap_or(""),
                         fg.add_modifier(Modifier::BOLD),
                     ));
@@ -130,7 +130,7 @@ pub fn render_range_marked(
         let mut lines = info.message.lines();
         let mut subject = Vec::new();
         subject.extend(ui::subject::spans(
-            &ui::Context::new(theme),
+            cx,
             lines.next().unwrap_or(""),
             fg.add_modifier(Modifier::BOLD),
         ));
@@ -210,7 +210,7 @@ pub fn render_range_marked(
             Span::raw(" ".repeat(pad)),
         ];
         spans.extend(ui::tree::line_counts(
-            &ui::Context::new(theme),
+            cx,
             (!f.binary).then_some((f.added, f.removed)),
             counts,
         ));
@@ -251,7 +251,7 @@ pub fn render_range_marked(
             None => repo.patch(rev),
         };
         if let Ok(files) = patch {
-            let (lines, a) = diff::render(&files, theme, opts, rest);
+            let (lines, a) = diff::render(&files, cx, opts, rest);
             anchors = a.shifted(out.len());
             out.extend(lines);
         }
@@ -273,10 +273,10 @@ pub fn render_file_diff(
     root: &Path,
     rel_path: &Path,
     side: git_core::Side,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
-    render_file_diff_marked(root, rel_path, side, theme, opts).map(|(lines, _)| lines)
+    render_file_diff_marked(root, rel_path, side, cx, opts).map(|(lines, _)| lines)
 }
 
 /// `render_file_diff`, with where the hunks start.
@@ -284,14 +284,14 @@ pub fn render_file_diff_marked(
     root: &Path,
     rel_path: &Path,
     side: git_core::Side,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+    let theme = cx.theme;
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let patch = repo.diff_file(rel_path, side).map_err(|e| Error::Unsupported(e.to_string()))?;
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
-    let (mut lines, mut anchors) =
-        diff::render(std::slice::from_ref(&patch), theme, opts, limit + 1);
+    let (mut lines, mut anchors) = diff::render(std::slice::from_ref(&patch), cx, opts, limit + 1);
     // The patch starts with a blank separator line; a single file does not need it.
     if lines.first().is_some_and(|l| l.spans.is_empty()) {
         lines.remove(0);
@@ -314,9 +314,10 @@ pub fn render_files_marked(
     root: &Path,
     rev: &str,
     prefix: &str,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<(Vec<Line<'static>>, Anchors), Error> {
+    let theme = cx.theme;
     let repo = Repo::discover(root).ok_or(Error::NotFound)?;
     let all = repo.patch(rev).map_err(|e| Error::Unsupported(e.to_string()))?;
     let below = format!("{}/", prefix.trim_end_matches('/'));
@@ -325,7 +326,7 @@ pub fn render_files_marked(
         .filter(|f| prefix.is_empty() || f.path == prefix || f.path.starts_with(&below))
         .collect();
     let limit = opts.height.map(usize::from).unwrap_or(MAX_LINES);
-    let (mut lines, mut anchors) = diff::render(&files, theme, opts, limit + 1);
+    let (mut lines, mut anchors) = diff::render(&files, cx, opts, limit + 1);
     if lines.first().is_some_and(|l| l.spans.is_empty()) {
         lines.remove(0);
         anchors.files.iter_mut().for_each(|m| *m = m.saturating_sub(1));

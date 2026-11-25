@@ -1,7 +1,6 @@
 use git_core::Hunk;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 /// The line that opens a hunk: where the change is, by name when there is one (the numbers are in the gutter below).
 /// `before` and `after` are the lines of the file's old and new text, which name the function the hunk sits in.
@@ -9,8 +8,9 @@ pub(super) fn hunk_header(
     h: &Hunk,
     before: &[&str],
     after: &[&str],
-    theme: &Theme,
+    cx: &ui::Context,
 ) -> Line<'static> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let context = if !after.is_empty() {
         context_of(after, h.new_start.saturating_sub(1) as usize)

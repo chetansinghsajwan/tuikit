@@ -1,6 +1,7 @@
 //! Tests for table previews.
 
 use super::*;
+use ui::Theme;
 
 /// Write `body` to a file `name` in a temp folder and return its path.
 fn tmp(name: &str, body: &str) -> std::path::PathBuf {
@@ -27,7 +28,10 @@ fn the_delimiter_is_sniffed_and_quoted_fields_stay_whole() {
     assert_eq!(sniff("a\tb\n1\t2\n"), b'\t');
     assert_eq!(sniff("a|b\n1|2\n"), b'|');
     let p = tmp("q.csv", "name,note\nann,\"one, two\"\nbob,plain\n");
-    let t = flat(&render(&p, kind(&p).unwrap(), &Theme::default(), &Options::default()).unwrap());
+    let t = flat(
+        &render(&p, kind(&p).unwrap(), &ui::Context::new(&Theme::default()), &Options::default())
+            .unwrap(),
+    );
     assert!(t.contains("one, two") && t.contains("csv · 2 columns · 2 of 2 rows"), "{t}");
     assert!(t.contains("╭") && t.contains("name"), "{t}");
 }
@@ -39,7 +43,9 @@ fn numbers_align_right_and_big_files_are_capped_with_a_footer() {
         body.push_str(&format!("{i},thing {i}\n"));
     }
     let p = tmp("big.csv", &body);
-    let lines = render(&p, kind(&p).unwrap(), &Theme::default(), &Options::default()).unwrap();
+    let lines =
+        render(&p, kind(&p).unwrap(), &ui::Context::new(&Theme::default()), &Options::default())
+            .unwrap();
     let t = flat(&lines);
     assert!(t.contains("200 of 500 rows") && t.contains("… 300 more rows"), "{t}");
     assert!(t.contains("│  0 │") || t.contains("│   0 │"), "the id column is right aligned: {t}");
@@ -54,7 +60,7 @@ fn many_columns_are_cut_to_what_fits_and_tsv_uses_tabs() {
         &render(
             &p,
             kind(&p).unwrap(),
-            &Theme::default(),
+            &ui::Context::new(&Theme::default()),
             &Options { width: Some(60), height: None, git: false, focus: None },
         )
         .unwrap(),

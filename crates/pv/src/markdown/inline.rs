@@ -2,7 +2,6 @@
 
 use super::state::Out;
 use ratatui::style::{Color, Modifier, Style};
-use ui::Theme;
 
 impl Out {
     /// Text goes to the code block, the front matter, the image alt text or the paragraph, whichever is open.
@@ -39,14 +38,16 @@ impl Out {
     }
 
     /// Open a link: underlined, with its target kept for the end.
-    pub(super) fn start_link(&mut self, dest_url: &str, theme: &Theme) {
+    pub(super) fn start_link(&mut self, dest_url: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         self.links.push(dest_url.to_string());
         self.styles.push(self.style().fg(Color::from(c.info)).add_modifier(Modifier::UNDERLINED));
     }
 
     /// Close a link: the target follows the text, muted.
-    pub(super) fn end_link(&mut self, theme: &Theme) {
+    pub(super) fn end_link(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         self.styles.pop();
         if let Some(url) = self.links.pop() {
@@ -65,7 +66,8 @@ impl Out {
     }
 
     /// Raw HTML: comments are dropped, other markup shows muted.
-    pub(super) fn html(&mut self, h: &str, theme: &Theme) {
+    pub(super) fn html(&mut self, h: &str, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         // Comments are for the author; other markup shows as it is, muted.
         if !h.trim_start().starts_with("<!--") {

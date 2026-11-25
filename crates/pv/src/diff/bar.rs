@@ -2,7 +2,6 @@ use crate::git;
 use git_core::FilePatch;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 /// A file's header: one tinted bar across the pane with the fold mark, the state letter, the folder muted and the
@@ -13,8 +12,9 @@ pub(crate) fn file_bar(
     added: usize,
     removed: usize,
     width: Option<usize>,
-    theme: &Theme,
+    cx: &ui::Context,
 ) -> Line<'static> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let bar_bg = ui::mix(c.accent.into(), c.bg.into(), 16);
     let kind_color = git::kind_color(theme, f.kind);

@@ -4,11 +4,11 @@ use super::state::Out;
 use pulldown_cmark::HeadingLevel;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 impl Out {
     /// Open a heading: its marker, and the bold accent style.
-    pub(super) fn start_heading(&mut self, level: HeadingLevel, theme: &Theme) {
+    pub(super) fn start_heading(&mut self, level: HeadingLevel, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         let accent = Color::from(theme.colors.accent);
         self.blank();

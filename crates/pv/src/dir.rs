@@ -10,7 +10,6 @@ use ratatui::text::{Line, Span};
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
-use ui::Theme;
 
 /// One entry of a folder, with what the row needs to show.
 struct Entry {
@@ -68,7 +67,8 @@ fn relative(t: Option<SystemTime>) -> String {
 }
 
 /// The `rwx` permission string in three groups; the owner bits are colored, the others muted.
-fn perm_spans(mode: u32, theme: &Theme) -> Vec<Span<'static>> {
+fn perm_spans(mode: u32, cx: &ui::Context) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let mut out = Vec::new();
     for i in 0..9 {
@@ -114,13 +114,14 @@ fn row(
     e: &Entry,
     opts: &Options,
     state: Option<(char, Kind)>,
-    theme: &Theme,
+    cx: &ui::Context,
     extra: Extra,
 ) -> Line<'static> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let (mut trailing, mut signs) = (Vec::new(), Vec::new());
     if opts.width.is_some() {
-        trailing = perm_spans(e.mode, theme);
+        trailing = perm_spans(e.mode, cx);
         if extra.size {
             let size = if e.is_dir { "-".to_string() } else { human_size(e.size) };
             trailing.push(Span::styled(format!("  {size:>6}"), Style::new().fg(c.muted.into())));
@@ -148,7 +149,7 @@ fn row(
         signs,
         ..Default::default()
     };
-    ui::tree::file_row_line(&ui::Context::new(theme), &row, opts.width)
+    ui::tree::file_row_line(cx, &row, opts.width)
 }
 
 /// Levels shown when there is room: the folder's entries are level 1.
@@ -238,9 +239,9 @@ fn weight(n: &Node) -> usize {
     if n.run > 0 { n.run } else { 1 }
 }
 
-/// What the folder renderer passes along: the theme, the options and the git status.
-struct Ctx<'a> {
-    theme: &'a Theme,
+/// What the folder walk passes along: the context, the options and the git status.
+struct Walk<'a> {
+    cx: &'a ui::Context<'a>,
     opts: &'a Options,
     git: &'a Option<(Repo, Status)>,
 }
@@ -248,7 +249,7 @@ struct Ctx<'a> {
 /// Flatten `nodes` into rows. With `cap`, each folder below the top level shows that
 /// many entries and then a `… N more` row; folders are expanded down to `depth` levels.
 fn flatten(
-    cx: &Ctx,
+    walk: &Walk,
     nodes: &[Node],
     unread: bool,
     level: usize,
@@ -256,7 +257,7 @@ fn flatten(
     depth: usize,
     out: &mut Vec<Line<'static>>,
 ) {
-    let c = &cx.theme.colors;
+    let c = &walk.cx.theme.colors;
     let shown = match cap {
         Some(n) if level >= 2 && nodes.len() > n => &nodes[..n],
         _ => nodes,
@@ -266,7 +267,7 @@ fn flatten(
     // Remarks (`… 3 more`) start under the names, after the guides and the icon column.
     let remark = |text: String, style: Style| {
         Line::from(vec![
-            ui::tree::guides(&ui::Context::new(cx.theme), level - 1),
+            ui::tree::guides(walk.cx, level - 1),
             Span::styled(format!("  {text}"), style),
         ])
     };
@@ -281,13 +282,13 @@ fn flatten(
             level - 1,
             open,
             e,
-            cx.opts,
-            state_of(e, cx.git),
-            cx.theme,
+            walk.opts,
+            state_of(e, walk.git),
+            walk.cx,
             Extra { note: if n.empty { Some("(empty)") } else { None }, size: false },
         ));
         if open {
-            flatten(cx, &n.kids, n.unread, level + 1, cap, depth, out);
+            flatten(walk, &n.kids, n.unread, level + 1, cap, depth, out);
         }
     }
     if more {
@@ -301,15 +302,15 @@ fn flatten(
 }
 
 /// Preview of the folder at `path`: its entries as a tree, with git state and metadata.
-pub fn render(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn render(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let limit = opts.height.map(usize::from).unwrap_or(usize::MAX);
     let git = if opts.git { git::load(path) } else { None };
     let mut budget = NODE_CAP;
     let (tree, unread) = load(path, MAX_DEPTH - 1, &mut budget);
-    let cx = Ctx { theme, opts, git: &git };
+    let walk = Walk { cx, opts, git: &git };
     let build = |cap: Option<usize>, depth: usize| {
         let mut out = Vec::new();
-        flatten(&cx, &tree, unread, 1, cap, depth, &mut out);
+        flatten(&walk, &tree, unread, 1, cap, depth, &mut out);
         out
     };
     // Everything, if it fits.
@@ -358,7 +359,7 @@ fn human_size(n: u64) -> String {
 
 /// The folder's own entries as a flat list, `ls -l` style: every entry (dot files and git-ignored ones too,
 /// never `.git`), folders first, with permissions, size, age and the git sign. Rows through the common file row.
-pub fn list(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+pub fn list(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let git = if opts.git { git::load(path) } else { None };
     let mut v: Vec<Entry> = fs::read_dir(path)?
         .flatten()
@@ -383,6 +384,6 @@ pub fn list(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'stat
         b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(v.iter()
-        .map(|e| row(0, false, e, opts, state_of(e, &git), theme, Extra { note: None, size: true }))
+        .map(|e| row(0, false, e, opts, state_of(e, &git), cx, Extra { note: None, size: true }))
         .collect())
 }

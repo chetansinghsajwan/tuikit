@@ -140,7 +140,7 @@ impl Picker {
         // Code colors for the whole text, when the rows are code.
         let colored: Vec<Style> =
             match (&self.row_style.syntax, cand.git.is_none() && cand.loc.is_none()) {
-                (Some(lang), true) => pv::highlight_line(&cand.display, lang, theme)
+                (Some(lang), true) => pv::highlight_line(&cand.display, lang, cx)
                     .into_iter()
                     .flat_map(|(st, piece)| piece.chars().map(move |_| st).collect::<Vec<_>>())
                     .collect(),
@@ -457,12 +457,12 @@ impl Picker {
                     .or(cand.buffer.as_ref().and_then(|b| b.focus)),
             };
             let rendered = match (&cand.git, &cand.buffer) {
-                (Some(g), _) => pv::preview_commit(&self.opts.root, &g.oid, theme, &opts),
+                (Some(g), _) => pv::preview_commit(&self.opts.root, &g.oid, cx, &opts),
                 // An open buffer: its text as shown in the editor, unsaved changes included.
                 (None, Some(b)) => pv::preview_text(
                     std::path::Path::new(cand.path()),
                     b.text.as_bytes(),
-                    theme,
+                    cx,
                     &opts,
                 ),
                 // Plain text with a preview supplied by the embedding tool.
@@ -477,7 +477,7 @@ impl Picker {
                     let out = self.preview_cmd.as_ref().map(|p| p.run(line)).unwrap_or_default();
                     Ok(ui::ansi::parse(&out))
                 }
-                (None, None) => pv::preview(&self.opts.root.join(cand.path()), theme, &opts),
+                (None, None) => pv::preview(&self.opts.root.join(cand.path()), cx, &opts),
             };
             let lines = match rendered {
                 Ok(l) => l,

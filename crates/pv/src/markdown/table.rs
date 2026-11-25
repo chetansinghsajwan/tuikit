@@ -3,7 +3,6 @@ use super::wrap::{clip, line_width, wrap};
 use pulldown_cmark::Alignment;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 use unicode_width::UnicodeWidthStr;
 
 /// A table being collected: the cells (as styled words) of every row, the head row apart.
@@ -35,9 +34,10 @@ fn column_widths(natural: &[usize], room: usize) -> Vec<usize> {
 pub(crate) fn grid_lines(
     head: &[String],
     rows: &[Vec<String>],
-    theme: &Theme,
+    cx: &ui::Context,
     room: usize,
 ) -> (Vec<Vec<Span<'static>>>, usize) {
+    let theme = cx.theme;
     let fg = Style::new().fg(theme.colors.fg.into());
     let n = head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0));
     let shown = n.min((room.saturating_sub(1) / 9).max(1));
@@ -63,11 +63,12 @@ pub(crate) fn grid_lines(
         row: Vec::new(),
         in_head: false,
     };
-    (table_lines(&table, theme, room), n - shown)
+    (table_lines(&table, cx, room), n - shown)
 }
 
 /// The lines of a table: bordered, the head row bold, cells wrapped, aligned as the table says.
-pub(super) fn table_lines(t: &Table, theme: &Theme, room: usize) -> Vec<Vec<Span<'static>>> {
+pub(super) fn table_lines(t: &Table, cx: &ui::Context, room: usize) -> Vec<Vec<Span<'static>>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let (muted, accent) = (
         Style::new().fg(c.muted.into()),
@@ -193,10 +194,10 @@ impl super::state::Out {
     }
 
     /// Close a table: draw it.
-    pub(super) fn end_table(&mut self, theme: &Theme) {
+    pub(super) fn end_table(&mut self, cx: &ui::Context) {
         if let Some(t) = self.table.take() {
             let room = self.width.saturating_sub(self.prefix_width());
-            for spans in table_lines(&t, theme, room) {
+            for spans in table_lines(&t, cx, room) {
                 self.push_line(spans);
             }
             self.lines.push(Line::default());

@@ -1,6 +1,7 @@
 //! Tests for PDF previews.
 
 use super::*;
+use ui::Theme;
 
 #[test]
 fn a_pdf_made_by_hand_shows_its_pages_and_text() {
@@ -30,7 +31,7 @@ fn a_pdf_made_by_hand_shows_its_pages_and_text() {
     let p = d.join("hello.pdf");
     doc.save(&p).unwrap();
     assert!(is_pdf(&p));
-    let lines = render(&p, &Theme::default(), &Options::default()).unwrap();
+    let lines = render(&p, &ui::Context::new(&Theme::default()), &Options::default()).unwrap();
     let t: String = lines
         .iter()
         .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>() + "\n")

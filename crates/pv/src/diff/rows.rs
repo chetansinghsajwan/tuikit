@@ -5,7 +5,6 @@ use crate::git::{self, PatchKind};
 use git_core::{FilePatch, Hunk};
 use ratatui::style::{Color, Modifier, Style};
 use std::ops::Range;
-use ui::Theme;
 
 /// The text of a hunk as the old file (context and removed lines) and as the new one (context and added lines).
 fn hunk_sides(h: &Hunk) -> (String, String) {
@@ -42,7 +41,8 @@ pub(super) struct Row {
 }
 
 /// The rows of one hunk with the syntax and word marks applied.
-pub(super) fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
+pub(super) fn hunk_rows(h: &Hunk, file: &FilePatch, cx: &ui::Context) -> Vec<Row> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let (add, del) = (Color::from(c.git.added), Color::from(c.git.deleted));
     let (add_bg, del_bg) = (git::tint(theme, add), git::tint(theme, del));
@@ -54,8 +54,8 @@ pub(super) fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
         let (os, ns) =
             (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize);
         (
-            highlight_window(&file.before, &file.path, theme, os, os + h.old_len as usize),
-            highlight_window(&file.after, &file.path, theme, ns, ns + h.new_len as usize),
+            highlight_window(&file.before, &file.path, cx, os, os + h.old_len as usize),
+            highlight_window(&file.after, &file.path, cx, ns, ns + h.new_len as usize),
         )
     } else {
         (Vec::new(), Vec::new())
@@ -64,7 +64,7 @@ pub(super) fn hunk_rows(h: &Hunk, file: &FilePatch, theme: &Theme) -> Vec<Row> {
         (Vec::new(), Vec::new())
     } else {
         let (o, n) = hunk_sides(h);
-        (highlight(&o, &file.path, theme, usize::MAX), highlight(&n, &file.path, theme, usize::MAX))
+        (highlight(&o, &file.path, cx, usize::MAX), highlight(&n, &file.path, cx, usize::MAX))
     };
     let (mut old_idx, mut new_idx) = if whole {
         (h.old_start.saturating_sub(1) as usize, h.new_start.saturating_sub(1) as usize)

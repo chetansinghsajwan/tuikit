@@ -29,7 +29,6 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use rows::hunk_rows;
 use side::side_rows;
-use ui::Theme;
 
 /// Width from which a patch is drawn in two columns, old beside new.
 pub const SIDE_BY_SIDE_MIN: u16 = 140;
@@ -37,10 +36,11 @@ pub const SIDE_BY_SIDE_MIN: u16 = 140;
 /// The drawn patch of `files`: lines (at most `limit`) and where the files and hunks start.
 pub fn render(
     files: &[FilePatch],
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
     limit: usize,
 ) -> (Vec<Line<'static>>, Anchors) {
+    let theme = cx.theme;
     highlight::reset_budget();
     let c = &theme.colors;
     let mut out: Vec<Line<'static>> = Vec::new();
@@ -67,7 +67,7 @@ pub fn render(
         anchors.paths.push(f.path.clone());
         let (added, removed) = counts(f);
         let folded = !f.binary && is_folded(f, added + removed);
-        out.push(file_bar(f, folded, added, removed, width, theme));
+        out.push(file_bar(f, folded, added, removed, width, cx));
         if f.binary {
             out.push(Line::from(Span::styled("  binary file not shown", muted)));
             continue;
@@ -86,16 +86,16 @@ pub fn render(
                 return (out, anchors);
             }
             anchors.hunks.push(out.len());
-            out.push(hunk_header(h, &before_lines, &after_lines, theme));
-            let rows = hunk_rows(h, f, theme);
+            out.push(hunk_header(h, &before_lines, &after_lines, cx));
+            let rows = hunk_rows(h, f, cx);
             if side_by_side {
-                side_rows(&rows, digits, width.unwrap_or(0), theme, &mut out, limit);
+                side_rows(&rows, digits, width.unwrap_or(0), cx, &mut out, limit);
             } else {
                 for r in &rows {
                     if out.len() >= limit {
                         return (out, anchors);
                     }
-                    out.push(unified_row(r, digits, width, theme));
+                    out.push(unified_row(r, digits, width, cx));
                 }
             }
         }

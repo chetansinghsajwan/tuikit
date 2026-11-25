@@ -192,7 +192,7 @@ impl Panel {
             let (lines, hunks) = if submodule {
                 (self.submodule_lines(&rel_path, cx), Vec::new())
             } else {
-                match pv::preview_diff_marked(&self.root, &rel_path, side, theme, &opts) {
+                match pv::preview_diff_marked(&self.root, &rel_path, side, cx, &opts) {
                     Ok((l, a)) => (l, a.hunks),
                     Err(e) => (
                         vec![Line::from(Span::styled(

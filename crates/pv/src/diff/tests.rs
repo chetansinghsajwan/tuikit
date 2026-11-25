@@ -5,6 +5,7 @@ use super::*;
 use crate::git::PatchKind;
 use git_core::{Kind, PatchLine};
 use ratatui::style::Modifier;
+use ui::Theme;
 
 /// A patch of `src/lib.rs` going from `old` to `new`.
 fn patch(old: &str, new: &str) -> FilePatch {
@@ -34,7 +35,8 @@ const NEW: &str = "fn main() {\n    let total = count + step;\n    println!(\"{t
 #[test]
 fn rows_carry_both_line_numbers_and_the_function_context() {
     let opts = Options { width: Some(80), ..Options::default() };
-    let (lines, anchors) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+    let (lines, anchors) =
+        render(&[patch(OLD, NEW)], &ui::Context::new(&Theme::default()), &opts, 100);
     let t = text(&lines);
     assert!(t.iter().any(|l| l.starts_with("  ⋯ line 1")), "{t:#?}");
     // A hunk header names the function it sits in when it starts below it.
@@ -43,7 +45,8 @@ fn rows_carry_both_line_numbers_and_the_function_context() {
         "    // pad\n".repeat(6)
     );
     let long_new = long_old.replace("let a = 1", "let a = 2");
-    let (lines, _) = render(&[patch(&long_old, &long_new)], &Theme::default(), &opts, 100);
+    let (lines, _) =
+        render(&[patch(&long_old, &long_new)], &ui::Context::new(&Theme::default()), &opts, 100);
     assert!(
         text(&lines).iter().any(|l| l.starts_with("  ⋯ line") && l.contains("fn second()")),
         "{:#?}",
@@ -61,18 +64,19 @@ fn big_and_generated_files_fold_by_themselves_and_a_fold_can_be_toggled() {
     let opts = Options { width: Some(80), ..Options::default() };
     let mut lock = patch("a\n", "a\nb\n");
     lock.path = "Cargo.lock".into();
-    let (lines, _) = render(&[lock.clone()], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[lock.clone()], &ui::Context::new(&Theme::default()), &opts, 100);
     let t = text(&lines);
     assert!(
         t.iter().any(|l| l.contains("folded")) && !t.iter().any(|l| l.contains("⋯ line")),
         "{t:#?}"
     );
     toggle_fold("Cargo.lock");
-    let (lines, _) = render(&[lock], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[lock], &ui::Context::new(&Theme::default()), &opts, 100);
     assert!(text(&lines).iter().any(|l| l.contains("⋯ line")));
     // An ordinary file folds by hand.
     toggle_fold("src/lib.rs");
-    let (lines, anchors) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+    let (lines, anchors) =
+        render(&[patch(OLD, NEW)], &ui::Context::new(&Theme::default()), &opts, 100);
     assert!(text(&lines).iter().any(|l| l.contains("folded")));
     assert_eq!(anchors.paths, vec!["src/lib.rs".to_string()]);
     reset_folds();
@@ -83,7 +87,7 @@ fn whitespace_only_changes_are_dimmed_or_shown_as_unchanged() {
     let opts = Options { width: Some(80), ..Options::default() };
     let (old, new) = ("a\n  b\nc\n", "a\n\tb\nc\nd\n");
     set_ignore_whitespace(false);
-    let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[patch(old, new)], &ui::Context::new(&Theme::default()), &opts, 100);
     let t = text(&lines);
     assert!(
         t.iter().any(|l| l.contains("- ") && l.contains("  b"))
@@ -91,7 +95,7 @@ fn whitespace_only_changes_are_dimmed_or_shown_as_unchanged() {
         "{t:#?}"
     );
     set_ignore_whitespace(true);
-    let (lines, _) = render(&[patch(old, new)], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[patch(old, new)], &ui::Context::new(&Theme::default()), &opts, 100);
     let t = text(&lines);
     assert!(!t.iter().any(|l| l.contains(" - ")), "the removed whitespace line is gone: {t:#?}");
     assert!(t.iter().any(|l| l.contains("+ d")), "{t:#?}");
@@ -110,7 +114,7 @@ fn a_line_that_does_not_fit_ends_in_a_marker() {
 #[test]
 fn the_changed_word_gets_a_stronger_background_than_the_rest_of_its_row() {
     let opts = Options { width: Some(80), ..Options::default() };
-    let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[patch(OLD, NEW)], &ui::Context::new(&Theme::default()), &opts, 100);
     let added = lines
         .iter()
         .find(|l| l.spans.iter().any(|s| s.content.contains("step")))
@@ -126,7 +130,7 @@ fn the_changed_word_gets_a_stronger_background_than_the_rest_of_its_row() {
 #[test]
 fn code_is_syntax_highlighted_inside_the_diff() {
     let opts = Options { width: Some(80), ..Options::default() };
-    let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[patch(OLD, NEW)], &ui::Context::new(&Theme::default()), &opts, 100);
     let colours: std::collections::HashSet<_> =
         lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
     assert!(colours.len() >= 5, "{colours:?}");
@@ -135,8 +139,12 @@ fn code_is_syntax_highlighted_inside_the_diff() {
 #[test]
 fn trailing_whitespace_on_an_added_line_and_conflict_markers_are_called_out() {
     let opts = Options { width: Some(80), ..Options::default() };
-    let (lines, _) =
-        render(&[patch("a\nb\n", "a\nb  \n<<<<<<< HEAD\n")], &Theme::default(), &opts, 100);
+    let (lines, _) = render(
+        &[patch("a\nb\n", "a\nb  \n<<<<<<< HEAD\n")],
+        &ui::Context::new(&Theme::default()),
+        &opts,
+        100,
+    );
     let ws = lines
         .iter()
         .find(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>().contains("+ b  "))
@@ -158,8 +166,12 @@ fn renames_and_mode_changes_show_in_the_file_header() {
     p.kind = Kind::Renamed;
     p.old_path = Some("src/old.rs".into());
     p.modes = Some(("100644".into(), "100755".into()));
-    let (lines, _) =
-        render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
+    let (lines, _) = render(
+        &[p],
+        &ui::Context::new(&Theme::default()),
+        &Options { width: Some(80), ..Options::default() },
+        100,
+    );
     let t = text(&lines);
     assert!(
         t.iter()
@@ -171,7 +183,7 @@ fn renames_and_mode_changes_show_in_the_file_header() {
 #[test]
 fn wide_screens_draw_old_beside_new() {
     let opts = Options { width: Some(160), ..Options::default() };
-    let (lines, _) = render(&[patch(OLD, NEW)], &Theme::default(), &opts, 100);
+    let (lines, _) = render(&[patch(OLD, NEW)], &ui::Context::new(&Theme::default()), &opts, 100);
     let t = text(&lines);
     let pair = t
         .iter()
@@ -205,8 +217,12 @@ fn a_file_too_big_to_keep_whole_is_still_highlighted_per_hunk() {
     let mut p = patch(OLD, NEW);
     p.before.clear();
     p.after.clear();
-    let (lines, _) =
-        render(&[p], &Theme::default(), &Options { width: Some(80), ..Options::default() }, 100);
+    let (lines, _) = render(
+        &[p],
+        &ui::Context::new(&Theme::default()),
+        &Options { width: Some(80), ..Options::default() },
+        100,
+    );
     let colours: std::collections::HashSet<_> =
         lines.iter().flat_map(|l| &l.spans).filter_map(|s| s.style.fg).collect();
     assert!(colours.len() >= 5, "{colours:?}");
@@ -239,8 +255,11 @@ diff --git a/img.png b/img.png\nBinary files a/img.png and b/img.png differ\n";
 fn unified_render_keeps_the_header_and_draws_the_patch() {
     let theme = Theme::default();
     let opts = Options { width: Some(80), height: None, git: false, focus: None };
-    let out =
-        text(&render_unified("commit abc\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n", &theme, &opts));
+    let out = text(&render_unified(
+        "commit abc\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n",
+        &ui::Context::new(&theme),
+        &opts,
+    ));
     assert_eq!(out[0], "commit abc");
     assert!(out.iter().any(|l| l.contains('b')) && out.iter().any(|l| l.contains("x")));
 }

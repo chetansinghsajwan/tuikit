@@ -1,6 +1,7 @@
 //! Tests for image, audio and video previews.
 
 use super::*;
+use ui::Theme;
 
 /// The text of a line, with the styles dropped.
 fn flat(l: &Line) -> String {
@@ -36,7 +37,7 @@ fn an_image_is_drawn_in_half_blocks_that_fit() {
     img.save(&f).unwrap();
     let lines = image(
         &f,
-        &Theme::default(),
+        &ui::Context::new(&Theme::default()),
         &Options { width: Some(21), height: Some(8), git: false, focus: None },
     )
     .unwrap();
@@ -55,7 +56,7 @@ fn a_broken_audio_file_is_unsupported_not_a_panic() {
     let f = d.join("x.mp3");
     std::fs::write(&f, b"not audio").unwrap();
     assert!(matches!(
-        render(&f, Kind::Audio, &Theme::default(), &Options::default()),
+        render(&f, Kind::Audio, &ui::Context::new(&Theme::default()), &Options::default()),
         Err(Error::Unsupported(_))
     ));
 }

@@ -3,7 +3,6 @@
 use super::state::Out;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ui::Theme;
 
 impl Out {
     /// Close a paragraph.
@@ -15,7 +14,8 @@ impl Out {
     }
 
     /// A horizontal rule.
-    pub(super) fn rule(&mut self, theme: &Theme) {
+    pub(super) fn rule(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         self.flush();
         let w = self.width.saturating_sub(self.prefix_width()).min(60);

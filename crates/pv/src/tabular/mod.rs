@@ -7,7 +7,6 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use ui::Theme;
 
 /// How many rows are drawn.
 pub const ROW_CAP: usize = 200;
@@ -79,9 +78,10 @@ fn commas(n: usize) -> String {
 pub fn render(
     path: &Path,
     kind: Kind,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
+    let theme = cx.theme;
     let muted = Style::new().fg(theme.colors.muted.into());
     let (name, head, rows, total, more_than, extra) = match kind {
         Kind::Delimited(delim) => delimited(path, delim)?,
@@ -94,7 +94,7 @@ pub fn render(
         .unwrap_or(ROW_CAP)
         .min(ROW_CAP);
     let shown_rows: Vec<Vec<String>> = rows.iter().take(cap).cloned().collect();
-    let (table, hidden_cols) = crate::markdown::grid_lines(&head, &shown_rows, theme, room);
+    let (table, hidden_cols) = crate::markdown::grid_lines(&head, &shown_rows, cx, room);
     let mut facts = format!(
         "{name} · {} column{}",
         head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0)),

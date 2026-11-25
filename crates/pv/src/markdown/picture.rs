@@ -3,7 +3,6 @@
 use super::state::Out;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use ui::Theme;
 
 /// The tallest an inline image gets, in rows.
 const IMAGE_ROWS: u16 = 16;
@@ -17,7 +16,8 @@ impl Out {
     }
 
     /// Close an image: the picture when it is a local file that fits, else its alt text and target.
-    pub(super) fn end_image(&mut self, theme: &Theme) {
+    pub(super) fn end_image(&mut self, cx: &ui::Context) {
+        let theme = cx.theme;
         let muted = Color::from(theme.colors.muted);
         if let Some((url, alt)) = self.image.take() {
             let local = if url.contains("://") {
@@ -30,7 +30,7 @@ impl Out {
                 .and_then(|p| {
                     let cols =
                         (self.width.saturating_sub(self.prefix_width() + 1) as u16).min(IMAGE_COLS);
-                    crate::media::image_rows(&p, theme, cols, IMAGE_ROWS).ok()
+                    crate::media::image_rows(&p, cx, cols, IMAGE_ROWS).ok()
                 });
             match picture {
                 Some(rows) => {

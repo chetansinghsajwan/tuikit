@@ -9,7 +9,6 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::path::Path;
 use std::time::Duration;
-use ui::Theme;
 
 /// The kind of media a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,13 +36,13 @@ pub fn kind(path: &Path) -> Option<Kind> {
 pub fn render(
     path: &Path,
     kind: Kind,
-    theme: &Theme,
+    cx: &ui::Context,
     opts: &Options,
 ) -> Result<Vec<Line<'static>>, Error> {
     match kind {
-        Kind::Image => image(path, theme, opts),
-        Kind::Audio => audio(path, theme),
-        Kind::Video => video(path, theme),
+        Kind::Image => image(path, cx, opts),
+        Kind::Audio => audio(path, cx),
+        Kind::Video => video(path, cx),
     }
 }
 
@@ -69,7 +68,8 @@ pub fn duration_text(d: Duration) -> String {
 }
 
 /// `label  value` rows, the labels aligned.
-fn facts(theme: &Theme, rows: &[(&str, String)]) -> Vec<Line<'static>> {
+fn facts(cx: &ui::Context, rows: &[(&str, String)]) -> Vec<Line<'static>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let w = rows.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
     rows.iter()
@@ -88,26 +88,26 @@ fn unreadable(what: &str, e: impl std::fmt::Display) -> Error {
 }
 
 /// An image: its size, then the picture drawn with half blocks to fit the room.
-fn image(path: &Path, theme: &Theme, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
+fn image(path: &Path, cx: &ui::Context, opts: &Options) -> Result<Vec<Line<'static>>, Error> {
     let img = image::ImageReader::open(path)?
         .with_guessed_format()?
         .decode()
         .map_err(|e| unreadable("image", e))?;
     let (w, h) = img.dimensions();
     let bytes = std::fs::metadata(path)?.len();
-    let mut out = facts(theme, &[("image", format!("{w}×{h}  {}", size_text(bytes)))]);
+    let mut out = facts(cx, &[("image", format!("{w}×{h}  {}", size_text(bytes)))]);
     out.push(Line::default());
     let cols = u32::from(opts.width.unwrap_or(80)).saturating_sub(1).max(1);
     let rows =
         opts.height.map(|h| u32::from(h).saturating_sub(out.len() as u32)).unwrap_or(30).max(1);
-    out.extend(picture(&img, theme, cols, rows));
+    out.extend(picture(&img, cx, cols, rows));
     Ok(out)
 }
 
 /// The image file as half-block rows, at most `cols` wide and `rows` tall.
 pub fn image_rows(
     path: &Path,
-    theme: &Theme,
+    cx: &ui::Context,
     cols: u16,
     rows: u16,
 ) -> Result<Vec<Line<'static>>, Error> {
@@ -115,11 +115,17 @@ pub fn image_rows(
         .with_guessed_format()?
         .decode()
         .map_err(|e| unreadable("image", e))?;
-    Ok(picture(&img, theme, u32::from(cols).max(1), u32::from(rows).max(1)))
+    Ok(picture(&img, cx, u32::from(cols).max(1), u32::from(rows).max(1)))
 }
 
 /// A cell is one pixel wide and two tall.
-fn picture(img: &image::DynamicImage, theme: &Theme, cols: u32, rows: u32) -> Vec<Line<'static>> {
+fn picture(
+    img: &image::DynamicImage,
+    cx: &ui::Context,
+    cols: u32,
+    rows: u32,
+) -> Vec<Line<'static>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let mut out = Vec::new();
     let small = img.resize(cols, rows * 2, image::imageops::FilterType::Triangle).to_rgba8();
@@ -148,7 +154,7 @@ fn picture(img: &image::DynamicImage, theme: &Theme, cols: u32, rows: u32) -> Ve
 }
 
 /// An audio file: its tags, length, bitrate, format and size, as `facts`.
-fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
+fn audio(path: &Path, cx: &ui::Context) -> Result<Vec<Line<'static>>, Error> {
     use lofty::prelude::*;
     let bytes = std::fs::metadata(path)?.len();
     let file = lofty::read_from_path(path).map_err(|e| unreadable("audio", e))?;
@@ -184,11 +190,12 @@ fn audio(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
     }
     rows.push(("format", format!("{:?}", file.file_type())));
     rows.push(("size", size_text(bytes)));
-    Ok(facts(theme, &rows))
+    Ok(facts(cx, &rows))
 }
 
 /// A video file: what its container says (length, audio codec, format) and its size, as `facts`.
-fn video(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
+fn video(path: &Path, cx: &ui::Context) -> Result<Vec<Line<'static>>, Error> {
+    let theme = cx.theme;
     let bytes = std::fs::metadata(path)?.len();
     let mut rows: Vec<(&str, String)> = Vec::new();
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -222,7 +229,7 @@ fn video(path: &Path, theme: &Theme) -> Result<Vec<Line<'static>>, Error> {
         rows.push(("format", ext.to_uppercase()));
     }
     rows.push(("size", size_text(bytes)));
-    let mut out = facts(theme, &rows);
+    let mut out = facts(cx, &rows);
     if !matches!(ext.as_str(), "mp4" | "m4v" | "mov") {
         out.push(Line::default());
         out.push(Line::from(Span::styled(
