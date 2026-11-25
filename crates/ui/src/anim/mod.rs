@@ -72,13 +72,13 @@ pub fn spinner() -> &'static str {
 /// How long the event loop may wait for input: a frame while something moves, `idle` otherwise.
 /// Call it after drawing, when the frame has said what it needs.
 pub fn poll_timeout(idle: Duration) -> Duration {
-    if STATE.with(|s| s.borrow().wanted) { FRAME.min(idle) } else { idle }
+    default_motion().poll_timeout(idle)
 }
 
 /// Whether the last frame was still moving, so the loop draws again even without input.
 /// Call it when the wait for input timed out; it clears the request, and drawing sets it anew.
 pub fn take_redraw() -> bool {
-    STATE.with(|s| std::mem::take(&mut s.borrow_mut().wanted))
+    default_motion().take_redraw()
 }
 
 /// Easing curve that starts fast and settles slowly, so motion feels soft where it stops.
@@ -136,14 +136,32 @@ struct State {
     frame: Option<Buffer>,
 }
 
+/// The memory of the animator: what the last frames showed and the motion under way. A `Context` carries
+/// one, so a component reaches it through its context and a test builds its own. Drawing happens on one
+/// thread, so the state sits in a `RefCell` and needs no lock.
+pub struct Motion {
+    state: RefCell<State>,
+}
+
+impl Default for Motion {
+    fn default() -> Self {
+        Motion { state: RefCell::new(State { first: true, ..State::default() }) }
+    }
+}
+
 thread_local! {
-    /// The animator's state. Thread-local because drawing happens on one thread and needs no lock.
-    static STATE: RefCell<State> = RefCell::new(State { first: true, ..State::default() });
+    /// The process-wide `Motion` that the free functions below act on, for code not yet moved to `Context`.
+    static DEFAULT: &'static Motion = Box::leak(Box::default());
+}
+
+/// The process-wide `Motion`: what the shell finishes each frame and what `Context::new` hands out.
+pub fn default_motion() -> &'static Motion {
+    DEFAULT.with(|m| *m)
 }
 
 /// Ask for another frame soon, because something is still moving.
 fn want() {
-    STATE.with(|s| s.borrow_mut().wanted = true);
+    default_motion().want();
 }
 
 /// Whether motion is fully on (not reduced or off). A component that moves on its own, such as a
@@ -168,24 +186,17 @@ pub fn hash_of(v: &impl Hash) -> u64 {
 /// it shows apart from the cursor. `finish` then glides a scrolled list, reveals rows a fold opened and flashes
 /// rows whose content changed.
 pub fn note_row(pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
-    STATE.with(|s| {
-        s.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar })
-    });
+    default_motion().note_row(pane, y, id, content, bar);
 }
 
 /// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it fades in over it.
 pub fn overlay(buf: &Buffer, rect: Rect) {
-    let rect = rect.intersection(buf.area);
-    let under = (rect.top()..rect.bottom())
-        .flat_map(|y| (rect.left()..rect.right()).map(move |x| (x, y)))
-        .map(|p| buf[p].clone())
-        .collect();
-    STATE.with(|s| s.borrow_mut().overlays.push((rect, under)));
+    default_motion().overlay(buf, rect);
 }
 
 /// A tab strip at `strip` shows tab `active` over `content`; when the tab changes, the content fades in.
 pub fn tab(strip: (u16, u16), active: usize, content: Rect) {
-    STATE.with(|s| s.borrow_mut().tabs.push((strip, active, content)));
+    default_motion().tab(strip, active, content);
 }
 
 /// How long a row a fold opened takes to fade in.
@@ -246,206 +257,260 @@ fn scrolled(prev: &[RowRec], cur: &[RowRec]) -> Option<i32> {
 /// lists glide to a new scroll position, rows a fold opened reveal one by one, rows that changed flash, popups
 /// and new tabs fade in, and the cursor row fades in. All of it only recolors or moves what the tool drew.
 pub fn finish(buf: &mut Buffer, theme: &Theme) {
-    let on = mode() == Mode::On && matches!(theme.colors.bg.into(), Color::Rgb(..));
-    let bg: Color = theme.colors.bg.into();
-    let now = Instant::now();
-    let area = buf.area;
-    let truth = buf.clone();
-    STATE.with(|s| {
-        let mut st = s.borrow_mut();
-        let st = &mut *st;
-        let rows = std::mem::take(&mut st.rows);
-        let overlays = std::mem::take(&mut st.overlays);
-        let tabs = std::mem::take(&mut st.tabs);
-        let frame = st.frame.replace(truth.clone());
-        if !on {
-            st.panes.clear();
-            return;
-        }
-        let steady = frame.as_ref().is_some_and(|f| f.area == area);
-        let mut moving = false;
-        let mut gliding = false;
+    default_motion().finish(buf, theme);
+}
 
-        // Lists.
-        st.panes.retain(|k, _| rows.contains_key(k));
-        for (key, cur) in rows {
-            let pane = st.panes.entry(key).or_default();
-            let prev = std::mem::replace(&mut pane.rows, cur.clone());
-            let mut started = false;
-            if steady && !prev.is_empty() {
-                if let Some(d) = scrolled(&prev, &cur) {
-                    pane.scroll = frame.clone().map(|from| Scroll {
-                        from,
-                        d,
-                        began: now,
-                        rect: bounds(&cur),
-                    });
-                    started = true;
-                } else if pane.scroll.is_none() {
-                    let old: HashMap<u64, usize> =
-                        prev.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
-                    let mut run = 0;
-                    for (i, r) in cur.iter().enumerate() {
-                        match old.get(&r.id) {
-                            None => {
-                                // New in the middle of rows that were there: a fold opened. Rows at the edges are scrolling in.
-                                let inside = cur[..i].iter().any(|p| old.contains_key(&p.id))
-                                    && cur[i..].iter().any(|n| old.contains_key(&n.id));
-                                if inside {
-                                    pane.born.insert(r.id, now + STAGGER * run);
-                                    run += 1;
+impl Motion {
+    /// A motion memory with nothing seen yet.
+    pub fn new() -> Motion {
+        Motion::default()
+    }
+
+    fn want(&self) {
+        self.state.borrow_mut().wanted = true;
+    }
+
+    /// Asks for the next frame, for a component that is still moving (see [`is_on`]).
+    pub fn request_frame(&self) {
+        self.want();
+    }
+
+    /// How long the event loop may wait for input: a frame while something moves, `idle` otherwise.
+    pub fn poll_timeout(&self, idle: Duration) -> Duration {
+        if self.state.borrow().wanted { FRAME.min(idle) } else { idle }
+    }
+
+    /// Whether the last frame was still moving; clears the request.
+    pub fn take_redraw(&self) -> bool {
+        std::mem::take(&mut self.state.borrow_mut().wanted)
+    }
+
+    /// A row component notes each row it drew (see [`note_row`]).
+    pub fn note_row(&self, pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
+        self.state.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar });
+    }
+
+    /// An overlay is about to be drawn into `rect` (see [`overlay`]).
+    pub fn overlay(&self, buf: &Buffer, rect: Rect) {
+        let rect = rect.intersection(buf.area);
+        let under = (rect.top()..rect.bottom())
+            .flat_map(|y| (rect.left()..rect.right()).map(move |x| (x, y)))
+            .map(|p| buf[p].clone())
+            .collect();
+        self.state.borrow_mut().overlays.push((rect, under));
+    }
+
+    /// A tab strip shows tab `active` over `content` (see [`tab`]).
+    pub fn tab(&self, strip: (u16, u16), active: usize, content: Rect) {
+        self.state.borrow_mut().tabs.push((strip, active, content));
+    }
+
+    /// The motion of the frame just drawn into `buf` (see [`finish`]).
+    pub fn finish(&self, buf: &mut Buffer, theme: &Theme) {
+        let on = mode() == Mode::On && matches!(theme.colors.bg.into(), Color::Rgb(..));
+        let bg: Color = theme.colors.bg.into();
+        let now = Instant::now();
+        let area = buf.area;
+        let truth = buf.clone();
+        {
+            let mut st = self.state.borrow_mut();
+            let st = &mut *st;
+            let rows = std::mem::take(&mut st.rows);
+            let overlays = std::mem::take(&mut st.overlays);
+            let tabs = std::mem::take(&mut st.tabs);
+            let frame = st.frame.replace(truth.clone());
+            if !on {
+                st.panes.clear();
+                return;
+            }
+            let steady = frame.as_ref().is_some_and(|f| f.area == area);
+            let mut moving = false;
+            let mut gliding = false;
+
+            // Lists.
+            st.panes.retain(|k, _| rows.contains_key(k));
+            for (key, cur) in rows {
+                let pane = st.panes.entry(key).or_default();
+                let prev = std::mem::replace(&mut pane.rows, cur.clone());
+                let mut started = false;
+                if steady && !prev.is_empty() {
+                    if let Some(d) = scrolled(&prev, &cur) {
+                        pane.scroll = frame.clone().map(|from| Scroll {
+                            from,
+                            d,
+                            began: now,
+                            rect: bounds(&cur),
+                        });
+                        started = true;
+                    } else if pane.scroll.is_none() {
+                        let old: HashMap<u64, usize> =
+                            prev.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
+                        let mut run = 0;
+                        for (i, r) in cur.iter().enumerate() {
+                            match old.get(&r.id) {
+                                None => {
+                                    // New in the middle of rows that were there: a fold opened. Rows at the edges are scrolling in.
+                                    let inside = cur[..i].iter().any(|p| old.contains_key(&p.id))
+                                        && cur[i..].iter().any(|n| old.contains_key(&n.id));
+                                    if inside {
+                                        pane.born.insert(r.id, now + STAGGER * run);
+                                        run += 1;
+                                    }
+                                }
+                                Some(&j) => {
+                                    run = 0;
+                                    if prev[j].content != r.content {
+                                        pane.flash.insert(r.id, now);
+                                    }
                                 }
                             }
-                            Some(&j) => {
-                                run = 0;
-                                if prev[j].content != r.content {
-                                    pane.flash.insert(r.id, now);
-                                }
+                        }
+                    }
+                }
+                let _ = started;
+
+                // The glide: show the frames between the old and the new position.
+                if let Some(sc) = &pane.scroll {
+                    let t = progress(sc.began, now, GLIDE);
+                    if t >= 1.0 || sc.from.area != area {
+                        pane.scroll = None;
+                    } else {
+                        gliding = true;
+                        moving = true;
+                        let shift = (sc.d.abs() as f32 * (1.0 - ease_out(t))).round() as i32
+                            * sc.d.signum();
+                        let r = sc.rect;
+                        for y in r.top()..r.bottom() {
+                            let v = i32::from(y) - shift;
+                            for x in r.left()..r.right() {
+                                let src = if v >= i32::from(r.top()) && v < i32::from(r.bottom()) {
+                                    Some(&truth[(x, v as u16)])
+                                } else {
+                                    let o = v + sc.d;
+                                    (o >= i32::from(r.top()) && o < i32::from(r.bottom()))
+                                        .then(|| &sc.from[(x, o as u16)])
+                                };
+                                buf[(x, y)] = src.cloned().unwrap_or_default();
+                            }
+                        }
+                    }
+                }
+
+                // Reveal and flash on the rows as drawn (not while the list glides: the rows are elsewhere).
+                if pane.scroll.is_none() {
+                    pane.born.retain(|_, b| progress(*b, now, REVEAL) < 1.0);
+                    pane.flash.retain(|_, b| progress(*b, now, FLASH) < 1.0);
+                    for r in &cur {
+                        let reveal = pane.born.get(&r.id).map(|b| progress(*b, now, REVEAL));
+                        let flash =
+                            pane.flash.get(&r.id).map(|b| ease_out(progress(*b, now, FLASH)));
+                        if reveal.is_none() && flash.is_none() {
+                            continue;
+                        }
+                        moving = true;
+                        for x in r.bar.left()..r.bar.right() {
+                            let cell = &mut buf[(x, r.y)];
+                            let cbg = rgb(cell.bg, bg);
+                            if let Some(p) = reveal
+                                && let Color::Rgb(..) = cell.fg
+                            {
+                                cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
+                            }
+                            if let Some(e) = flash {
+                                cell.set_bg(mix(
+                                    theme.colors.accent.into(),
+                                    cbg,
+                                    (24.0 * (1.0 - e)) as u8,
+                                ));
                             }
                         }
                     }
                 }
             }
-            let _ = started;
 
-            // The glide: show the frames between the old and the new position.
-            if let Some(sc) = &pane.scroll {
-                let t = progress(sc.began, now, GLIDE);
-                if t >= 1.0 || sc.from.area != area {
-                    pane.scroll = None;
-                } else {
-                    gliding = true;
-                    moving = true;
-                    let shift =
-                        (sc.d.abs() as f32 * (1.0 - ease_out(t))).round() as i32 * sc.d.signum();
-                    let r = sc.rect;
-                    for y in r.top()..r.bottom() {
-                        let v = i32::from(y) - shift;
-                        for x in r.left()..r.right() {
-                            let src = if v >= i32::from(r.top()) && v < i32::from(r.bottom()) {
-                                Some(&truth[(x, v as u16)])
-                            } else {
-                                let o = v + sc.d;
-                                (o >= i32::from(r.top()) && o < i32::from(r.bottom()))
-                                    .then(|| &sc.from[(x, o as u16)])
-                            };
-                            buf[(x, y)] = src.cloned().unwrap_or_default();
-                        }
-                    }
-                }
-            }
-
-            // Reveal and flash on the rows as drawn (not while the list glides: the rows are elsewhere).
-            if pane.scroll.is_none() {
-                pane.born.retain(|_, b| progress(*b, now, REVEAL) < 1.0);
-                pane.flash.retain(|_, b| progress(*b, now, FLASH) < 1.0);
-                for r in &cur {
-                    let reveal = pane.born.get(&r.id).map(|b| progress(*b, now, REVEAL));
-                    let flash = pane.flash.get(&r.id).map(|b| ease_out(progress(*b, now, FLASH)));
-                    if reveal.is_none() && flash.is_none() {
-                        continue;
-                    }
-                    moving = true;
-                    for x in r.bar.left()..r.bar.right() {
-                        let cell = &mut buf[(x, r.y)];
-                        let cbg = rgb(cell.bg, bg);
-                        if let Some(p) = reveal
-                            && let Color::Rgb(..) = cell.fg
-                        {
-                            cell.set_fg(mix(cell.fg, cbg, (p * 100.0) as u8));
-                        }
-                        if let Some(e) = flash {
-                            cell.set_bg(mix(
-                                theme.colors.accent.into(),
-                                cbg,
-                                (24.0 * (1.0 - e)) as u8,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Overlays fade in over what they cover.
-        let mut began = HashMap::new();
-        for (rect, under) in overlays {
-            let b = st.overlay_began.get(&rect).copied().unwrap_or(now);
-            began.insert(rect, b);
-            let p = progress(b, now, OVERLAY);
-            if p >= 1.0 {
-                continue;
-            }
-            moving = true;
-            let mut it = under.into_iter();
-            for y in rect.top()..rect.bottom() {
-                for x in rect.left()..rect.right() {
-                    let Some(u) = it.next() else { break };
-                    let cell = &mut buf[(x, y)];
-                    let shade = mix(rgb(cell.bg, bg), rgb(u.bg, bg), (ease_out(p) * 100.0) as u8);
-                    let ink = mix(rgb(cell.fg, bg), shade, (ease_out(p) * 100.0) as u8);
-                    cell.set_bg(shade);
-                    if matches!(cell.fg, Color::Rgb(..)) {
-                        cell.set_fg(ink);
-                    }
-                }
-            }
-        }
-        st.overlay_began = began;
-
-        // A new tab: its content fades in.
-        for (strip, active, content) in tabs {
-            if st.tab_active.insert(strip, active).is_some_and(|was| was != active) && steady {
-                st.tab_fades.insert(strip, now);
-            }
-            if let Some(b) = st.tab_fades.get(&strip).copied() {
-                let p = progress(b, now, TAB);
+            // Overlays fade in over what they cover.
+            let mut began = HashMap::new();
+            for (rect, under) in overlays {
+                let b = st.overlay_began.get(&rect).copied().unwrap_or(now);
+                began.insert(rect, b);
+                let p = progress(b, now, OVERLAY);
                 if p >= 1.0 {
-                    st.tab_fades.remove(&strip);
                     continue;
                 }
                 moving = true;
-                let r = content.intersection(area);
-                for y in r.top()..r.bottom() {
-                    for x in r.left()..r.right() {
+                let mut it = under.into_iter();
+                for y in rect.top()..rect.bottom() {
+                    for x in rect.left()..rect.right() {
+                        let Some(u) = it.next() else { break };
                         let cell = &mut buf[(x, y)];
-                        if let Color::Rgb(..) = cell.fg {
-                            cell.set_fg(mix(
-                                cell.fg,
-                                rgb(cell.bg, bg),
-                                (ease_out(p) * 100.0) as u8,
-                            ));
+                        let shade =
+                            mix(rgb(cell.bg, bg), rgb(u.bg, bg), (ease_out(p) * 100.0) as u8);
+                        let ink = mix(rgb(cell.fg, bg), shade, (ease_out(p) * 100.0) as u8);
+                        cell.set_bg(shade);
+                        if matches!(cell.fg, Color::Rgb(..)) {
+                            cell.set_fg(ink);
                         }
                     }
                 }
             }
-        }
+            st.overlay_began = began;
 
-        // The cursor row, judged on the frame as the tool drew it.
-        let lit = mix(theme.colors.accent.into(), bg, 28);
-        let mut seen = HashMap::new();
-        for y in area.top()..area.bottom() {
-            if !(area.left()..area.right()).any(|x| truth[(x, y)].bg == lit) {
-                continue;
-            }
-            let began = if st.first { now - FADE } else { st.seen.get(&y).copied().unwrap_or(now) };
-            seen.insert(y, began);
-            let t = now.duration_since(began).as_secs_f32() / FADE.as_secs_f32();
-            if t < 1.0 {
-                moving = true;
-                if !gliding {
-                    let shade = mix(lit, bg, (ease_out(t) * 100.0) as u8);
-                    for x in area.left()..area.right() {
-                        if buf[(x, y)].bg == lit {
-                            buf[(x, y)].set_bg(shade);
+            // A new tab: its content fades in.
+            for (strip, active, content) in tabs {
+                if st.tab_active.insert(strip, active).is_some_and(|was| was != active) && steady {
+                    st.tab_fades.insert(strip, now);
+                }
+                if let Some(b) = st.tab_fades.get(&strip).copied() {
+                    let p = progress(b, now, TAB);
+                    if p >= 1.0 {
+                        st.tab_fades.remove(&strip);
+                        continue;
+                    }
+                    moving = true;
+                    let r = content.intersection(area);
+                    for y in r.top()..r.bottom() {
+                        for x in r.left()..r.right() {
+                            let cell = &mut buf[(x, y)];
+                            if let Color::Rgb(..) = cell.fg {
+                                cell.set_fg(mix(
+                                    cell.fg,
+                                    rgb(cell.bg, bg),
+                                    (ease_out(p) * 100.0) as u8,
+                                ));
+                            }
                         }
                     }
                 }
             }
+
+            // The cursor row, judged on the frame as the tool drew it.
+            let lit = mix(theme.colors.accent.into(), bg, 28);
+            let mut seen = HashMap::new();
+            for y in area.top()..area.bottom() {
+                if !(area.left()..area.right()).any(|x| truth[(x, y)].bg == lit) {
+                    continue;
+                }
+                let began =
+                    if st.first { now - FADE } else { st.seen.get(&y).copied().unwrap_or(now) };
+                seen.insert(y, began);
+                let t = now.duration_since(began).as_secs_f32() / FADE.as_secs_f32();
+                if t < 1.0 {
+                    moving = true;
+                    if !gliding {
+                        let shade = mix(lit, bg, (ease_out(t) * 100.0) as u8);
+                        for x in area.left()..area.right() {
+                            if buf[(x, y)].bg == lit {
+                                buf[(x, y)].set_bg(shade);
+                            }
+                        }
+                    }
+                }
+            }
+            st.seen = seen;
+            st.first = false;
+            st.wanted |= moving;
         }
-        st.seen = seen;
-        st.first = false;
-        st.wanted |= moving;
-    });
+    }
 }
 
 #[cfg(test)]

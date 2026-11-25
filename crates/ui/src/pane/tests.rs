@@ -7,7 +7,7 @@ use ratatui::style::Color;
 fn bg_at(theme: &Theme, x: u16, y: u16) -> Color {
     let area = Rect::new(0, 0, 10, 5);
     let mut buf = Buffer::empty(area);
-    Pane::new(theme).title("t").render(area, &mut buf);
+    Widget::render(Pane::new(theme).title("t"), area, &mut buf);
     buf[(x, y)].bg
 }
 

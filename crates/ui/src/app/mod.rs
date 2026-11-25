@@ -537,6 +537,7 @@ fn event_loop<S: Screen>(
     screen: &mut S,
 ) -> io::Result<()> {
     let theme = Theme::load();
+    let cx = crate::component::Context::new(&theme);
     let mut help: Option<Help> = None;
     let mut dirty = true;
     loop {
@@ -551,11 +552,11 @@ fn event_loop<S: Screen>(
                 if let Some(h) = help.as_mut() {
                     h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.palette_rows(ctx));
                 }
-                crate::anim::finish(f.buffer_mut(), &theme);
+                cx.motion.finish(f.buffer_mut(), cx.theme);
             })?;
         }
-        if !event::poll(crate::anim::poll_timeout(app.tick))? {
-            dirty = screen.on_tick() || crate::anim::take_redraw();
+        if !event::poll(cx.motion.poll_timeout(app.tick))? {
+            dirty = screen.on_tick() || cx.motion.take_redraw();
             continue;
         }
         let ev = event::read()?;

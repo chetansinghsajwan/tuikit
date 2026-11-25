@@ -1,5 +1,6 @@
 //! `Pane`: the one place a bordered, titled, padded region is drawn.
 
+use crate::component::{Component, Context};
 use crate::icons::Icon;
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
@@ -89,6 +90,15 @@ impl<'a> Pane<'a> {
 impl Widget for Pane<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         self.block().render(area, buf);
+    }
+}
+
+/// Drawn with the theme of `cx`, not the one it was built with.
+impl Component for Pane<'_> {
+    fn render(self, cx: &Context, area: Rect, buf: &mut Buffer) {
+        let pane =
+            Pane { theme: cx.theme, title: self.title, icon: self.icon, focused: self.focused };
+        Widget::render(pane, area, buf);
     }
 }
 

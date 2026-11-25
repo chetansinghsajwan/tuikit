@@ -8,6 +8,7 @@ pub mod app;
 pub mod bigtext;
 pub mod clipboard;
 pub mod columns;
+pub mod component;
 pub mod config;
 pub mod dim;
 pub mod footer;
@@ -32,5 +33,6 @@ pub mod time;
 pub mod tree;
 pub mod watch;
 
+pub use component::{Component, Context};
 pub use pane::Pane;
 pub use theme::{Theme, mix};

@@ -5,6 +5,7 @@
 //! highlight touches the borders; its *content* stays inside the padding, giving
 //! the text a one-cell margin within the bar.
 
+use crate::component::Context;
 use crate::theme::{Theme, mix};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -139,8 +140,14 @@ pub fn clip_spans(spans: Vec<Span<'static>>, limit: usize) -> Vec<Span<'static>>
 }
 
 impl ListRow {
-    /// Draw the row at line `y` and report it to the motion.
+    /// Draw the row at line `y` and report it to the process-wide motion.
     pub fn draw(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
+        self.render(&Context::new(theme), buf, rows, y);
+    }
+
+    /// Draw the row at line `y` of the list `rows` and report it to the motion of `cx`. Not a
+    /// `Component`: a row is placed by its list's geometry, not by a free area.
+    pub fn render(self, cx: &Context, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
         let (id, content) = if self.id == 0 && self.content == 0 {
             (
                 crate::anim::hash_of(&text_of(&self.left)),
@@ -149,8 +156,8 @@ impl ListRow {
         } else {
             (self.id, self.content)
         };
-        self.paint(theme, buf, rows, y);
-        crate::anim::note_row(rows.id(), y, id, content, rows.bar(y));
+        self.paint(cx.theme, buf, rows, y);
+        cx.motion.note_row(rows.id(), y, id, content, rows.bar(y));
     }
 
     /// Draw the row without the motion: for a row built off screen (a preview).
