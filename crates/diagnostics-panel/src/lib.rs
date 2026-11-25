@@ -250,7 +250,8 @@ impl Panel {
     }
 
     /// Draws the list into `area`, scrolling to keep the cursor in view.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let (e, w, _) = self.counts();
         let plural = |n: usize, s: &str| format!("{n} {s}{}", if n == 1 { "" } else { "s" });
@@ -264,9 +265,8 @@ impl Panel {
                 self.filter.label()
             )
         };
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.diagnostics).focused(focused);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(theme.icons.diagnostics).focused(focused);
+        let inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 6 {
             return;
         }
@@ -338,7 +338,7 @@ impl Panel {
                         is_focused: focused,
                         ..Default::default()
                     }
-                    .draw(theme, buf, &geo, y);
+                    .render(cx, buf, &geo, y);
                 }
             }
         }

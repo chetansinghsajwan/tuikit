@@ -140,7 +140,7 @@ fn rows_and_help_list_every_action_with_its_keys() {
     let area = Rect::new(0, 0, 80, 24);
     let mut buf = Buffer::empty(area);
     let mut help = Help::default();
-    help.render(area, &mut buf, &Theme::default(), "Keys", &rows);
+    help.render(area, &mut buf, &crate::Context::new(&Theme::default()), "Keys", &rows);
     let text: String = (0..24)
         .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
@@ -158,7 +158,7 @@ fn the_popup_draws_the_title_and_the_entries() {
     m.feed(&k(' '));
     let area = Rect::new(0, 0, 40, 10);
     let mut buf = Buffer::empty(area);
-    render_menu(area, &mut buf, &Theme::default(), &m.menu().unwrap());
+    render_menu(area, &mut buf, &crate::Context::new(&Theme::default()), &m.menu().unwrap());
     let text: String = (0..10)
         .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
@@ -178,7 +178,7 @@ fn help_search_filters_rows_and_esc_clears_before_closing() {
     let area = Rect::new(0, 0, 80, 24);
     let text = |h: &mut Help| {
         let mut buf = Buffer::empty(area);
-        h.render(area, &mut buf, &Theme::default(), "Keys", &rows);
+        h.render(area, &mut buf, &crate::Context::new(&Theme::default()), "Keys", &rows);
         (0..24)
             .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
             .collect::<String>()

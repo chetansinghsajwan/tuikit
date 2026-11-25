@@ -68,7 +68,7 @@ fn it_draws_the_sections_the_list_and_what_is_chosen() {
     m.key(&k(KeyCode::Char(' ')));
     let area = Rect::new(0, 0, 80, 24);
     let mut buf = Buffer::empty(area);
-    m.render(area, &mut buf, &Theme::default());
+    m.render(area, &mut buf, &Context::new(&crate::Theme::default()));
     let text: String = (0..24)
         .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();

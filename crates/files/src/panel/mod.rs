@@ -308,7 +308,7 @@ impl Panel {
     /// The width the pane needs to show the rows on screen without cutting a name off: the longest one
     /// (guides, icon, name, the git sign) and the pane's own border and padding.
     pub fn wanted_width(&self, theme: &Theme) -> u16 {
-        let chrome = 100 - Pane::new(theme).inner(Rect::new(0, 0, 100, 10)).width;
+        let chrome = 100 - Pane::new().inner(theme, Rect::new(0, 0, 100, 10)).width;
         let longest = self
             .visible()
             .into_iter()

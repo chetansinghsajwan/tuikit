@@ -1,6 +1,6 @@
 use super::chord::Chord;
 use super::keymap::Keymap;
-use crate::theme::Theme;
+use crate::component::Context;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -82,11 +82,12 @@ pub fn menu_height(screen_height: u16) -> u16 {
 
 /// Draw the which-key popup in the centre of `area`: a pane titled with the keys
 /// typed so far, one row per option (`key  name`, groups marked with `▸`).
-pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
+pub fn render_menu(area: Rect, buf: &mut Buffer, cx: &Context, menu: &Menu) {
+    let theme = cx.theme;
     if menu.entries.is_empty() || area.width < 12 || area.height < 4 {
         return;
     }
-    crate::anim::overlay(buf, area);
+    cx.motion.overlay(buf, area);
     crate::dim::dim(buf, area, theme);
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
@@ -100,9 +101,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, theme: &Theme, menu: &Menu) {
         height,
     };
     Clear.render(rect, buf);
-    let pane = crate::Pane::new(theme).title(&menu.title).focused(true);
-    let inner = pane.inner(rect);
-    pane.render(rect, buf);
+    let inner = crate::Pane::new().title(&menu.title).focused(true).draw(cx, rect, buf);
     for (i, e) in menu.entries.iter().take(usize::from(inner.height)).enumerate() {
         let mut spans = vec![
             Span::styled(

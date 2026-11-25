@@ -32,7 +32,7 @@ fn key(code: KeyCode) -> Event {
 fn lines(p: &mut Picker) -> Vec<String> {
     let area = Rect::new(0, 0, 60, 14);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &Theme::default());
+    p.render(area, &mut b, &ui::Context::new(&Theme::default()));
     (0..14)
         .map(|y| {
             (0..60)

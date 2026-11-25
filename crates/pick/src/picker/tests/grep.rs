@@ -97,7 +97,7 @@ fn preview_focuses_the_matching_line() {
     wait_items(&mut p, 1);
     let area = Rect::new(0, 0, 90, 12);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default());
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()));
     let text: String = (0..12)
         .map(|y| (0..90).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();

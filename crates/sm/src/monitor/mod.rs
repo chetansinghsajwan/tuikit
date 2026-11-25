@@ -187,18 +187,18 @@ impl Monitor {
     }
 
     /// A pane titled `title` over `area`, returning its inner area (the pane is drawn).
-    fn pane(theme: &Theme, buf: &mut Buffer, area: Rect, title: &str, focused: bool) -> Rect {
-        let mut pane = Pane::new(theme).title(title).focused(focused);
+    fn pane(cx: &ui::Context, buf: &mut Buffer, area: Rect, title: &str, focused: bool) -> Rect {
+        let theme = cx.theme;
+        let mut pane = Pane::new().title(title).focused(focused);
         if let Some(icon) = theme.icons.title(title) {
             pane = pane.icon(icon);
         }
-        let inner = pane.inner(area);
-        pane.render(area, buf);
-        inner
+        pane.draw(cx, area, buf)
     }
 
     /// The CPU pane: the history graph, then the cores in two columns.
-    fn draw_cpu(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn draw_cpu(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let s = &self.sampler.snapshot;
         let title = format!(
             "cpu {:.0}%  load {:.2} {:.2} {:.2}  up {}",
@@ -208,7 +208,7 @@ impl Monitor {
             s.load.2,
             format::duration(s.uptime)
         );
-        let inner = Self::pane(theme, buf, area, &title, false);
+        let inner = Self::pane(cx, buf, area, &title, false);
         if inner.height == 0 || inner.width == 0 {
             return;
         }
@@ -284,9 +284,10 @@ impl Monitor {
     }
 
     /// The memory pane: memory, swap and every disk.
-    fn draw_memory(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn draw_memory(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let s = &self.sampler.snapshot;
-        let inner = Self::pane(theme, buf, area, "memory", false);
+        let inner = Self::pane(cx, buf, area, "memory", false);
         if inner.height == 0 || inner.width == 0 {
             return;
         }
@@ -315,9 +316,10 @@ impl Monitor {
     }
 
     /// The network pane: download over upload, each a label and a history graph.
-    fn draw_network(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn draw_network(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let s = &self.sampler.snapshot;
-        let inner = Self::pane(theme, buf, area, "network", false);
+        let inner = Self::pane(cx, buf, area, "network", false);
         if inner.height < 2 || inner.width == 0 {
             return;
         }
@@ -348,7 +350,8 @@ impl Monitor {
     }
 
     /// The process pane: a header, then the rows with the cursor.
-    fn draw_procs(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn draw_procs(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let rows = self.rows();
         let title = format!(
             "processes {}  by {}{}{}",
@@ -361,9 +364,8 @@ impl Monitor {
                 format!("  filter {}", self.options.filter)
             }
         );
-        let pane = Pane::new(theme).title(&title).focused(true);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).focused(true);
+        let inner = pane.draw(cx, area, buf);
         if inner.height < 2 {
             return;
         }
@@ -401,7 +403,7 @@ impl Monitor {
                 is_focused: true,
                 ..ListRow::default()
             }
-            .draw(theme, buf, &geometry, list.y + i as u16);
+            .render(cx, buf, &geometry, list.y + i as u16);
         }
     }
 
@@ -467,7 +469,8 @@ impl Monitor {
 /// Lets the shared app shell host the monitor.
 impl Screen for Monitor {
     /// Draws the panes: cpu and memory and network on top, the processes below, the footer last.
-    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        let theme = cx.theme;
         if area.height < 6 || area.width < 20 {
             return;
         }
@@ -476,16 +479,16 @@ impl Screen for Monitor {
         let body = Rect { height: area.height - 1, ..area };
         let placed = self.panels.place(body);
         if let Some(rect) = placed.cpu {
-            self.draw_cpu(rect, buf, theme);
+            self.draw_cpu(rect, buf, cx);
         }
         if let Some(rect) = placed.memory {
-            self.draw_memory(rect, buf, theme);
+            self.draw_memory(rect, buf, cx);
         }
         if let Some(rect) = placed.network {
-            self.draw_network(rect, buf, theme);
+            self.draw_network(rect, buf, cx);
         }
         if let Some(rect) = placed.processes {
-            self.draw_procs(rect, buf, theme);
+            self.draw_procs(rect, buf, cx);
         }
         if self.glide.is_moving(self.frame_time) {
             anim::request_frame();

@@ -137,7 +137,7 @@ impl App {
     }
 
     /// Draws the whole screen: layer banner, keyboard, history and the key hint line.
-    pub fn render(&self, area: Rect, buf: &mut Buffer) {
+    pub fn render(&self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
         let l = &self.theme.layout;
         let keyboard_h = self.keys_height() + 2 + 2 + 2 * l.padding_y;
         let rows = ui::layout::rows(
@@ -152,8 +152,8 @@ impl App {
         );
         let rows: Vec<Rect> = rows.iter().map(|r| r.intersection(area)).collect();
         self.render_layer(rows[0], buf);
-        self.render_keyboard(rows[1], buf);
-        self.render_history(rows[2], buf);
+        self.render_keyboard(rows[1], buf, cx);
+        self.render_history(rows[2], buf, cx);
         if rows[3].is_empty() {
             return;
         }
@@ -198,13 +198,12 @@ impl App {
 
     /// Draws the keys of the shown layer in a bordered pane, lights the held ones and adds the
     /// status line below.
-    fn render_keyboard(&self, area: Rect, buf: &mut Buffer) {
+    fn render_keyboard(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let c = &self.theme.colors;
         let layer = self.cfg.layers[self.shown_index()].name.clone();
         let live = self.browsing.is_none();
-        let pane = Pane::new(&self.theme).title("Keyboard").focused(true);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title("Keyboard").focused(true);
+        let inner = pane.draw(cx, area, buf);
 
         let lit = if live { self.lit(&layer) } else { Vec::new() };
         let width = inner.width.min(144) as usize;
@@ -305,11 +304,10 @@ impl App {
     }
 
     /// One line per event, newest at the bottom, like a log.
-    fn render_history(&self, area: Rect, buf: &mut Buffer) {
+    fn render_history(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let c = &self.theme.colors;
-        let pane = Pane::new(&self.theme).title("History");
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title("History");
+        let inner = pane.draw(cx, area, buf);
         if inner.width == 0 || inner.height == 0 {
             return;
         }
@@ -360,8 +358,8 @@ mod tests;
 /// Lets the shared app shell host the screen: it owns the terminal, the keys, the help and the
 /// palette; the screen draws and follows the daemon.
 impl ui::app::Screen for App {
-    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
-        App::render(self, area, buf);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        App::render(self, cx, area, buf);
     }
 
     fn run_action(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {

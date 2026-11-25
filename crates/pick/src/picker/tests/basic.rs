@@ -177,7 +177,7 @@ fn renders_list_and_preview() {
     let mut p = picker(&["hello.txt", "other.txt"], true, d);
     let area = Rect::new(0, 0, 80, 10);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default());
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()));
     let text: String = (0..10)
         .map(|y| (0..80).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();

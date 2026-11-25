@@ -33,8 +33,8 @@ impl PickScreen {
 
 impl Screen for PickScreen {
     /// Draws the picker.
-    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &ui::Theme) {
-        self.picker.render(area, buf, theme);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        self.picker.render(area, buf, cx);
     }
 
     /// The picker takes every event.

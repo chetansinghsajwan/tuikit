@@ -11,8 +11,8 @@ mod status;
 
 impl App {
     /// Draw the tab strip and the screen of the active tab.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    pub fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        let theme = cx.theme;
         let labels = [
             ui::tabs::Label::new("Status"),
             ui::tabs::Label::new("Commits"),
@@ -23,43 +23,43 @@ impl App {
             Tab::Commits => 1,
             Tab::Refs => 2,
         };
-        ui::tabs::render(Rect { height: 1, ..area }, buf, &theme, &labels, active, true);
+        ui::tabs::render(Rect { height: 1, ..area }, buf, theme, &labels, active, true);
         let rest = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
         match self.tab {
-            Tab::Status => self.render_panes(rest, buf),
-            Tab::Commits => self.render_commits_tab(rest, buf),
-            Tab::Refs => self.render_refs_tab(rest, buf),
+            Tab::Status => self.render_panes(rest, buf, cx),
+            Tab::Commits => self.render_commits_tab(rest, buf, cx),
+            Tab::Refs => self.render_refs_tab(rest, buf, cx),
         }
     }
 
     /// The Commits tab: the whole graph of every branch full width, the diff of the commit beside it on request.
-    pub(super) fn render_commits_tab(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    pub(super) fn render_commits_tab(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         if self.commit_files.is_some() {
-            let [left, right] = ui::layout::main_preview(&theme, body);
-            self.render_commit_files(left, buf, &theme);
-            self.render_preview(Focus::Commits, right, buf, &theme);
+            let [left, right] = ui::layout::main_preview(theme, body);
+            self.render_commit_files(left, buf, cx);
+            self.render_preview(Focus::Commits, right, buf, cx);
         } else if self.detail && body.width >= 60 {
-            let [left, right] = ui::layout::main_preview(&theme, body);
-            self.render_list(Focus::Commits, left, buf, &theme);
-            self.render_preview(Focus::Commits, right, buf, &theme);
+            let [left, right] = ui::layout::main_preview(theme, body);
+            self.render_list(Focus::Commits, left, buf, cx);
+            self.render_preview(Focus::Commits, right, buf, cx);
         } else {
-            self.render_list(Focus::Commits, body, buf, &theme);
+            self.render_list(Focus::Commits, body, buf, cx);
         }
-        self.render_status(status, buf, &theme);
-        self.render_overlays(area, buf, &theme);
+        self.render_status(status, buf, cx);
+        self.render_overlays(area, buf, cx);
     }
 
     /// The files of the commit being explored, as a tree.
-    pub(super) fn render_commit_files(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_commit_files(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let Some(cf) = self.commit_files.as_mut() else { return };
         let c = &theme.colors;
         let title = format!("{}  {}", cf.short, cf.subject);
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.commit).focused(true);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(theme.icons.commit).focused(true);
+        let inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 6 {
             return;
         }
@@ -142,42 +142,42 @@ impl App {
     }
 
     /// The Status tab: the changed files and the preview of the one under the cursor.
-    pub(super) fn render_panes(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    pub(super) fn render_panes(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
-        let [left, right] = ui::layout::main_preview(&theme, body);
-        self.files.render_compact(left, buf, &theme, true);
-        self.files.render_preview_pane(right, buf, &theme);
-        self.render_status(status, buf, &theme);
-        self.render_overlays(area, buf, &theme);
+        let [left, right] = ui::layout::main_preview(theme, body);
+        self.files.render_compact(left, buf, cx, true);
+        self.files.render_preview_pane(right, buf, cx);
+        self.render_status(status, buf, cx);
+        self.render_overlays(area, buf, cx);
     }
 
     /// The Refs tab: branches (with remotes and tags) above the stashes, the preview beside them.
-    pub(super) fn render_refs_tab(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    pub(super) fn render_refs_tab(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
-        let [left, right] = ui::layout::main_preview(&theme, body);
+        let [left, right] = ui::layout::main_preview(theme, body);
         // The focused pane takes the room, the other shows a few rows.
         let constraints = REFS_PANES
             .map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
         let panes = Layout::vertical(constraints).split(left);
         for (pane, f) in panes.iter().zip(REFS_PANES) {
-            self.render_list(f, *pane, buf, &theme);
+            self.render_list(f, *pane, buf, cx);
             if f != self.focus {
-                ui::dim::dim_to(buf, *pane, &theme, ui::dim::KEEP_INACTIVE);
+                ui::dim::dim_to(buf, *pane, theme, ui::dim::KEEP_INACTIVE);
             }
         }
-        self.render_preview(self.focus, right, buf, &theme);
-        self.render_status(status, buf, &theme);
-        self.render_overlays(area, buf, &theme);
+        self.render_preview(self.focus, right, buf, cx);
+        self.render_status(status, buf, cx);
+        self.render_overlays(area, buf, cx);
     }
 
     /// The popup over everything else (the shell draws the menu and the help above it).
-    pub(super) fn render_overlays(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_overlays(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         if let Mode::Popup(p) = &self.mode {
-            p.render(area, buf, theme);
+            p.render(area, buf, cx);
         }
     }
 }

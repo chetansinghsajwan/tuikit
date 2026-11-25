@@ -125,10 +125,10 @@ fn fit_cuts_pads_and_right_aligns() {
 #[test]
 fn it_draws_the_header_the_cursor_and_the_footer() {
     let mut g = grid("name,qty\nfig,3\nplum,12\n");
-    let theme = Theme::load();
+    let theme = ui::Theme::load();
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
-    g.grid.render(area, &mut buf, &theme, true);
+    g.grid.render(area, &mut buf, &ui::Context::new(&theme), true);
     let text: String = (0..8)
         .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();

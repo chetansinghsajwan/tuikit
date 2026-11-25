@@ -34,7 +34,7 @@ fn sample() -> Vec<Item> {
 fn draw(p: &mut Panel) -> Vec<String> {
     let area = Rect::new(0, 0, 70, 14);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &Theme::default(), true);
+    p.render(area, &mut b, &ui::Context::new(&Theme::default()), true);
     (0..14)
         .map(|y| {
             (0..70)

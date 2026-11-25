@@ -124,7 +124,8 @@ impl Panel {
     }
 
     /// Draw the panel in `area`; `focused` colors the border like any focused pane.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
+        let theme = cx.theme;
         self.poll_job();
         let c = &theme.colors;
         let title = self
@@ -133,9 +134,8 @@ impl Panel {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "/".into());
         let icon = theme.icons.dir(&title, true);
-        let pane = Pane::new(theme).title(&title).icon(icon).focused(focused);
-        let mut inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(icon).focused(focused);
+        let mut inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 4 {
             return;
         }

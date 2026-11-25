@@ -5,13 +5,19 @@ use super::*;
 impl Panel {
     /// Only the file list (no diff pane), for a narrow dock; `focused` colors
     /// the border like any focused pane.
-    pub fn render_compact(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
-        self.render_list(area, buf, theme, focused);
+    pub fn render_compact(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        cx: &ui::Context,
+        focused: bool,
+    ) {
+        self.render_list(area, buf, cx, focused);
     }
 
     /// Only the diff of the highlighted file, for a host that lays the panes out itself.
-    pub fn render_preview_pane(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        self.render_preview(area, buf, theme);
+    pub fn render_preview_pane(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        self.render_preview(area, buf, cx);
     }
 
     /// Replace the list pane's title (`git: <branch>` by default).
@@ -25,10 +31,11 @@ impl Panel {
     }
 
     /// Draws the whole panel: the change list on one side and the diff on the other.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let [list_area, preview_area] = layout::main_preview(theme, area);
-        self.render_list(list_area, buf, theme, true);
-        self.render_preview(preview_area, buf, theme);
+        self.render_list(list_area, buf, cx, true);
+        self.render_preview(preview_area, buf, cx);
     }
 
     /// Draws the change list pane with its footer (prompt or message).
@@ -36,14 +43,14 @@ impl Panel {
         &mut self,
         area: Rect,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &ui::Context,
         focused: bool,
     ) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let title = self.title.clone().unwrap_or_else(|| format!("git: {}", self.branch));
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.git).focused(focused);
-        let mut inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(theme.icons.git).focused(focused);
+        let mut inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 6 {
             return;
         }
@@ -186,14 +193,14 @@ impl Panel {
     }
 
     /// Draws the diff of the highlighted file, reusing the cached one while nothing changed.
-    pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let current =
             self.current().map(|c| (c.unstaged.is_none(), c.rel_path.clone(), c.submodule));
         let title = current.as_ref().map(|(_, p, _)| p.display().to_string()).unwrap_or_default();
         let name = title.trim_end_matches('/').rsplit('/').next().unwrap_or(&title).to_string();
-        let pane = Pane::new(theme).title(&title).icon(theme.icons.file(&name, false));
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(theme.icons.file(&name, false));
+        let inner = pane.draw(cx, area, buf);
         let Some((staged, rel_path, submodule)) = current else {
             self.preview = None;
             return;

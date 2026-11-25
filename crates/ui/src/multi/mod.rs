@@ -5,7 +5,7 @@
 //! Space chooses or drops the item under the cursor, typing narrows the list (or is the text of a
 //! text section), Backspace erases, Ctrl-X clears the section, Enter applies, Esc cancels.
 
-use crate::theme::Theme;
+use crate::component::Context;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
@@ -163,7 +163,8 @@ impl Multi {
     }
 
     /// Draw the popup over `area`, dimming what is behind it.
-    pub fn render(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&self, area: Rect, buf: &mut Buffer, cx: &Context) {
+        let theme = cx.theme;
         if area.width < 30 || area.height < 10 {
             return;
         }
@@ -177,9 +178,7 @@ impl Multi {
             height,
         };
         Clear.render(rect, buf);
-        let pane = crate::Pane::new(theme).title(&self.title).focused(true);
-        let inner = pane.inner(rect);
-        pane.render(rect, buf);
+        let inner = crate::Pane::new().title(&self.title).focused(true).draw(cx, rect, buf);
         let (fg, muted, accent) = (
             Style::new().fg(c.fg.into()),
             Style::new().fg(c.muted.into()),

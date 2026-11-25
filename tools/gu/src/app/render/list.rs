@@ -9,8 +9,9 @@ impl App {
         which: Focus,
         area: Rect,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &ui::Context,
     ) {
+        let theme = cx.theme;
         let (title, n) = match which {
             Focus::Branches => ("Refs", self.ref_rows.len()),
             Focus::Commits => ("Commits", self.commits.len()),
@@ -18,7 +19,7 @@ impl App {
             _ => ("Stashes", self.stashes.len()),
         };
         let focused = self.focus == which;
-        let mut pane = Pane::new(theme).title(title).focused(focused);
+        let mut pane = Pane::new().title(title).focused(focused);
         let icon = if which == Focus::Branches {
             Some(theme.icons.branch)
         } else {
@@ -27,8 +28,7 @@ impl App {
         if let Some(icon) = icon {
             pane = pane.icon(icon);
         }
-        let mut inner = pane.inner(area);
-        pane.render(area, buf);
+        let mut inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 4 {
             return;
         }
@@ -68,11 +68,11 @@ impl App {
                 ..Default::default()
             }
         };
-        let list = ui::list::List::new(n, &mut state, row)
+        ui::list::List::new(n, &mut state, row)
             .pane(area)
             .focused(focused)
-            .empty("nothing here");
-        ui::Component::render(list, &ui::Context::new(theme), inner, buf);
+            .empty("nothing here")
+            .render(cx, inner, buf);
         self.lists[li] = state;
     }
 

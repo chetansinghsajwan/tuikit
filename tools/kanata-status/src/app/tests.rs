@@ -61,7 +61,7 @@ fn renders_without_panicking_on_small_screens() {
     for (w, h) in [(120, 40), (60, 20), (10, 5), (1, 1)] {
         let area = Rect::new(0, 0, w, h);
         let mut buf = Buffer::empty(area);
-        app.render(area, &mut buf);
+        app.render(&ui::Context::new(&ui::Theme::default()), area, &mut buf);
     }
 }
 

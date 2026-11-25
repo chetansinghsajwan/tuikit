@@ -1,5 +1,5 @@
 use super::palette::Row;
-use crate::theme::Theme;
+use crate::component::Context;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
@@ -76,21 +76,20 @@ impl Help {
         &mut self,
         area: Rect,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &Context,
         title: &str,
         rows: &[Row],
     ) {
+        let theme = cx.theme;
         let rect = crate::layout::popup(theme, area);
         if rect.width < 20 || rect.height < 6 {
             return;
         }
-        crate::anim::overlay(buf, area);
+        cx.motion.overlay(buf, area);
         crate::dim::dim(buf, area, theme);
         let c = &theme.colors;
         Clear.render(rect, buf);
-        let pane = crate::Pane::new(theme).title(title).focused(true);
-        let inner = pane.inner(rect);
-        pane.render(rect, buf);
+        let inner = crate::Pane::new().title(title).focused(true).draw(cx, rect, buf);
         // The search line and a rule under it, then the rows.
         let hint = if self.searching {
             String::new()

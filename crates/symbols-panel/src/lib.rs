@@ -11,12 +11,11 @@ use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
-use ratatui::widgets::Widget;
 use std::collections::HashSet;
 use tui_input::Input;
+use ui::Pane;
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme};
 
 pub use ui::symbol::Kind;
 
@@ -329,11 +328,11 @@ impl Panel {
     }
 
     /// Draws the panel. Without the focus the cursor follows the editor's line.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
+        let theme = cx.theme;
         let c = &theme.colors;
-        let pane = Pane::new(theme).title("Symbols").icon(theme.icons.branch).focused(focused);
-        let mut inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title("Symbols").icon(theme.icons.branch).focused(focused);
+        let mut inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 6 {
             return;
         }
@@ -408,7 +407,7 @@ impl Panel {
                 is_focused: focused,
                 ..Default::default()
             }
-            .draw(theme, buf, &geo, y);
+            .render(cx, buf, &geo, y);
         }
     }
 }

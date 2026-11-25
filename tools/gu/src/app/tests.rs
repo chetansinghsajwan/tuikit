@@ -129,7 +129,8 @@ fn press(app: &mut Rig, keys: &str) {
 fn screen(app: &mut App) -> Vec<String> {
     let area = Rect::new(0, 0, 120, 36);
     let mut buf = Buffer::empty(area);
-    app.render(area, &mut buf);
+    let theme = app.theme.clone();
+    app.render(&ui::Context::new(&theme), area, &mut buf);
     (0..36)
         .map(|y| {
             (0..120)

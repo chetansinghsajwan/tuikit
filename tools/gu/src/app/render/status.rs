@@ -5,7 +5,8 @@ use super::super::*;
 impl App {
     /// The bottom line: the prompt or question being asked, a job in progress, a message, or key
     /// hints.
-    pub(in crate::app) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(in crate::app) fn render_status(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let line = match &self.mode {
             Mode::Prompt(kind, input) => {

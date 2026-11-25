@@ -98,7 +98,7 @@ fn commits_print_full_hash_and_preview_shows_the_commit() {
 
     let area = Rect::new(0, 0, 100, 16);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default());
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()));
     let text: String = (0..16)
         .map(|y| (0..100).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
@@ -123,7 +123,7 @@ fn commit_preview_scrolls_with_ctrl_d_and_u() {
     let area = Rect::new(0, 0, 100, 16);
     let draw = |p: &mut Picker| -> String {
         let mut buf = Buffer::empty(area);
-        p.render(area, &mut buf, &Theme::default());
+        p.render(area, &mut buf, &ui::Context::new(&Theme::default()));
         (0..16)
             .map(|y| (0..100).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
             .collect()

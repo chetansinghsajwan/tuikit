@@ -10,8 +10,9 @@ impl App {
         which: Focus,
         area: Rect,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &ui::Context,
     ) {
+        let theme = cx.theme;
         let rev = self.current_rev(which);
         let short = |s: &str| s.chars().take(8).collect::<String>();
         let whole = rev.clone().unwrap_or_default();
@@ -32,9 +33,8 @@ impl App {
             Focus::Submodules => theme.icons.git,
             _ => theme.icons.commit,
         };
-        let pane = Pane::new(theme).title(&title).icon(icon);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(icon);
+        let inner = pane.draw(cx, area, buf);
         let Some(rev) = rev else {
             self.preview = None;
             return;

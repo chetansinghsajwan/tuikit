@@ -42,7 +42,7 @@ fn press(p: &mut Panel, s: &str) -> Action {
 fn draw(p: &mut Panel, focused: bool) -> String {
     let area = Rect::new(0, 0, 40, 10);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &Theme::default(), focused);
+    p.render(area, &mut b, &ui::Context::new(&ui::Theme::default()), focused);
     (0..10)
         .map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect()

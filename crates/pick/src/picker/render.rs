@@ -4,16 +4,17 @@ use super::*;
 
 impl Picker {
     /// Draw the list, and the preview beside it when the preview is on.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let (list_area, preview_area) = if self.opts.preview {
             let [l, p] = layout::main_preview(theme, area);
             (l, Some(p))
         } else {
             (area, None)
         };
-        self.render_list(list_area, buf, theme);
+        self.render_list(list_area, buf, cx);
         if let Some(p) = preview_area {
-            self.render_preview(p, buf, theme);
+            self.render_preview(p, buf, cx);
         }
     }
 
@@ -218,7 +219,8 @@ impl Picker {
     }
 
     /// Draw the query line, the count and the matched rows, flat or as a hierarchy.
-    pub(super) fn render_list(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_list(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let (snap_total, snap_matched) = {
             let s = self.nucleo.snapshot();
@@ -235,13 +237,12 @@ impl Picker {
         } else {
             "pick"
         });
-        let mut pane = Pane::new(theme).title(title).focused(true);
+        let mut pane = Pane::new().title(title).focused(true);
         // An explicit icon, else one that fits the title (`Files`, `History`, `Branches`, ...).
         if let Some(icon) = self.icon.or_else(|| theme.icons.title(title)) {
             pane = pane.icon(icon);
         }
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         if inner.height < 2 {
             return;
         }
@@ -303,7 +304,7 @@ impl Picker {
         self.page = u32::from(list.height).max(1);
         self.refresh_tree();
         if self.tree.is_some() {
-            self.render_tree_rows(list, rows, buf, theme);
+            self.render_tree_rows(list, rows, buf, cx);
             return;
         }
         // Keep the cursor inside the window.
@@ -340,7 +341,7 @@ impl Picker {
                 is_focused: true,
                 ..Default::default()
             }
-            .draw(theme, buf, &rows, y);
+            .render(cx, buf, &rows, y);
         }
     }
 
@@ -351,8 +352,9 @@ impl Picker {
         list: Rect,
         rows_geo: ui::list::Rows,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &ui::Context,
     ) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let (rows, scope): (Vec<(usize, crate::tree::Row)>, Option<ui::tree::Scope>) = {
             let Some(tree) = self.tree.as_ref() else { return };
@@ -430,7 +432,7 @@ impl Picker {
                         is_focused: true,
                         ..Default::default()
                     }
-                    .draw(theme, buf, &rows_geo, y);
+                    .render(cx, buf, &rows_geo, y);
                 }
                 crate::tree::Row::Head { depth, label, kind } => {
                     let mut spans = vec![Span::raw("  ")];
@@ -451,7 +453,7 @@ impl Picker {
                         is_focused: true,
                         ..Default::default()
                     }
-                    .draw(theme, buf, &rows_geo, y);
+                    .render(cx, buf, &rows_geo, y);
                 }
                 crate::tree::Row::Item { idx, depth } => {
                     let Some(cand) =
@@ -483,7 +485,7 @@ impl Picker {
                         is_focused: true,
                         ..Default::default()
                     }
-                    .draw(theme, buf, &rows_geo, y);
+                    .render(cx, buf, &rows_geo, y);
                 }
             }
         }
@@ -491,7 +493,8 @@ impl Picker {
 
     /// Draw the preview of the highlighted candidate. The rendered lines are kept until the
     /// candidate or the pane size changes, so a frame does not render the file again.
-    pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_preview(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let cand = self.current();
         let title = cand
             .as_ref()
@@ -502,7 +505,7 @@ impl Picker {
             })
             .unwrap_or_default();
         // The file picker's preview has no title: the list already names the file. A commit keeps its title.
-        let mut pane = Pane::new(theme);
+        let mut pane = Pane::new();
         if let Some(c) = cand.as_ref() {
             if c.git.is_some() {
                 pane = pane.title(&title).icon(theme.icons.git);
@@ -510,8 +513,7 @@ impl Picker {
                 pane = pane.title(&title);
             }
         }
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         let Some(cand) = cand else {
             self.preview = None;
             return;

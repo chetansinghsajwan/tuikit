@@ -15,7 +15,7 @@ use tui_input::Input;
 use ui::app::{Host, Navigable, Request};
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme};
+use ui::{Component, Pane, Theme};
 
 /// How often the lists are reread while the screen is open.
 const REFRESH: Duration = Duration::from_secs(4);
@@ -50,7 +50,6 @@ use ui::list::ListState;
 pub struct App {
     wifi: Arc<dyn Backend>,
     bt: Arc<dyn Bluetooth>,
-    theme: Theme,
     wifi_status: Status,
     networks: Vec<Network>,
     /// Why Wi-Fi is unavailable (no NetworkManager, no D-Bus), if it is.
@@ -72,7 +71,6 @@ impl App {
         let mut app = App {
             wifi,
             bt,
-            theme: Theme::load(),
             wifi_status: Status::default(),
             networks: Vec::new(),
             wifi_error: None,
@@ -412,8 +410,8 @@ mod tests;
 /// Lets the shared app shell host the screen: it owns the keymaps, the help and the palette; the
 /// screen draws and runs its own actions.
 impl ui::app::Screen for App {
-    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
-        App::render(self, area, buf);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        App::render(self, cx, area, buf);
     }
 
     /// A password prompt or a forget question is open: the keys are theirs.

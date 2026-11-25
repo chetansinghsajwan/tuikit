@@ -155,16 +155,16 @@ pub fn perm_spans(theme: &Theme, perm: &str, spaced: bool) -> Vec<Span<'static>>
 pub fn render(
     area: Rect,
     buf: &mut Buffer,
-    theme: &Theme,
+    cx: &ui::Context,
     meta: Option<&Meta>,
     dir_size: Option<(u64, bool)>,
 ) {
-    let mut pane = Pane::new(theme).title("properties");
+    let theme = cx.theme;
+    let mut pane = Pane::new().title("properties");
     if let Some(icon) = theme.icons.title("properties") {
         pane = pane.icon(icon);
     }
-    let inner = pane.inner(area);
-    pane.render(area, buf);
+    let inner = pane.draw(cx, area, buf);
     if let Some(m) = meta {
         Paragraph::new(m.lines(theme, dir_size)).render(inner, buf);
     }

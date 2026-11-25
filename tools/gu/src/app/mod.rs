@@ -15,7 +15,7 @@ use tui_input::Input;
 use ui::app::{Host, Navigable, Request, Tabbed};
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme};
+use ui::{Component, Pane, Theme};
 
 /// Running actions by id.
 mod actions;
@@ -177,8 +177,8 @@ impl App {
 /// Lets the shared app shell host the screen: it owns the keymaps, the help, the palette and the
 /// terminal; the screen draws and runs its own actions.
 impl ui::app::Screen for App {
-    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
-        App::render(self, area, buf);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        App::render(self, cx, area, buf);
     }
 
     fn captures_input(&self, ev: &Event) -> bool {

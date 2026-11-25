@@ -5,13 +5,12 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::widgets::Widget;
 use std::path::PathBuf;
 use tui_input::Input;
+use ui::Pane;
 use ui::app::{Navigable, Request};
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme};
 use unicode_width::UnicodeWidthStr;
 
 /// The widest a column is drawn.
@@ -368,7 +367,8 @@ impl Grid {
 
     /// Draws the table with a row-number gutter, the header and a footer, scrolling to keep the
     /// cursor in view.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme, focused: bool) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let name = self
             .path
@@ -377,10 +377,8 @@ impl Grid {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "table".into());
         let title = if self.modified() { format!("{name} [+]") } else { name.clone() };
-        let pane =
-            Pane::new(theme).title(&title).icon(theme.icons.file(&name, false)).focused(focused);
-        let mut inner = pane.inner(area);
-        pane.render(area, buf);
+        let pane = Pane::new().title(&title).icon(theme.icons.file(&name, false)).focused(focused);
+        let mut inner = pane.draw(cx, area, buf);
         if inner.height < 3 || inner.width < 8 {
             return;
         }
@@ -537,8 +535,8 @@ fn fit(text: &str, width: usize, right: bool) -> String {
 /// and runs its own actions.
 impl ui::app::Screen for Grid {
     /// Draws the table, always focused since it is the only pane.
-    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        Grid::render(self, area, buf, theme, true);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        Grid::render(self, area, buf, cx, true);
     }
 
     /// A cell, the find box or a question is open: the keys are theirs.

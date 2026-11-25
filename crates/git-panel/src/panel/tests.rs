@@ -73,7 +73,7 @@ fn press(p: &mut Panel, s: &str) -> Outcome {
 fn draw(p: &mut Panel) -> Vec<String> {
     let area = Rect::new(0, 0, 100, 16);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &Theme::default());
+    p.render(area, &mut b, &ui::Context::new(&Theme::default()));
     (0..16).map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>()).collect()
 }
 
@@ -117,7 +117,7 @@ fn staged_marks_are_drawn_in_the_staged_color() {
     let theme = Theme::default();
     let area = Rect::new(0, 0, 100, 16);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &theme);
+    p.render(area, &mut b, &ui::Context::new(&theme));
     let success: ratatui::style::Color = theme.colors.success.into();
     let row = |name: &str| {
         (0..16)

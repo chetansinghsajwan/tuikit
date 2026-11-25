@@ -36,7 +36,7 @@ fn key(code: KeyCode, m: KeyModifiers) -> Event {
 fn draw(p: &mut Picker) -> String {
     let area = Rect::new(0, 0, 100, 12);
     let mut b = Buffer::empty(area);
-    p.render(area, &mut b, &Theme::default());
+    p.render(area, &mut b, &ui::Context::new(&Theme::default()));
     (0..12)
         .map(|y| (0..100).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect()

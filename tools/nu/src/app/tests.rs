@@ -62,7 +62,8 @@ fn app() -> (Rig, Arc<Fake>, Arc<FakeBluetooth>) {
 fn screen(app: &mut App) -> String {
     let area = Rect::new(0, 0, 110, 26);
     let mut buf = Buffer::empty(area);
-    app.render(area, &mut buf);
+    let theme = Theme::load();
+    app.render(&ui::Context::new(&theme), area, &mut buf);
     (0..26)
         .map(|y| (0..110).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect()

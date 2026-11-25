@@ -28,7 +28,7 @@ struct Fake {
 }
 
 impl Screen for Fake {
-    fn render(&mut self, _: Rect, _: &mut Buffer, _: &Theme) {}
+    fn render(&mut self, _: &crate::Context, _: Rect, _: &mut Buffer) {}
 
     fn captures_input(&self, _ev: &Event) -> bool {
         self.typing

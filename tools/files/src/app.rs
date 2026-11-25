@@ -14,8 +14,8 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+use ui::Pane;
 use ui::app::{Host, Navigable, Request, Tabbed, with_overlay, with_suspended};
-use ui::{Pane, Theme};
 
 /// What the command line asked for, passed from `main` so this module does not parse arguments.
 pub struct Options {
@@ -36,7 +36,6 @@ struct Preview {
 /// The state of the running explorer: its tabs, the preview cache and the properties pane.
 struct Explorer {
     opts: Options,
-    theme: Theme,
     tabs: ui::tabs::Tabs<Panel>,
     preview: Option<Preview>,
     scroll: ui::scroll::PreviewScroll,
@@ -53,7 +52,6 @@ pub fn run(opts: Options) -> io::Result<()> {
     let dir = opts.dir.canonicalize()?;
     let panel_opts = panel_opts(&opts);
     let mut explorer = Explorer {
-        theme: Theme::load(),
         tabs: ui::tabs::Tabs::new(Panel::new(dir, panel_opts)),
         preview: None,
         scroll: Default::default(),
@@ -77,8 +75,8 @@ pub fn run(opts: Options) -> io::Result<()> {
 }
 
 impl ui::app::Screen for Explorer {
-    fn render(&mut self, area: Rect, buf: &mut Buffer, _theme: &Theme) {
-        self.draw(area, buf);
+    fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        self.draw(area, buf, cx);
         self.shown = self.dirsize.as_ref().map(DirSize::state);
     }
 
@@ -254,54 +252,51 @@ impl Explorer {
     }
 
     /// Draws the tab bar (when there are several tabs), the list and the preview.
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    fn draw(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let mut body = area;
         if self.tabs.len() > 1 {
             let bar = Rect { height: 1, ..area };
             body = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
-            self.tab_bar(bar, buf);
+            self.tab_bar(bar, buf, cx);
         }
         let (list, preview) = if self.opts.preview && body.width >= 60 {
-            let [l, p] = ui::layout::main_preview(&theme, body);
+            let [l, p] = ui::layout::main_preview(theme, body);
             (l, Some(p))
         } else {
             (body, None)
         };
-        self.tabs.active_mut().render(list, buf, &theme, true);
+        self.tabs.active_mut().render(list, buf, cx, true);
         if let Some(area) = preview {
-            self.render_preview(area, buf);
+            self.render_preview(area, buf, cx);
         }
     }
 
     /// Draws the tab titles, shortened so they stay unique.
-    fn tab_bar(&self, area: Rect, buf: &mut Buffer) {
+    fn tab_bar(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let roots: Vec<&Path> = self.tabs.iter().map(|tab| tab.root()).collect();
         let labels: Vec<ui::tabs::Label> =
             ui::tabs::short_titles(&roots).into_iter().map(ui::tabs::Label::new).collect();
-        ui::tabs::render(area, buf, &self.theme, &labels, self.tabs.active_index(), true);
+        ui::tabs::render(area, buf, cx.theme, &labels, self.tabs.active_index(), true);
     }
 
     /// Draws the preview pane for the file under the cursor, rebuilding the preview only when the
     /// file or the pane size changes.
-    fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render_preview(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let current = self.tabs.active().current().map(Path::to_path_buf);
-        let theme = self.theme.clone();
-        let area = self.render_meta(area, buf, current.as_deref());
+        let theme = cx.theme;
+        let area = self.render_meta(area, buf, current.as_deref(), cx);
         let title = current
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let pane = match current.as_deref() {
-            Some(p) if p.is_dir() => {
-                Pane::new(&theme).title(&title).icon(theme.icons.dir(&title, false))
-            }
-            Some(_) => Pane::new(&theme).title(&title).icon(theme.icons.file(&title, false)),
-            None => Pane::new(&theme).title(&title),
+            Some(p) if p.is_dir() => Pane::new().title(&title).icon(theme.icons.dir(&title, false)),
+            Some(_) => Pane::new().title(&title).icon(theme.icons.file(&title, false)),
+            None => Pane::new().title(&title),
         };
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         let Some(path) = current else { return };
         if inner.width == 0 || inner.height == 0 {
             return;
@@ -315,7 +310,7 @@ impl Explorer {
                 git: self.opts.git,
                 focus: None,
             };
-            let lines = pv::preview(&path, &theme, &opts).map_err(|e| e.to_string());
+            let lines = pv::preview(&path, theme, &opts).map_err(|e| e.to_string());
             if self.preview.as_ref().is_none_or(|p| p.key.0 != key.0) {
                 self.scroll.reset();
             }
@@ -416,7 +411,13 @@ fn bulk_rename(root: &Path, paths: &[PathBuf]) -> Result<usize, String> {
 
 impl Explorer {
     /// Draw the properties pane at the bottom of `area`; returns what is left for the preview.
-    fn render_meta(&mut self, area: Rect, buf: &mut Buffer, current: Option<&Path>) -> Rect {
+    fn render_meta(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        current: Option<&Path>,
+        cx: &ui::Context,
+    ) -> Rect {
         if !self.show_meta {
             return area;
         }
@@ -434,7 +435,7 @@ impl Explorer {
         }
         let split = Rect { y: area.bottom() - height, height, ..area };
         let meta = self.meta.as_ref().and_then(|(_, m)| m.as_ref());
-        meta::render(split, buf, &self.theme, meta, self.dirsize.as_ref().map(DirSize::state));
+        meta::render(split, buf, cx, meta, self.dirsize.as_ref().map(DirSize::state));
         Rect { height: area.height - height, ..area }
     }
 }

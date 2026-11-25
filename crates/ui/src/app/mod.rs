@@ -5,6 +5,7 @@
 //! help and the palette look the same everywhere.
 
 use crate::Theme;
+use crate::component::Context;
 use crate::keys::{Commands, Feed, Group, Help, Keymap, Menu, Row, choose, render_menu};
 use crate::scroll::{self, PreviewScroll};
 use ratatui::Terminal;
@@ -175,8 +176,8 @@ pub trait Tabbed {
 /// What a tool provides to the shell: how it draws and how it runs its own actions. The shell
 /// owns the keymap, so it decides which key means which action.
 pub trait Screen {
-    /// Draws the whole screen.
-    fn render(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme);
+    /// Draws the whole screen with `cx`.
+    fn render(&mut self, cx: &Context, area: Rect, buf: &mut Buffer);
 
     /// Whether this event is the screen's own and the keymap, leader included, stays out of it:
     /// typed text in a prompt, an answer to a question.
@@ -537,7 +538,7 @@ fn event_loop<S: Screen>(
     screen: &mut S,
 ) -> io::Result<()> {
     let theme = Theme::load();
-    let cx = crate::component::Context::new(&theme);
+    let cx = Context::new(&theme);
     let mut help: Option<Help> = None;
     let mut dirty = true;
     loop {
@@ -545,12 +546,12 @@ fn event_loop<S: Screen>(
             let ctx = screen.context();
             term.draw(|f| {
                 let area = f.area();
-                screen.render(area, f.buffer_mut(), &theme);
+                screen.render(&cx, area, f.buffer_mut());
                 if let Some(menu) = dispatcher.leader_menu(ctx) {
-                    render_menu(area, f.buffer_mut(), &theme, &menu);
+                    render_menu(area, f.buffer_mut(), &cx, &menu);
                 }
                 if let Some(h) = help.as_mut() {
-                    h.render(area, f.buffer_mut(), &theme, "Keys", &dispatcher.palette_rows(ctx));
+                    h.render(area, f.buffer_mut(), &cx, "Keys", &dispatcher.palette_rows(ctx));
                 }
                 cx.motion.finish(f.buffer_mut(), cx.theme);
             })?;

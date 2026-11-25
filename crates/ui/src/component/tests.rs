@@ -4,7 +4,6 @@ use super::*;
 use crate::Pane;
 use crate::list::{ListRow, Rows};
 use ratatui::text::Span;
-use ratatui::widgets::Widget;
 use std::time::Duration;
 
 /// Draws one row into a list of `area` and finishes the frame with `cx`.
@@ -20,29 +19,13 @@ fn frame(cx: &Context, area: Rect, rows_at: &[(u16, &'static str)]) -> Buffer {
 }
 
 #[test]
-fn a_pane_drawn_as_a_component_matches_the_widget() {
+fn a_pane_draws_and_returns_its_content_area() {
     let theme = Theme::default();
     let area = Rect::new(0, 0, 12, 4);
-    let (mut a, mut b) = (Buffer::empty(area), Buffer::empty(area));
-    Widget::render(Pane::new(&theme).title("t").focused(true), area, &mut a);
-    Component::render(
-        Pane::new(&theme).title("t").focused(true),
-        &Context::new(&theme),
-        area,
-        &mut b,
-    );
-    assert_eq!(a, b);
-}
-
-#[test]
-fn a_pane_takes_its_theme_from_the_context() {
-    let built = Theme::default();
-    let mut drawn = Theme::default();
-    drawn.chrome.transparent = false;
-    let area = Rect::new(0, 0, 10, 4);
     let mut buf = Buffer::empty(area);
-    Component::render(Pane::new(&built), &Context::new(&drawn), area, &mut buf);
-    assert_eq!(buf[(3, 2)].bg, ratatui::style::Color::from(drawn.colors.bg));
+    let inner = Pane::new().title("t").draw(&Context::new(&theme), area, &mut buf);
+    assert_eq!(inner, Pane::new().inner(&theme, area));
+    assert_ne!(buf[(0, 0)].symbol(), " ", "the border is drawn");
 }
 
 #[test]

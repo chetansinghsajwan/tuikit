@@ -94,7 +94,7 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
     let theme = Theme::default();
     for _ in 0..5 {
         let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
-        p.render(Rect::new(0, 0, 40, 10), &mut buf, &theme, true);
+        p.render(Rect::new(0, 0, 40, 10), &mut buf, &ui::Context::new(&theme), true);
         let text: Vec<String> = (0..10)
             .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
             .collect();
@@ -129,12 +129,12 @@ fn wanted_width_fits_the_longest_name_on_screen() {
     let mut p = panel(&d);
     let theme = Theme::default();
     let mut buf = Buffer::empty(Rect::new(0, 0, 30, 12));
-    p.render(Rect::new(0, 0, 30, 12), &mut buf, &theme, true);
+    p.render(Rect::new(0, 0, 30, 12), &mut buf, &ui::Context::new(&theme), true);
     let want = p.wanted_width(&theme);
     assert!(want >= 40 + 2 + 4, "{want}");
     // Given that width the name is drawn whole.
     let mut wide = Buffer::empty(Rect::new(0, 0, want, 12));
-    p.render(Rect::new(0, 0, want, 12), &mut wide, &theme, true);
+    p.render(Rect::new(0, 0, want, 12), &mut wide, &ui::Context::new(&theme), true);
     let text: String = (0..12)
         .map(|y| (0..want).map(|x| wide[(x, y)].symbol().to_string()).collect::<String>())
         .collect::<Vec<_>>()
@@ -230,7 +230,7 @@ fn respects_gitignore_and_shows_git_state() {
 
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let row = |y: u16| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>();
     let text: Vec<String> = (0..8).map(row).collect();
     // src has an untracked file beneath it (`?`), README.md is modified (M).
@@ -252,14 +252,14 @@ fn renders_a_pane_with_the_root_name_and_scrolls() {
     let mut p = panel(&d);
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let all: String = (0..8)
         .map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
     assert!(all.contains("files-test-") && all.contains("docs"), "{all}");
     p.handle_event(&key(KeyCode::Char('G')));
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let all: String = (0..8)
         .map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
@@ -407,7 +407,7 @@ fn footer_shows_the_prompt_and_messages_in_the_render() {
     let area = Rect::new(0, 0, 40, 8);
     let draw = |p: &mut Panel| {
         let mut b = Buffer::empty(area);
-        p.render(area, &mut b, &Theme::default(), true);
+        p.render(area, &mut b, &ui::Context::new(&Theme::default()), true);
         (0..8)
             .map(|y| (0..40).map(|x| b[(x, y)].symbol().to_string()).collect::<String>() + "\n")
             .collect::<String>()
@@ -465,14 +465,14 @@ fn columns_show_size_and_time_for_files_when_wide() {
     );
     let area = Rect::new(0, 0, 70, 8);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let text: Vec<String> =
         (0..8).map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
     assert!(text.iter().any(|l| l.contains("README.md") && l.contains("2.0K")), "{text:?}");
     // Narrow panes (a sidebar) drop the columns.
     let area = Rect::new(0, 0, 30, 8);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let text: Vec<String> =
         (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
     assert!(!text.iter().any(|l| l.contains("2.0K")), "{text:?}");
@@ -497,7 +497,7 @@ fn linemodes_cycle_and_show_permissions_and_folder_sizes() {
     let area = Rect::new(0, 0, 70, 8);
     let draw = |p: &mut Panel| {
         let mut buf = Buffer::empty(area);
-        p.render(area, &mut buf, &Theme::default(), true);
+        p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
         (0..8)
             .map(|y| (0..70).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
             .collect::<Vec<_>>()
@@ -592,7 +592,7 @@ fn the_leader_opens_a_menu_and_space_no_longer_toggles_folders() {
     // The popup is drawn over the screen by the host.
     let area = Rect::new(0, 0, 60, 30);
     let mut buf = Buffer::empty(area);
-    ui::keys::render_menu(area, &mut buf, &Theme::default(), &menu);
+    ui::keys::render_menu(area, &mut buf, &ui::Context::new(&Theme::default()), &menu);
     let text: String = (0..30)
         .map(|y| (0..60).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>() + "\n")
         .collect();
@@ -650,7 +650,7 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
     p.reveal(&d.join("src/deep/er/f29.txt"));
     let area = Rect::new(0, 0, 40, 8);
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let text: Vec<String> = (0..8)
         .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
         .collect();
@@ -666,7 +666,7 @@ fn scrolling_keeps_the_parent_folders_pinned_at_the_top() {
     // At the top nothing is pinned.
     p.handle_event(&key(KeyCode::Char('g')));
     let mut buf = Buffer::empty(area);
-    p.render(area, &mut buf, &Theme::default(), true);
+    p.render(area, &mut buf, &ui::Context::new(&Theme::default()), true);
     let text: Vec<String> = (0..8)
         .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
         .collect();

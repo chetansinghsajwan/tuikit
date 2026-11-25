@@ -4,28 +4,28 @@ use super::*;
 
 impl App {
     /// Draws the whole screen: both panes, the details of the focused one and the status line.
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
-        let theme = self.theme.clone();
+    pub fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
+        let theme = cx.theme;
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
-        let [left, right] = ui::layout::main_preview(&theme, body);
+        let [left, right] = ui::layout::main_preview(theme, body);
         // The focused pane takes the room; the other shows a few rows.
         let constraints =
             ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
         let panes = Layout::vertical(constraints).split(left);
-        self.render_wifi(panes[0], buf, &theme);
-        self.render_bluetooth(panes[1], buf, &theme);
+        self.render_wifi(panes[0], buf, cx);
+        self.render_bluetooth(panes[1], buf, cx);
         // The pane without the focus is dimmed a little.
         for (f, pane) in ORDER.iter().zip(panes.iter()) {
             if *f != self.focus {
-                ui::dim::dim_to(buf, *pane, &theme, ui::dim::KEEP_INACTIVE);
+                ui::dim::dim_to(buf, *pane, theme, ui::dim::KEEP_INACTIVE);
             }
         }
         match self.focus {
-            Focus::Wifi => self.details_wifi(right, buf, &theme),
-            Focus::Bluetooth => self.details_bluetooth(right, buf, &theme),
+            Focus::Wifi => self.details_wifi(right, buf, cx),
+            Focus::Bluetooth => self.details_bluetooth(right, buf, cx),
         }
-        self.render_status(status, buf, &theme);
+        self.render_status(status, buf, cx);
     }
 
     /// A pane with the list `rows` drawn in it: each entry is `(left, right, highlighted tint)`.
@@ -36,18 +36,18 @@ impl App {
         title: &str,
         area: Rect,
         buf: &mut Buffer,
-        theme: &Theme,
+        cx: &ui::Context,
         note: Option<(String, bool)>,
         rows: Vec<(Line<'static>, String, bool)>,
     ) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let focused = self.focus == focus;
-        let mut pane = Pane::new(theme).title(title).focused(focused);
+        let mut pane = Pane::new().title(title).focused(focused);
         if let Some(icon) = theme.icons.title(title) {
             pane = pane.icon(icon);
         }
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         if inner.height == 0 || inner.width < 8 {
             return;
         }
@@ -69,14 +69,15 @@ impl App {
                 ..Default::default()
             }
         };
-        let list = ui::list::List::new(rows.len(), &mut self.lists[Self::pane(focus)], row)
+        ui::list::List::new(rows.len(), &mut self.lists[Self::pane(focus)], row)
             .pane(area)
-            .focused(focused);
-        ui::Component::render(list, &ui::Context::new(theme), inner, buf);
+            .focused(focused)
+            .render(cx, inner, buf);
     }
 
     /// The Wi-Fi pane: its networks, or the reason there are none to show.
-    pub(super) fn render_wifi(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_wifi(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let note = if let Some(e) = &self.wifi_error {
             Some((format!("unavailable: {e}"), false))
@@ -116,11 +117,12 @@ impl App {
                 (left, tags, n.active)
             })
             .collect();
-        self.render_list(Focus::Wifi, "Wi-Fi", area, buf, theme, note, rows);
+        self.render_list(Focus::Wifi, "Wi-Fi", area, buf, cx, note, rows);
     }
 
     /// The Bluetooth pane: its devices, or the reason there are none to show.
-    pub(super) fn render_bluetooth(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_bluetooth(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let note = if let Some(e) = &self.bt_error {
             Some((format!("unavailable: {e}"), false))
@@ -167,17 +169,17 @@ impl App {
             .collect();
         let title = if self.bt_status.discovering { "Bluetooth (scanning)" } else { "Bluetooth" };
         // The title keeps its icon by name; the scanning note is appended to the title text only.
-        self.render_list(Focus::Bluetooth, title, area, buf, theme, note, rows);
+        self.render_list(Focus::Bluetooth, title, area, buf, cx, note, rows);
     }
 
     /// The details of the selected network, on the right.
-    pub(super) fn details_wifi(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn details_wifi(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
-        let pane = Pane::new(theme)
+        let pane = Pane::new()
             .title(self.network().map(|n| n.ssid.as_str()).unwrap_or("Details"))
             .icon(theme.icons.wifi);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         let Some(n) = self.network() else { return };
         let label = |t: &str| Span::styled(format!("{t:<10}"), Style::new().fg(c.muted.into()));
         let val = |t: String| Span::styled(t, Style::new().fg(c.fg.into()));
@@ -207,13 +209,13 @@ impl App {
     }
 
     /// The details of the selected device, on the right.
-    pub(super) fn details_bluetooth(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn details_bluetooth(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
-        let pane = Pane::new(theme)
+        let pane = Pane::new()
             .title(self.device().map(|d| d.name.as_str()).unwrap_or("Details"))
             .icon(theme.icons.bluetooth);
-        let inner = pane.inner(area);
-        pane.render(area, buf);
+        let inner = pane.draw(cx, area, buf);
         let Some(d) = self.device() else { return };
         let label = |t: &str| Span::styled(format!("{t:<10}"), Style::new().fg(c.muted.into()));
         let val = |t: String| Span::styled(t, Style::new().fg(c.fg.into()));
@@ -246,7 +248,8 @@ impl App {
     }
 
     /// The bottom line: a prompt, a running job, the last message, or else the key hints.
-    pub(super) fn render_status(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_status(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let _c = &theme.colors;
         let footer = match &self.mode {
             Mode::Password(ssid, input) => Footer::Prompt {
