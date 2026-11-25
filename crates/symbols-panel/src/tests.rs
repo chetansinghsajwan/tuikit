@@ -63,7 +63,7 @@ fn the_tree_folds_unfolds_and_enter_jumps() {
     assert_eq!(p.handle_event(&key(KeyCode::Enter)), Action::Goto { line: 1, col: 4 });
     // h on a member goes to the parent.
     press(&mut p, "h");
-    assert_eq!(p.rows[p.cursor].name, "Config");
+    assert_eq!(p.rows[p.list.cursor()].name, "Config");
 }
 
 #[test]
@@ -91,12 +91,16 @@ fn without_the_focus_the_cursor_follows_the_editor_line() {
     let mut p = panel();
     p.follow(Some(2));
     draw(&mut p, false);
-    assert_eq!(p.rows[p.cursor].name, "size");
+    assert_eq!(p.rows[p.list.cursor()].name, "size");
     p.follow(Some(15));
     draw(&mut p, false);
-    assert_eq!(p.rows[p.cursor].name, "load");
+    assert_eq!(p.rows[p.list.cursor()].name, "load");
     p.follow(Some(5));
     draw(&mut p, false);
-    assert_eq!(p.rows[p.cursor].name, "Config", "the innermost symbol that contains the line");
+    assert_eq!(
+        p.rows[p.list.cursor()].name,
+        "Config",
+        "the innermost symbol that contains the line"
+    );
     assert!(draw(&mut Panel::default(), true).contains("no symbols"));
 }

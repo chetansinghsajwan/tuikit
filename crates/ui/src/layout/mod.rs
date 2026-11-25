@@ -1,26 +1,28 @@
 //! Screen splitting. Tools ask for rects here instead of computing their own,
 //! so the pane gap and ratios come from the theme.
 
-use crate::theme::Theme;
+use crate::component::Context;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
 /// Split `area` into columns with the theme's gap between them.
-pub fn columns(theme: &Theme, area: Rect, constraints: &[Constraint]) -> Vec<Rect> {
-    split(theme, area, Direction::Horizontal, constraints)
+pub fn columns(cx: &Context, area: Rect, constraints: &[Constraint]) -> Vec<Rect> {
+    split(cx, area, Direction::Horizontal, constraints)
 }
 
 /// Split `area` into rows with the theme's gap between them.
-pub fn rows(theme: &Theme, area: Rect, constraints: &[Constraint]) -> Vec<Rect> {
-    split(theme, area, Direction::Vertical, constraints)
+pub fn rows(cx: &Context, area: Rect, constraints: &[Constraint]) -> Vec<Rect> {
+    split(cx, area, Direction::Vertical, constraints)
 }
 
 /// The shared splitter behind `columns` and `rows`, so the theme's gap applies to every split.
-fn split(theme: &Theme, area: Rect, dir: Direction, constraints: &[Constraint]) -> Vec<Rect> {
+fn split(cx: &Context, area: Rect, dir: Direction, constraints: &[Constraint]) -> Vec<Rect> {
+    let theme = cx.theme;
     Layout::new(dir, constraints).spacing(theme.layout.gap).split(area).to_vec()
 }
 
 /// A popup centered in `area`, `popup_percent` of its width and height.
-pub fn popup(theme: &Theme, area: Rect) -> Rect {
+pub fn popup(cx: &Context, area: Rect) -> Rect {
+    let theme = cx.theme;
     let p = u32::from(theme.layout.popup_percent.clamp(10, 100));
     let w = (u32::from(area.width) * p / 100) as u16;
     let h = (u32::from(area.height) * p / 100) as u16;
@@ -33,13 +35,14 @@ pub fn popup(theme: &Theme, area: Rect) -> Rect {
 }
 
 /// `[sidebar | main | preview]` using the theme's sidebar width and preview share.
-pub fn sidebar_main_preview(theme: &Theme, area: Rect) -> [Rect; 3] {
+pub fn sidebar_main_preview(cx: &Context, area: Rect) -> [Rect; 3] {
+    let theme = cx.theme;
     let l = &theme.layout;
     let p = l.preview_percent.min(100);
     let rest = area.width.saturating_sub(l.sidebar_width + 2 * l.gap);
     let preview = rest * p / 100;
     let v = columns(
-        theme,
+        cx,
         area,
         &[Constraint::Length(l.sidebar_width), Constraint::Min(0), Constraint::Length(preview)],
     );
@@ -47,9 +50,10 @@ pub fn sidebar_main_preview(theme: &Theme, area: Rect) -> [Rect; 3] {
 }
 
 /// `[main | preview]` using the theme's preview share.
-pub fn main_preview(theme: &Theme, area: Rect) -> [Rect; 2] {
+pub fn main_preview(cx: &Context, area: Rect) -> [Rect; 2] {
+    let theme = cx.theme;
     let p = theme.layout.preview_percent.min(100);
-    let v = columns(theme, area, &[Constraint::Percentage(100 - p), Constraint::Percentage(p)]);
+    let v = columns(cx, area, &[Constraint::Percentage(100 - p), Constraint::Percentage(p)]);
     [v[0], v[1]]
 }
 

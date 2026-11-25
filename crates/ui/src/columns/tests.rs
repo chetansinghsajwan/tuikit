@@ -18,7 +18,7 @@ fn text(spans: &[Span]) -> String {
 fn header(columns: &Columns, width: u16) -> String {
     let area = Rect::new(0, 0, width, 1);
     let mut buf = Buffer::empty(area);
-    columns.draw_header(&Theme::default(), &mut buf, area);
+    columns.draw_header(&crate::Context::new(&crate::Theme::default()), &mut buf, area);
     (0..width).map(|x| buf[(x, 0)].symbol().to_string()).collect()
 }
 

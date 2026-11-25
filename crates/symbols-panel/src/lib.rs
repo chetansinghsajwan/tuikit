@@ -13,9 +13,9 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use std::collections::HashSet;
 use tui_input::Input;
-use ui::Pane;
 use ui::footer::Footer;
 use ui::prompt::Typed;
+use ui::{Component, Pane};
 
 pub use ui::symbol::Kind;
 
@@ -73,9 +73,8 @@ enum Mode {
 pub struct Panel {
     symbols: Vec<Symbol>,
     rows: Vec<Row>,
-    cursor: usize,
-    offset: usize,
-    page: usize,
+    /// The cursor and the scroll over `rows`.
+    list: ui::list::List,
     /// Symbols with members that are folded, by their position in the tree.
     folded: HashSet<Vec<usize>>,
     filter: String,
@@ -98,9 +97,7 @@ impl Panel {
         Panel {
             symbols: Vec::new(),
             rows: Vec::new(),
-            cursor: 0,
-            offset: 0,
-            page: 10,
+            list: ui::list::List::new(),
             folded: HashSet::new(),
             filter: String::new(),
             mode: Mode::Normal,
@@ -141,7 +138,7 @@ impl Panel {
     /// Recomputes the visible rows from the symbols, folds and filter, keeping the cursor on the
     /// same symbol.
     fn rebuild(&mut self) {
-        let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
+        let keep = self.rows.get(self.list.cursor()).map(|r| r.path.clone());
         let q = self.filter.to_lowercase();
         let mut rows = Vec::new();
         /// Adds the rows of `list` and its open members; with a filter, drops symbols that neither
@@ -185,10 +182,11 @@ impl Panel {
         }
         walk(&self.symbols, &mut Vec::new(), 0, &self.folded, &q, &mut rows);
         self.rows = rows;
-        self.cursor = keep
+        let at = keep
             .and_then(|p| self.rows.iter().position(|r| r.path == p))
-            .unwrap_or(self.cursor)
-            .min(self.rows.len().saturating_sub(1));
+            .unwrap_or(self.list.cursor());
+        self.list.set_len(self.rows.len());
+        self.list.set_cursor(at);
     }
 
     /// The row of the innermost symbol that contains `line`.
@@ -233,12 +231,6 @@ impl Panel {
         self.rebuild();
     }
 
-    /// Moves the cursor by `delta` rows, stopping at the first and last row.
-    fn move_by(&mut self, delta: isize) {
-        let last = self.rows.len().saturating_sub(1) as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
-    }
-
     /// Feeds a terminal event to the filter box or the keymap and returns what the host must do.
     pub fn handle_event(&mut self, ev: &Event) -> Action {
         let Some(key) = ui::keys::pressed(ev) else { return Action::None };
@@ -275,30 +267,25 @@ impl Panel {
 
     /// Runs one action by id. Also lets the host run an action picked from its palette.
     pub fn run(&mut self, id: &'static str) -> Action {
+        if ui::app::run_nav(&mut self.list, id) {
+            return Action::None;
+        }
         match id {
-            "nav.up" => self.move_by(-1),
-            "nav.down" => self.move_by(1),
-            "nav.up_step" => self.move_by(-5),
-            "nav.down_step" => self.move_by(5),
-            "nav.page_up" => self.move_by(-(self.page as isize)),
-            "nav.page_down" => self.move_by(self.page as isize),
-            "nav.top" => self.cursor = 0,
-            "nav.bottom" => self.cursor = self.rows.len().saturating_sub(1),
             "tree.collapse" => {
-                if let Some(r) = self.rows.get(self.cursor) {
+                if let Some(r) = self.rows.get(self.list.cursor()) {
                     if r.folded == Some(false) {
                         let p = r.path.clone();
                         self.set_fold(p, true);
                     } else if r.path.len() > 1 {
                         let parent = r.path[..r.path.len() - 1].to_vec();
                         if let Some(i) = self.rows.iter().position(|x| x.path == parent) {
-                            self.cursor = i;
+                            self.list.set_cursor(i);
                         }
                     }
                 }
             }
             "tree.in" => {
-                if let Some(r) = self.rows.get(self.cursor)
+                if let Some(r) = self.rows.get(self.list.cursor())
                     && r.folded == Some(true)
                 {
                     let p = r.path.clone();
@@ -306,7 +293,7 @@ impl Panel {
                 }
             }
             "item.open" => {
-                if let Some(r) = self.rows.get(self.cursor) {
+                if let Some(r) = self.rows.get(self.list.cursor()) {
                     return Action::Goto { line: r.line, col: r.col };
                 }
             }
@@ -350,37 +337,30 @@ impl Panel {
         };
         if let Some(footer) = footer {
             let row = Rect { y: inner.bottom() - 1, height: 1, ..inner };
-            footer.render(row, buf, theme);
+            footer.render(cx, row, buf);
             inner.height -= 1;
             if inner.height == 0 {
                 return;
             }
         }
-        if self.rows.is_empty() {
-            let why = if self.filter.is_empty() {
-                "no symbols (no language server?)"
-            } else {
-                "nothing matches"
-            };
-            buf.set_string(inner.x + 1, inner.y, why, Style::new().fg(c.muted.into()));
-            return;
-        }
+        let why = if self.filter.is_empty() {
+            "no symbols (no language server?)"
+        } else {
+            "nothing matches"
+        };
         // Without the focus the cursor stays on the symbol the editor's cursor is in.
         if !focused
             && !self.is_typing()
             && let Some(i) = self.following.and_then(|l| self.row_at_line(l))
         {
-            self.cursor = i;
+            self.list.set_cursor(i);
         }
-        self.page = usize::from(inner.height).max(1);
-        self.offset = ui::list::follow_cursor(self.cursor, self.offset, self.page, self.rows.len());
-        let geo = ui::list::Rows::new(area, inner);
-        for (n, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
-            let y = inner.y + (n - self.offset) as u16;
-            let at = n == self.cursor;
+        let rows = &self.rows;
+        let row = |s: ui::list::Slot| {
+            let row = &rows[s.index];
             let mut spans = vec![
-                ui::tree::guides(theme, row.depth),
-                ui::tree::fold_mark(theme, row.folded),
+                ui::tree::guides(cx, row.depth),
+                ui::tree::fold_mark(cx, row.folded),
                 Span::styled(
                     format!("{} ", theme.icons.symbol(row.kind).glyph),
                     Style::new().fg(row.kind.color(theme)),
@@ -403,12 +383,15 @@ impl Panel {
             ui::list::ListRow {
                 id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind).glyph)),
                 left: spans,
-                is_selected: at,
-                is_focused: focused,
                 ..Default::default()
             }
-            .render(cx, buf, &geo, y);
-        }
+        };
+        self.list
+            .view(rows.len(), row)
+            .pane(area)
+            .focused(focused)
+            .empty(why)
+            .render(cx, inner, buf);
     }
 }
 

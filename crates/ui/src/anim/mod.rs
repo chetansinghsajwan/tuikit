@@ -1,9 +1,10 @@
 //! Animation: the one place that owns timing, easing and drawing of motion, so every tool moves alike.
 //!
-//! Tools do not animate. They draw as usual; `finish` (once per frame, after drawing) fades the cursor
-//! row in, and `spinner` stands in for a `…` while something runs. Motion asks for the next frame itself:
-//! `poll_timeout` is how long the event loop may wait, short while something moves and the tool's own
-//! idle time otherwise, so a still screen costs nothing.
+//! Tools do not animate. They draw as usual through a `Context`, whose `Motion` remembers what each frame
+//! showed; `Motion::finish` (once per frame, after drawing) glides, reveals and fades, and
+//! `Motion::spinner` stands in for a `…` while something runs. Motion asks for the next frame itself:
+//! `Motion::poll_timeout` is how long the event loop may wait, short while something moves and the
+//! tool's own idle time otherwise, so a still screen costs nothing.
 //!
 //! `animations = "on" | "reduced" | "off"` in the config (`on` default): `reduced` keeps only the
 //! spinner, `off` shows no motion at all. Fades need truecolor and are skipped without it.
@@ -58,27 +59,6 @@ fn start() -> Instant {
 /// The motion mode from the config; `On` when unset or unreadable.
 fn mode() -> Mode {
     crate::config::get().animations.as_deref().and_then(Mode::parse).unwrap_or_default()
-}
-
-/// A spinner frame for something running; asks for the next frame. A plain `…` when animations are off.
-pub fn spinner() -> &'static str {
-    if mode() == Mode::Off {
-        return "…";
-    }
-    want();
-    FRAMES[(start().elapsed().as_millis() / STEP.as_millis()) as usize % FRAMES.len()]
-}
-
-/// How long the event loop may wait for input: a frame while something moves, `idle` otherwise.
-/// Call it after drawing, when the frame has said what it needs.
-pub fn poll_timeout(idle: Duration) -> Duration {
-    default_motion().poll_timeout(idle)
-}
-
-/// Whether the last frame was still moving, so the loop draws again even without input.
-/// Call it when the wait for input timed out; it clears the request, and drawing sets it anew.
-pub fn take_redraw() -> bool {
-    default_motion().take_redraw()
 }
 
 /// Easing curve that starts fast and settles slowly, so motion feels soft where it stops.
@@ -150,7 +130,7 @@ impl Default for Motion {
 }
 
 thread_local! {
-    /// The process-wide `Motion` that the free functions below act on, for code not yet moved to `Context`.
+    /// The process-wide `Motion`, the one `Context::new` hands out.
     static DEFAULT: &'static Motion = Box::leak(Box::default());
 }
 
@@ -159,20 +139,10 @@ pub fn default_motion() -> &'static Motion {
     DEFAULT.with(|m| *m)
 }
 
-/// Ask for another frame soon, because something is still moving.
-fn want() {
-    default_motion().want();
-}
-
 /// Whether motion is fully on (not reduced or off). A component that moves on its own, such as a
 /// bar gliding to a new value, jumps straight to the value when this is false.
 pub fn is_on() -> bool {
     mode() == Mode::On
-}
-
-/// Asks for the next frame, for a component that is still moving (see [`is_on`]).
-pub fn request_frame() {
-    want();
 }
 
 /// A stable number for `v`, for a row's identity and content.
@@ -180,23 +150,6 @@ pub fn hash_of(v: &impl Hash) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     v.hash(&mut h);
     h.finish()
-}
-
-/// A row component notes each row it drew: `pane` identifies the list, `id` the row (its path), `content` what
-/// it shows apart from the cursor. `finish` then glides a scrolled list, reveals rows a fold opened and flashes
-/// rows whose content changed.
-pub fn note_row(pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
-    default_motion().note_row(pane, y, id, content, bar);
-}
-
-/// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it fades in over it.
-pub fn overlay(buf: &Buffer, rect: Rect) {
-    default_motion().overlay(buf, rect);
-}
-
-/// A tab strip at `strip` shows tab `active` over `content`; when the tab changes, the content fades in.
-pub fn tab(strip: (u16, u16), active: usize, content: Rect) {
-    default_motion().tab(strip, active, content);
 }
 
 /// How long a row a fold opened takes to fade in.
@@ -253,11 +206,34 @@ fn scrolled(prev: &[RowRec], cur: &[RowRec]) -> Option<i32> {
     (d.abs() >= 2 && n >= 3 && n * 10 >= matched * 7 && still <= 3).then_some(d)
 }
 
-/// The motion of the frame just drawn into `buf`. Call once per frame, right after the tool has drawn:
-/// lists glide to a new scroll position, rows a fold opened reveal one by one, rows that changed flash, popups
-/// and new tabs fade in, and the cursor row fades in. All of it only recolors or moves what the tool drew.
-pub fn finish(buf: &mut Buffer, theme: &Theme) {
+/// The process-wide motion's own operations, for the tests of this module.
+#[cfg(test)]
+fn finish(buf: &mut Buffer, theme: &Theme) {
     default_motion().finish(buf, theme);
+}
+#[cfg(test)]
+fn note_row(pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
+    default_motion().note_row(pane, y, id, content, bar);
+}
+#[cfg(test)]
+fn overlay(buf: &Buffer, rect: Rect) {
+    default_motion().overlay(buf, rect);
+}
+#[cfg(test)]
+fn tab(strip: (u16, u16), active: usize, content: Rect) {
+    default_motion().tab(strip, active, content);
+}
+#[cfg(test)]
+fn poll_timeout(idle: Duration) -> Duration {
+    default_motion().poll_timeout(idle)
+}
+#[cfg(test)]
+fn take_redraw() -> bool {
+    default_motion().take_redraw()
+}
+#[cfg(test)]
+fn spinner() -> &'static str {
+    default_motion().spinner()
 }
 
 impl Motion {
@@ -275,22 +251,37 @@ impl Motion {
         self.want();
     }
 
+    /// A spinner frame for something running; asks for the next frame. A plain `…` when animations
+    /// are off.
+    pub fn spinner(&self) -> &'static str {
+        if mode() == Mode::Off {
+            return "…";
+        }
+        self.want();
+        FRAMES[(start().elapsed().as_millis() / STEP.as_millis()) as usize % FRAMES.len()]
+    }
+
     /// How long the event loop may wait for input: a frame while something moves, `idle` otherwise.
+    /// Call it after drawing, when the frame has said what it needs.
     pub fn poll_timeout(&self, idle: Duration) -> Duration {
         if self.state.borrow().wanted { FRAME.min(idle) } else { idle }
     }
 
-    /// Whether the last frame was still moving; clears the request.
+    /// Whether the last frame was still moving, so the loop draws again even without input. Call it
+    /// when the wait for input timed out; it clears the request, and drawing sets it anew.
     pub fn take_redraw(&self) -> bool {
         std::mem::take(&mut self.state.borrow_mut().wanted)
     }
 
-    /// A row component notes each row it drew (see [`note_row`]).
+    /// A row component notes each row it drew: `pane` identifies the list, `id` the row (its path),
+    /// `content` what it shows apart from the cursor. `finish` then glides a scrolled list, reveals rows
+    /// a fold opened and flashes rows whose content changed.
     pub fn note_row(&self, pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
         self.state.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar });
     }
 
-    /// An overlay is about to be drawn into `rect` (see [`overlay`]).
+    /// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it
+    /// fades in over it.
     pub fn overlay(&self, buf: &Buffer, rect: Rect) {
         let rect = rect.intersection(buf.area);
         let under = (rect.top()..rect.bottom())
@@ -300,12 +291,16 @@ impl Motion {
         self.state.borrow_mut().overlays.push((rect, under));
     }
 
-    /// A tab strip shows tab `active` over `content` (see [`tab`]).
+    /// A tab strip at `strip` shows tab `active` over `content`; when the tab changes, the content fades
+    /// in.
     pub fn tab(&self, strip: (u16, u16), active: usize, content: Rect) {
         self.state.borrow_mut().tabs.push((strip, active, content));
     }
 
-    /// The motion of the frame just drawn into `buf` (see [`finish`]).
+    /// The motion of the frame just drawn into `buf`. Call once per frame, right after the tool has
+    /// drawn: lists glide to a new scroll position, rows a fold opened reveal one by one, rows that
+    /// changed flash, popups and new tabs fade in, and the cursor row fades in. All of it only recolors
+    /// or moves what the tool drew.
     pub fn finish(&self, buf: &mut Buffer, theme: &Theme) {
         let on = mode() == Mode::On && matches!(theme.colors.bg.into(), Color::Rgb(..));
         let bg: Color = theme.colors.bg.into();

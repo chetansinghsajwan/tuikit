@@ -68,7 +68,7 @@ pub struct App {
     /// The repos opened above this one (entering a submodule pushes, `leader U` pops).
     parents: Vec<PathBuf>,
     /// Cursor and scroll of the branches, commits, stashes and submodules panes.
-    lists: [ListState; 4],
+    lists: [List; 4],
     focus: Focus,
     mode: Mode,
     message: Option<ui::footer::Notice>,
@@ -132,7 +132,7 @@ impl App {
             stashes: Vec::new(),
             submodules: Vec::new(),
             parents: Vec::new(),
-            lists: [ListState::default(); 4],
+            lists: Default::default(),
             focus: Focus::Files,
             mode: Mode::Normal,
             message: None,
@@ -168,7 +168,7 @@ impl App {
             .iter()
             .position(|r| matches!(r, RefRow::Item { index, .. } if app.branches[*index].is_head))
         {
-            app.lists[0].cursor = i;
+            app.lists[0].set_cursor(i);
         }
         Some(app)
     }
@@ -300,44 +300,37 @@ impl Tabbed for App {
 }
 
 /// The cursor of the focused pane is what the shared movement walks; the Files pane is the git
-/// panel's own list.
+/// panel's own list. A move resets the preview's scroll.
 impl Navigable for App {
     fn move_by(&mut self, delta: isize) {
-        match Self::list_index(self.focus) {
-            Some(li) => {
-                let len = self.len(self.focus);
-                let st = &mut self.lists[li];
-                st.cursor = ui::list::move_cursor(st.cursor, delta, len);
-                self.preview_scroll.reset();
-            }
-            None => self.files.move_by(delta),
-        }
+        self.focused_list().move_by(delta);
+        self.preview_scroll.reset();
     }
 
     fn page_row_count(&self) -> usize {
         match Self::list_index(self.focus) {
-            Some(_) => 10,
+            Some(li) => self.lists[li].page_row_count(),
             None => self.files.page_row_count(),
         }
     }
 
     fn move_to_top(&mut self) {
-        match Self::list_index(self.focus) {
-            Some(li) => {
-                self.lists[li].cursor = 0;
-                self.preview_scroll.reset();
-            }
-            None => self.files.move_to_top(),
-        }
+        self.focused_list().move_to_top();
+        self.preview_scroll.reset();
     }
 
     fn move_to_bottom(&mut self) {
+        self.focused_list().move_to_bottom();
+        self.preview_scroll.reset();
+    }
+}
+
+impl App {
+    /// The list of the focused pane: one of the app's own, or the git panel's.
+    fn focused_list(&mut self) -> &mut dyn Navigable {
         match Self::list_index(self.focus) {
-            Some(li) => {
-                self.lists[li].cursor = self.len(self.focus).saturating_sub(1);
-                self.preview_scroll.reset();
-            }
-            None => self.files.move_to_bottom(),
+            Some(li) => &mut self.lists[li],
+            None => &mut self.files,
         }
     }
 }

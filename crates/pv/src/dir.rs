@@ -148,7 +148,7 @@ fn row(
         signs,
         ..Default::default()
     };
-    ui::tree::file_row_line(theme, &row, opts.width)
+    ui::tree::file_row_line(&ui::Context::new(theme), &row, opts.width)
 }
 
 /// Levels shown when there is room: the folder's entries are level 1.
@@ -266,7 +266,7 @@ fn flatten(
     // Remarks (`… 3 more`) start under the names, after the guides and the icon column.
     let remark = |text: String, style: Style| {
         Line::from(vec![
-            ui::tree::guides(cx.theme, level - 1),
+            ui::tree::guides(&ui::Context::new(cx.theme), level - 1),
             Span::styled(format!("  {text}"), style),
         ])
     };

@@ -4,6 +4,7 @@ use super::*;
 use ratatui::crossterm::event::KeyModifiers;
 use std::fs;
 use std::process::Command;
+use ui::Theme;
 
 /// Make a throwaway folder with a few files and subfolders and return its real path.
 fn tree(name: &str) -> PathBuf {
@@ -114,10 +115,10 @@ fn the_active_indent_guide_is_the_scope_the_cursor_is_in() {
     let s = p.active_scope().unwrap();
     assert_eq!((s.from, s.col, s.to), (deep, 1, at(&p, "inner.txt") + 1));
     // On an open folder: its own contents. On a top-level file: no guide.
-    p.cursor = src;
+    p.list.set_cursor(src);
     let s = p.active_scope().unwrap();
     assert_eq!((s.from, s.col), (src, 0));
-    p.cursor = at(&p, "README.md");
+    p.list.set_cursor(at(&p, "README.md"));
     assert!(p.active_scope().is_none());
 }
 
@@ -130,7 +131,7 @@ fn wanted_width_fits_the_longest_name_on_screen() {
     let theme = Theme::default();
     let mut buf = Buffer::empty(Rect::new(0, 0, 30, 12));
     p.render(Rect::new(0, 0, 30, 12), &mut buf, &ui::Context::new(&theme), true);
-    let want = p.wanted_width(&theme);
+    let want = p.wanted_width(&ui::Context::new(&theme));
     assert!(want >= 40 + 2 + 4, "{want}");
     // Given that width the name is drawn whole.
     let mut wide = Buffer::empty(Rect::new(0, 0, want, 12));
@@ -280,7 +281,7 @@ fn cursor_on(p: &mut Panel, name: &str) {
         .iter()
         .position(|r| r.name == name)
         .unwrap_or_else(|| panic!("{name} in {:?}", names(p)));
-    p.cursor = i;
+    p.list.set_cursor(i);
 }
 
 #[test]
@@ -542,7 +543,7 @@ fn a_big_paste_runs_in_the_background_and_reports_when_done() {
     );
     let find = |p: &mut Panel, name: &str| {
         let rows = p.rows.iter().position(|r| r.name == name).unwrap();
-        p.cursor = rows;
+        p.list.set_cursor(rows);
     };
     // Cut big.bin into docs/: a move, so the end produces `Moved`.
     find(&mut p, "big.bin");

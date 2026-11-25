@@ -1,6 +1,7 @@
 //! Tests for list motion in `anim`: glides, folds, flashes and overlays.
 
 use super::*;
+use crate::Theme;
 
 /// The default theme, whose background the faded colors blend toward.
 fn theme() -> Theme {

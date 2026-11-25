@@ -31,7 +31,7 @@ pub fn heat(theme: &Theme, load: f32) -> Color {
 
 /// A value that glides to each new target instead of jumping, for bars that are fed a reading now and
 /// then. The tool sets the target when a reading arrives and draws [`Eased::value`] each frame; while
-/// [`Eased::is_moving`] it asks for the next frame with `anim::request_frame`.
+/// [`Eased::is_moving`] it asks for the next frame with `Motion::request_frame`.
 #[derive(Debug, Clone, Copy)]
 pub struct Eased {
     from: f32,

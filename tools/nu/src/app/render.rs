@@ -5,10 +5,9 @@ use super::*;
 impl App {
     /// Draws the whole screen: both panes, the details of the focused one and the status line.
     pub fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
-        let theme = cx.theme;
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
-        let [left, right] = ui::layout::main_preview(theme, body);
+        let [left, right] = ui::layout::main_preview(cx, body);
         // The focused pane takes the room; the other shows a few rows.
         let constraints =
             ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
@@ -18,7 +17,7 @@ impl App {
         // The pane without the focus is dimmed a little.
         for (f, pane) in ORDER.iter().zip(panes.iter()) {
             if *f != self.focus {
-                ui::dim::dim_to(buf, *pane, theme, ui::dim::KEEP_INACTIVE);
+                ui::dim::dim_to(buf, *pane, cx, ui::dim::KEEP_INACTIVE);
             }
         }
         match self.focus {
@@ -59,8 +58,8 @@ impl App {
                 .render(inner, buf);
             return;
         }
-        let row = |i: usize| {
-            let (left, right, active) = &rows[i];
+        let row = |s: ui::list::Slot| {
+            let (left, right, active) = &rows[s.index];
             ui::list::ListRow {
                 left: left.spans.clone(),
                 right: vec![Span::raw(right.clone())],
@@ -69,7 +68,8 @@ impl App {
                 ..Default::default()
             }
         };
-        ui::list::List::new(rows.len(), &mut self.lists[Self::pane(focus)], row)
+        self.lists[Self::pane(focus)]
+            .view(rows.len(), row)
             .pane(area)
             .focused(focused)
             .render(cx, inner, buf);
@@ -267,11 +267,7 @@ impl App {
                 (None, None) => Footer::Hint(self.hints().to_string()),
             },
         };
-        footer.render(
-            Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area },
-            buf,
-            theme,
-        );
+        footer.render(cx, Rect { x: area.x + 1, width: area.width.saturating_sub(2), ..area }, buf);
     }
 
     /// The short key hints of the focused pane.

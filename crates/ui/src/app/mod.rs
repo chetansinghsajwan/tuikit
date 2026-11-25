@@ -438,7 +438,7 @@ impl Dispatcher {
             "help" => Request::Help,
             _ if self.nav && NAV.iter().any(|a| a.id == id) => {
                 if let Some(nav) = screen.navigable() {
-                    run_nav_action(nav, id);
+                    run_nav(nav, id);
                 }
                 Request::None
             }
@@ -490,8 +490,10 @@ fn run_tab_action(tabs: &mut dyn Tabbed, id: &str) {
     }
 }
 
-/// Carries out one shared movement on the screen.
-fn run_nav_action(nav: &mut dyn Navigable, id: &str) {
+/// Carries out the shared movement `id` (a `nav.*` action) on `nav`; false when `id` is not one. The
+/// shell runs it on the screen's `Navigable`; a panel with its own action dispatch (hosted by an
+/// editor) runs it on its `List`, so no panel repeats the movement.
+pub fn run_nav(nav: &mut dyn Navigable, id: &str) -> bool {
     let page = nav.page_row_count().max(1) as isize;
     let step = nav.step_size().max(1) as isize;
     match id {
@@ -503,8 +505,9 @@ fn run_nav_action(nav: &mut dyn Navigable, id: &str) {
         "nav.page_down" => nav.move_by(page),
         "nav.top" => nav.move_to_top(),
         "nav.bottom" => nav.move_to_bottom(),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Opens the controlling terminal, so stdout stays free for the caller.

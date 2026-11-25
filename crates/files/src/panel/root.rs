@@ -7,7 +7,7 @@ impl Panel {
     pub(super) fn run_root_action(&mut self, id: &str) -> Outcome {
         match id {
             "root.into" => {
-                if let Some(row) = self.rows.get(self.cursor).filter(|r| r.is_dir) {
+                if let Some(row) = self.rows.get(self.list.cursor()).filter(|r| r.is_dir) {
                     let dir = row.path.clone();
                     self.set_root(dir);
                 }

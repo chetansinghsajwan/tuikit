@@ -2,7 +2,7 @@
 //! mixed toward the background colour; cells whose colour is the terminal's own default get the
 //! terminal's "dim" attribute instead.
 
-use crate::Theme;
+use crate::component::Context;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier};
@@ -13,12 +13,13 @@ pub const KEEP: u8 = 28;
 pub const KEEP_INACTIVE: u8 = 62;
 
 /// Dim every cell of `area`.
-pub fn dim(buf: &mut Buffer, area: Rect, theme: &Theme) {
-    dim_to(buf, area, theme, KEEP);
+pub fn dim(buf: &mut Buffer, area: Rect, cx: &Context) {
+    dim_to(buf, area, cx, KEEP);
 }
 
 /// Dim every cell of `area`, keeping `keep` percent of each colour.
-pub fn dim_to(buf: &mut Buffer, area: Rect, theme: &Theme, keep: u8) {
+pub fn dim_to(buf: &mut Buffer, area: Rect, cx: &Context, keep: u8) {
+    let theme = cx.theme;
     let base: Color = theme.colors.bg.into();
     let area = area.intersection(buf.area);
     for y in area.top()..area.bottom() {

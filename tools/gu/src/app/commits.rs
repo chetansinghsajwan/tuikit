@@ -5,7 +5,7 @@ use super::*;
 impl App {
     /// The actions that act on the highlighted commit.
     pub(super) fn commit_action(&mut self, id: &str) {
-        let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
+        let Some(k) = self.commits.get(self.lists[1].cursor()).cloned() else { return };
         match id {
             "commit.copy_hash" => match ui::clipboard::copy(&k.oid) {
                 Ok(()) => self.show_message(format!("copied {} to the clipboard", k.short), false),

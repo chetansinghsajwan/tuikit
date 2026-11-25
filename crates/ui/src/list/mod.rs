@@ -12,13 +12,14 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// The `List` component and the state it scrolls.
+/// The `List` component: the scrolling list a tool keeps, and its view.
 mod view;
-pub use view::{List, ListState};
+pub use view::{List, ListView, Slot};
 
 /// The geometry of one list: where its row bars and row contents go, so every tool lines up alike.
+/// Internal to `List`, which is the only thing that places rows.
 #[derive(Debug, Clone, Copy)]
-pub struct Rows {
+pub(crate) struct Rows {
     inner: Rect,
     left: u16,
     right: u16,
@@ -26,19 +27,19 @@ pub struct Rows {
 
 impl Rows {
     /// `pane` is the whole pane, `inner` the list's area inside its border and padding.
-    pub fn new(pane: Rect, inner: Rect) -> Rows {
+    pub(crate) fn new(pane: Rect, inner: Rect) -> Rows {
         let left = inner.x.saturating_sub(pane.x + 1).min(1);
         let right = pane.right().saturating_sub(inner.right() + 1).min(1);
         Rows { inner, left, right }
     }
 
     /// Which list this is, for the motion: where its content starts.
-    pub fn id(&self) -> (u16, u16) {
+    pub(crate) fn id(&self) -> (u16, u16) {
         (self.inner.x, self.inner.y)
     }
 
     /// The row's background at `y`, reaching into the padding on both sides.
-    pub fn bar(&self, y: u16) -> Rect {
+    pub(crate) fn bar(&self, y: u16) -> Rect {
         Rect {
             x: self.inner.x - self.left,
             y,
@@ -48,7 +49,7 @@ impl Rows {
     }
 
     /// The row's content area at `y`, inside the padding.
-    pub fn content(&self, y: u16) -> Rect {
+    pub(crate) fn content(&self, y: u16) -> Rect {
         Rect { y, height: 1, ..self.inner }
     }
 }
@@ -144,14 +145,15 @@ pub fn clip_spans(spans: Vec<Span<'static>>, limit: usize) -> Vec<Span<'static>>
 }
 
 impl ListRow {
-    /// Draw the row at line `y` and report it to the process-wide motion.
-    pub fn draw(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
-        self.render(&Context::new(theme), buf, rows, y);
-    }
-
     /// Draw the row at line `y` of the list `rows` and report it to the motion of `cx`. Not a
-    /// `Component`: a row is placed by its list's geometry, not by a free area.
-    pub fn render(self, cx: &Context, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
+    /// `Component`: a row is placed by its list's geometry, so only `List` draws it.
+    pub(crate) fn render(
+        self,
+        cx: &Context,
+        buf: &mut ratatui::buffer::Buffer,
+        rows: &Rows,
+        y: u16,
+    ) {
         let (id, content) = if self.id == 0 && self.content == 0 {
             (
                 crate::anim::hash_of(&text_of(&self.left)),
@@ -160,12 +162,19 @@ impl ListRow {
         } else {
             (self.id, self.content)
         };
-        self.paint(cx.theme, buf, rows, y);
+        self.paint(cx, buf, rows, y);
         cx.motion.note_row(rows.id(), y, id, content, rows.bar(y));
     }
 
     /// Draw the row without the motion: for a row built off screen (a preview).
-    pub fn paint(self, theme: &Theme, buf: &mut ratatui::buffer::Buffer, rows: &Rows, y: u16) {
+    pub(crate) fn paint(
+        self,
+        cx: &Context,
+        buf: &mut ratatui::buffer::Buffer,
+        rows: &Rows,
+        y: u16,
+    ) {
+        let theme = cx.theme;
         use ratatui::text::Line;
         use ratatui::widgets::{Paragraph, Widget};
         let base = if self.is_selected && !self.is_focused {
@@ -222,8 +231,14 @@ pub fn move_cursor(cursor: usize, delta: isize, len: usize) -> usize {
 /// rows, `scroll_margin` rows from both edges (except at the ends of the list), scrolling as little
 /// as possible from `first_visible_row`, and never so far that the window runs past the last row (a
 /// list that shrank under its old scroll). The one rule every list scrolls by.
-pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize, len: usize) -> usize {
-    let margin = scroll_margin(page);
+pub(crate) fn follow_cursor(
+    cursor: usize,
+    first_visible_row: usize,
+    page: usize,
+    len: usize,
+    scroll_off: usize,
+) -> usize {
+    let margin = scroll_margin(page, scroll_off);
     let last = len.saturating_sub(1);
     let first_visible_row = first_visible_row.min(len.saturating_sub(page));
     if cursor < first_visible_row + margin {
@@ -235,14 +250,15 @@ pub fn follow_cursor(cursor: usize, first_visible_row: usize, page: usize, len: 
     }
 }
 
-/// How many rows stay visible between the cursor and the edge of a list while it scrolls (vim's
-/// `scrolloff`), so there is always context ahead of the cursor.
+/// How many rows a `List` keeps visible between the cursor and the edge while it scrolls (vim's
+/// `scrolloff`) unless told otherwise (`List::with_scroll_off`), so there is always context ahead of
+/// the cursor.
 pub const SCROLL_OFF: usize = 4;
 
-/// The rows kept between the cursor and the edge of a window of `page` rows: `SCROLL_OFF`, less in a
+/// The rows kept between the cursor and the edge of a window of `page` rows: `scroll_off`, less in a
 /// window too small to hold it on both sides of the cursor.
-pub fn scroll_margin(page: usize) -> usize {
-    SCROLL_OFF.min(page.saturating_sub(1) / 2)
+pub(crate) fn scroll_margin(page: usize, scroll_off: usize) -> usize {
+    scroll_off.min(page.saturating_sub(1) / 2)
 }
 
 /// The row that is current while its pane does not have the focus (the file open in the editor): a

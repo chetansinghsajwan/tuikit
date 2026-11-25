@@ -168,7 +168,7 @@ fn the_commits_tab_shows_every_branch_and_searches() {
     // `/` searches: the cursor lands on the match and the message counts it.
     press(&mut app, "/");
     type_text(&mut app, "needle");
-    assert_eq!(app.commits[app.lists[1].cursor].subject, "needle on a side branch");
+    assert_eq!(app.commits[app.lists[1].cursor()].subject, "needle on a side branch");
     assert!(
         app.message
             .as_ref()
@@ -259,11 +259,11 @@ fn l_on_a_commit_shows_its_files_as_a_tree_with_the_diff_of_each() {
         .iter()
         .position(|r| matches!(r, FileRow::File { change, .. } if change.path == "src/a.rs"))
         .unwrap();
-    app.commit_files.as_mut().unwrap().cursor = at;
+    app.commit_files.as_mut().unwrap().list.set_cursor(at);
     let text = screen(&mut app).join("\n");
     assert!(text.contains("fn a()"), "{text}");
     // h folds and unfolds a folder, and goes to the parent; esc goes back to the commits.
-    app.commit_files.as_mut().unwrap().cursor = 0;
+    app.commit_files.as_mut().unwrap().list.set_cursor(0);
     let open = app.commit_files.as_ref().unwrap().rows.len();
     press(&mut app, "h");
     assert!(app.commit_files.as_ref().unwrap().rows.len() < open, "the folder is folded");
@@ -394,18 +394,20 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
         .collect();
     assert_eq!(folders, vec!["Feature".to_string(), "feature".to_string()]);
     // A new branch sorts before the one under the cursor: the cursor stays on its ref.
-    app.lists[0].cursor = ref_row(&app, "other");
+    let row = ref_row(&app, "other");
+    app.lists[0].set_cursor(row);
     git(&d, &["branch", "aaa"]);
     app.reload_all();
     assert_eq!(app.current_ref().map(|b| b.name.as_str()), Some("other"));
     // A folder rename that cannot be done as a whole does nothing at all.
     git(&d, &["branch", "taken-a"]);
     app.reload_all();
-    app.lists[0].cursor = app
+    let row = app
         .ref_rows
         .iter()
         .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "Feature"))
         .unwrap();
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -418,11 +420,12 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
         app.message
     );
     let before: Vec<String> = app.branches.iter().map(|b| b.name.clone()).collect();
-    app.lists[0].cursor = app
+    let row = app
         .ref_rows
         .iter()
         .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "x"))
         .unwrap();
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..1 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -432,11 +435,12 @@ fn the_refs_cursor_follows_its_ref_across_reloads_and_case_makes_folders() {
     assert_ne!(before, after);
     // A name that is not valid says so and changes nothing.
     let snapshot = after.clone();
-    app.lists[0].cursor = app
+    let row = app
         .ref_rows
         .iter()
         .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
         .unwrap();
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -459,7 +463,8 @@ fn tags_and_folders_of_refs_can_be_renamed() {
     let mut app = rig(&d);
     press(&mut app, "3");
     // A tag.
-    app.lists[0].cursor = ref_row(&app, "v1");
+    let row = ref_row(&app, "v1");
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..2 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -471,11 +476,12 @@ fn tags_and_folders_of_refs_can_be_renamed() {
         app.message
     );
     // A folder: everything under `feature/` moves to `feat/`.
-    app.lists[0].cursor = app
+    let row = app
         .ref_rows
         .iter()
         .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
         .unwrap();
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..7 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -490,7 +496,7 @@ fn tags_and_folders_of_refs_can_be_renamed() {
         app.message
     );
     // A section cannot be renamed.
-    app.lists[0].cursor = 0;
+    app.lists[0].set_cursor(0);
     press(&mut app, "r");
     assert!(
         matches!(app.mode, Mode::Normal)
@@ -531,18 +537,19 @@ fn the_refs_are_a_tree_of_sections_and_folders_that_fold() {
     );
     // Enter on a folder folds it; the cursor stays on the folder.
     press(&mut app, "3");
-    app.lists[0].cursor = app
+    let row = app
         .ref_rows
         .iter()
         .position(|r| matches!(r, RefRow::Folder { name, .. } if name == "feature"))
         .unwrap();
+    app.lists[0].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(shape(&app), vec!["Branches", " feature/", " main", " other", "Tags", " v1"]);
-    assert!(matches!(app.ref_rows[app.lists[0].cursor], RefRow::Folder { .. }));
+    assert!(matches!(app.ref_rows[app.lists[0].cursor()], RefRow::Folder { .. }));
     // Enter again unfolds it, a section folds all its refs.
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(app.ref_rows.len(), 9);
-    app.lists[0].cursor = 0;
+    app.lists[0].set_cursor(0);
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(shape(&app), vec!["Branches", "Tags", " v1"]);
 }
@@ -562,13 +569,15 @@ fn branches_checkout_create_and_delete() {
     app.handle_event(&key(KeyCode::Enter));
     assert_eq!(head(&d), "topic");
     // Delete `other` (not checked out) with a confirmation.
-    app.lists[0].cursor = ref_row(&app, "other");
+    let row = ref_row(&app, "other");
+    app.lists[0].set_cursor(row);
     press(&mut app, "d");
     assert!(matches!(app.mode, Mode::Confirm(_)));
     press(&mut app, "y");
     assert!(app.branches.iter().all(|b| b.name != "other"), "{:?}", app.branches);
     // The checked-out branch cannot be deleted.
-    app.lists[0].cursor = ref_row(&app, "topic");
+    let row = ref_row(&app, "topic");
+    app.lists[0].set_cursor(row);
     press(&mut app, "d");
     assert!(
         matches!(app.mode, Mode::Normal)
@@ -837,7 +846,7 @@ fn commit_actions_check_out_tag_branch_reword_reset_and_revert() {
     assert!(matches!(app.mode, Mode::Confirm(Confirm::Revert(_))));
     press(&mut app, "y");
     assert_eq!(app.commits.len(), 3, "{:?}", app.message);
-    app.lists[1].cursor = 2;
+    app.lists[1].set_cursor(2);
     press(&mut app, " ");
     press(&mut app, "z");
     press(&mut app, "h");
@@ -859,13 +868,15 @@ fn branches_rebase_rename_and_delete_tags() {
     press(&mut app, "3");
     let at = |app: &App, name: &str| ref_row(app, name);
     // Rebase feat onto main.
-    app.lists[0].cursor = at(&app, "main");
+    let row = at(&app, "main");
+    app.lists[0].set_cursor(row);
     press(&mut app, "B");
     assert!(matches!(app.mode, Mode::Confirm(Confirm::Rebase(_))));
     press(&mut app, "y");
     assert!(d.join("m.txt").exists() && d.join("f.txt").exists(), "{:?}", app.message);
     // Rename it.
-    app.lists[0].cursor = at(&app, "feat");
+    let row = at(&app, "feat");
+    app.lists[0].set_cursor(row);
     press(&mut app, "r");
     for _ in 0..4 {
         app.handle_event(&key(KeyCode::Backspace));
@@ -873,7 +884,8 @@ fn branches_rebase_rename_and_delete_tags() {
     type_text(&mut app, "topic");
     assert!(app.branches.iter().any(|b| b.name == "topic"), "{:?}", app.message);
     // A tag is deleted through the same key, with a confirmation.
-    app.lists[0].cursor = at(&app, "v9");
+    let row = at(&app, "v9");
+    app.lists[0].set_cursor(row);
     press(&mut app, "d");
     assert!(matches!(app.mode, Mode::Confirm(Confirm::DeleteTag(_))));
     press(&mut app, "y");
@@ -938,7 +950,8 @@ fn a_stopped_operation_shows_in_the_status_line_and_can_be_aborted() {
     commit_file(&d, "b.txt", "main\n", "main");
     let mut app = rig(&d);
     press(&mut app, "3");
-    app.lists[0].cursor = ref_row(&app, "other");
+    let row = ref_row(&app, "other");
+    app.lists[0].set_cursor(row);
     press(&mut app, "M");
     press(&mut app, "y"); // the merge conflicts
     assert_eq!(app.operation_name(), Some("MERGING"), "{:?}", app.message);

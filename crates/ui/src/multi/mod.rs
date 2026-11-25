@@ -168,7 +168,7 @@ impl Multi {
         if area.width < 30 || area.height < 10 {
             return;
         }
-        crate::dim::dim(buf, area, theme);
+        crate::dim::dim(buf, area, cx);
         let c = &theme.colors;
         let (width, height) = (area.width.min(68), area.height.saturating_sub(2).min(24));
         let rect = Rect {

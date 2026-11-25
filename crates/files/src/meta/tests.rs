@@ -43,7 +43,7 @@ fn file_rows_and_csv_extra() {
     let f = d.join("t.csv");
     fs::write(&f, "a,b,c\n1,2,3\n4,5,6\n").unwrap();
     let m = Meta::read(&f).unwrap();
-    let rows = text(&m.lines(&Theme::default(), None));
+    let rows = text(&m.lines(&ui::Context::new(&Theme::default()), None));
     assert_eq!(rows[0], "t.csv");
     assert!(rows.iter().any(|r| r.starts_with("Size") && r.ends_with("18 B")), "{rows:?}");
     assert!(rows.iter().any(|r| r.starts_with("Type") && r.contains("csv")), "{rows:?}");

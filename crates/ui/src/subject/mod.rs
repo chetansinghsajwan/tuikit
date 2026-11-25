@@ -1,5 +1,6 @@
 //! Commit subjects: the category before the colon (`fix:`, `feat(ui)!:`) in a color of its own.
 
+use crate::component::Context;
 use crate::theme::Theme;
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
@@ -57,7 +58,8 @@ pub fn category_color(theme: &Theme, subject: &str) -> Color {
 }
 
 /// The subject as spans: the category in its color (bold), the rest in `base`.
-pub fn spans(theme: &Theme, subject: &str, base: Style) -> Vec<Span<'static>> {
+pub fn spans(cx: &Context, subject: &str, base: Style) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     match category_len(subject) {
         Some(n) => vec![
             Span::styled(

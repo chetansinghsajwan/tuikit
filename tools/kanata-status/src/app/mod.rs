@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::sync::mpsc::Receiver;
 use ui::app::{Host, Request};
-use ui::{Pane, Theme, mix};
+use ui::{Pane, mix};
 
 /// Cap on the history log, so a long session does not grow memory without bound.
 const HISTORY_LIMIT: usize = 500;
@@ -35,7 +35,6 @@ enum Item {
 /// Everything the screen needs: the parsed config, the latest daemon state and the history.
 pub struct App {
     cfg: Config,
-    theme: Theme,
     addr: String,
     state: State,
     connected: bool,
@@ -54,7 +53,6 @@ impl App {
         let base = cfg.layers[0].name.clone();
         App {
             cfg,
-            theme: Theme::load(),
             addr,
             state: State::default(),
             connected: false,
@@ -138,10 +136,10 @@ impl App {
 
     /// Draws the whole screen: layer banner, keyboard, history and the key hint line.
     pub fn render(&self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
-        let l = &self.theme.layout;
+        let l = &cx.theme.layout;
         let keyboard_h = self.keys_height() + 2 + 2 + 2 * l.padding_y;
         let rows = ui::layout::rows(
-            &self.theme,
+            cx,
             area,
             &[
                 Constraint::Length(1),
@@ -151,7 +149,7 @@ impl App {
             ],
         );
         let rows: Vec<Rect> = rows.iter().map(|r| r.intersection(area)).collect();
-        self.render_layer(rows[0], buf);
+        self.render_layer(rows[0], buf, cx);
         self.render_keyboard(rows[1], buf, cx);
         self.render_history(rows[2], buf, cx);
         if rows[3].is_empty() {
@@ -163,7 +161,7 @@ impl App {
             rows[3].y,
             hint,
             rows[3].width as usize,
-            Style::new().fg(self.theme.colors.muted.into()),
+            Style::new().fg(cx.theme.colors.muted.into()),
         );
     }
 
@@ -173,15 +171,15 @@ impl App {
     }
 
     /// A color for a layer, so each one is recognisable at a glance.
-    fn layer_color(&self, name: &str) -> Color {
-        let c = &self.theme.colors;
+    fn layer_color(&self, cx: &ui::Context, name: &str) -> Color {
+        let c = &cx.theme.colors;
         let palette = [c.success, c.info, c.warning, c.accent, c.error, c.git.renamed];
         let i = self.cfg.layers.iter().position(|l| l.name == name).unwrap_or(0);
         palette[i % palette.len()].into()
     }
 
     /// Draws the centered layer name banner, marking when a layer is being browsed by hand.
-    fn render_layer(&self, area: Rect, buf: &mut Buffer) {
+    fn render_layer(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         if area.is_empty() {
             return;
         }
@@ -189,8 +187,8 @@ impl App {
         let suffix = if self.browsing.is_some() { " (browsing)" } else { "" };
         let text = format!(" {}{suffix} ", name.to_uppercase());
         let style = Style::new()
-            .fg(self.theme.colors.bg.into())
-            .bg(self.layer_color(&name))
+            .fg(cx.theme.colors.bg.into())
+            .bg(self.layer_color(cx, &name))
             .add_modifier(Modifier::BOLD);
         let w = (text.chars().count() as u16).min(area.width);
         buf.set_stringn(area.x + (area.width - w) / 2, area.y, text, w as usize, style);
@@ -199,7 +197,7 @@ impl App {
     /// Draws the keys of the shown layer in a bordered pane, lights the held ones and adds the
     /// status line below.
     fn render_keyboard(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let c = &self.theme.colors;
+        let c = &cx.theme.colors;
         let layer = self.cfg.layers[self.shown_index()].name.clone();
         let live = self.browsing.is_none();
         let pane = Pane::new().title("Keyboard").focused(true);
@@ -209,7 +207,7 @@ impl App {
         let width = inner.width.min(144) as usize;
         let at = |q: usize| (q * width / ROW_QUARTERS) as u16;
         let base_bg = mix(c.muted.into(), c.bg.into(), 16);
-        let lit_bg = self.layer_color(&layer);
+        let lit_bg = self.layer_color(cx, &layer);
         for (r, row) in self.cfg.rows.iter().enumerate() {
             let y = inner.y + (r as u16) * 2;
             if y >= inner.y + inner.height {
@@ -234,7 +232,7 @@ impl App {
                     continue;
                 }
                 let cell = Rect::new(inner.x + x0, y, w, 1);
-                let (label, color) = self.label(key, &action);
+                let (label, color) = self.label(cx, key, &action);
                 let style = if lit.contains(key) {
                     Style::new().fg(c.bg.into()).bg(lit_bg).add_modifier(Modifier::BOLD)
                 } else {
@@ -249,14 +247,19 @@ impl App {
 
         let status_y = inner.y + self.keys_height() + 1;
         if status_y < inner.y + inner.height {
-            let line = self.status_line();
+            let line = self.status_line(cx);
             Paragraph::new(line).render(Rect::new(inner.x, status_y, inner.width, 1), buf);
         }
     }
 
     /// The text and color of what a key does.
-    fn label(&self, key: &str, action: &KeyAction) -> (String, ratatui::style::Color) {
-        let c = &self.theme.colors;
+    fn label(
+        &self,
+        cx: &ui::Context,
+        key: &str,
+        action: &KeyAction,
+    ) -> (String, ratatui::style::Color) {
+        let c = &cx.theme.colors;
         match action {
             KeyAction::Blocked => ("·".into(), c.muted.into()),
             KeyAction::Transparent => (kbd::short(key), c.muted.into()),
@@ -271,8 +274,8 @@ impl App {
     }
 
     /// One line saying whether the daemon or kanata is unreachable and which keys are held.
-    fn status_line(&self) -> Line<'static> {
-        let c = &self.theme.colors;
+    fn status_line(&self, cx: &ui::Context) -> Line<'static> {
+        let c = &cx.theme.colors;
         if !self.connected {
             return Line::styled(
                 format!("kb daemon not reachable at {}", self.addr),
@@ -305,7 +308,7 @@ impl App {
 
     /// One line per event, newest at the bottom, like a log.
     fn render_history(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let c = &self.theme.colors;
+        let c = &cx.theme.colors;
         let pane = Pane::new().title("History");
         let inner = pane.draw(cx, area, buf);
         if inner.width == 0 || inner.height == 0 {
@@ -329,7 +332,7 @@ impl App {
                 }
                 Item::Layer(l) => Line::styled(
                     format!("-> {}", l.to_uppercase()),
-                    Style::new().fg(self.layer_color(l)),
+                    Style::new().fg(self.layer_color(cx, l)),
                 ),
             })
             .collect();

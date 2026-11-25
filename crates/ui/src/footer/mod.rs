@@ -2,7 +2,7 @@
 //! question being asked, a job that runs, the last message, or the key hints, so every tool says
 //! these things in the same colors and the same place.
 
-use crate::theme::Theme;
+use crate::component::{Component, Context};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -40,10 +40,10 @@ pub enum Footer<'a> {
 
 impl Footer<'_> {
     /// The line to draw.
-    pub fn line(&self, theme: &Theme) -> Line<'static> {
-        let c = &theme.colors;
+    pub fn line(&self, cx: &Context) -> Line<'static> {
+        let c = &cx.theme.colors;
         match self {
-            Footer::Prompt { label, text, .. } => crate::prompt::line(theme, label, text),
+            Footer::Prompt { label, text, .. } => crate::prompt::line(cx, label, text),
             Footer::Question(q) => {
                 Line::from(Span::styled(q.clone(), Style::new().fg(c.warning.into())))
             }
@@ -52,18 +52,20 @@ impl Footer<'_> {
                 Style::new().fg(if n.is_error { c.error } else { c.muted }.into()),
             )),
             Footer::Busy(label) => Line::from(Span::styled(
-                format!("{} {label}", crate::anim::spinner()),
+                format!("{} {label}", cx.motion.spinner()),
                 Style::new().fg(c.accent.into()),
             )),
             Footer::Hint(h) => Line::from(Span::styled(h.clone(), Style::new().fg(c.muted.into()))),
         }
     }
+}
 
-    /// Draws the footer on the row `area`, with the cursor for a prompt.
-    pub fn render(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
-        Paragraph::new(self.line(theme)).render(area, buf);
+/// Drawn on the row `area`, with the cursor for a prompt.
+impl Component for Footer<'_> {
+    fn render(self, cx: &Context, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.line(cx)).render(area, buf);
         if let Footer::Prompt { label, cursor, .. } = self {
-            crate::prompt::cursor(buf, area, label, *cursor);
+            crate::prompt::cursor(buf, area, label, cursor);
         }
     }
 }

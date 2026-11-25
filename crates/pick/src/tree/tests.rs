@@ -9,6 +9,12 @@ fn e(idx: u32, path: &str) -> Entry {
     Entry { idx, dirs: parts, sort: name.to_lowercase() }
 }
 
+/// The rows that enclose row `at`, as the picker pins them: any shallower row above encloses.
+fn ancestors(rows: &[Row], at: usize) -> Vec<usize> {
+    let depths: Vec<usize> = rows.iter().map(|r| usize::from(row_depth(r))).collect();
+    ui::tree::ancestors(&depths, |_| true, at)
+}
+
 #[test]
 fn ancestors_are_the_enclosing_headers_outermost_first() {
     let t = build(
@@ -65,7 +71,6 @@ fn folders_first_items_indented_and_single_chains_merged() {
     );
     // The walk order skips headers and follows the drawing order.
     assert_eq!(t.order, vec![4, 3, 2, 1, 5, 0]);
-    assert_eq!(t.pos_of[&2], 2);
     assert_eq!(t.row_of[&0], 9);
 }
 

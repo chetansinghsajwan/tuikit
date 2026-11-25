@@ -88,7 +88,7 @@ pub fn render_menu(area: Rect, buf: &mut Buffer, cx: &Context, menu: &Menu) {
         return;
     }
     cx.motion.overlay(buf, area);
-    crate::dim::dim(buf, area, theme);
+    crate::dim::dim(buf, area, cx);
     let c = &theme.colors;
     let key_w = menu.entries.iter().map(|e| e.key.chars().count()).max().unwrap_or(1);
     // A fixed size, so the popup does not jump between levels (smaller only on a small screen).

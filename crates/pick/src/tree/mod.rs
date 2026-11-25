@@ -28,12 +28,10 @@ pub enum Row {
 #[derive(Debug, Default)]
 pub struct Tree {
     pub rows: Vec<Row>,
-    /// Matched-list indices in the order they are drawn (what Up/Down walk).
+    /// Matched-list indices in the order they are drawn.
     pub order: Vec<u32>,
     /// `row_of[idx]`: the row an item is drawn on.
     pub row_of: HashMap<u32, usize>,
-    /// `pos_of[idx]`: its position in `order`.
-    pub pos_of: HashMap<u32, usize>,
 }
 
 /// A folder in the tree being built: its subfolders, its items and its best match.
@@ -93,7 +91,6 @@ fn emit(node: &Node, depth: u16, ranked: bool, tree: &mut Tree) {
     }
     for (_, idx) in items {
         tree.row_of.insert(*idx, tree.rows.len());
-        tree.pos_of.insert(*idx, tree.order.len());
         tree.order.push(*idx);
         tree.rows.push(Row::Item { idx: *idx, depth });
     }
@@ -173,7 +170,6 @@ pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
             match n.idx {
                 Some(idx) => {
                     tree.row_of.insert(idx, tree.rows.len());
-                    tree.pos_of.insert(idx, tree.order.len());
                     tree.order.push(idx);
                     tree.rows.push(Row::Item { idx, depth });
                 }
@@ -186,31 +182,10 @@ pub fn build_hier(entries: Vec<HierEntry>, ranked: bool) -> Tree {
     tree
 }
 /// The indent depth of a row.
-fn row_depth(row: &Row) -> u16 {
+pub fn row_depth(row: &Row) -> u16 {
     match row {
         Row::Dir { depth, .. } | Row::Head { depth, .. } | Row::Item { depth, .. } => *depth,
     }
-}
-
-/// The header rows (and items with others inside them) that enclose the row at `at`, outermost first (what stays
-/// pinned at the top of the list while that row is the first one shown).
-pub fn ancestors(rows: &[Row], at: usize) -> Vec<usize> {
-    let Some(row) = rows.get(at) else { return Vec::new() };
-    let depth = row_depth(row);
-    let mut need = depth;
-    let mut found = Vec::new();
-    for i in (0..at).rev() {
-        if need == 0 {
-            break;
-        }
-        let d = &row_depth(&rows[i]);
-        if *d < need {
-            found.push(i);
-            need = *d;
-        }
-    }
-    found.reverse();
-    found
 }
 
 #[cfg(test)]

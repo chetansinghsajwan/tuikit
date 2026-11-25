@@ -116,7 +116,7 @@ pub fn render_range_marked(
                         ),
                     ];
                     s.extend(ui::subject::spans(
-                        theme,
+                        &ui::Context::new(theme),
                         i.message.lines().next().unwrap_or(""),
                         fg.add_modifier(Modifier::BOLD),
                     ));
@@ -130,7 +130,7 @@ pub fn render_range_marked(
         let mut lines = info.message.lines();
         let mut subject = Vec::new();
         subject.extend(ui::subject::spans(
-            theme,
+            &ui::Context::new(theme),
             lines.next().unwrap_or(""),
             fg.add_modifier(Modifier::BOLD),
         ));
@@ -210,7 +210,7 @@ pub fn render_range_marked(
             Span::raw(" ".repeat(pad)),
         ];
         spans.extend(ui::tree::line_counts(
-            theme,
+            &ui::Context::new(theme),
             (!f.binary).then_some((f.added, f.removed)),
             counts,
         ));

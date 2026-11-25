@@ -59,7 +59,8 @@ pub(super) fn pills(refs: &[RefInfo]) -> Vec<(RefInfo, Vec<String>)> {
 
 /// A branch or tag name as a pill with rounded ends. The checked-out branch is solid with the
 /// branch icon; the others are a tint of their colour (branches blue, remotes grey, tags yellow).
-pub(super) fn ref_pill(theme: &Theme, r: &RefInfo, remotes: &[String]) -> Vec<Span<'static>> {
+pub(super) fn ref_pill(cx: &ui::Context, r: &RefInfo, remotes: &[String]) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     use ratatui::style::Color;
     let c = &theme.colors;
     let color = match (r.is_head, r.kind) {

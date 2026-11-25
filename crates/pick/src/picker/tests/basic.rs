@@ -113,16 +113,16 @@ fn filters_and_accepts_highlighted() {
 fn navigation_clamps_and_tab_marks() {
     let mut p = picker(&["a", "b", "c"], false, PathBuf::new());
     p.handle_event(&key(KeyCode::Up));
-    assert_eq!(p.cursor, 0);
+    assert_eq!(p.list.cursor(), 0);
     p.handle_event(&key(KeyCode::Tab)); // marks the first and moves down
     p.handle_event(&key(KeyCode::Tab)); // marks the second
-    assert_eq!(p.cursor, 2);
+    assert_eq!(p.list.cursor(), 2);
     let Action::Accept(v) = p.handle_event(&key(KeyCode::Enter)) else { panic!() };
     assert_eq!(v.len(), 2);
     for _ in 0..10 {
         p.handle_event(&key(KeyCode::Down));
     }
-    assert_eq!(p.cursor, 2);
+    assert_eq!(p.list.cursor(), 2);
 }
 
 #[test]

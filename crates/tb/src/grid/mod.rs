@@ -7,10 +7,10 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use std::path::PathBuf;
 use tui_input::Input;
-use ui::Pane;
 use ui::app::{Navigable, Request};
 use ui::footer::Footer;
 use ui::prompt::Typed;
+use ui::{Component, Pane};
 use unicode_width::UnicodeWidthStr;
 
 /// The widest a column is drawn.
@@ -413,7 +413,7 @@ impl Grid {
                 )),
             },
         };
-        footer.render(footer_row, buf, theme);
+        footer.render(cx, footer_row, buf);
 
         let widths = self.widths();
         let digits = self.table.row_count().to_string().len().max(2);

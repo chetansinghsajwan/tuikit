@@ -5,9 +5,8 @@ use super::*;
 impl Picker {
     /// Draw the list, and the preview beside it when the preview is on.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
         let (list_area, preview_area) = if self.opts.preview {
-            let [l, p] = layout::main_preview(theme, area);
+            let [l, p] = layout::main_preview(cx, area);
             (l, Some(p))
         } else {
             (area, None)
@@ -27,10 +26,11 @@ impl Picker {
         &mut self,
         cand: &Candidate,
         name_fg: Color,
-        theme: &Theme,
+        cx: &ui::Context,
         snap_index: u32,
         leaf: bool,
     ) -> Vec<Span<'static>> {
+        let theme = cx.theme;
         let mut spans = Vec::new();
         // Row numbers and, for input that carries times, how long ago each was.
         if self.row_style.numbers {
@@ -65,7 +65,7 @@ impl Picker {
                 Style::new().fg(k.color(theme)),
             ));
         }
-        spans.extend(self.row_spans_inner(cand, name_fg, theme, snap_index, leaf));
+        spans.extend(self.row_spans_inner(cand, name_fg, cx, snap_index, leaf));
         spans
     }
 
@@ -75,10 +75,11 @@ impl Picker {
         &mut self,
         cand: &Candidate,
         name_fg: Color,
-        theme: &Theme,
+        cx: &ui::Context,
         snap_index: u32,
         leaf: bool,
     ) -> Vec<Span<'static>> {
+        let theme = cx.theme;
         let c = &theme.colors;
         let hit = Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD);
         if let Some(loc) = &cand.loc {
@@ -173,7 +174,8 @@ impl Picker {
     }
 
     /// Draw the grep toggles and the include and exclude filter lines.
-    pub(super) fn render_grep_filters(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    pub(super) fn render_grep_filters(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let on = |b: bool| {
             if b {
@@ -256,7 +258,7 @@ impl Picker {
             width: if show_count { inner.width - cw - 1 } else { inner.width },
             ..inner
         };
-        let prompt = ui::prompt::line(theme, "> ", self.input.value());
+        let prompt = ui::prompt::line(cx, "> ", self.input.value());
         Paragraph::new(prompt).render(prompt_area, buf);
         if show_count {
             buf.set_string(inner.right() - cw, inner.y, &count, Style::new().fg(c.muted.into()));
@@ -281,7 +283,7 @@ impl Picker {
             self.render_grep_filters(
                 Rect { y: inner.y + 1 + sep, height: filter_row, ..inner },
                 buf,
-                theme,
+                cx,
             );
         }
         let header_rows =
@@ -295,199 +297,111 @@ impl Picker {
                 Style::new().fg(c.muted.into()),
             );
         }
-        let list = Rect {
+        let list_area = Rect {
             y: inner.y + 1 + sep + filter_row + header_rows,
             height: inner.height - 1 - sep - filter_row - header_rows,
             ..inner
         };
-        let rows = ui::list::Rows::new(area, inner);
-        self.page = u32::from(list.height).max(1);
-        self.refresh_tree();
-        if self.tree.is_some() {
-            self.render_tree_rows(list, rows, buf, cx);
-            return;
+        self.refresh_rows(None);
+        // The guide of the scope the cursor is in is highlighted, as in the files panel.
+        let depths: Option<Vec<usize>> = self
+            .tree
+            .as_ref()
+            .map(|tree| tree.rows.iter().map(|r| usize::from(crate::tree::row_depth(r))).collect());
+        let scope = depths.as_ref().and_then(|d| ui::tree::active_scope(d, self.list.cursor()));
+        let len = match &self.tree {
+            Some(tree) => tree.rows.len(),
+            None => snap_matched as usize,
+        };
+        // The list is taken out so the rows can read the picker while it scrolls.
+        let mut list = std::mem::take(&mut self.list);
+        let row = |s: ui::list::Slot| self.list_row(cx, s.index, scope);
+        let view = list.view(len, row).pane(area).focused(true);
+        match &depths {
+            // The rows above the top row that enclose it stay pinned at the top, so scrolling never
+            // loses the path.
+            Some(depths) => view
+                .pinned(|first| ui::tree::ancestors(depths, |_| true, first))
+                .render(cx, list_area, buf),
+            None => view.render(cx, list_area, buf),
         }
-        // Keep the cursor inside the window.
-        self.offset = ui::list::follow_cursor(
-            self.cursor as usize,
-            self.offset as usize,
-            self.page as usize,
-            snap_matched as usize,
-        ) as u32;
-
-        let end = (self.offset + self.page).min(snap_matched);
-        for (row, idx) in (self.offset..end).enumerate() {
-            let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|i| i.data.clone())
-            else {
-                break;
-            };
-            let y = list.y + row as u16;
-            let selected = idx == self.cursor;
-            let git = self.git_state(cand.path());
-            let marked = self.marked.contains(&cand.output());
-            let mut spans = vec![Span::styled(
-                if marked { "● " } else { "  " },
-                Style::new().fg(c.accent.into()),
-            )];
-            let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
-            spans.extend(self.row_spans(&cand, name_fg, theme, idx, false));
-            ui::list::ListRow {
-                id: ui::anim::hash_of(&cand.output()),
-                left: spans,
-                signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
-                has_sign_cell: true,
-                tint: git.map(|(_, k)| Self::git_color(theme, k)),
-                is_selected: selected,
-                is_focused: true,
-                ..Default::default()
-            }
-            .render(cx, buf, &rows, y);
-        }
+        self.list = list;
     }
 
-    /// The list as a directory hierarchy: folder header rows with the items
-    /// indented beneath them. `offset` counts rows here, not results.
-    pub(super) fn render_tree_rows(
+    /// Row `at` of the list: a result, or in the hierarchy a folder or a heading above results.
+    fn list_row(
         &mut self,
-        list: Rect,
-        rows_geo: ui::list::Rows,
-        buf: &mut Buffer,
         cx: &ui::Context,
-    ) {
+        at: usize,
+        scope: Option<ui::tree::Scope>,
+    ) -> ui::list::ListRow {
         let theme = cx.theme;
         let c = &theme.colors;
-        let (rows, scope): (Vec<(usize, crate::tree::Row)>, Option<ui::tree::Scope>) = {
-            let Some(tree) = self.tree.as_ref() else { return };
-            // The folders above the top row stay pinned at the top, so scrolling never loses the
-            // path; they take lines from the window, which the scrolling below accounts for.
-            let room = |off: u32| {
-                (self.page as usize)
-                    .saturating_sub(crate::tree::ancestors(&tree.rows, off as usize).len())
-                    .max(1) as u32
-            };
-            let crow = tree.row_of.get(&self.cursor).copied().unwrap_or(0) as u32;
-            let margin = ui::list::scroll_margin(self.page as usize) as u32;
-            if crow < self.offset + margin {
-                self.offset = crow.saturating_sub(margin);
-            } else {
-                let want = (crow + margin).min(tree.rows.len().saturating_sub(1) as u32);
-                while want >= self.offset + room(self.offset) {
-                    self.offset += 1;
-                }
+        let guide = scope.and_then(|s| s.col_at(at));
+        let (idx, depth) = match self.tree.as_ref().map(|t| &t.rows[at]) {
+            None => (at as u32, None),
+            Some(crate::tree::Row::Item { idx, depth }) => (*idx, Some(*depth)),
+            Some(crate::tree::Row::Dir { depth, label }) => {
+                // In grep mode the header is a file, otherwise a folder.
+                let last = label.rsplit('/').next().unwrap_or(label);
+                let icon = if self.opts.mode == Mode::Grep {
+                    theme.icons.file(last, false)
+                } else {
+                    theme.icons.dir(last, true)
+                };
+                let mut spans = vec![Span::raw("  ")];
+                spans.extend(ui::tree::guides_marked(cx, usize::from(*depth), guide));
+                spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
+                spans.push(Span::styled(
+                    label.clone(),
+                    Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+                ));
+                return ui::list::ListRow {
+                    id: ui::anim::hash_of(&(depth, label)),
+                    left: spans,
+                    ..Default::default()
+                };
             }
-            let mut pinned: Vec<(usize, crate::tree::Row)> =
-                crate::tree::ancestors(&tree.rows, self.offset as usize)
-                    .into_iter()
-                    .map(|i| (i, tree.rows[i].clone()))
-                    .collect();
-            // In a tiny pane keep at least one scrolling row: drop the outermost pins first.
-            let keep = (self.page as usize).saturating_sub(1);
-            if pinned.len() > keep {
-                pinned.drain(..pinned.len() - keep);
+            Some(crate::tree::Row::Head { depth, label, kind }) => {
+                let mut spans = vec![Span::raw("  ")];
+                spans.extend(ui::tree::guides_marked(cx, usize::from(*depth), guide));
+                let (glyph, style) = match kind {
+                    Some(k) => (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme))),
+                    None => {
+                        let icon =
+                            theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
+                        (icon.glyph, icon.style())
+                    }
+                };
+                spans.push(Span::styled(format!("{glyph} "), style));
+                spans.push(Span::styled(label.clone(), Style::new().fg(c.muted.into())));
+                return ui::list::ListRow {
+                    id: ui::anim::hash_of(&(depth, label)),
+                    left: spans,
+                    ..Default::default()
+                };
             }
-            let take = (self.page as usize).saturating_sub(pinned.len());
-            // The guide of the scope the cursor is in is highlighted, as in the files panel.
-            let depths: Vec<usize> = tree
-                .rows
-                .iter()
-                .map(|r| match r {
-                    crate::tree::Row::Dir { depth, .. }
-                    | crate::tree::Row::Head { depth, .. }
-                    | crate::tree::Row::Item { depth, .. } => usize::from(*depth),
-                })
-                .collect();
-            let scope = ui::tree::active_scope(&depths, crow as usize);
-            let window = tree
-                .rows
-                .iter()
-                .enumerate()
-                .skip(self.offset as usize)
-                .take(take)
-                .map(|(i, r)| (i, r.clone()));
-            (pinned.into_iter().chain(window).collect(), scope)
         };
-
-        for (i, (at, row)) in rows.iter().enumerate() {
-            let guide = scope.and_then(|s| s.col_at(*at));
-            let y = list.y + i as u16;
-            match row {
-                crate::tree::Row::Dir { depth, label } => {
-                    // In grep mode the header is a file, otherwise a folder.
-                    let last = label.rsplit('/').next().unwrap_or(label);
-                    let icon = if self.opts.mode == Mode::Grep {
-                        theme.icons.file(last, false)
-                    } else {
-                        theme.icons.dir(last, true)
-                    };
-                    let mut spans = vec![Span::raw("  ")];
-                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
-                    spans.push(Span::styled(
-                        label.clone(),
-                        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
-                    ));
-                    ui::list::ListRow {
-                        id: ui::anim::hash_of(&(depth, label)),
-                        left: spans,
-                        is_focused: true,
-                        ..Default::default()
-                    }
-                    .render(cx, buf, &rows_geo, y);
-                }
-                crate::tree::Row::Head { depth, label, kind } => {
-                    let mut spans = vec![Span::raw("  ")];
-                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    let (glyph, style) = match kind {
-                        Some(k) => (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme))),
-                        None => {
-                            let icon =
-                                theme.icons.file(label.rsplit('/').next().unwrap_or(label), false);
-                            (icon.glyph, icon.style())
-                        }
-                    };
-                    spans.push(Span::styled(format!("{glyph} "), style));
-                    spans.push(Span::styled(label.clone(), Style::new().fg(c.muted.into())));
-                    ui::list::ListRow {
-                        id: ui::anim::hash_of(&(depth, label)),
-                        left: spans,
-                        is_focused: true,
-                        ..Default::default()
-                    }
-                    .render(cx, buf, &rows_geo, y);
-                }
-                crate::tree::Row::Item { idx, depth } => {
-                    let Some(cand) =
-                        self.nucleo.snapshot().get_matched_item(*idx).map(|it| it.data.clone())
-                    else {
-                        continue;
-                    };
-                    let selected = *idx == self.cursor;
-                    let git = self.git_state(cand.path());
-                    let marked = self.marked.contains(&cand.output());
-                    let mut spans = vec![Span::styled(
-                        if marked { "● " } else { "  " },
-                        Style::new().fg(c.accent.into()),
-                    )];
-                    spans.extend(ui::tree::guides_marked(theme, usize::from(*depth), guide));
-                    let name_fg =
-                        git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
-                    spans.extend(self.row_spans(&cand, name_fg, theme, *idx, true));
-                    ui::list::ListRow {
-                        id: ui::anim::hash_of(&cand.output()),
-                        left: spans,
-                        signs: git
-                            .map(|(ch, k)| (ch, Self::git_color(theme, k)))
-                            .into_iter()
-                            .collect(),
-                        has_sign_cell: true,
-                        tint: git.map(|(_, k)| Self::git_color(theme, k)),
-                        is_selected: selected,
-                        is_focused: true,
-                        ..Default::default()
-                    }
-                    .render(cx, buf, &rows_geo, y);
-                }
-            }
+        let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|it| it.data.clone())
+        else {
+            return ui::list::ListRow::default();
+        };
+        let git = self.git_state(cand.path());
+        let marked = self.marked.contains(&cand.output());
+        let mut spans =
+            vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
+        if let Some(depth) = depth {
+            spans.extend(ui::tree::guides_marked(cx, usize::from(depth), guide));
+        }
+        let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
+        spans.extend(self.row_spans(&cand, name_fg, cx, idx, depth.is_some()));
+        ui::list::ListRow {
+            id: ui::anim::hash_of(&cand.output()),
+            left: spans,
+            signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
+            has_sign_cell: true,
+            tint: git.map(|(_, k)| Self::git_color(theme, k)),
+            ..Default::default()
         }
     }
 

@@ -1,6 +1,7 @@
 //! Tests for the graph and the meter.
 
 use super::*;
+use crate::Theme;
 
 #[test]
 fn a_small_load_still_shows_one_eighth() {

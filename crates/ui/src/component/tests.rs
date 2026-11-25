@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::Pane;
+use crate::Theme;
 use crate::list::{ListRow, Rows};
 use ratatui::text::Span;
 use std::time::Duration;
@@ -21,10 +22,11 @@ fn frame(cx: &Context, area: Rect, rows_at: &[(u16, &'static str)]) -> Buffer {
 #[test]
 fn a_pane_draws_and_returns_its_content_area() {
     let theme = Theme::default();
+    let cx = &crate::Context::new(&theme);
     let area = Rect::new(0, 0, 12, 4);
     let mut buf = Buffer::empty(area);
     let inner = Pane::new().title("t").draw(&Context::new(&theme), area, &mut buf);
-    assert_eq!(inner, Pane::new().inner(&theme, area));
+    assert_eq!(inner, Pane::new().inner(cx, area));
     assert_ne!(buf[(0, 0)].symbol(), " ", "the border is drawn");
 }
 

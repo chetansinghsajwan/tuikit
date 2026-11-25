@@ -57,10 +57,10 @@ impl App {
         if which == Focus::Commits {
             self.fit_columns(inner.width);
         }
-        // The state is copied out so the rows can borrow `self` while the list scrolls it.
-        let mut state = self.lists[li];
-        let row = |i| {
-            let (left, right) = self.row(which, i, theme);
+        // The list is taken out so the rows can borrow `self` while it scrolls.
+        let mut list = std::mem::take(&mut self.lists[li]);
+        let row = |s: ui::list::Slot| {
+            let (left, right) = self.row(which, s.index, cx);
             ui::list::ListRow {
                 left: left.spans,
                 right: vec![Span::raw(right)],
@@ -68,12 +68,8 @@ impl App {
                 ..Default::default()
             }
         };
-        ui::list::List::new(n, &mut state, row)
-            .pane(area)
-            .focused(focused)
-            .empty("nothing here")
-            .render(cx, inner, buf);
-        self.lists[li] = state;
+        list.view(n, row).pane(area).focused(focused).empty("nothing here").render(cx, inner, buf);
+        self.lists[li] = list;
     }
 
     /// Give the flexible columns their widths for a list `width` wide: the refs column as wide as the most
@@ -123,8 +119,9 @@ impl App {
         &self,
         which: Focus,
         i: usize,
-        theme: &Theme,
+        cx: &ui::Context,
     ) -> (Line<'static>, String) {
+        let theme = cx.theme;
         let c = &theme.colors;
         let fg = Style::new().fg(c.fg.into());
         let muted = Style::new().fg(c.muted.into());
@@ -134,20 +131,19 @@ impl App {
                 match &self.ref_rows[i] {
                     RefRow::Section { key, label, count } => {
                         let mut spans = ui::tree::group(
-                            theme,
+                            cx,
                             0,
                             self.folded.contains(key),
                             None,
                             label,
                             accent.add_modifier(Modifier::BOLD),
                         );
-                        spans.push(ui::tree::count(theme, *count));
+                        spans.push(ui::tree::count(cx, *count));
                         (Line::from(spans), String::new())
                     }
                     RefRow::Folder { key, name, depth, count } => {
-                        let mut spans =
-                            ui::tree::dir(theme, *depth, name, !self.folded.contains(key));
-                        spans.push(ui::tree::count(theme, *count));
+                        let mut spans = ui::tree::dir(cx, *depth, name, !self.folded.contains(key));
+                        spans.push(ui::tree::count(cx, *count));
                         (Line::from(spans), String::new())
                     }
                     RefRow::Item { index, name, depth } => {
@@ -162,7 +158,7 @@ impl App {
                         // Indentation guides, like the files tree: a thin line at each level.
                         (
                             Line::from(vec![
-                                ui::tree::guides(theme, *depth),
+                                ui::tree::guides(cx, *depth),
                                 Span::styled(name.clone(), style),
                             ]),
                             ago(b.time),
@@ -187,7 +183,7 @@ impl App {
                 let hit = self.commit_matches(i);
                 let mut spans = Vec::new();
                 if let Some(row) = self.graph_rows.get(i) {
-                    spans.extend(self.graph_spans(row, theme));
+                    spans.extend(self.graph_spans(row, cx));
                 }
                 // A table: graph, author, hash, refs (pills; the checked-out branch is the solid one
                 // with the branch icon), subject; every column starts at the same place in every row.
@@ -221,7 +217,7 @@ impl App {
                             }
                             break;
                         }
-                        spans.extend(ref_pill(theme, r, remotes));
+                        spans.extend(ref_pill(cx, r, remotes));
                         used += w;
                     }
                     spans.push(Span::raw(" ".repeat(self.refs_w.saturating_sub(used) + 1)));
@@ -233,7 +229,7 @@ impl App {
                         Style::new().fg(c.warning.into()).add_modifier(Modifier::BOLD),
                     ));
                 } else {
-                    spans.extend(ui::subject::spans(theme, &k.subject, fg));
+                    spans.extend(ui::subject::spans(cx, &k.subject, fg));
                 }
                 let mut when = Vec::new();
                 if self.cols.show_absolute_time {
@@ -281,8 +277,9 @@ impl App {
     pub(in crate::app) fn graph_spans(
         &self,
         row: &git_core::GraphRow,
-        theme: &Theme,
+        cx: &ui::Context,
     ) -> Vec<Span<'static>> {
+        let theme = cx.theme;
         let c = &theme.colors;
         let palette = [c.accent, c.success, c.warning, c.info, c.error, c.git.renamed];
         let mut spans: Vec<Span<'static>> = row
@@ -306,19 +303,19 @@ impl App {
                 // The diff of the file (or folder) of the commit being explored: `oid`, a separator, the path.
                 Some(cf) => Some(format!("{}\u{1}{}", cf.oid, cf.current_path().unwrap_or(""))),
                 None if self.work => {
-                    self.commits.get(self.lists[1].cursor).map(|c| format!("{}\u{3}", c.oid))
+                    self.commits.get(self.lists[1].cursor()).map(|c| format!("{}\u{3}", c.oid))
                 }
-                None => self.commits.get(self.lists[1].cursor).map(|c| match &self.compare {
+                None => self.commits.get(self.lists[1].cursor()).map(|c| match &self.compare {
                     // Two commits: the diff from the marked one to this one.
                     Some(base) if *base != c.oid => format!("{base}\u{2}{}", c.oid),
                     _ => c.oid.clone(),
                 }),
             },
             Focus::Stashes => {
-                self.stashes.get(self.lists[2].cursor).map(|s| format!("stash@{{{}}}", s.index))
+                self.stashes.get(self.lists[2].cursor()).map(|s| format!("stash@{{{}}}", s.index))
             }
             Focus::Submodules => {
-                self.submodules.get(self.lists[3].cursor).map(|s| format!("\u{4}{}", s.path))
+                self.submodules.get(self.lists[3].cursor()).map(|s| format!("\u{4}{}", s.path))
             }
             Focus::Files => None,
         }

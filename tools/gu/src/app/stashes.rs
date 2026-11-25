@@ -5,7 +5,7 @@ use super::*;
 impl App {
     /// The actions that act on the highlighted stash.
     pub(super) fn stash_action(&mut self, id: &str) {
-        let cur = self.stashes.get(self.lists[2].cursor).map(|s| s.index);
+        let cur = self.stashes.get(self.lists[2].cursor()).map(|s| s.index);
         match (id, cur) {
             ("stash.new", _) => self.mode = Mode::Prompt(PromptKind::NewStash, Input::default()),
             ("stash.apply", Some(i)) => {

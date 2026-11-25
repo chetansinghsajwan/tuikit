@@ -2,7 +2,6 @@
 
 use crate::component::{Component, Context};
 use crate::icons::Icon;
-use crate::theme::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -42,7 +41,8 @@ impl<'a> Pane<'a> {
     }
 
     /// The ratatui block for this pane, with the theme's border, colors, padding and title.
-    fn block(&self, theme: &Theme) -> Block<'a> {
+    fn block(&self, cx: &Context) -> Block<'a> {
+        let theme = cx.theme;
         let c = &theme.colors;
         let l = &theme.layout;
         let border = if self.focused { c.border_focused } else { c.border };
@@ -57,16 +57,16 @@ impl<'a> Pane<'a> {
             })
             .padding(Padding::symmetric(l.padding_x, l.padding_y));
         if let (true, Some(t)) = (theme.chrome.titles, self.title) {
-            block = block.title(self.title_line(theme, t, border.into()));
+            block = block.title(self.title_line(cx, t, border.into()));
         }
         block
     }
 
     /// `─ icon title ─`: set off from the corner by a bar and a space on each side;
     /// bold accent when the pane is focused, muted otherwise.
-    fn title_line(&self, theme: &Theme, title: &str, border: ratatui::style::Color) -> Line<'a> {
-        let c = &theme.colors;
-        let bar = theme.chrome.border_type().to_border_set().horizontal_top;
+    fn title_line(&self, cx: &Context, title: &str, border: ratatui::style::Color) -> Line<'a> {
+        let c = &cx.theme.colors;
+        let bar = cx.theme.chrome.border_type().to_border_set().horizontal_top;
         let style = if self.focused {
             Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
         } else {
@@ -81,14 +81,14 @@ impl<'a> Pane<'a> {
         Line::from(spans)
     }
 
-    /// The content rect inside the border and padding of `theme`.
-    pub fn inner(&self, theme: &Theme, area: Rect) -> Rect {
-        self.block(theme).inner(area)
+    /// The content rect inside the border and padding.
+    pub fn inner(&self, cx: &Context, area: Rect) -> Rect {
+        self.block(cx).inner(area)
     }
 
     /// Draws the pane into `area` and returns its content rect, inside the border and padding.
     pub fn draw(self, cx: &Context, area: Rect, buf: &mut Buffer) -> Rect {
-        let inner = self.inner(cx.theme, area);
+        let inner = self.inner(cx, area);
         Component::render(self, cx, area, buf);
         inner
     }
@@ -102,7 +102,7 @@ impl Default for Pane<'_> {
 
 impl Component for Pane<'_> {
     fn render(self, cx: &Context, area: Rect, buf: &mut Buffer) {
-        self.block(cx.theme).render(area, buf);
+        self.block(cx).render(area, buf);
     }
 }
 

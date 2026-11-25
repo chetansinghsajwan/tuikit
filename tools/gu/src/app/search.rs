@@ -39,7 +39,7 @@ impl App {
 
     /// Reload the list after a filter changed and say how many commits are left.
     pub(super) fn refilter(&mut self, what: &str) {
-        self.lists[1] = ListState::default();
+        self.lists[1].reset();
         self.preview_scroll.reset();
         self.reload_history();
         let n = self.commits.len();
@@ -76,14 +76,14 @@ impl App {
             self.show_message("no search: / starts one", true);
             return;
         }
-        let from = self.lists[1].cursor;
+        let from = self.lists[1].cursor();
         let found = (1..=n)
             .map(|d| (from as isize + step * d as isize).rem_euclid(n as isize) as usize)
             .find(|&i| self.commit_matches(i));
         let total = (0..n).filter(|&i| self.commit_matches(i)).count();
         match found {
             Some(i) => {
-                self.lists[1].cursor = i;
+                self.lists[1].set_cursor(i);
                 self.preview_scroll.reset();
                 let nth = (0..=i).filter(|&j| self.commit_matches(j)).count();
                 self.show_message(format!("match {nth} of {total}"), false);
@@ -117,7 +117,7 @@ impl App {
             self.search = if value.is_empty() { None } else { Some(value) };
             if self.search.is_some() {
                 // The commit under the cursor counts if it matches.
-                let at = self.lists[1].cursor;
+                let at = self.lists[1].cursor();
                 if self.commit_matches(at) {
                     let total = (0..self.commits.len()).filter(|&i| self.commit_matches(i)).count();
                     let nth = (0..=at).filter(|&j| self.commit_matches(j)).count();

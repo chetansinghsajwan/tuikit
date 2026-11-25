@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use tui_input::Input;
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme};
+use ui::{Component, Pane};
 
 /// The default keys of every domain's actions.
 mod binds;
@@ -75,10 +75,8 @@ pub struct Panel {
     opts: PanelOptions,
     expanded: BTreeSet<PathBuf>,
     rows: Vec<Row>,
-    cursor: usize,
-    offset: usize,
-    /// Rows visible at the last render, for paging.
-    page: usize,
+    /// The cursor and the scroll over `rows`.
+    list: ui::list::List,
     git: Option<(Repo, Status)>,
     mode: Mode,
     marked: BTreeSet<PathBuf>,
@@ -114,9 +112,7 @@ impl Panel {
             opts,
             expanded: BTreeSet::new(),
             rows: Vec::new(),
-            cursor: 0,
-            offset: 0,
-            page: 10,
+            list: ui::list::List::new(),
             git: None,
             mode: Mode::Normal,
             marked: BTreeSet::new(),
@@ -153,16 +149,16 @@ impl Panel {
         } else {
             None
         };
-        let keep = self.rows.get(self.cursor).map(|r| r.path.clone());
+        let keep = self.rows.get(self.list.cursor()).map(|r| r.path.clone());
         self.rows.clear();
         let root = self.root.clone();
         self.build(&root, 0);
+        self.list.set_len(self.rows.len());
         if let Some(path) = keep
             && let Some(i) = self.rows.iter().position(|r| r.path == path)
         {
-            self.cursor = i;
+            self.list.set_cursor(i);
         }
-        self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
     }
 
     /// The sorted, filtered entries of one folder: folders first, then by name, honoring the ignore
@@ -236,7 +232,7 @@ impl Panel {
         }
         self.refresh();
         if let Some(i) = self.rows.iter().position(|r| r.path == path) {
-            self.cursor = i;
+            self.list.set_cursor(i);
         }
     }
 
@@ -246,8 +242,7 @@ impl Panel {
         self.root = dir;
         self.expanded.clear();
         self.marked.clear();
-        self.cursor = 0;
-        self.offset = 0;
+        self.list.reset();
         self.rebuild();
     }
 
@@ -270,49 +265,21 @@ impl Panel {
         }
     }
 
-    /// The folder rows that enclose row `at`, outermost first (what stays pinned above it).
-    fn ancestors(&self, at: usize) -> Vec<usize> {
-        let Some(row) = self.rows.get(at) else { return Vec::new() };
-        let mut need = row.depth;
-        let mut found = Vec::new();
-        for i in (0..at).rev() {
-            if need == 0 {
-                break;
-            }
-            if self.rows[i].is_dir && self.rows[i].depth < need {
-                found.push(i);
-                need = self.rows[i].depth;
-            }
-        }
-        found.reverse();
-        found
-    }
-
-    /// The pinned folder rows when `offset` is the first scrolling row; at least one row scrolls.
-    fn pinned(&self, offset: usize) -> Vec<usize> {
-        let mut p = self.ancestors(offset);
-        let keep = self.page.saturating_sub(1);
-        if p.len() > keep {
-            p.drain(..p.len() - keep);
-        }
-        p
-    }
-
-    /// The rows drawn, top to bottom: the pinned folders, then the rows from `offset`.
-    fn visible(&self) -> Vec<usize> {
-        let pinned = self.pinned(self.offset);
-        let take = self.page.saturating_sub(pinned.len());
-        pinned.into_iter().chain(self.offset..(self.offset + take).min(self.rows.len())).collect()
+    /// The folder rows pinned above `first`, the first row that scrolls: the folders it is inside.
+    pub(super) fn pinned(&self, first: usize) -> Vec<usize> {
+        let depths: Vec<usize> = self.rows.iter().map(|r| usize::from(r.depth)).collect();
+        ui::tree::ancestors(&depths, |i| self.rows[i].is_dir, first)
     }
 
     /// The width the pane needs to show the rows on screen without cutting a name off: the longest one
     /// (guides, icon, name, the git sign) and the pane's own border and padding.
-    pub fn wanted_width(&self, theme: &Theme) -> u16 {
-        let chrome = 100 - Pane::new().inner(theme, Rect::new(0, 0, 100, 10)).width;
+    pub fn wanted_width(&self, cx: &ui::Context) -> u16 {
+        let chrome = 100 - Pane::new().inner(cx, Rect::new(0, 0, 100, 10)).width;
         let longest = self
-            .visible()
-            .into_iter()
-            .filter_map(|i| self.rows.get(i))
+            .list
+            .shown()
+            .iter()
+            .filter_map(|&i| self.rows.get(i))
             .map(|r| usize::from(r.depth) * 2 + 2 + r.name.chars().count() + 5)
             .max()
             .unwrap_or(0);
@@ -322,22 +289,17 @@ impl Panel {
     /// The scope the cursor is in, for the highlighted indent guide.
     fn active_scope(&self) -> Option<ui::tree::Scope> {
         let depths: Vec<usize> = self.rows.iter().map(|r| usize::from(r.depth)).collect();
-        ui::tree::active_scope(&depths, self.cursor)
+        ui::tree::active_scope(&depths, self.list.cursor())
     }
 
     /// Path under the cursor.
     pub fn current(&self) -> Option<&Path> {
-        self.rows.get(self.cursor).map(|r| r.path.as_path())
-    }
-
-    /// Move the cursor by `delta` rows, staying inside the list.
-    fn move_by(&mut self, delta: isize) {
-        self.cursor = ui::list::move_cursor(self.cursor, delta, self.rows.len());
+        self.rows.get(self.list.cursor()).map(|r| r.path.as_path())
     }
 
     /// Open or close the folder under the cursor (`open` forces a state, `None` flips it).
     fn toggle(&mut self, open: Option<bool>) {
-        let Some(row) = self.rows.get(self.cursor) else { return };
+        let Some(row) = self.rows.get(self.list.cursor()) else { return };
         if !row.is_dir {
             return;
         }
@@ -353,19 +315,19 @@ impl Panel {
 
     /// `h`: collapse an open folder, otherwise go to the parent folder's row.
     fn left(&mut self) {
-        let Some(row) = self.rows.get(self.cursor) else { return };
+        let Some(row) = self.rows.get(self.list.cursor()) else { return };
         if row.is_dir && self.expanded.contains(&row.path) {
             self.toggle(Some(false));
         } else if let Some(parent) = row.path.parent()
             && let Some(i) = self.rows.iter().position(|r| r.path == parent)
         {
-            self.cursor = i;
+            self.list.set_cursor(i);
         }
     }
 
     /// Where `a` and `p` put things: the folder under the cursor, else its parent.
     fn target_dir(&self) -> PathBuf {
-        match self.rows.get(self.cursor) {
+        match self.rows.get(self.list.cursor()) {
             Some(r) if r.is_dir => r.path.clone(),
             Some(r) => r.path.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone()),
             None => self.root.clone(),
@@ -661,18 +623,18 @@ impl Panel {
 /// The rows are what the shared movement walks.
 impl ui::app::Navigable for Panel {
     fn move_by(&mut self, delta: isize) {
-        Panel::move_by(self, delta);
+        self.list.move_by(delta);
     }
 
     fn page_row_count(&self) -> usize {
-        self.page
+        self.list.page_row_count()
     }
 
     fn move_to_top(&mut self) {
-        self.cursor = 0;
+        self.list.move_to_top();
     }
 
     fn move_to_bottom(&mut self) {
-        self.cursor = self.rows.len().saturating_sub(1);
+        self.list.move_to_bottom();
     }
 }

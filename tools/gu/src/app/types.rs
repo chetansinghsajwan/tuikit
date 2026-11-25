@@ -169,8 +169,7 @@ pub(super) struct CommitFiles {
     pub(super) subject: String,
     pub(super) changes: Vec<git_core::FileChange>,
     pub(super) rows: Vec<FileRow>,
-    pub(super) cursor: usize,
-    pub(super) first_visible_row: usize,
+    pub(super) list: List,
     pub(super) folded: std::collections::HashSet<String>,
 }
 
@@ -219,8 +218,7 @@ impl CommitFiles {
             subject,
             changes,
             rows: Vec::new(),
-            cursor: 0,
-            first_visible_row: 0,
+            list: List::new(),
             folded: Default::default(),
         };
         cf.rebuild();
@@ -230,7 +228,7 @@ impl CommitFiles {
     /// Rebuild the tree rows from the changes and the folded folders, keeping the cursor on its
     /// row.
     pub(super) fn rebuild(&mut self) {
-        let keep = self.rows.get(self.cursor).map(|r| r.path().to_string());
+        let keep = self.rows.get(self.list.cursor()).map(|r| r.path().to_string());
         let mut root = FileNode::default();
         for c in &self.changes {
             let mut node = &mut root;
@@ -282,21 +280,16 @@ impl CommitFiles {
         }
         push(&root, "", 0, &self.folded, &mut rows);
         self.rows = rows;
-        self.cursor = keep
+        let at = keep
             .and_then(|p| self.rows.iter().position(|r| r.path() == p))
-            .unwrap_or(self.cursor)
-            .min(self.rows.len().saturating_sub(1));
-    }
-
-    /// Move the cursor by `delta` rows, staying inside the list.
-    pub(super) fn move_by(&mut self, delta: isize) {
-        let last = self.rows.len().saturating_sub(1) as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
+            .unwrap_or(self.list.cursor());
+        self.list.set_len(self.rows.len());
+        self.list.set_cursor(at);
     }
 
     /// The path of the row under the cursor (a folder's covers every file below it).
     pub(super) fn current_path(&self) -> Option<&str> {
-        self.rows.get(self.cursor).map(FileRow::path)
+        self.rows.get(self.list.cursor()).map(FileRow::path)
     }
 }
 
@@ -399,7 +392,7 @@ pub(super) enum DiffMark {
     File,
 }
 
-pub(super) use ui::list::ListState;
+pub(super) use ui::list::List;
 
 /// The diff text drawn in the preview, kept until another entry is highlighted or the width
 /// changes.

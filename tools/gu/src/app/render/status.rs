@@ -28,9 +28,9 @@ impl App {
                 };
                 ui::prompt::cursor(buf, area, label, input.visual_cursor());
                 if matches!(kind, PromptKind::SwitchTo) {
-                    self.suggest.render(buf, area, theme);
+                    self.suggest.render(cx, area, buf);
                 }
-                ui::prompt::line(theme, label, input.value())
+                ui::prompt::line(cx, label, input.value())
             }
             Mode::Confirm(cf) => {
                 let q = match cf {
@@ -62,14 +62,14 @@ impl App {
                         format!("Delete {name} on the remote? (d again or y)")
                     }
                 };
-                Footer::Question(q).line(theme)
+                Footer::Question(q).line(cx)
             }
             Mode::Popup(_) => Line::default(),
             Mode::Normal if self.job.is_some() => {
-                Footer::Busy(self.job.as_ref().map(Job::label).unwrap_or("")).line(theme)
+                Footer::Busy(self.job.as_ref().map(Job::label).unwrap_or("")).line(cx)
             }
             Mode::Normal => match &self.message {
-                Some(notice) => Footer::Notice(notice).line(theme),
+                Some(notice) => Footer::Notice(notice).line(cx),
                 None => match self.operation_name() {
                     Some(op) => Line::from(vec![
                         Span::styled(
@@ -81,7 +81,7 @@ impl App {
                             Style::new().fg(c.muted.into()),
                         ),
                     ]),
-                    None => Footer::Hint(self.hints().to_string()).line(theme),
+                    None => Footer::Hint(self.hints().to_string()).line(cx),
                 },
             },
         };

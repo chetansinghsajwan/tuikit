@@ -72,7 +72,8 @@ impl Meta {
     }
 
     /// The rows to draw. `dir_size` is `(bytes so far, finished)` for a folder.
-    pub fn lines(&self, theme: &Theme, dir_size: Option<(u64, bool)>) -> Vec<Line<'static>> {
+    pub fn lines(&self, cx: &ui::Context, dir_size: Option<(u64, bool)>) -> Vec<Line<'static>> {
+        let theme = cx.theme;
         let c = &theme.colors;
         let dim = Style::new().fg(c.muted.into());
         let label = |t: &str| Span::styled(format!("{t:<9}"), dim);
@@ -103,7 +104,7 @@ impl Meta {
         let mut lines = vec![Line::from(name)];
         if let Some(p) = &self.perm {
             let mut spans = vec![label("Perm")];
-            spans.extend(perm_spans(theme, p, true));
+            spans.extend(perm_spans(cx, p, true));
             lines.push(Line::from(spans));
         }
         if let Some(o) = &self.owner {
@@ -124,14 +125,15 @@ impl Meta {
 
     /// Rows `lines` will return at most, to size the pane.
     pub fn height(&self) -> u16 {
-        (self.lines(&Theme::default(), None).len() as u16).min(MAX_ROWS)
+        (self.lines(&ui::Context::new(&Theme::default()), None).len() as u16).min(MAX_ROWS)
     }
 }
 
 /// The nine permission characters colored like the properties panel: the owner's `r` `w` `x`
 /// green, yellow and red, group and other muted, setuid-style bits in the info color.
 /// With `spaced`, a gap separates owner, group and other.
-pub fn perm_spans(theme: &Theme, perm: &str, spaced: bool) -> Vec<Span<'static>> {
+pub fn perm_spans(cx: &ui::Context, perm: &str, spaced: bool) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let mut spans = Vec::new();
     for (i, ch) in perm.chars().enumerate() {
@@ -166,7 +168,7 @@ pub fn render(
     }
     let inner = pane.draw(cx, area, buf);
     if let Some(m) = meta {
-        Paragraph::new(m.lines(theme, dir_size)).render(inner, buf);
+        Paragraph::new(m.lines(cx, dir_size)).render(inner, buf);
     }
 }
 

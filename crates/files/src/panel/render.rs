@@ -30,9 +30,10 @@ impl Panel {
         }
         let mut running = self.dir_sizes.values().filter(|d| !d.state().1).count();
         let visible: Vec<PathBuf> = self
-            .visible()
-            .into_iter()
-            .map(|i| &self.rows[i])
+            .list
+            .shown()
+            .iter()
+            .filter_map(|&i| self.rows.get(i))
             .filter(|r| r.is_dir)
             .map(|r| r.path.clone())
             .collect();
@@ -49,9 +50,10 @@ impl Panel {
 
     /// The folder sizes of the visible rows and how far each count is.
     pub(super) fn size_signature(&self) -> Vec<(PathBuf, (u64, bool))> {
-        self.visible()
-            .into_iter()
-            .map(|i| &self.rows[i])
+        self.list
+            .shown()
+            .iter()
+            .filter_map(|&i| self.rows.get(i))
             .filter_map(|r| self.dir_sizes.get(&r.path).map(|d| (r.path.clone(), d.state())))
             .collect()
     }
@@ -76,11 +78,12 @@ impl Panel {
     }
 
     /// The footer: a prompt, a confirmation question, or the last message.
-    pub(super) fn footer(&self, theme: &Theme) -> Option<Line<'static>> {
+    pub(super) fn footer(&self, cx: &ui::Context) -> Option<Line<'static>> {
+        let theme = cx.theme;
         let c = &theme.colors;
         match &self.mode {
             Mode::Prompt(kind, input) => {
-                Some(ui::prompt::line(theme, Self::prompt_label(kind), input.value()))
+                Some(ui::prompt::line(cx, Self::prompt_label(kind), input.value()))
             }
             Mode::Confirm(kind, targets) => {
                 let what = if targets.len() == 1 {
@@ -97,7 +100,7 @@ impl Panel {
                         "{verb} {what}? ({} again, Esc cancels)",
                         kind.confirm_key()
                     ))
-                    .line(theme),
+                    .line(cx),
                 )
             }
             Mode::Bookmark(op) => {
@@ -118,8 +121,8 @@ impl Panel {
                 }
                 Some(Line::from(spans))
             }
-            Mode::Normal if self.job.is_some() => self.job_line(theme),
-            Mode::Normal => self.message.as_ref().map(|n| Footer::Notice(n).line(theme)),
+            Mode::Normal if self.job.is_some() => self.job_line(cx),
+            Mode::Normal => self.message.as_ref().map(|n| Footer::Notice(n).line(cx)),
         }
     }
 
@@ -140,7 +143,7 @@ impl Panel {
             return;
         }
 
-        if let Some(line) = self.footer(theme) {
+        if let Some(line) = self.footer(cx) {
             let y = inner.bottom() - 1;
             let footer_area = Rect { y, height: 1, ..inner };
             Paragraph::new(line).render(footer_area, buf);
@@ -158,32 +161,15 @@ impl Panel {
             }
         }
 
-        self.page = usize::from(inner.height).max(1);
         // The folders above the top row stay pinned at the top while scrolling, so the path is
-        // never lost; they take rows from the window, which the scrolling accounts for.
-        // The cursor keeps `scroll_margin` rows from the edges, except at the ends of the list.
-        let margin = ui::list::scroll_margin(self.page);
-        let last = self.rows.len().saturating_sub(1);
-        if self.cursor < self.offset + margin {
-            self.offset = self.cursor.saturating_sub(margin);
-        } else {
-            let want = (self.cursor + margin).min(last);
-            while want >= self.offset + self.page - self.pinned(self.offset).len() {
-                self.offset += 1;
-            }
-        }
-
-        let rows = ui::list::Rows::new(area, inner);
-        self.count_visible_dirs();
-        let sizes = &self.dir_sizes;
-        let shown = self.visible();
+        // never lost.
         let active = self.active_scope();
-
-        for (k, &i) in shown.iter().enumerate() {
+        // The list is taken out so the rows can read the panel while it scrolls.
+        let mut list = std::mem::take(&mut self.list);
+        let sizes = &self.dir_sizes;
+        let row = |s: ui::list::Slot| {
+            let (i, width) = (s.index, s.width);
             let row = &self.rows[i];
-            let y = inner.y + k as u16;
-            let area = rows.content(y);
-            let selected = i == self.cursor;
             let git = self.git_state(row);
             let submodule = row.is_dir
                 && self.git.as_ref().is_some_and(|(r, s)| {
@@ -192,13 +178,13 @@ impl Panel {
             let tint = git.map(|(_, k)| pv::kind_color(theme, k));
 
             // Size and modified-time columns sit left of the git sign, when there is room.
-            let cols = if area.width >= 44 { self.opts.columns.width() } else { 0 };
+            let cols = if width >= 44 { self.opts.columns.width() } else { 0 };
             let mut trailing: Vec<Span<'static>> = Vec::new();
             if cols > 0 {
                 let mode = self.opts.columns;
                 let muted = Style::new().fg(c.muted.into());
                 if matches!(mode, Columns::Full | Columns::PermTime) {
-                    trailing.extend(meta::perm_spans(theme, &meta::perm_string(row.mode), false));
+                    trailing.extend(meta::perm_spans(cx, &meta::perm_string(row.mode), false));
                     trailing.push(Span::styled(" ", muted));
                 }
                 let mut text = String::new();
@@ -217,7 +203,7 @@ impl Panel {
             // A folder with several kinds of change shows one sign for each, the most serious on the left.
             let kinds = self.git_dir_kinds(row);
             let signs: Vec<(char, Color)> = if kinds.len() > 1 {
-                let room = (usize::from(area.width) / 3).max(1);
+                let room = (width / 3).max(1);
                 let shown = kinds.len().min(room.div_ceil(2).max(1));
                 kinds.iter().take(shown).map(|k| (k.letter(), pv::kind_color(theme, *k))).collect()
             } else if let Some((ch, kind)) = git {
@@ -226,36 +212,35 @@ impl Panel {
                 Vec::new()
             };
 
-            ui::tree::file_row(
-                theme,
-                buf,
-                &rows,
-                y,
-                &ui::tree::FileRow {
-                    depth: usize::from(row.depth),
-                    name: &row.name,
-                    active_guide: active.and_then(|s| s.col_at(i)),
-                    is_dir: row.is_dir,
-                    is_open: self.expanded.contains(&row.path),
-                    is_executable: !row.is_dir && is_executable(&row.path),
-                    icon: submodule.then_some(theme.icons.submodule),
-                    tint,
-                    is_selected: selected,
-                    is_focused: focused,
-                    // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
-                    is_marked: self.marked.contains(&row.path),
-                    is_cut: self
-                        .clip
-                        .as_ref()
-                        .is_some_and(|k| k.cut && k.paths.contains(&row.path)),
-                    is_hidden: row.name.starts_with('.'),
-                    is_ignored: row.ignored,
-                    trailing,
-                    signs,
-                    ..Default::default()
-                },
-            );
-        }
+            ui::tree::FileRow {
+                depth: usize::from(row.depth),
+                name: &row.name,
+                active_guide: active.and_then(|s| s.col_at(i)),
+                is_dir: row.is_dir,
+                is_open: self.expanded.contains(&row.path),
+                is_executable: !row.is_dir && is_executable(&row.path),
+                icon: submodule.then_some(theme.icons.submodule),
+                tint,
+                // Marked rows: yellow (yazi's selected color) and underlined (no column is spent on a marker).
+                is_marked: self.marked.contains(&row.path),
+                is_cut: self.clip.as_ref().is_some_and(|k| k.cut && k.paths.contains(&row.path)),
+                is_hidden: row.name.starts_with('.'),
+                is_ignored: row.ignored,
+                trailing,
+                signs,
+                ..Default::default()
+            }
+            .list_row(cx, width)
+        };
+        let pinned = |first| self.pinned(first);
+        list.view(self.rows.len(), row)
+            .pane(area)
+            .focused(focused)
+            .pinned(pinned)
+            .render(cx, inner, buf);
+        self.list = list;
+        // The rows on screen are known now; their folder sizes start counting.
+        self.count_visible_dirs();
         self.sizes_shown = self.size_signature();
     }
 }

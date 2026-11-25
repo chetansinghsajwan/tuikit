@@ -6,6 +6,7 @@
 //! The strip is one row. Keys come from each tool's action registry (`Space t n/c/l/h`,
 //! `[` and `]`, `1`-`9`), which call the model's methods.
 
+use crate::component::Context;
 use crate::icons::Icon;
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
@@ -288,7 +289,7 @@ fn window(widths: &[usize], active: usize, room: usize) -> (usize, usize) {
 pub fn render(
     area: Rect,
     buf: &mut Buffer,
-    theme: &Theme,
+    cx: &Context,
     labels: &[Label],
     active: usize,
     numbers: bool,
@@ -296,6 +297,7 @@ pub fn render(
     if labels.is_empty() || area.width < 4 || area.height == 0 {
         return;
     }
+    let theme = cx.theme;
     let c = &theme.colors;
     let room = usize::from(area.width);
     let all: Vec<Vec<(String, Part)>> =
@@ -330,7 +332,7 @@ pub fn render(
     }
     Paragraph::new(Line::from(line)).render(Rect { height: 1, ..area }, buf);
     let below = area.bottom().min(buf.area.bottom());
-    crate::anim::tab(
+    cx.motion.tab(
         (area.x, area.y),
         active,
         Rect { x: area.x, y: below, width: area.width, height: buf.area.bottom() - below },

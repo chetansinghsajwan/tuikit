@@ -253,7 +253,6 @@ impl Explorer {
 
     /// Draws the tab bar (when there are several tabs), the list and the preview.
     fn draw(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
         let mut body = area;
         if self.tabs.len() > 1 {
             let bar = Rect { height: 1, ..area };
@@ -261,7 +260,7 @@ impl Explorer {
             self.tab_bar(bar, buf, cx);
         }
         let (list, preview) = if self.opts.preview && body.width >= 60 {
-            let [l, p] = ui::layout::main_preview(theme, body);
+            let [l, p] = ui::layout::main_preview(cx, body);
             (l, Some(p))
         } else {
             (body, None)
@@ -277,7 +276,7 @@ impl Explorer {
         let roots: Vec<&Path> = self.tabs.iter().map(|tab| tab.root()).collect();
         let labels: Vec<ui::tabs::Label> =
             ui::tabs::short_titles(&roots).into_iter().map(ui::tabs::Label::new).collect();
-        ui::tabs::render(area, buf, cx.theme, &labels, self.tabs.active_index(), true);
+        ui::tabs::render(area, buf, cx, &labels, self.tabs.active_index(), true);
     }
 
     /// Draws the preview pane for the file under the cursor, rebuilding the preview only when the

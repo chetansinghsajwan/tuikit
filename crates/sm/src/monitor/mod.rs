@@ -18,9 +18,9 @@ use ui::app::{Host, Navigable, Request, Screen};
 use ui::columns::{Column, Columns};
 use ui::footer::{Footer, Notice};
 use ui::graph::Eased;
-use ui::list::{ListRow, Rows};
+use ui::list::{List, ListRow, Slot};
 use ui::prompt::Typed;
-use ui::{Pane, Theme, anim, graph, tree};
+use ui::{Component, Pane, graph, tree};
 
 /// What the footer is busy with: nothing, a filter being typed, or a signal waiting for a yes.
 enum Mode {
@@ -106,9 +106,8 @@ pub struct Monitor {
     options: Options,
     mode: Mode,
     message: Option<Notice>,
-    cursor: usize,
-    top: usize,
-    page: usize,
+    /// The cursor and the scroll over the process rows.
+    list: List,
     /// The process under the cursor, so a refresh that reorders the list keeps the cursor on it.
     selected: Option<u32>,
 }
@@ -135,9 +134,7 @@ impl Monitor {
             },
             mode: Mode::Normal,
             message: None,
-            cursor: 0,
-            top: 0,
-            page: 1,
+            list: List::new(),
             selected: None,
         })
     }
@@ -155,15 +152,17 @@ impl Monitor {
             && let Some(at) =
                 rows.iter().position(|r| self.sampler.snapshot.procs[r.index].pid == pid)
         {
-            self.cursor = at;
+            self.list.set_len(rows.len());
+            self.list.set_cursor(at);
         }
-        self.cursor = self.cursor.min(rows.len().saturating_sub(1));
+        self.list.set_len(rows.len());
         self.remember(&rows);
     }
 
     /// Notes which process the cursor is on.
     fn remember(&mut self, rows: &[Row]) {
-        self.selected = rows.get(self.cursor).map(|r| self.sampler.snapshot.procs[r.index].pid);
+        self.selected =
+            rows.get(self.list.cursor()).map(|r| self.sampler.snapshot.procs[r.index].pid);
     }
 
     /// Shows or hides `panel`; the last panel on stays on, and the message says so.
@@ -181,7 +180,7 @@ impl Monitor {
     /// Asks before sending `signal` to the process under the cursor.
     fn ask_signal(&mut self, signal: Signal) {
         let rows = self.rows();
-        let Some(row) = rows.get(self.cursor) else { return };
+        let Some(row) = rows.get(self.list.cursor()) else { return };
         let p = &self.sampler.snapshot.procs[row.index];
         self.mode = Mode::Confirm { pid: p.pid, name: p.name.clone(), signal };
     }
@@ -230,12 +229,13 @@ impl Monitor {
                 width: if column == 0 { half } else { inner.width - half },
                 height: 1,
             };
-            self.draw_core(cell, buf, theme, i, *load);
+            self.draw_core(cell, buf, cx, i, *load);
         }
     }
 
     /// One core: its number, a meter and its percent.
-    fn draw_core(&self, area: Rect, buf: &mut Buffer, theme: &Theme, i: usize, load: f32) {
+    fn draw_core(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context, i: usize, load: f32) {
+        let theme = cx.theme;
         let label = format!("{i:>2} ");
         let value = format!(" {load:>3.0}%");
         let used = (label.len() + value.len() + 1) as u16;
@@ -258,7 +258,8 @@ impl Monitor {
     }
 
     /// One labeled meter over two rows (the label with its numbers, then the bar); returns the next row.
-    fn draw_meter(area: Rect, buf: &mut Buffer, theme: &Theme, y: u16, gauge: Gauge) -> u16 {
+    fn draw_meter(area: Rect, buf: &mut Buffer, cx: &ui::Context, y: u16, gauge: Gauge) -> u16 {
+        let theme = cx.theme;
         let Gauge { label, used, total, shown } = gauge;
         if y + 1 >= area.bottom() {
             return area.bottom();
@@ -285,7 +286,6 @@ impl Monitor {
 
     /// The memory pane: memory, swap and every disk.
     fn draw_memory(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
         let s = &self.sampler.snapshot;
         let inner = Self::pane(cx, buf, area, "memory", false);
         if inner.height == 0 || inner.width == 0 {
@@ -298,10 +298,10 @@ impl Monitor {
         let swap = self.glide.swap.map_or(swap_ratio, |bar| bar.value(now));
         let mut y = inner.y;
         let gauge = Gauge::new("mem", s.memory_used, s.memory_total, memory);
-        y = Self::draw_meter(inner, buf, theme, y, gauge);
+        y = Self::draw_meter(inner, buf, cx, y, gauge);
         if s.swap_total > 0 {
             let gauge = Gauge::new("swap", s.swap_used, s.swap_total, swap);
-            y = Self::draw_meter(inner, buf, theme, y, gauge);
+            y = Self::draw_meter(inner, buf, cx, y, gauge);
         }
         for (i, disk) in s.disks.iter().enumerate() {
             let fallback = ratio(disk.used, disk.total);
@@ -311,7 +311,7 @@ impl Monitor {
                 disk.total,
                 shown(&self.glide.disks, i, now, fallback),
             );
-            y = Self::draw_meter(inner, buf, theme, y, gauge);
+            y = Self::draw_meter(inner, buf, cx, y, gauge);
         }
     }
 
@@ -371,20 +371,18 @@ impl Monitor {
         }
         let muted = Style::new().fg(theme.colors.muted.into());
         let columns = Self::process_columns(&self.options);
-        columns.draw_header(theme, buf, inner);
+        columns.draw_header(cx, buf, inner);
 
         let list = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
-        self.page = usize::from(list.height).max(1);
-        self.top = ui::list::follow_cursor(self.cursor, self.top, self.page, rows.len());
-        let geometry = Rows::new(area, list);
         let procs = &self.sampler.snapshot.procs;
         let depths: Vec<usize> = rows.iter().map(|r| r.depth).collect();
-        let scope = tree::active_scope(&depths, self.cursor);
-        for (i, row) in rows.iter().skip(self.top).take(self.page).enumerate() {
+        let scope = tree::active_scope(&depths, self.list.cursor());
+        let row = |s: Slot| {
+            let row = &rows[s.index];
             let p = &procs[row.index];
             let cpu_color = graph::heat(theme, p.cpu / 100.0);
             let guides =
-                tree::guides_marked(theme, row.depth, scope.and_then(|s| s.col_at(self.top + i)));
+                tree::guides_marked(cx, row.depth, scope.and_then(|sc| sc.col_at(s.index)));
             let mut left = columns.lead_cells(vec![Span::styled(p.pid.to_string(), muted)]);
             left.extend(guides);
             left.push(Span::raw(p.name.clone()));
@@ -399,16 +397,14 @@ impl Monitor {
                     Span::raw(p.status.clone()),
                 ]),
                 min_left: columns.min_left(),
-                is_selected: self.top + i == self.cursor,
-                is_focused: true,
                 ..ListRow::default()
             }
-            .render(cx, buf, &geometry, list.y + i as u16);
-        }
+        };
+        self.list.view(rows.len(), row).pane(area).focused(true).render(cx, list, buf);
     }
 
     /// The footer line: a prompt, a question, a message, or the hints.
-    fn draw_footer(&self, area: Rect, buf: &mut Buffer, theme: &Theme) {
+    fn draw_footer(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let footer = match &self.mode {
             Mode::Filter(i) => Footer::Prompt {
                 label: "filter: ",
@@ -427,7 +423,7 @@ impl Monitor {
                 )),
             },
         };
-        footer.render(area, buf, theme);
+        footer.render(cx, area, buf);
     }
 
     /// Feeds a key to the filter prompt or the question.
@@ -436,14 +432,13 @@ impl Monitor {
             Mode::Filter(mut input) => match ui::prompt::typed(&mut input, ev) {
                 Typed::Submit(text) => {
                     self.options.filter = text;
-                    self.cursor = 0;
-                    self.top = 0;
+                    self.list.reset();
                     self.follow_selected();
                 }
                 Typed::Cancel => {}
                 Typed::Editing => {
                     self.options.filter = input.value().to_string();
-                    self.cursor = 0;
+                    self.list.set_cursor(0);
                     self.mode = Mode::Filter(input);
                 }
             },
@@ -470,7 +465,6 @@ impl Monitor {
 impl Screen for Monitor {
     /// Draws the panes: cpu and memory and network on top, the processes below, the footer last.
     fn render(&mut self, cx: &ui::Context, area: Rect, buf: &mut Buffer) {
-        let theme = cx.theme;
         if area.height < 6 || area.width < 20 {
             return;
         }
@@ -491,9 +485,9 @@ impl Screen for Monitor {
             self.draw_procs(rect, buf, cx);
         }
         if self.glide.is_moving(self.frame_time) {
-            anim::request_frame();
+            cx.motion.request_frame();
         }
-        self.draw_footer(footer, buf, theme);
+        self.draw_footer(footer, buf, cx);
     }
 
     /// A filter or a question is open: the keys are theirs.
@@ -563,22 +557,24 @@ impl Screen for Monitor {
 }
 
 /// The process rows are what the shared movement walks.
+/// Every move also notes the process the cursor lands on, so it stays on it as the list changes.
 impl Navigable for Monitor {
     fn move_by(&mut self, delta: isize) {
-        let rows = self.rows();
-        self.cursor = ui::list::move_cursor(self.cursor, delta, rows.len());
-        self.remember(&rows);
+        self.list.move_by(delta);
+        self.remember(&self.rows());
     }
 
     fn page_row_count(&self) -> usize {
-        self.page
+        self.list.page_row_count()
     }
 
     fn move_to_top(&mut self) {
-        self.move_by(isize::MIN / 2);
+        self.list.move_to_top();
+        self.remember(&self.rows());
     }
 
     fn move_to_bottom(&mut self) {
-        self.move_by(isize::MAX / 2);
+        self.list.move_to_bottom();
+        self.remember(&self.rows());
     }
 }

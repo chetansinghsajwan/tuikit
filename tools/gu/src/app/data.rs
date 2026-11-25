@@ -20,7 +20,7 @@ impl App {
             rank(a).cmp(&rank(b)).then(b.is_head.cmp(&a.is_head)).then(b.time.cmp(&a.time))
         });
         // The row the cursor is on, by identity (before the refs change under it).
-        let keep = self.ref_row_id(self.lists[0].cursor);
+        let keep = self.ref_row_id(self.lists[0].cursor());
         self.branches = refs;
         // The commits are only loaded while their tab is shown.
         let limit = TAB_LOG_LIMIT;
@@ -83,7 +83,7 @@ impl App {
                 .into_iter()
                 .enumerate()
         {
-            self.lists[i].cursor = self.lists[i].cursor.min(len.saturating_sub(1));
+            self.lists[i].set_len(len);
         }
         self.preview = None;
     }
@@ -115,17 +115,6 @@ impl App {
             Focus::Commits => Some(1),
             Focus::Stashes => Some(2),
             Focus::Submodules => Some(3),
-        }
-    }
-
-    /// How many rows the pane `focus` has.
-    pub(super) fn len(&self, focus: Focus) -> usize {
-        match focus {
-            Focus::Files => 0,
-            Focus::Branches => self.ref_rows.len(),
-            Focus::Commits => self.commits.len(),
-            Focus::Stashes => self.stashes.len(),
-            Focus::Submodules => self.submodules.len(),
         }
     }
 

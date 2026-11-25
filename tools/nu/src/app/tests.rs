@@ -114,7 +114,8 @@ fn wifi_enter_connects_asks_for_a_password_when_needed_and_toggles_off() {
     assert_eq!(app.wifi_status.active.as_deref(), Some("home"), "{:?}", app.message);
     app.handle_event(&key(KeyCode::Enter)); // on the connected network: disconnect
     assert_eq!(app.wifi_status.active, None);
-    app.lists[0].cursor = app.networks.iter().position(|n| n.ssid == "neighbor").unwrap();
+    let row = app.networks.iter().position(|n| n.ssid == "neighbor").unwrap();
+    app.lists[0].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     assert!(matches!(app.mode, Mode::Password(..)));
     press(&mut app, "short");
@@ -127,7 +128,8 @@ fn wifi_enter_connects_asks_for_a_password_when_needed_and_toggles_off() {
         "{:?}",
         app.message
     );
-    app.lists[0].cursor = app.networks.iter().position(|n| n.ssid == "neighbor").unwrap();
+    let row = app.networks.iter().position(|n| n.ssid == "neighbor").unwrap();
+    app.lists[0].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     press(&mut app, "longenoughpw");
     app.handle_event(&key(KeyCode::Enter));
@@ -170,20 +172,23 @@ fn bluetooth_connect_pairs_new_devices_toggles_disconnect_trust_forget_scan_and_
     press(&mut app, "2");
     let at = |app: &App, name: &str| app.devices.iter().position(|d| d.name == name).unwrap();
     // A new device is paired and connected in the background.
-    app.lists[1].cursor = at(&app, "Phone");
+    let row = at(&app, "Phone");
+    app.lists[1].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     assert!(app.job.as_ref().is_some_and(|j| j.label().contains("pairing")));
     wait(&mut app);
     let phone = app.devices.iter().find(|d| d.name == "Phone").unwrap();
     assert!(phone.paired && phone.trusted && phone.connected, "{:?}", app.message);
     // Enter on a connected device disconnects it.
-    app.lists[1].cursor = at(&app, "Phone");
+    let row = at(&app, "Phone");
+    app.lists[1].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     assert!(!app.devices.iter().find(|d| d.name == "Phone").unwrap().connected);
     // Trust toggles; a device out of range cannot connect.
     press(&mut app, "t");
     assert!(!app.devices.iter().find(|d| d.name == "Phone").unwrap().trusted);
-    app.lists[1].cursor = at(&app, "Old mouse");
+    let row = at(&app, "Old mouse");
+    app.lists[1].set_cursor(row);
     app.handle_event(&key(KeyCode::Enter));
     wait(&mut app);
     assert!(

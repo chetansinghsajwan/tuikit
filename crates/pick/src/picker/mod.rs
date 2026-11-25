@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
-use ui::{Pane, Theme, layout};
+use ui::{Component, Pane, Theme, layout};
 
 mod render;
 mod types;
@@ -46,14 +46,12 @@ pub struct Picker {
     /// Which line takes the typing in grep mode.
     field: Field,
     last_query: String,
-    /// Index into the matched list.
-    cursor: u32,
-    offset: u32,
+    /// The cursor and the scroll over the rows drawn: the matched list, or the hierarchy's rows
+    /// (whose headers the cursor skips).
+    list: ui::list::List,
     marked: BTreeSet<String>,
     git: Option<(Repo, Status)>,
     preview: Option<Preview>,
-    /// Rows visible in the list at the last render, for paging.
-    page: u32,
     /// Stops the running grep search.
     cancel: Arc<AtomicBool>,
     /// Where the preview is scrolled to.
@@ -104,12 +102,10 @@ impl Picker {
             exclude: Input::default(),
             field: Field::Query,
             last_query: String::new(),
-            cursor: 0,
-            offset: 0,
+            list: ui::list::List::new(),
             marked: BTreeSet::new(),
             git,
             preview: None,
-            page: 10,
             cancel: Arc::new(AtomicBool::new(false)),
             scroll: Default::default(),
             title: None,
@@ -210,16 +206,16 @@ impl Picker {
                 break;
             }
         }
-        self.cursor = index;
-        self.clamp();
+        self.tree_dirty = true;
+        self.refresh_rows(Some(index));
     }
 
     /// Advance the matcher. Returns true if the result list changed (redraw).
     pub fn tick(&mut self) -> bool {
         let changed = self.nucleo.tick(10).changed;
         if changed {
-            self.clamp();
             self.tree_dirty = true;
+            self.refresh_rows(None);
         }
         changed
     }
@@ -233,7 +229,6 @@ impl Picker {
     pub fn set_tree(&mut self, on: bool) {
         self.tree_on = on;
         self.tree_dirty = true;
-        self.offset = 0;
     }
 
     /// Where a candidate sits in the hierarchy: its folders and a sort key within
@@ -309,18 +304,55 @@ impl Picker {
         self.install_tree(crate::tree::build(entries, !self.input.value().is_empty()));
     }
 
-    /// Take a freshly built hierarchy; the first one resets the scroll and puts the cursor on the first row.
+    /// Take a freshly built hierarchy.
     fn install_tree(&mut self, tree: crate::tree::Tree) {
-        let was_tree = self.tree.is_some();
         self.tree = Some(tree);
-        if !was_tree {
-            self.offset = 0;
-            // With nothing typed the list starts at its top: the cursor takes the first row
-            // as drawn (folders first), not the first match in path order.
-            if self.input.value().is_empty()
-                && let Some(&first) = self.tree.as_ref().and_then(|t| t.order.first())
-            {
-                self.cursor = first;
+    }
+
+    /// The matched-list index of the result under the cursor.
+    fn current_index(&self) -> Option<u32> {
+        let row = self.list.cursor();
+        match &self.tree {
+            Some(tree) => match tree.rows.get(row)? {
+                crate::tree::Row::Item { idx, .. } => Some(*idx),
+                _ => None,
+            },
+            None => (row < self.matched() as usize).then_some(row as u32),
+        }
+    }
+
+    /// Rebuilds the hierarchy when the results changed and tells the list its rows, keeping the
+    /// cursor on the result it was on (or on `keep`, a matched-list index). The first hierarchy
+    /// starts at its top: with nothing typed the cursor takes the first row as drawn (folders
+    /// first), not the first match in path order.
+    fn refresh_rows(&mut self, keep: Option<u32>) {
+        if !self.tree_dirty {
+            return;
+        }
+        let keep = keep.or_else(|| self.current_index()).unwrap_or(0);
+        let was_tree = self.tree.is_some();
+        self.refresh_tree();
+        match &self.tree {
+            Some(tree) => {
+                let mut keep = keep;
+                if !was_tree {
+                    self.list.reset();
+                    if self.input.value().is_empty()
+                        && let Some(&first) = tree.order.first()
+                    {
+                        keep = first;
+                    }
+                }
+                let rows = &tree.rows;
+                self.list
+                    .set_rows(rows.len(), |r| matches!(rows[r], crate::tree::Row::Item { .. }));
+                if let Some(&row) = tree.row_of.get(&keep) {
+                    self.list.set_cursor(row);
+                }
+            }
+            None => {
+                self.list.set_len(self.matched() as usize);
+                self.list.set_cursor(keep as usize);
             }
         }
     }
@@ -336,8 +368,7 @@ impl Picker {
             self.nucleo.restart(true);
             live(&q, self.nucleo.injector(), self.cancel.clone());
             self.last_query = q;
-            self.cursor = 0;
-            self.offset = 0;
+            self.list.reset();
             self.tree_dirty = true;
             return;
         }
@@ -357,8 +388,7 @@ impl Picker {
             }
         }
         self.last_query = q;
-        self.cursor = 0;
-        self.offset = 0;
+        self.list.reset();
         self.tree_dirty = true;
     }
 
@@ -376,8 +406,7 @@ impl Picker {
             self.nucleo.injector(),
             self.cancel.clone(),
         );
-        self.cursor = 0;
-        self.offset = 0;
+        self.list.reset();
         self.tree_dirty = true;
     }
 
@@ -438,38 +467,17 @@ impl Picker {
         self.nucleo.snapshot().matched_item_count()
     }
 
-    /// Keep the cursor inside the matched list, which may have shrunk.
-    fn clamp(&mut self) {
-        let n = self.matched();
-        if n == 0 {
-            self.cursor = 0;
-        } else if self.cursor >= n {
-            self.cursor = n - 1;
-        }
-    }
-
     /// The candidate under the cursor, if any.
     fn current(&self) -> Option<Candidate> {
-        self.nucleo.snapshot().get_matched_item(self.cursor).map(|i| i.data.clone())
+        let idx = self.current_index()?;
+        self.nucleo.snapshot().get_matched_item(idx).map(|i| i.data.clone())
     }
 
-    /// Move the cursor by `delta` rows, following the drawn order in the hierarchy view.
-    fn move_by(&mut self, delta: i64) {
-        self.refresh_tree();
-        // In the hierarchy, Up/Down walk the items in the order they are drawn.
-        if let Some(tree) = &self.tree
-            && let Some(&pos) = tree.pos_of.get(&self.cursor)
-        {
-            let last = tree.order.len() as i64 - 1;
-            let to = (pos as i64 + delta).clamp(0, last) as usize;
-            self.cursor = tree.order[to];
-            return;
-        }
-        let n = i64::from(self.matched());
-        if n == 0 {
-            return;
-        }
-        self.cursor = (i64::from(self.cursor) + delta).clamp(0, n - 1) as u32;
+    /// Move the cursor by `delta` results, in the order they are drawn (the hierarchy's headers are
+    /// skipped).
+    fn move_by(&mut self, delta: isize) {
+        self.refresh_rows(None);
+        self.list.move_by(delta);
     }
 
     /// Handle one terminal event and tell the host what to do next (nothing, accept or cancel).
@@ -524,8 +532,8 @@ impl Picker {
                 pv::set_raw_tables(!pv::raw_tables());
                 self.preview = None;
             }
-            KeyCode::PageUp => self.move_by(-i64::from(self.page)),
-            KeyCode::PageDown => self.move_by(i64::from(self.page)),
+            KeyCode::PageUp => self.move_by(-(self.list.page_row_count() as isize)),
+            KeyCode::PageDown => self.move_by(self.list.page_row_count() as isize),
             KeyCode::Tab => {
                 if let Some(c) = self.current().map(|c| c.output()) {
                     if !self.marked.remove(&c) {

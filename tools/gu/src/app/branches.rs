@@ -8,7 +8,7 @@ impl App {
         // Renaming a folder renames everything under it (a remote folder renames the remote itself).
         if id == "branch.rename" {
             if let Some(RefRow::Folder { key, depth, .. }) =
-                self.ref_rows.get(self.lists[0].cursor).cloned()
+                self.ref_rows.get(self.lists[0].cursor()).cloned()
             {
                 let (section, path) = key.split_once('/').unwrap_or(("", &key));
                 match section {
@@ -43,21 +43,21 @@ impl App {
                 }
                 return;
             }
-            if matches!(self.ref_rows.get(self.lists[0].cursor), Some(RefRow::Section { .. })) {
+            if matches!(self.ref_rows.get(self.lists[0].cursor()), Some(RefRow::Section { .. })) {
                 self.show_message("pick a ref or a folder to rename", true);
                 return;
             }
         }
         // On a section or folder the Enter key folds or unfolds it.
         if let Some(RefRow::Section { key, .. } | RefRow::Folder { key, .. }) =
-            self.ref_rows.get(self.lists[0].cursor)
+            self.ref_rows.get(self.lists[0].cursor())
             && id == "branch.checkout"
         {
             let key = key.clone();
             if !self.folded.remove(&key) {
                 self.folded.insert(key);
             }
-            let keep = self.ref_row_id(self.lists[0].cursor);
+            let keep = self.ref_row_id(self.lists[0].cursor());
             self.build_ref_rows(keep);
             return;
         }

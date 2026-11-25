@@ -1,6 +1,7 @@
 //! Tests for pane drawing.
 
 use super::*;
+use crate::Theme;
 use ratatui::style::Color;
 
 /// The background color at `(x, y)` after drawing a titled pane in a 10 by 5 area.

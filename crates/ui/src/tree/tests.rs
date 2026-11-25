@@ -1,6 +1,7 @@
 //! Tests for tree rows: guides, folds, counts and file rows.
 
 use super::*;
+use crate::Theme;
 
 /// The text of `spans` with the styles dropped.
 fn text(spans: &[Span]) -> String {
@@ -10,11 +11,12 @@ fn text(spans: &[Span]) -> String {
 #[test]
 fn a_dir_has_guides_and_a_folder_icon_a_group_has_an_arrow() {
     let theme = Theme::load();
-    let d = text(&dir(&theme, 2, "src", true));
+    let cx = &crate::Context::new(&theme);
+    let d = text(&dir(cx, 2, "src", true));
     assert!(d.starts_with("│ │ ") && d.ends_with("src") && !d.contains('▾'), "{d}");
-    assert!(text(&group(&theme, 1, true, None, "Tags", Style::new())).starts_with("│ ▸ Tags"));
-    assert!(text(&group(&theme, 0, false, None, "Tags", Style::new())).starts_with("▾ Tags"));
-    assert_eq!(text(&[count(&theme, 3)]), " 3");
+    assert!(text(&group(cx, 1, true, None, "Tags", Style::new())).starts_with("│ ▸ Tags"));
+    assert!(text(&group(cx, 0, false, None, "Tags", Style::new())).starts_with("▾ Tags"));
+    assert_eq!(text(&[count(cx, 3)]), " 3");
 }
 
 /// Draw `row` into a one-row buffer `width` cells wide and return what it shows.
@@ -22,7 +24,13 @@ fn row_text(row: &FileRow, width: u16) -> String {
     let theme = Theme::load();
     let area = Rect::new(0, 0, width, 1);
     let mut buf = Buffer::empty(area);
-    file_row(&theme, &mut buf, &list::Rows::new(area, area), 0, row);
+    let cx = crate::Context::new(&theme);
+    row.list_row(&cx, usize::from(width)).paint(
+        &crate::Context::new(&theme),
+        &mut buf,
+        &list::Rows::new(area, area),
+        0,
+    );
     (0..width).map(|x| buf[(x, 0)].symbol().to_string()).collect()
 }
 
@@ -82,15 +90,16 @@ fn the_scope_is_the_folder_under_the_cursor_or_the_one_holding_it() {
 #[test]
 fn indent_guides_replace_the_leading_spaces_at_each_unit() {
     let theme = Theme::load();
+    let cx = &crate::Context::new(&theme);
     let text = |s: &[Span]| -> String { s.iter().map(|s| s.content.as_ref()).collect() };
     let line = vec![Span::raw("        "), Span::raw("let x = 1;")];
-    assert_eq!(text(&mark_indent(&theme, line, 8, 4)), "│   │   let x = 1;");
+    assert_eq!(text(&mark_indent(cx, line, 8, 4)), "│   │   let x = 1;");
     // Only up to the indentation given (a blank line borrows its neighbors'), and never inside the code.
-    assert_eq!(text(&mark_indent(&theme, vec![Span::raw("      a  b")], 4, 2)), "│ │   a  b");
-    assert_eq!(text(&mark_indent(&theme, vec![Span::raw("    ")], 0, 4)), "    ");
+    assert_eq!(text(&mark_indent(cx, vec![Span::raw("      a  b")], 4, 2)), "│ │   a  b");
+    assert_eq!(text(&mark_indent(cx, vec![Span::raw("    ")], 0, 4)), "    ");
     // The spaces of one span split across highlight pieces still count as one column run.
     assert_eq!(
-        text(&mark_indent(&theme, vec![Span::raw("  "), Span::raw("  "), Span::raw("x")], 4, 2)),
+        text(&mark_indent(cx, vec![Span::raw("  "), Span::raw("  "), Span::raw("x")], 4, 2)),
         "│ │ x"
     );
 }
@@ -98,10 +107,11 @@ fn indent_guides_replace_the_leading_spaces_at_each_unit() {
 #[test]
 fn line_counts_line_up_in_columns() {
     let theme = Theme::load();
+    let cx = &crate::Context::new(&theme);
     let text = |s: &[Span]| -> String { s.iter().map(|s| s.content.as_ref()).collect() };
     let changes = [Some((3, 120)), Some((1204, 4)), None];
     let w = CountWidths::of(changes);
-    let rows: Vec<String> = changes.iter().map(|c| text(&line_counts(&theme, *c, w))).collect();
+    let rows: Vec<String> = changes.iter().map(|c| text(&line_counts(cx, *c, w))).collect();
     assert!(rows.iter().all(|r| r.chars().count() == w.width()), "{rows:?}");
     assert_eq!(rows[0], "   +3 −120", "{rows:?}");
     assert_eq!(rows[1], "+1204 −4  ", "{rows:?}");
@@ -111,9 +121,10 @@ fn line_counts_line_up_in_columns() {
 #[test]
 fn the_active_guide_is_drawn_in_the_accent() {
     let theme = Theme::load();
+    let cx = &crate::Context::new(&theme);
     let text = |s: &[Span]| -> String { s.iter().map(|s| s.content.as_ref()).collect() };
-    let marked = guides_marked(&theme, 3, Some(1));
-    assert_eq!(text(&marked), guides(&theme, 3).content);
+    let marked = guides_marked(cx, 3, Some(1));
+    assert_eq!(text(&marked), guides(cx, 3).content);
     let accent: Color = theme.colors.accent.into();
     assert_eq!(
         marked
@@ -124,7 +135,7 @@ fn the_active_guide_is_drawn_in_the_accent() {
         "│ "
     );
     // A column that is not among the guides marks nothing.
-    assert_eq!(guides_marked(&theme, 1, Some(1)).len(), 1);
+    assert_eq!(guides_marked(cx, 1, Some(1)).len(), 1);
 }
 
 #[test]
@@ -144,4 +155,18 @@ fn a_file_row_shows_only_the_options_asked_for() {
     };
     let t = row_text(&full, 40);
     assert!(t.trim_end().ends_with("+3 -1M"), "trailing text ends just left of the sign cell: {t}");
+}
+
+#[test]
+fn the_ancestors_of_a_row_are_the_folders_around_it() {
+    // a/          0
+    //   b/        1
+    //     c.rs    2
+    //   d.rs      1
+    //   e.rs      1
+    let depths = [0, 1, 2, 1, 1];
+    let is_dir = |i: usize| i < 2;
+    assert_eq!(ancestors(&depths, is_dir, 2), vec![0, 1]);
+    assert_eq!(ancestors(&depths, is_dir, 4), vec![0]);
+    assert_eq!(ancestors(&depths, is_dir, 0), Vec::<usize>::new());
 }

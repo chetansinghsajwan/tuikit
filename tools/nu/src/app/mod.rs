@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use tui_input::Input;
 use ui::app::{Host, Navigable, Request};
 use ui::footer::Footer;
+use ui::list::List;
 use ui::prompt::Typed;
 use ui::{Component, Pane, Theme};
 
@@ -44,8 +45,6 @@ enum Mode {
 /// A connection attempt, on its own thread (it waits for the network or the device).
 type Job = ui::job::Job<nu_core::Result<()>>;
 
-use ui::list::ListState;
-
 /// The whole screen: both radios, their lists, the focus and any prompt or running job.
 pub struct App {
     wifi: Arc<dyn Backend>,
@@ -57,7 +56,7 @@ pub struct App {
     bt_status: BtStatus,
     devices: Vec<Device>,
     bt_error: Option<String>,
-    lists: [ListState; 2],
+    lists: [List; 2],
     focus: Focus,
     mode: Mode,
     message: Option<ui::footer::Notice>,
@@ -77,7 +76,7 @@ impl App {
             bt_status: BtStatus::default(),
             devices: Vec::new(),
             bt_error: None,
-            lists: [ListState::default(); 2],
+            lists: [List::new(), List::new()],
             focus: Focus::Wifi,
             mode: Mode::Normal,
             message: None,
@@ -106,7 +105,7 @@ impl App {
 
     /// Reread both radios, keeping each cursor on the same entry.
     fn refresh(&mut self) {
-        let keep_wifi = self.networks.get(self.lists[0].cursor).map(|n| n.ssid.clone());
+        let keep_wifi = self.networks.get(self.lists[0].cursor()).map(|n| n.ssid.clone());
         match self.wifi.status().and_then(|s| self.wifi.networks().map(|n| (s, n))) {
             Ok((s, n)) => {
                 self.wifi_status = s;
@@ -122,9 +121,10 @@ impl App {
         if let Some(i) =
             keep_wifi.and_then(|ssid| self.networks.iter().position(|n| n.ssid == ssid))
         {
-            self.lists[0].cursor = i;
+            self.lists[0].set_len(self.networks.len());
+            self.lists[0].set_cursor(i);
         }
-        let keep_bt = self.devices.get(self.lists[1].cursor).map(|d| d.address.clone());
+        let keep_bt = self.devices.get(self.lists[1].cursor()).map(|d| d.address.clone());
         match self.bt.status().and_then(|s| self.bt.devices().map(|d| (s, d))) {
             Ok((s, d)) => {
                 self.bt_status = s;
@@ -138,10 +138,12 @@ impl App {
             }
         }
         if let Some(i) = keep_bt.and_then(|a| self.devices.iter().position(|d| d.address == a)) {
-            self.lists[1].cursor = i;
+            self.lists[1].set_len(self.devices.len());
+            self.lists[1].set_cursor(i);
         }
         for (i, f) in ORDER.into_iter().enumerate() {
-            self.lists[i].cursor = self.lists[i].cursor.min(self.len(f).saturating_sub(1));
+            let len = self.len(f);
+            self.lists[i].set_len(len);
         }
         self.refreshed = Instant::now();
     }
@@ -153,12 +155,12 @@ impl App {
 
     /// The Wi-Fi network under the cursor, if any.
     fn network(&self) -> Option<&Network> {
-        self.networks.get(self.lists[0].cursor)
+        self.networks.get(self.lists[0].cursor())
     }
 
     /// The Bluetooth device under the cursor, if any.
     fn device(&self) -> Option<&Device> {
-        self.devices.get(self.lists[1].cursor)
+        self.devices.get(self.lists[1].cursor())
     }
 
     /// Call between events: finishes a connection attempt that ended and rereads the lists now
@@ -440,34 +442,13 @@ impl ui::app::Screen for App {
         App::tick(self)
     }
 
+    /// The focused list is what the shared movement walks.
     fn navigable(&mut self) -> Option<&mut dyn Navigable> {
-        Some(self)
+        Some(&mut self.lists[Self::pane(self.focus)])
     }
 
     /// The focused pane: Wi-Fi and Bluetooth have different actions.
     fn context(&self) -> usize {
         Self::pane(self.focus)
-    }
-}
-
-/// The cursor of the focused list is what the shared movement walks.
-impl Navigable for App {
-    fn move_by(&mut self, delta: isize) {
-        let len = self.len(self.focus);
-        let st = &mut self.lists[Self::pane(self.focus)];
-        st.cursor = ui::list::move_cursor(st.cursor, delta, len);
-    }
-
-    fn page_row_count(&self) -> usize {
-        10
-    }
-
-    fn move_to_top(&mut self) {
-        self.lists[Self::pane(self.focus)].cursor = 0;
-    }
-
-    fn move_to_bottom(&mut self) {
-        let last = self.len(self.focus).saturating_sub(1);
-        self.lists[Self::pane(self.focus)].cursor = last;
     }
 }

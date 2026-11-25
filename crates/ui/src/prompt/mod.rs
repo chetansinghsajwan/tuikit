@@ -1,7 +1,7 @@
 //! The one-line text prompt (`label value` with a block cursor), shared by
 //! pick's query line and the explorer's new/rename/open-with prompts.
 
-use crate::theme::Theme;
+use crate::component::Context;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
@@ -11,7 +11,8 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 use unicode_width::UnicodeWidthStr;
 
 /// `label` in the accent color followed by the typed `value`.
-pub fn line(theme: &Theme, label: &str, value: &str) -> Line<'static> {
+pub fn line(cx: &Context, label: &str, value: &str) -> Line<'static> {
+    let theme = cx.theme;
     let c = &theme.colors;
     Line::from(vec![
         Span::styled(label.to_string(), Style::new().fg(c.accent.into())),
@@ -120,7 +121,8 @@ impl Suggest {
     }
 
     /// Draw the matches in a box above `prompt` (the row of the prompt line).
-    pub fn render(&self, buf: &mut Buffer, prompt: Rect, theme: &Theme) {
+    pub fn render(&self, cx: &Context, prompt: Rect, buf: &mut Buffer) {
+        let theme = cx.theme;
         let hits = self.matches();
         let rows = hits.len().min(SUGGEST_ROWS).min(usize::from(prompt.y.saturating_sub(1)));
         if rows == 0 {

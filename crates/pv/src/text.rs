@@ -230,7 +230,7 @@ pub fn render_bytes(
         if code.is_empty() && depth > 0 {
             code.push(Span::raw(" ".repeat(depth)));
         }
-        spans.extend(ui::tree::mark_indent(theme, code, depth, unit));
+        spans.extend(ui::tree::mark_indent(&ui::Context::new(theme), code, depth, unit));
         // The focus line wins over a git tint; both span the full width.
         let row_bg = if opts.focus == Some(i as u32 + 1) {
             Some(Color::from(theme.colors.selection))

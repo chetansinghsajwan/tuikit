@@ -1,6 +1,7 @@
 //! Tests for finding the category of a commit subject.
 
 use super::*;
+use crate::Theme;
 
 #[test]
 fn finds_the_category_prefix() {
@@ -25,7 +26,7 @@ fn colors_by_kind_and_splits_the_spans() {
     assert_eq!(category_color(&t, "Fix: x"), category_color(&t, "fix: x"));
     assert_eq!(category_word("Feat(ui)!: a").as_deref(), Some("feat"));
     assert_eq!(category_word("plain"), None);
-    let s = spans(&t, "docs: write", Style::new());
+    let s = spans(&crate::Context::new(&t), "docs: write", Style::new());
     assert_eq!((s[0].content.as_ref(), s[1].content.as_ref()), ("docs:", " write"));
-    assert_eq!(spans(&t, "plain subject", Style::new()).len(), 1);
+    assert_eq!(spans(&crate::Context::new(&t), "plain subject", Style::new()).len(), 1);
 }

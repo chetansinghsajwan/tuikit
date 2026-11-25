@@ -7,8 +7,8 @@
 //! right edge. `lead_cells` and `trail_cells` pad a row's cells; the tool puts them in `ListRow::left`
 //! and `ListRow::right` and passes `min_left`.
 
+use crate::component::Context;
 use crate::list;
-use crate::theme::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -130,7 +130,8 @@ impl Columns {
     }
 
     /// The header cell of a column: its title, accent and bold with a marker when it is the sort column.
-    fn title_cell(&self, theme: &Theme, title: &'static str) -> Span<'static> {
+    fn title_cell(&self, cx: &Context, title: &'static str) -> Span<'static> {
+        let theme = cx.theme;
         match self.sorted {
             Some((sorted, is_descending)) if sorted == title => Span::styled(
                 format!("{title}{}", if is_descending { '▼' } else { '▲' }),
@@ -142,21 +143,21 @@ impl Columns {
 
     /// Draws the header on the one row `area` (the list's content width, the same `inner` the rows
     /// are drawn in).
-    pub fn draw_header(&self, theme: &Theme, buf: &mut Buffer, area: Rect) {
+    pub fn draw_header(&self, cx: &Context, buf: &mut Buffer, area: Rect) {
         if area.height == 0 || area.width == 0 {
             return;
         }
         let area = Rect { height: 1, ..area };
-        let titles = self.lead.iter().map(|c| self.title_cell(theme, c.title)).collect();
+        let titles = self.lead.iter().map(|c| self.title_cell(cx, c.title)).collect();
         let mut left = self.lead_cells(titles);
-        left.push(self.title_cell(theme, self.flex_title));
+        left.push(self.title_cell(cx, self.flex_title));
         let width = usize::from(area.width);
         let trail_width = if self.shows_trail(width) { self.trail_width() } else { 0 };
         let limit = width.saturating_sub(if trail_width > 0 { trail_width + 1 } else { 0 });
         let left = list::clip_spans(left, limit);
         Paragraph::new(Line::from(left)).render(Rect { width: limit as u16, ..area }, buf);
         if trail_width > 0 {
-            let titles = self.trail.iter().map(|c| self.title_cell(theme, c.title)).collect();
+            let titles = self.trail.iter().map(|c| self.title_cell(cx, c.title)).collect();
             let right = self.trail_cells(titles);
             let x = area.right() - trail_width as u16;
             Paragraph::new(Line::from(right))

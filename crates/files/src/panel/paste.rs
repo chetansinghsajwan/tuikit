@@ -154,7 +154,8 @@ impl Panel {
     }
 
     /// The footer line while a paste runs: a percentage and the item count.
-    pub(super) fn job_line(&self, theme: &Theme) -> Option<Line<'static>> {
+    pub(super) fn job_line(&self, cx: &ui::Context) -> Option<Line<'static>> {
+        let theme = cx.theme;
         let j = self.job.as_ref()?;
         let p = &j.progress;
         let pct = (p.done.load(Ordering::Relaxed) * 100).checked_div(p.total).unwrap_or(0).min(100);

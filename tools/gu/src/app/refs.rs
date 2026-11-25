@@ -15,7 +15,7 @@ impl App {
 
     /// The ref under the cursor of the Refs pane (`None` on a section or a folder).
     pub(super) fn current_ref(&self) -> Option<&RefInfo> {
-        match self.ref_rows.get(self.lists[0].cursor)? {
+        match self.ref_rows.get(self.lists[0].cursor())? {
             RefRow::Item { index, .. } => self.branches.get(*index),
             _ => None,
         }
@@ -93,14 +93,15 @@ impl App {
                 (0..self.ref_rows.len())
                     .find(|&i| self.ref_row_id(i).as_deref() == Some(k.as_str()))
             })
-            .unwrap_or(self.lists[0].cursor);
-        self.lists[0].cursor = at.min(self.ref_rows.len().saturating_sub(1));
+            .unwrap_or(self.lists[0].cursor());
+        self.lists[0].set_len(self.ref_rows.len());
+        self.lists[0].set_cursor(at);
     }
 
     /// Scroll the diff to the next or previous hunk (or file).
     /// Open the file tree of the commit under the cursor.
     pub(super) fn open_commit_files(&mut self) {
-        let Some(k) = self.commits.get(self.lists[1].cursor).cloned() else { return };
+        let Some(k) = self.commits.get(self.lists[1].cursor()).cloned() else { return };
         match self.repo.changes(&k.oid) {
             Ok(changes) => {
                 self.commit_files = Some(CommitFiles::new(k.oid, k.short, k.subject, changes));
@@ -118,22 +119,24 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let page = self.preview_scroll.height().max(2);
         let Some(cf) = self.commit_files.as_mut() else { return Outcome::Continue };
-        let before = cf.cursor;
+        let before = cf.list.cursor();
         match key.code {
             KeyCode::Char('c') if ctrl => return Outcome::Quit,
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => self.commit_files = None,
-            KeyCode::Char('j') | KeyCode::Down if !ctrl => cf.move_by(1),
-            KeyCode::Char('k') | KeyCode::Up if !ctrl => cf.move_by(-1),
-            KeyCode::Char('n') if ctrl => cf.move_by(1),
-            KeyCode::Char('p') if ctrl => cf.move_by(-1),
-            KeyCode::Char('j') if ctrl => cf.move_by(5),
-            KeyCode::Char('k') if ctrl => cf.move_by(-5),
-            KeyCode::PageDown => cf.move_by(page as isize),
-            KeyCode::PageUp => cf.move_by(-(page as isize)),
-            KeyCode::Char('g') | KeyCode::Home => cf.cursor = 0,
-            KeyCode::Char('G') | KeyCode::End => cf.cursor = cf.rows.len().saturating_sub(1),
+            KeyCode::Char('j') | KeyCode::Down if !ctrl => cf.list.move_by(1),
+            KeyCode::Char('k') | KeyCode::Up if !ctrl => cf.list.move_by(-1),
+            KeyCode::Char('n') if ctrl => cf.list.move_by(1),
+            KeyCode::Char('p') if ctrl => cf.list.move_by(-1),
+            KeyCode::Char('j') if ctrl => cf.list.move_by(5),
+            KeyCode::Char('k') if ctrl => cf.list.move_by(-5),
+            KeyCode::PageDown => cf.list.move_by(page as isize),
+            KeyCode::PageUp => cf.list.move_by(-(page as isize)),
+            KeyCode::Char('g') | KeyCode::Home => cf.list.move_to_top(),
+            KeyCode::Char('G') | KeyCode::End => cf.list.move_to_bottom(),
             KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                if let Some(FileRow::Folder { path, folded: true, .. }) = cf.rows.get(cf.cursor) {
+                if let Some(FileRow::Folder { path, folded: true, .. }) =
+                    cf.rows.get(cf.list.cursor())
+                {
                     let p = path.clone();
                     cf.folded.remove(&p);
                     cf.rebuild();
@@ -144,7 +147,7 @@ impl App {
                 let depth_of = |r: &FileRow| match r {
                     FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
                 };
-                match cf.rows.get(cf.cursor) {
+                match cf.rows.get(cf.list.cursor()) {
                     Some(FileRow::Folder { path, folded: false, .. }) => {
                         let p = path.clone();
                         cf.folded.insert(p);
@@ -152,10 +155,10 @@ impl App {
                     }
                     Some(row) if depth_of(row) > 0 => {
                         let want = depth_of(row) - 1;
-                        if let Some(i) = cf.rows[..cf.cursor].iter().rposition(|r| {
+                        if let Some(i) = cf.rows[..cf.list.cursor()].iter().rposition(|r| {
                             matches!(r, FileRow::Folder { .. }) && depth_of(r) == want
                         }) {
-                            cf.cursor = i;
+                            cf.list.set_cursor(i);
                         }
                     }
                     _ => self.commit_files = None,
@@ -169,7 +172,7 @@ impl App {
             KeyCode::Char('(') => self.jump_to_prev_mark(DiffMark::File),
             _ => {}
         }
-        if self.commit_files.as_ref().is_some_and(|cf| cf.cursor != before) {
+        if self.commit_files.as_ref().is_some_and(|cf| cf.list.cursor() != before) {
             self.preview_scroll.reset();
         }
         Outcome::Continue

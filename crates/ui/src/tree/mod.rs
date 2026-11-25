@@ -7,9 +7,9 @@
 //!   (open) or `▸` (folded), then its icon if it has one.
 //! - A **leaf** is the guides, then what the tool puts there.
 
+use crate::component::Context;
 use crate::icons::Icon;
 use crate::list;
-use crate::theme::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -17,7 +17,8 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
 /// The indent guides: a thin line at each level.
-pub fn guides(theme: &Theme, depth: usize) -> Span<'static> {
+pub fn guides(cx: &Context, depth: usize) -> Span<'static> {
+    let theme = cx.theme;
     Span::styled(
         format!("{} ", theme.icons.guide.glyph).repeat(depth),
         Style::new().fg(theme.colors.muted.into()),
@@ -96,8 +97,9 @@ pub fn code_scope(indents: &[Option<usize>], unit: usize, cursor: usize) -> Opti
 
 /// The indent guides with the one at column `active` highlighted (the accent), like the editor marks the
 /// scope the cursor is in. Without an active column it is just [`guides`].
-pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<Span<'static>> {
-    let Some(col) = active.filter(|c| *c < depth) else { return vec![guides(theme, depth)] };
+pub fn guides_marked(cx: &Context, depth: usize, active: Option<usize>) -> Vec<Span<'static>> {
+    let theme = cx.theme;
+    let Some(col) = active.filter(|c| *c < depth) else { return vec![guides(cx, depth)] };
     let muted = Style::new().fg(theme.colors.muted.into());
     vec![
         Span::styled(format!("{} ", theme.icons.guide.glyph).repeat(col), muted),
@@ -110,10 +112,11 @@ pub fn guides_marked(theme: &Theme, depth: usize, active: Option<usize>) -> Vec<
 }
 
 /// The start of a folder row: guides, the open or closed folder icon, and the name (accent, bold).
-pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'static>> {
+pub fn dir(cx: &Context, depth: usize, name: &str, open: bool) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     let icon = theme.icons.dir(name.rsplit('/').next().unwrap_or(name), open);
     vec![
-        guides(theme, depth),
+        guides(cx, depth),
         Span::styled(format!("{} ", icon.glyph), icon.style()),
         Span::styled(
             name.to_string(),
@@ -123,7 +126,8 @@ pub fn dir(theme: &Theme, depth: usize, name: &str, open: bool) -> Vec<Span<'sta
 }
 
 /// The fold arrow of a row that can fold (`Some(true)` folded), or blank space of the same width for one that cannot.
-pub fn fold_mark(theme: &Theme, folded: Option<bool>) -> Span<'static> {
+pub fn fold_mark(cx: &Context, folded: Option<bool>) -> Span<'static> {
+    let theme = cx.theme;
     let text = match folded {
         Some(true) => theme.icons.fold_closed.glyph,
         Some(false) => theme.icons.fold_open.glyph,
@@ -134,14 +138,14 @@ pub fn fold_mark(theme: &Theme, folded: Option<bool>) -> Span<'static> {
 
 /// The start of a group row: guides, the fold arrow, the icon if there is one, and the label in `style`.
 pub fn group(
-    theme: &Theme,
+    cx: &Context,
     depth: usize,
     folded: bool,
     icon: Option<Icon>,
     label: &str,
     style: Style,
 ) -> Vec<Span<'static>> {
-    let mut spans = vec![guides(theme, depth), fold_mark(theme, Some(folded))];
+    let mut spans = vec![guides(cx, depth), fold_mark(cx, Some(folded))];
     if let Some(icon) = icon {
         spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
     }
@@ -150,7 +154,8 @@ pub fn group(
 }
 
 /// The count after a folder or group name: ` 3`.
-pub fn count(theme: &Theme, n: usize) -> Span<'static> {
+pub fn count(cx: &Context, n: usize) -> Span<'static> {
+    let theme = cx.theme;
     Span::styled(format!(" {n}"), Style::new().fg(theme.colors.muted.into()))
 }
 
@@ -159,11 +164,12 @@ pub fn count(theme: &Theme, n: usize) -> Span<'static> {
 /// leading spaces change; the rest of the line is untouched. A tool passes the content and the indentation; the
 /// drawing is the toolkit's, so the guides of every code view look alike.
 pub fn mark_indent(
-    theme: &Theme,
+    cx: &Context,
     spans: Vec<Span<'static>>,
     indent: usize,
     unit: usize,
 ) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     let guide = Style::new().fg(theme.colors.muted.into()).add_modifier(Modifier::DIM);
     let mut out: Vec<Span<'static>> = Vec::new();
     let mut col = 0;
@@ -241,10 +247,11 @@ impl CountWidths {
 /// One row's line counts in the columns of `widths`: `+12` right-aligned, `−3` left-aligned, in the git
 /// colors; `None` (a binary file) reads `binary`, muted. Always `widths.width()` cells.
 pub fn line_counts(
-    theme: &Theme,
+    cx: &Context,
     change: Option<(u32, u32)>,
     widths: CountWidths,
 ) -> Vec<Span<'static>> {
+    let theme = cx.theme;
     let c = &theme.colors;
     let total = widths.width();
     match change {
@@ -320,14 +327,38 @@ pub struct FileRow<'a> {
 /// The fewest cells of a name worth showing beside the trailing text.
 const MIN_NAME: usize = 4;
 
-/// Draws one row of a file tree at line `y`: the bar and highlight, the indent guides, the icon, the name
-/// (git-colored, folders bold in the accent), then the optional count, trailing text and signs.
-pub fn file_row(theme: &Theme, buf: &mut Buffer, rows: &list::Rows, y: u16, row: &FileRow) {
-    list_row(theme, usize::from(rows.content(y).width), row).draw(theme, buf, rows, y);
+/// The rows that enclose row `at` of a tree whose rows sit at `depths`, outermost first: for each
+/// level above it, the nearest row before it that `is_container` (a folder). What a tree pins above
+/// its first scrolling row (`List::view(..).pinned(..)`).
+pub fn ancestors(depths: &[usize], is_container: impl Fn(usize) -> bool, at: usize) -> Vec<usize> {
+    let Some(&depth) = depths.get(at) else { return Vec::new() };
+    let mut need = depth;
+    let mut found = Vec::new();
+    for i in (0..at).rev() {
+        if need == 0 {
+            break;
+        }
+        if is_container(i) && depths[i] < need {
+            found.push(i);
+            need = depths[i];
+        }
+    }
+    found.reverse();
+    found
+}
+
+impl FileRow<'_> {
+    /// The row as a [`list::ListRow`] `width` cells wide, for a `List` to draw: the indent guides, the
+    /// icon, the name (git-colored, folders bold in the accent), then the optional count, trailing text
+    /// and signs. The list marks the cursor row and the focus.
+    pub fn list_row(&self, cx: &Context, width: usize) -> list::ListRow {
+        list_row(cx, width, self)
+    }
 }
 
 /// The row as a [`list::ListRow`] for a row `width` cells wide.
-fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
+fn list_row(cx: &Context, width: usize, row: &FileRow) -> list::ListRow {
+    let theme = cx.theme;
     let c = &theme.colors;
 
     let mut name_style =
@@ -355,12 +386,12 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
             theme.icons.file(base_name, row.is_executable)
         }
     });
-    let mut spans = guides_marked(theme, row.depth, row.active_guide);
+    let mut spans = guides_marked(cx, row.depth, row.active_guide);
     spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
     let name_at = spans.len();
     spans.push(Span::raw(""));
     if let Some(n) = row.count {
-        spans.push(count(theme, n));
+        spans.push(count(cx, n));
     }
     if let Some(note) = row.note {
         spans.push(Span::styled(format!("  {note}"), Style::new().fg(c.muted.into())));
@@ -412,9 +443,10 @@ fn list_row(theme: &Theme, width: usize, row: &FileRow) -> list::ListRow {
 
 /// The same row as a [`Line`] of `width` cells, for places that build lines and not a buffer (a preview). With
 /// no width only the name part is built: no trailing text and no signs, as they need a right edge.
-pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'static> {
+pub fn file_row_line(cx: &Context, row: &FileRow, width: Option<u16>) -> Line<'static> {
+    let theme = cx.theme;
     let Some(w) = width else {
-        let mut spans = guides_marked(theme, row.depth, row.active_guide);
+        let mut spans = guides_marked(cx, row.depth, row.active_guide);
         let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
         let icon = row.icon.unwrap_or_else(|| {
             if row.is_dir {
@@ -432,7 +464,7 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
         };
         spans.push(Span::styled(row.name.to_string(), style));
         if let Some(n) = row.count {
-            spans.push(count(theme, n));
+            spans.push(count(cx, n));
         }
         if let Some(note) = row.note {
             spans.push(Span::styled(format!("  {note}"), Style::new().fg(c.muted.into())));
@@ -441,7 +473,7 @@ pub fn file_row_line(theme: &Theme, row: &FileRow, width: Option<u16>) -> Line<'
     };
     let area = Rect::new(0, 0, w, 1);
     let mut buf = Buffer::empty(area);
-    list_row(theme, usize::from(w), row).paint(theme, &mut buf, &list::Rows::new(area, area), 0);
+    list_row(cx, usize::from(w), row).paint(cx, &mut buf, &list::Rows::new(area, area), 0);
     let mut runs: Vec<(Style, String)> = Vec::new();
     for x in 0..w {
         let cell = &buf[(x, 0)];

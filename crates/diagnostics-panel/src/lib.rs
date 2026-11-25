@@ -7,10 +7,9 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::text::Span;
 use std::path::{Path, PathBuf};
-use ui::{Pane, Theme};
+use ui::{Component, Pane, Theme};
 use unicode_width::UnicodeWidthStr;
 
 /// Most severe first (`Error < Warning < ...` in sort order).
@@ -101,12 +100,8 @@ pub struct Panel {
     root: PathBuf,
     items: Vec<Item>,
     rows: Vec<Row>,
-    /// Indices into `rows` of the selectable rows.
-    selectable: Vec<usize>,
-    /// Position in `selectable`.
-    cursor: usize,
-    offset: usize,
-    page: usize,
+    /// The cursor and the scroll over `rows`; the cursor lands only on problems, not on file rows.
+    list: ui::list::List,
     filter: Filter,
 }
 
@@ -117,10 +112,7 @@ impl Panel {
             root: root.into(),
             items: Vec::new(),
             rows: Vec::new(),
-            selectable: Vec::new(),
-            cursor: 0,
-            offset: 0,
-            page: 10,
+            list: ui::list::List::new(),
             filter: Filter::All,
         }
     }
@@ -152,7 +144,7 @@ impl Panel {
 
     /// The problem under the cursor, or `None` when the list is empty.
     fn current(&self) -> Option<&Item> {
-        match self.rows.get(*self.selectable.get(self.cursor)?)? {
+        match self.rows.get(self.list.cursor())? {
             Row::Item(i) => self.items.get(*i),
             Row::File(..) => None,
         }
@@ -161,7 +153,6 @@ impl Panel {
     /// Rebuilds the rows from the items and the filter, keeping the cursor on `keep` when it is still shown.
     fn rebuild(&mut self, keep: Option<Item>) {
         self.rows.clear();
-        self.selectable.clear();
         let mut last: Option<&Path> = None;
         for (i, it) in self.items.iter().enumerate() {
             if !self.filter.keeps(it.severity) {
@@ -176,24 +167,17 @@ impl Panel {
             {
                 *n += 1;
             }
-            self.selectable.push(self.rows.len());
             self.rows.push(Row::Item(i));
         }
         // Stay on the same problem if it is still there.
-        self.cursor = keep
+        let at = keep
             .and_then(|k| {
-                self.selectable
-                    .iter()
-                    .position(|&r| matches!(&self.rows[r], Row::Item(i) if self.items[*i] == k))
+                self.rows.iter().position(|r| matches!(r, Row::Item(i) if self.items[*i] == k))
             })
-            .unwrap_or(self.cursor)
-            .min(self.selectable.len().saturating_sub(1));
-    }
-
-    /// Moves the cursor by `delta` problems, stopping at the first and last.
-    fn move_by(&mut self, delta: isize) {
-        let last = self.selectable.len().saturating_sub(1) as isize;
-        self.cursor = (self.cursor as isize + delta).clamp(0, last.max(0)) as usize;
+            .unwrap_or(self.list.cursor());
+        let rows = &self.rows;
+        self.list.set_rows(rows.len(), |r| matches!(rows[r], Row::Item(_)));
+        self.list.set_cursor(at);
     }
 
     /// Handles a key press and tells the host what to do (open a place, close, or nothing).
@@ -205,18 +189,16 @@ impl Panel {
         match code {
             KeyCode::Esc | KeyCode::Char('q') => return Action::Close,
             KeyCode::Char('c') if ctrl => return Action::Close,
-            KeyCode::Char('k') if ctrl => self.move_by(-5),
-            KeyCode::Char('j') if ctrl => self.move_by(5),
-            KeyCode::Up | KeyCode::Char('k') => self.move_by(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.move_by(1),
-            KeyCode::Char('p') if ctrl => self.move_by(-1),
-            KeyCode::Char('n') if ctrl => self.move_by(1),
-            KeyCode::PageUp => self.move_by(-(self.page as isize)),
-            KeyCode::PageDown => self.move_by(self.page as isize),
-            KeyCode::Home | KeyCode::Char('g') => self.cursor = 0,
-            KeyCode::End | KeyCode::Char('G') => {
-                self.cursor = self.selectable.len().saturating_sub(1)
-            }
+            KeyCode::Char('k') if ctrl => self.list.move_by(-5),
+            KeyCode::Char('j') if ctrl => self.list.move_by(5),
+            KeyCode::Up | KeyCode::Char('k') => self.list.move_by(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.list.move_by(1),
+            KeyCode::Char('p') if ctrl => self.list.move_by(-1),
+            KeyCode::Char('n') if ctrl => self.list.move_by(1),
+            KeyCode::PageUp => self.list.move_by(-(self.list.page_row_count() as isize)),
+            KeyCode::PageDown => self.list.move_by(self.list.page_row_count() as isize),
+            KeyCode::Home | KeyCode::Char('g') => self.list.move_to_top(),
+            KeyCode::End | KeyCode::Char('G') => self.list.move_to_bottom(),
             KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
                 if let Some(it) = self.current() {
                     return Action::Open { path: it.path.clone(), line: it.line, col: it.col };
@@ -244,11 +226,6 @@ impl Panel {
         .into()
     }
 
-    /// A path relative to the workspace root, for shorter file headings.
-    fn rel<'a>(&'a self, p: &'a Path) -> &'a Path {
-        p.strip_prefix(&self.root).unwrap_or(p)
-    }
-
     /// Draws the list into `area`, scrolling to keep the cursor in view.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
         let theme = cx.theme;
@@ -270,57 +247,39 @@ impl Panel {
         if inner.height == 0 || inner.width < 6 {
             return;
         }
-        if self.rows.is_empty() {
-            let msg =
-                if self.items.is_empty() { "no problems" } else { "nothing at this filter (f)" };
-            buf.set_string(inner.x + 1, inner.y, msg, Style::new().fg(c.muted.into()));
-            return;
-        }
-
-        self.page = usize::from(inner.height).max(1);
-        let crow = self.selectable.get(self.cursor).copied().unwrap_or(0);
-        self.offset = ui::list::follow_cursor(crow, self.offset, self.page, self.rows.len());
-        let geo = ui::list::Rows::new(area, inner);
-        for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
-            let y = inner.y + (i - self.offset) as u16;
-            let line_area = Rect { y, height: 1, ..inner };
-            match row {
-                Row::File(path, n) => {
-                    let line = Line::from(vec![
-                        Span::styled(theme.icons.fold_open.glyph, Style::new().fg(c.muted.into())),
-                        Span::styled(
-                            self.rel(path).display().to_string(),
-                            Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(format!("  {n}"), Style::new().fg(c.muted.into())),
-                    ]);
-                    Paragraph::new(line).render(line_area, buf);
+        let empty =
+            if self.items.is_empty() { "no problems" } else { "nothing at this filter (f)" };
+        let (rows, items, root) = (&self.rows, &self.items, &self.root);
+        let (cursor, width) = (self.list.cursor(), usize::from(inner.width));
+        let row = |s: ui::list::Slot| match &rows[s.index] {
+            Row::File(path, n) => ui::list::ListRow {
+                left: vec![
+                    Span::styled(theme.icons.fold_open.glyph, Style::new().fg(c.muted.into())),
+                    Span::styled(
+                        // Relative to the workspace root, for a shorter heading.
+                        path.strip_prefix(root).unwrap_or(path).display().to_string(),
+                        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(format!("  {n}"), Style::new().fg(c.muted.into())),
+                ],
+                ..Default::default()
+            },
+            Row::Item(idx) => {
+                let it = &items[*idx];
+                let selected = s.index == cursor;
+                let head = format!("{}:{}", it.line, it.col);
+                let mut source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
+                // The first line of the message, cut to the room left.
+                let fixed = 2 + 2 + head.width() + 2;
+                // The source goes when it would leave the message under 4 cells.
+                if width.saturating_sub(fixed + source.width()) < 4 {
+                    source.clear();
                 }
-                Row::Item(idx) => {
-                    let it = &self.items[*idx];
-                    let selected = i == crow;
-                    let head = format!("{}:{}", it.line, it.col);
-                    let mut source =
-                        it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
-                    // The first line of the message, cut to the room left.
-                    let fixed = 2 + 2 + head.width() + 2;
-                    // The source goes when it would leave the message under 4 cells.
-                    if usize::from(inner.width).saturating_sub(fixed + source.width()) < 4 {
-                        source.clear();
-                    }
-                    let room = usize::from(inner.width).saturating_sub(fixed + source.width());
-                    let mut msg: String = it.message.lines().next().unwrap_or("").to_string();
-                    if msg.width() > room {
-                        let mut cut = String::new();
-                        for ch in msg.chars() {
-                            if cut.width() + 1 >= room {
-                                break;
-                            }
-                            cut.push(ch);
-                        }
-                        msg = format!("{cut}…");
-                    }
-                    let line = Line::from(vec![
+                let room = width.saturating_sub(fixed + source.width());
+                let msg = ui::list::fit(it.message.lines().next().unwrap_or(""), room);
+                ui::list::ListRow {
+                    id: ui::anim::hash_of(&(it.line, it.col, &it.message)),
+                    left: vec![
                         Span::styled(
                             if selected { "▸ " } else { "  " },
                             Style::new().fg(c.accent.into()),
@@ -330,18 +289,17 @@ impl Panel {
                         Span::raw("  "),
                         Span::styled(msg, Style::new().fg(c.fg.into())),
                         Span::styled(source, Style::new().fg(c.muted.into())),
-                    ]);
-                    ui::list::ListRow {
-                        id: ui::anim::hash_of(&(it.line, it.col, &it.message)),
-                        left: line.spans,
-                        is_selected: selected,
-                        is_focused: focused,
-                        ..Default::default()
-                    }
-                    .render(cx, buf, &geo, y);
+                    ],
+                    ..Default::default()
                 }
             }
-        }
+        };
+        self.list
+            .view(rows.len(), row)
+            .pane(area)
+            .focused(focused)
+            .empty(empty)
+            .render(cx, inner, buf);
     }
 }
 

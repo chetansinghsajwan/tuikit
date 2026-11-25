@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use tui_input::Input;
 use ui::footer::Footer;
 use ui::prompt::Typed;
-use ui::{Pane, Theme, layout};
+use ui::{Component, Pane, layout};
 
 /// What the host should do after an event.
 #[derive(Debug, PartialEq, Eq)]
@@ -111,12 +111,8 @@ pub struct Panel {
     repo: Repo,
     root: PathBuf,
     rows: Vec<Row>,
-    /// Indices into `rows` of the selectable (file) rows.
-    items: Vec<usize>,
-    /// Position in `items`.
-    cursor: usize,
-    offset: usize,
-    page: usize,
+    /// The cursor and the scroll over `rows`.
+    list: ui::list::List,
     branch: String,
     mode: Mode,
     message: Option<ui::footer::Notice>,
@@ -172,10 +168,7 @@ impl Panel {
             repo,
             root,
             rows: Vec::new(),
-            items: Vec::new(),
-            cursor: 0,
-            offset: 0,
-            page: 10,
+            list: ui::list::List::new(),
             branch: String::new(),
             mode: Mode::Normal,
             message: None,
@@ -199,7 +192,7 @@ impl Panel {
 
     /// Reread the status, keeping the cursor on the same file where possible.
     pub fn refresh(&mut self) {
-        let keep = self.row_key(self.cursor);
+        let keep = self.row_key(self.list.cursor());
         self.branch = self.repo.branch().unwrap_or_else(|| "(detached)".into());
         // Deep: files changed inside a submodule are rows too; the repo routes their actions.
         let status = self.repo.status_deep().unwrap_or_default();
@@ -221,7 +214,6 @@ impl Panel {
             .collect();
         self.all.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
         self.rows.clear();
-        self.items.clear();
         if self.tree {
             let mut root = Node::default();
             for change in &self.all {
@@ -248,18 +240,18 @@ impl Panel {
             self.push_node(&root, Path::new(""), 0);
         } else {
             for change in self.all.clone() {
-                self.items.push(self.rows.len());
                 self.rows.push(Row::File { change, depth: 0 });
             }
         }
         // Stay on the same row.
-        self.cursor = keep
+        let at = keep
             .and_then(|(p, folder)| {
-                (0..self.items.len())
+                (0..self.rows.len())
                     .find(|&n| self.row_key(n).is_some_and(|(q, f)| q == p && f == folder))
             })
-            .unwrap_or(self.cursor)
-            .min(self.items.len().saturating_sub(1));
+            .unwrap_or(self.list.cursor());
+        self.list.set_len(self.rows.len());
+        self.list.set_cursor(at);
         self.version += 1;
         self.scroll.reset();
     }
@@ -275,7 +267,6 @@ impl Panel {
                 child = c;
             }
             let folded = self.folded.contains(&path);
-            self.items.push(self.rows.len());
             self.rows.push(Row::Folder {
                 path: path.clone(),
                 label,
@@ -288,14 +279,13 @@ impl Panel {
             }
         }
         for change in &node.files {
-            self.items.push(self.rows.len());
             self.rows.push(Row::File { change: change.clone(), depth });
         }
     }
 
-    /// Path and whether it is a folder, of the `n`th selectable row.
+    /// Path and whether it is a folder, of row `n`.
     fn row_key(&self, n: usize) -> Option<(PathBuf, bool)> {
-        match self.rows.get(*self.items.get(n)?)? {
+        match self.rows.get(n)? {
             Row::File { change, .. } => Some((change.rel_path.clone(), false)),
             Row::Folder { path, .. } => Some((path.clone(), true)),
         }
@@ -303,7 +293,7 @@ impl Panel {
 
     /// The highlighted folder of the tree view.
     fn current_folder(&self) -> Option<PathBuf> {
-        match self.rows.get(*self.items.get(self.cursor)?)? {
+        match self.rows.get(self.list.cursor())? {
             Row::Folder { path, .. } => Some(path.clone()),
             _ => None,
         }
@@ -316,7 +306,7 @@ impl Panel {
 
     /// The highlighted file.
     fn current(&self) -> Option<&Change> {
-        match self.rows.get(*self.items.get(self.cursor)?)? {
+        match self.rows.get(self.list.cursor())? {
             Row::File { change, .. } => Some(change),
             Row::Folder { .. } => None,
         }
@@ -325,11 +315,6 @@ impl Panel {
     /// Shows a message in the footer; `error` colours it as a failure.
     fn show_message(&mut self, msg: impl Into<String>, error: bool) {
         self.message = Some(ui::footer::Notice::new(msg, error));
-    }
-
-    /// Moves the cursor by `delta` rows, stopping at the first and last.
-    fn move_by(&mut self, delta: isize) {
-        self.cursor = ui::list::move_cursor(self.cursor, delta, self.items.len());
     }
 
     /// Turns the result of a git change into a footer message and a refresh, and tells the host the
@@ -443,15 +428,10 @@ impl Panel {
             return Outcome::Command(id);
         }
         self.message = None;
+        if ui::app::run_nav(&mut self.list, id) {
+            return Outcome::None;
+        }
         match id {
-            "nav.up" => self.move_by(-1),
-            "nav.down" => self.move_by(1),
-            "nav.up_step" => self.move_by(-5),
-            "nav.down_step" => self.move_by(5),
-            "nav.page_up" => self.move_by(-(self.page as isize)),
-            "nav.page_down" => self.move_by(self.page as isize),
-            "nav.top" => self.cursor = 0,
-            "nav.bottom" => self.cursor = self.items.len().saturating_sub(1),
             "preview.down" | "preview.up" => {
                 self.scroll.run(id);
             }
@@ -596,18 +576,16 @@ impl Panel {
     /// The footer rows: the commit prompt, a discard question, or the last
     /// message. While the commit prompt is open an error (a refused commit) is
     /// shown above it, so it is not hidden by what you are typing.
-    fn footer(&self, theme: &Theme) -> Vec<Line<'static>> {
-        let message = self.message.as_ref().map(|n| Footer::Notice(n).line(theme));
+    fn footer(&self, cx: &ui::Context) -> Vec<Line<'static>> {
+        let message = self.message.as_ref().map(|n| Footer::Notice(n).line(cx));
         match &self.mode {
             Mode::Commit(input) => {
-                let prompt = ui::prompt::line(theme, "commit: ", input.value());
+                let prompt = ui::prompt::line(cx, "commit: ", input.value());
                 message.into_iter().chain(std::iter::once(prompt)).collect()
             }
             Mode::Discard(rel_path, untracked) => {
                 let what = if *untracked { "Delete" } else { "Discard" };
-                vec![
-                    Footer::Question(format!("{what} {}? d again", rel_path.display())).line(theme),
-                ]
+                vec![Footer::Question(format!("{what} {}? d again", rel_path.display())).line(cx)]
             }
             Mode::Normal => message.into_iter().collect(),
         }
@@ -624,18 +602,18 @@ mod tests;
 /// The change rows are what the shared movement walks.
 impl ui::app::Navigable for Panel {
     fn move_by(&mut self, delta: isize) {
-        Panel::move_by(self, delta);
+        self.list.move_by(delta);
     }
 
     fn page_row_count(&self) -> usize {
-        self.page
+        self.list.page_row_count()
     }
 
     fn move_to_top(&mut self) {
-        self.cursor = 0;
+        self.list.move_to_top();
     }
 
     fn move_to_bottom(&mut self) {
-        self.cursor = self.items.len().saturating_sub(1);
+        self.list.move_to_bottom();
     }
 }

@@ -1,6 +1,7 @@
 //! Tests for the cursor-row fade, the spinner and the frame requests of `anim`.
 
 use super::*;
+use crate::Theme;
 use ratatui::layout::Rect;
 
 /// The color the cursor row is drawn in.

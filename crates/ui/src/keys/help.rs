@@ -81,12 +81,12 @@ impl Help {
         rows: &[Row],
     ) {
         let theme = cx.theme;
-        let rect = crate::layout::popup(theme, area);
+        let rect = crate::layout::popup(cx, area);
         if rect.width < 20 || rect.height < 6 {
             return;
         }
         cx.motion.overlay(buf, area);
-        crate::dim::dim(buf, area, theme);
+        crate::dim::dim(buf, area, cx);
         let c = &theme.colors;
         Clear.render(rect, buf);
         let inner = crate::Pane::new().title(title).focused(true).draw(cx, rect, buf);
@@ -99,7 +99,7 @@ impl Help {
             String::new()
         };
         let line = if self.searching || !self.query.is_empty() {
-            crate::prompt::line(theme, "/ ", &self.query)
+            crate::prompt::line(cx, "/ ", &self.query)
         } else {
             Line::from(Span::styled(hint, Style::new().fg(c.muted.into())))
         };

@@ -5,7 +5,7 @@ use super::*;
 impl App {
     /// The actions that act on the highlighted submodule.
     pub(super) fn submodule_action(&mut self, id: &str) {
-        let cur = self.submodules.get(self.lists[3].cursor).cloned();
+        let cur = self.submodules.get(self.lists[3].cursor()).cloned();
         match (id, cur) {
             ("submodule.add", _) => {
                 self.mode = Mode::Prompt(PromptKind::AddSubmodule, Input::default())

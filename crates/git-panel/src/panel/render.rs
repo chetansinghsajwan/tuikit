@@ -32,8 +32,7 @@ impl Panel {
 
     /// Draws the whole panel: the change list on one side and the diff on the other.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
-        let [list_area, preview_area] = layout::main_preview(theme, area);
+        let [list_area, preview_area] = layout::main_preview(cx, area);
         self.render_list(list_area, buf, cx, true);
         self.render_preview(preview_area, buf, cx);
     }
@@ -54,7 +53,7 @@ impl Panel {
         if inner.height == 0 || inner.width < 6 {
             return;
         }
-        let footer = self.footer(theme);
+        let footer = self.footer(cx);
         if !footer.is_empty() {
             let rows = (footer.len() as u16).min(inner.height);
             let top = inner.bottom() - rows;
@@ -83,19 +82,6 @@ impl Panel {
                 return;
             }
         }
-        if self.rows.is_empty() {
-            buf.set_string(
-                inner.x + 1,
-                inner.y,
-                "clean: nothing to commit",
-                Style::new().fg(c.muted.into()),
-            );
-            return;
-        }
-
-        self.page = usize::from(inner.height).max(1);
-        let crow = self.items.get(self.cursor).copied().unwrap_or(0);
-        self.offset = ui::list::follow_cursor(crow, self.offset, self.page, self.rows.len());
         let depths: Vec<usize> = self
             .rows
             .iter()
@@ -103,33 +89,23 @@ impl Panel {
                 Row::Folder { depth, .. } | Row::File { depth, .. } => *depth,
             })
             .collect();
-        let scope = ui::tree::active_scope(&depths, crow);
-        let geo = ui::list::Rows::new(area, inner);
-        for (i, row) in self.rows.iter().enumerate().skip(self.offset).take(self.page) {
-            let y = inner.y + (i - self.offset) as u16;
-            let selected = i == crow;
-            match row {
-                Row::Folder { label, depth, count, folded, .. } => {
-                    ui::tree::file_row(
-                        theme,
-                        buf,
-                        &geo,
-                        y,
-                        &ui::tree::FileRow {
-                            depth: *depth,
-                            name: label,
-                            is_dir: true,
-                            is_open: !*folded,
-                            count: Some(*count),
-                            is_selected: selected,
-                            is_focused: true,
-                            active_guide: scope.and_then(|s| s.col_at(i)),
-                            ..Default::default()
-                        },
-                    );
+        let scope = ui::tree::active_scope(&depths, self.list.cursor());
+        let (rows, tree) = (&self.rows, self.tree);
+        let row = |s: ui::list::Slot| {
+            let active_guide = scope.and_then(|sc| sc.col_at(s.index));
+            match &rows[s.index] {
+                Row::Folder { label, depth, count, folded, .. } => ui::tree::FileRow {
+                    depth: *depth,
+                    name: label,
+                    is_dir: true,
+                    is_open: !*folded,
+                    count: Some(*count),
+                    active_guide,
+                    ..Default::default()
                 }
+                .list_row(cx, s.width),
                 Row::File { change, depth } => {
-                    let name = if self.tree {
+                    let name = if tree {
                         change
                             .rel_path
                             .file_name()
@@ -148,30 +124,30 @@ impl Panel {
                             (kind_char(k), pv::kind_color(theme, k))
                         })
                     };
-                    ui::tree::file_row(
-                        theme,
-                        buf,
-                        &geo,
-                        y,
-                        &ui::tree::FileRow {
-                            depth: *depth,
-                            name: &name,
-                            tint: Some(pv::kind_color(theme, change.kind())),
-                            icon: change.submodule.then_some(theme.icons.submodule),
-                            is_selected: selected,
-                            is_focused: true,
-                            signs: vec![staged(change.staged), unstaged(change.unstaged)],
-                            active_guide: scope.and_then(|s| s.col_at(i)),
-                            ..Default::default()
-                        },
-                    );
+                    ui::tree::FileRow {
+                        depth: *depth,
+                        name: &name,
+                        tint: Some(pv::kind_color(theme, change.kind())),
+                        icon: change.submodule.then_some(theme.icons.submodule),
+                        signs: vec![staged(change.staged), unstaged(change.unstaged)],
+                        active_guide,
+                        ..Default::default()
+                    }
+                    .list_row(cx, s.width)
                 }
             }
-        }
+        };
+        self.list
+            .view(rows.len(), row)
+            .pane(area)
+            .focused(true)
+            .empty("clean: nothing to commit")
+            .render(cx, inner, buf);
     }
 
     /// The preview of a submodule: where it is, then the commits that moved it.
-    fn submodule_lines(&self, rel_path: &Path, theme: &Theme) -> Vec<Line<'static>> {
+    fn submodule_lines(&self, rel_path: &Path, cx: &ui::Context) -> Vec<Line<'static>> {
+        let theme = cx.theme;
         let path = rel_path.to_string_lossy();
         let mut text = String::new();
         if let Some(s) = self.repo.submodules().unwrap_or_default().iter().find(|s| s.path == path)
@@ -214,7 +190,7 @@ impl Panel {
                 pv::Options { width: Some(inner.width), height: None, git: false, focus: None };
             let side = if staged { Side::Staged } else { Side::Unstaged };
             let (lines, hunks) = if submodule {
-                (self.submodule_lines(&rel_path, theme), Vec::new())
+                (self.submodule_lines(&rel_path, cx), Vec::new())
             } else {
                 match pv::preview_diff_marked(&self.root, &rel_path, side, theme, &opts) {
                     Ok((l, a)) => (l, a.hunks),

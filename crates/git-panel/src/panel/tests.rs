@@ -4,6 +4,7 @@ use super::*;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use std::fs;
 use std::process::Command;
+use ui::Theme;
 
 /// Commits made through `Repo::create_commit` use the ambient git identity,
 /// which a clean build sandbox does not have.
@@ -80,13 +81,11 @@ fn draw(p: &mut Panel) -> Vec<String> {
 /// Moves the cursor onto the changed file `name`; fails the test if it is not listed.
 fn on(p: &mut Panel, name: &str) {
     let i = p
-        .items
+        .rows
         .iter()
-        .position(
-            |&i| matches!(&p.rows[i], Row::File { change, .. } if change.rel_path == Path::new(name)),
-        )
+        .position(|r| matches!(r, Row::File { change, .. } if change.rel_path == Path::new(name)))
         .unwrap_or_else(|| panic!("{name} listed"));
-    p.cursor = i;
+    p.list.set_cursor(i);
 }
 
 #[test]
@@ -177,11 +176,11 @@ fn the_tree_groups_by_folder_stages_a_folder_folds_and_toggles_to_a_list() {
     assert!(!text.contains("src/one.rs"), "files show their name only in the tree");
     // Enter on the folder folds it.
     let at = p
-        .items
+        .rows
         .iter()
-        .position(|&i| matches!(&p.rows[i], Row::Folder { path, .. } if path == Path::new("src")))
+        .position(|r| matches!(r, Row::Folder { path, .. } if path == Path::new("src")))
         .unwrap();
-    p.cursor = at;
+    p.list.set_cursor(at);
     p.handle_event(&key(KeyCode::Enter));
     let text = draw(&mut p).join("\n");
     assert!(text.contains("src 2") && !text.contains("one.rs"), "{text}");

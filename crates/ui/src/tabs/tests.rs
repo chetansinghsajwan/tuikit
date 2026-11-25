@@ -1,6 +1,7 @@
 //! Tests for the tab model, short titles and the tab strip.
 
 use super::*;
+use crate::Theme;
 
 #[test]
 fn open_close_next_prev_goto_and_reorder() {
@@ -68,7 +69,7 @@ fn all_labels_show_numbered_when_they_fit() {
     let mut buf = Buffer::empty(area);
     let mut ls = labels(&["README.md", "good.nix"]);
     ls[1].modified = true;
-    render(area, &mut buf, &Theme::default(), &ls, 1, true);
+    render(area, &mut buf, &crate::Context::new(&Theme::default()), &ls, 1, true);
     let text = row(&buf, 60);
     assert_eq!(text, " 1 README.md  2 good.nix ●");
     // The active label is bold, the other is not.
@@ -81,7 +82,7 @@ fn all_labels_show_numbered_when_they_fit() {
     );
     // Without numbers the labels are plain.
     let mut buf = Buffer::empty(area);
-    render(area, &mut buf, &Theme::default(), &ls, 0, false);
+    render(area, &mut buf, &crate::Context::new(&Theme::default()), &ls, 0, false);
     assert_eq!(row(&buf, 60), " README.md  good.nix ●");
 }
 
@@ -92,14 +93,14 @@ fn a_crowded_strip_shows_a_window_around_the_active_tab_with_counts() {
     let ls = labels(&refs);
     let area = Rect::new(0, 0, 40, 1);
     let mut buf = Buffer::empty(area);
-    render(area, &mut buf, &Theme::default(), &ls, 4, true);
+    render(area, &mut buf, &crate::Context::new(&Theme::default()), &ls, 4, true);
     let text = row(&buf, 40);
     assert!(text.contains("5 file4.rs"), "the active tab is in view: {text:?}");
     assert!(text.starts_with('‹') && text.ends_with('›'), "both ends have counts: {text:?}");
     assert!(text.chars().count() <= 40, "{text:?}");
     // At the first tab nothing is hidden on the left.
     let mut buf = Buffer::empty(area);
-    render(area, &mut buf, &Theme::default(), &ls, 0, true);
+    render(area, &mut buf, &crate::Context::new(&Theme::default()), &ls, 0, true);
     let text = row(&buf, 40);
     assert!(
         text.contains("1 file0.rs") && !text.starts_with('‹') && text.ends_with('›'),
@@ -110,7 +111,7 @@ fn a_crowded_strip_shows_a_window_around_the_active_tab_with_counts() {
     render(
         Rect::new(0, 0, 12, 1),
         &mut buf,
-        &Theme::default(),
+        &crate::Context::new(&Theme::default()),
         &labels(&["a-very-long-file-name.rs"]),
         0,
         true,
