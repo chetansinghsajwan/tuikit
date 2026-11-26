@@ -12,6 +12,18 @@
 
 ## Architecture
 
+- tuikit is immediate mode on ratatui; React is an inspiration, not the model. Take an idea from it
+  only where it fits drawing a fresh frame every time:
+  - Each frame the parent computes the areas and draws its parts into them. A container is a
+    layout function that returns rects (`ui::layout`, `layout::focus_stack`, `Pane::draw`
+    returning the content area), not a component that owns its children; no tree outlives the
+    frame.
+  - State lives in the tool's structs (the `List` it keeps), not inside components; a component is
+    built from that state each frame.
+  - Events go from the keymap to an action id to the screen, which runs it on the focused part. A
+    part returns what it does not handle (a panel's `Outcome::Command`), which is the bubbling;
+    there is no focus tree.
+
 - Pass the whole context, not one part of it. A function that draws takes `cx: &ui::Context` and
   reads `cx.theme` inside; it never takes `theme: &Theme`. The theme is one part of the context,
   next to the motion; passing the whole lets the context grow (focus, config, clock) without
