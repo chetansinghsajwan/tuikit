@@ -29,6 +29,9 @@ enum Mode {
     Confirm { pid: u32, name: String, signal: Signal },
 }
 
+/// The blank cells between the two columns of core meters.
+const GAP: u16 = 2;
+
 /// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar filled to
 /// `shown` (0 to 1), which glides to the true ratio.
 struct Gauge<'a> {
@@ -47,6 +50,7 @@ impl<'a> Gauge<'a> {
 /// The values the bars show, each gliding to the latest reading instead of jumping.
 #[derive(Default)]
 struct Glide {
+    cpu: Option<Eased>,
     cores: Vec<Eased>,
     memory: Option<Eased>,
     swap: Option<Eased>,
@@ -60,6 +64,8 @@ impl Glide {
         let disks: Vec<f32> = s.disks.iter().map(|d| ratio(d.used, d.total)).collect();
         Self::follow(&mut self.cores, &cores, now);
         Self::follow(&mut self.disks, &disks, now);
+        let cpu = s.cpu / 100.0;
+        self.cpu.get_or_insert(Eased::new(cpu)).set(cpu, now);
         let memory = ratio(s.memory_used, s.memory_total);
         self.memory.get_or_insert(Eased::new(memory)).set(memory, now);
         let swap = ratio(s.swap_used, s.swap_total);
@@ -82,6 +88,7 @@ impl Glide {
         self.cores
             .iter()
             .chain(&self.disks)
+            .chain(self.cpu.iter())
             .chain(self.memory.iter())
             .chain(self.swap.iter())
             .any(|bar| bar.is_moving(now))
@@ -195,9 +202,8 @@ impl Monitor {
         pane.draw(cx, area, buf)
     }
 
-    /// The CPU pane: the history graph, then the cores in two columns.
+    /// The CPU pane: the load of the whole machine, then the cores in two columns, all as horizontal bars.
     fn draw_cpu(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
         let s = &self.sampler.snapshot;
         let title = format!(
             "cpu {:.0}%  load {:.2} {:.2} {:.2}  up {}",
@@ -211,53 +217,42 @@ impl Monitor {
         if inner.height == 0 || inner.width == 0 {
             return;
         }
-        let core_rows = (s.cores.len() as u16).div_ceil(2).min(inner.height / 2);
-        let graph_area = Rect { height: inner.height - core_rows, ..inner };
-        graph::history(buf, graph_area, &self.sampler.cpu_history.values(), |v| {
-            graph::heat(theme, v)
-        });
-        let half = inner.width / 2;
+        // Horizontal bars only: the whole machine, a blank row, then the cores in two columns.
+        let total = self.glide.cpu.map_or(s.cpu / 100.0, |bar| bar.value(self.frame_time));
+        Self::draw_load(cx, buf, Rect { height: 1, ..inner }, "all", total);
+        let top = inner.y + 2;
+        let core_rows = (s.cores.len() as u16).div_ceil(2).min(inner.bottom().saturating_sub(top));
+        if core_rows == 0 {
+            return;
+        }
+        // A gap of two cells between the columns keeps a value off the next label.
+        let half = inner.width.saturating_sub(GAP) / 2;
         for (i, load) in s.cores.iter().enumerate() {
-            let row = i as u16 % core_rows.max(1);
-            let column = i as u16 / core_rows.max(1);
+            let row = i as u16 % core_rows;
+            let column = i as u16 / core_rows;
             if column > 1 {
                 break;
             }
             let cell = Rect {
-                x: inner.x + column * half,
-                y: graph_area.bottom() + row,
-                width: if column == 0 { half } else { inner.width - half },
+                x: inner.x + column * (half + GAP),
+                y: top + row,
+                width: if column == 0 { half } else { inner.width - half - GAP },
                 height: 1,
             };
-            self.draw_core(cell, buf, cx, i, *load);
+            let ratio = shown(&self.glide.cores, i, self.frame_time, load / 100.0);
+            Self::draw_load(cx, buf, cell, &i.to_string(), ratio);
         }
     }
 
-    /// One core: its number, a meter and its percent.
-    fn draw_core(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context, i: usize, load: f32) {
-        let theme = cx.theme;
-        let label = format!("{i:>2} ");
-        let value = format!(" {load:>3.0}%");
-        let used = (label.len() + value.len() + 1) as u16;
-        if area.width <= used {
-            return;
-        }
-        let muted = Style::new().fg(theme.colors.muted.into());
-        buf.set_string(area.x, area.y, &label, muted);
-        let meter = Rect { x: area.x + label.len() as u16, width: area.width - used, ..area };
-        let ratio = shown(&self.glide.cores, i, self.frame_time, load / 100.0);
-        let color = graph::heat(theme, ratio);
-        graph::meter(
-            buf,
-            meter,
-            ratio,
-            |place| graph::heat(theme, place),
-            theme.colors.border.into(),
-        );
-        buf.set_string(meter.right(), area.y, &value, Style::new().fg(color));
+    /// One load on one row: its label, a bar and its percent.
+    fn draw_load(cx: &ui::Context, buf: &mut Buffer, area: Rect, label: &str, ratio: f32) {
+        let value = format!("{:.0}%", ratio * 100.0);
+        graph::MeterRow { label, label_width: 3, ratio, value: &value, value_width: 4 }
+            .render(cx, area, buf);
     }
 
-    /// One labeled meter over two rows (the label with its numbers, then the bar); returns the next row.
+    /// One labeled meter over two rows (the label with its numbers, then the bar); returns the row of
+    /// the next meter, after a blank one.
     fn draw_meter(area: Rect, buf: &mut Buffer, cx: &ui::Context, y: u16, gauge: Gauge) -> u16 {
         let theme = cx.theme;
         let Gauge { label, used, total, shown } = gauge;
@@ -281,7 +276,8 @@ impl Monitor {
             |place| graph::heat(theme, place),
             theme.colors.border.into(),
         );
-        y + 2
+        // A blank row before the next meter.
+        y + 3
     }
 
     /// The memory pane: memory, swap and every disk.

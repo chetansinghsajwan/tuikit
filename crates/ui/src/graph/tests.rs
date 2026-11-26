@@ -111,3 +111,20 @@ fn history_colors_each_column_by_its_value() {
     assert_eq!(buf[(0, 0)].fg, Color::Green);
     assert_eq!(buf[(1, 0)].fg, Color::Red);
 }
+
+#[test]
+fn a_meter_row_keeps_a_blank_cell_between_its_parts() {
+    let theme = Theme::default();
+    let cx = crate::Context::new(&theme);
+    let area = Rect::new(0, 0, 20, 1);
+    let mut buf = Buffer::empty(area);
+    crate::Component::render(
+        MeterRow { label: "7", label_width: 3, ratio: 0.5, value: "50%", value_width: 4 },
+        &cx,
+        area,
+        &mut buf,
+    );
+    let row: String = (0..20).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+    assert!(row.starts_with("7   "), "label, its width, then one blank: {row:?}");
+    assert_eq!(&row[row.len() - 5..], "  50%", "one blank before the value");
+}

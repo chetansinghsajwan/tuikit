@@ -2,6 +2,7 @@
 //! bar, so every tool that shows a load (CPU, memory, a transfer rate) draws it the same way.
 
 use crate::anim;
+use crate::component::{Component, Context};
 use crate::theme::{Theme, mix};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -130,6 +131,40 @@ pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: impl Fn(f32) -> Co
             let place = (f32::from(i) + 0.5) / f32::from(area.width);
             cell.set_char(glyph(here)).set_style(Style::new().fg(color(place)));
         }
+    }
+}
+
+/// One meter on one row: the label (muted), a bar filled to `ratio` in the heat gradient, then the
+/// value in the color of the load, with one blank cell between the parts so they never touch. The
+/// label and the value take `label_width` and `value_width` cells, so the bars of a column of rows
+/// line up; the bar takes the rest.
+pub struct MeterRow<'a> {
+    pub label: &'a str,
+    pub label_width: usize,
+    pub ratio: f32,
+    pub value: &'a str,
+    pub value_width: usize,
+}
+
+impl Component for MeterRow<'_> {
+    fn render(self, cx: &Context, area: Rect, buf: &mut Buffer) {
+        let theme = cx.theme;
+        let fixed = (self.label_width + 1 + 1 + self.value_width) as u16;
+        if area.height == 0 || area.width <= fixed {
+            return;
+        }
+        let muted = Style::new().fg(theme.colors.muted.into());
+        buf.set_stringn(area.x, area.y, self.label, self.label_width, muted);
+        let bar = Rect {
+            x: area.x + self.label_width as u16 + 1,
+            width: area.width - fixed,
+            height: 1,
+            ..area
+        };
+        meter(buf, bar, self.ratio, |place| heat(theme, place), theme.colors.border.into());
+        let value = format!("{:>width$}", self.value, width = self.value_width);
+        let color = Style::new().fg(heat(theme, self.ratio));
+        buf.set_stringn(bar.right() + 1, area.y, value, self.value_width, color);
     }
 }
 

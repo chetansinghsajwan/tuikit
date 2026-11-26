@@ -73,7 +73,6 @@ pub struct Sampler {
     networks: Networks,
     last: Instant,
     pub snapshot: Snapshot,
-    pub cpu_history: Ring,
     pub memory_history: Ring,
     pub download_history: Ring,
     pub upload_history: Ring,
@@ -92,7 +91,6 @@ impl Sampler {
             networks,
             last: Instant::now(),
             snapshot: Snapshot::default(),
-            cpu_history: Ring::default(),
             memory_history: Ring::default(),
             download_history: Ring::default(),
             upload_history: Ring::default(),
@@ -153,7 +151,6 @@ impl Sampler {
             })
             .collect();
 
-        self.cpu_history.push(s.cpu / 100.0);
         self.memory_history.push(ratio(s.memory_used, s.memory_total));
         self.download_history.push(s.download as f32);
         self.upload_history.push(s.upload as f32);
