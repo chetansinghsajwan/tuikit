@@ -5,7 +5,7 @@ use nu_core::bluetooth::{Bluetooth, BtStatus, Device, rssi_percent};
 use nu_core::{Backend, Network, Security, Status};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::Event;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};

@@ -5,6 +5,9 @@ use super::*;
 impl App {
     /// Run an action by id: what a key, the leader menu or the palette resolves to.
     pub fn run_id(&mut self, id: &'static str) -> Outcome {
+        if self.shows_commit_files() && self.commit_files_action(id) {
+            return Outcome::Continue;
+        }
         match id {
             "quit" => return Outcome::Quit,
             "repo.up" => self.repo_up(),

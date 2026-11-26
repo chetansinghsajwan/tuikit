@@ -1,10 +1,10 @@
-//! The input modes: a prompt, a question or the commit files hold the keys. Each feature runs its own answers.
+//! The input modes: a prompt, a question or a popup holds the keys. Each feature runs its own answers.
 
 use super::*;
 
 impl App {
-    /// Handles an event the screen claimed (see `captures`): a prompt, a question, a popup, the
-    /// files of a commit or the Files panel's own prompts. Tells the host what to do next.
+    /// Handles an event the screen claimed (see `captures`): a prompt, a question, a popup or the
+    /// Files panel's own prompts. Tells the host what to do next.
     pub(super) fn typing(&mut self, ev: &Event) -> Outcome {
         let Some(key) = ui::keys::pressed(ev) else { return Outcome::Continue };
         match std::mem::replace(&mut self.mode, Mode::Normal) {
@@ -22,9 +22,6 @@ impl App {
             }
             Mode::Normal => {}
         }
-        if self.tab == Tab::Commits && self.commit_files.is_some() {
-            return self.commit_files_key(key);
-        }
         if self.focus == Focus::Files && self.files.captures_input(ev) {
             let action = self.files.handle_captured(ev);
             return self.files_action(action);
@@ -32,11 +29,10 @@ impl App {
         Outcome::Continue
     }
 
-    /// Whether the screen takes this event itself: a prompt, a question or a popup is open, the
-    /// files of a commit show, or the Files panel is asking something.
+    /// Whether the screen takes this event itself: a prompt, a question or a popup is open, or the
+    /// Files panel is asking something.
     pub(super) fn takes(&self, ev: &Event) -> bool {
         !matches!(self.mode, Mode::Normal)
-            || (self.tab == Tab::Commits && self.commit_files.is_some())
             || (self.focus == Focus::Files && self.files.captures_input(ev))
     }
 

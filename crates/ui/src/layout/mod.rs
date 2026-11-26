@@ -20,6 +20,27 @@ fn split(cx: &Context, area: Rect, dir: Direction, constraints: &[Constraint]) -
     Layout::new(dir, constraints).spacing(theme.layout.gap).split(area).to_vec()
 }
 
+/// The rows a pane of a `focus_stack` keeps while another has the focus: its title and its first
+/// entries.
+const STACK_REST: u16 = 6;
+/// The fewest rows the focused pane of a `focus_stack` takes.
+const STACK_FOCUSED: u16 = 7;
+
+/// `count` panes one under another in `area`: pane `focused` takes the room, every other keeps a few
+/// rows. Draw the panes, then dim the others with `dim::unfocused`.
+pub fn focus_stack(cx: &Context, area: Rect, count: usize, focused: usize) -> Vec<Rect> {
+    let constraints: Vec<Constraint> = (0..count)
+        .map(|i| {
+            if i == focused {
+                Constraint::Min(STACK_FOCUSED)
+            } else {
+                Constraint::Length(STACK_REST)
+            }
+        })
+        .collect();
+    rows(cx, area, &constraints)
+}
+
 /// A popup centered in `area`, `popup_percent` of its width and height.
 pub fn popup(cx: &Context, area: Rect) -> Rect {
     let theme = cx.theme;

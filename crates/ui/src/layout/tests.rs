@@ -26,3 +26,13 @@ fn parses_json() {
     assert_eq!(t.layout.gap, 3);
     assert_eq!(t.chrome.border, "double");
 }
+
+#[test]
+fn the_focused_pane_of_a_stack_takes_the_room() {
+    let t = Theme::default();
+    let cx = crate::Context::new(&t);
+    let area = Rect::new(0, 0, 40, 30);
+    let panes = focus_stack(&cx, area, 3, 1);
+    assert_eq!(panes.iter().map(|r| r.height).collect::<Vec<_>>(), vec![6, 18, 6]);
+    assert_eq!(panes[2].bottom(), area.bottom());
+}

@@ -55,7 +55,7 @@ impl App {
         }
         let Some(li) = Self::list_index(which) else { return };
         if which == Focus::Commits {
-            self.fit_columns(inner.width);
+            self.fit_columns(inner.width, cx);
         }
         // The list is taken out so the rows can borrow `self` while it scrolls.
         let mut list = std::mem::take(&mut self.lists[li]);
@@ -75,9 +75,24 @@ impl App {
     /// Give the flexible columns their widths for a list `width` wide: the refs column as wide as the most
     /// refs on one commit need (as far as the message keeps room), and when the message is hidden the
     /// refs (or the author names) take what is left, so the row is always filled.
-    pub(in crate::app) fn fit_columns(&mut self, width: u16) {
+    pub(in crate::app) fn fit_columns(&mut self, width: u16, cx: &ui::Context) {
         /// The least width the commit message keeps before the refs column has to shrink.
         const MIN_SUBJECT: usize = 24;
+        // Every column has one width, whatever the commits are: the refs column too (when any commit
+        // has a ref).
+        let refs_need = *self.refs_need.get_or_insert_with(|| {
+            self.commits
+                .iter()
+                .filter_map(|k| self.labels.get(&k.oid))
+                .map(|l| {
+                    pills(l)
+                        .iter()
+                        .map(|(r, remotes)| ref_width(&cx.theme.icons, r, remotes))
+                        .sum::<usize>()
+                })
+                .max()
+                .unwrap_or(0)
+        });
         let width = usize::from(width);
         let mut fixed = if self.graph { self.graph_w + 1 } else { 0 };
         if self.cols.show_hash {
@@ -95,14 +110,12 @@ impl App {
         }
         self.author_w = name_w;
         let free = width.saturating_sub(fixed);
-        let refs_on = self.cols.show_refs && self.refs_need > 0;
+        let refs_on = self.cols.show_refs && refs_need > 0;
         self.refs_w = match (refs_on, self.cols.show_subject) {
             (false, _) => 0,
-            (true, true) => {
-                self.refs_need.min(free.saturating_sub(MIN_SUBJECT)).max(8.min(self.refs_need))
-            }
+            (true, true) => refs_need.min(free.saturating_sub(MIN_SUBJECT)).max(8.min(refs_need)),
             // No message: the refs take the rest of the row.
-            (true, false) => free.saturating_sub(1).max(self.refs_need.min(free)),
+            (true, false) => free.saturating_sub(1).max(refs_need.min(free)),
         };
         if !self.cols.show_subject
             && !refs_on

@@ -11,4 +11,6 @@ fn every_pane_has_described_actions_and_no_shared_keys() {
     let mut files = git_panel::keys::commands();
     files.add(GLOBAL, binds::GLOBAL);
     assert_eq!(files.problems(), Vec::<String>::new(), "the files pane");
+    assert_eq!(commit_files_commands().problems(), Vec::<String>::new(), "the files of a commit");
+    assert_eq!(contexts().len(), COMMIT_FILES_CONTEXT + 1);
 }

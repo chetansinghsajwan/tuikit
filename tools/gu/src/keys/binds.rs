@@ -33,6 +33,25 @@ pub(super) const COMMON: &[DefaultBinding] = &[
     DefaultBinding { id: "quit", keys: &["q", "ctrl-c", "leader q"] },
 ];
 
+/// The default keys of [`COMMIT_FILES`].
+pub(super) const COMMIT_FILES: &[DefaultBinding] = &[
+    DefaultBinding { id: "tree.in", keys: &["enter", "l", "right"] },
+    DefaultBinding { id: "tree.collapse", keys: &["h", "left"] },
+];
+
+/// The default keys of [`COMMON`] while the files of a commit show: `q` and backspace go back to
+/// the commits instead of quitting.
+pub(super) const COMMIT_FILES_COMMON: &[DefaultBinding] = &[
+    DefaultBinding { id: "preview.next_hunk", keys: &["}"] },
+    DefaultBinding { id: "preview.prev_hunk", keys: &["{"] },
+    DefaultBinding { id: "preview.next_file", keys: &[")"] },
+    DefaultBinding { id: "preview.prev_file", keys: &["("] },
+    DefaultBinding { id: "preview.fold", keys: &["z"] },
+    DefaultBinding { id: "preview.whitespace", keys: &["w"] },
+    DefaultBinding { id: "back", keys: &["esc", "q", "backspace"] },
+    DefaultBinding { id: "quit", keys: &["ctrl-c", "leader q"] },
+];
+
 /// The default keys of [`BRANCHES`].
 pub(super) const BRANCHES: &[DefaultBinding] = &[
     DefaultBinding { id: "branch.checkout", keys: &["enter", "leader k"] },

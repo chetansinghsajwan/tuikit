@@ -129,7 +129,7 @@ fn press(app: &mut Rig, keys: &str) {
 fn screen(app: &mut App) -> Vec<String> {
     let area = Rect::new(0, 0, 120, 36);
     let mut buf = Buffer::empty(area);
-    let theme = app.theme.clone();
+    let theme = ui::Theme::load();
     app.render(&ui::Context::new(&theme), area, &mut buf);
     (0..36)
         .map(|y| {
@@ -757,15 +757,16 @@ fn the_refs_column_fits_the_widest_commit_and_the_free_space_goes_to_what_is_lef
     git(&d, &["tag", "another-long-tag-name"]);
     let mut app = rig(&d);
     press(&mut app, "2");
-    app.fit_columns(120);
+    app.fit_columns(120, &ui::Context::new(&ui::Theme::default()));
     assert!(app.refs_w > 24, "the refs of the widest commit all fit: {}", app.refs_w);
     // Without the message the refs take the rest of the row.
     app.cols.show_subject = false;
-    app.fit_columns(120);
-    assert!(app.refs_w > app.refs_need, "{} vs {}", app.refs_w, app.refs_need);
+    app.fit_columns(120, &ui::Context::new(&ui::Theme::default()));
+    let need = app.refs_need.unwrap();
+    assert!(app.refs_w > need, "{} vs {need}", app.refs_w);
     // In a narrow list the message keeps its room and the refs give way.
     app.cols.show_subject = true;
-    app.fit_columns(60);
+    app.fit_columns(60, &ui::Context::new(&ui::Theme::default()));
     assert!(app.refs_w <= 60 - 24, "{}", app.refs_w);
 }
 

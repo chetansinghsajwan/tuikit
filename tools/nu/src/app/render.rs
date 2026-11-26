@@ -8,18 +8,11 @@ impl App {
         let body = Rect { height: area.height.saturating_sub(1), ..area };
         let status = Rect { y: area.bottom().saturating_sub(1), height: 1, ..area };
         let [left, right] = ui::layout::main_preview(cx, body);
-        // The focused pane takes the room; the other shows a few rows.
-        let constraints =
-            ORDER.map(|f| if f == self.focus { Constraint::Min(7) } else { Constraint::Length(6) });
-        let panes = Layout::vertical(constraints).split(left);
+        let focused = ORDER.iter().position(|&f| f == self.focus).unwrap_or(0);
+        let panes = ui::layout::focus_stack(cx, left, ORDER.len(), focused);
         self.render_wifi(panes[0], buf, cx);
         self.render_bluetooth(panes[1], buf, cx);
-        // The pane without the focus is dimmed a little.
-        for (f, pane) in ORDER.iter().zip(panes.iter()) {
-            if *f != self.focus {
-                ui::dim::dim_to(buf, *pane, cx, ui::dim::KEEP_INACTIVE);
-            }
-        }
+        ui::dim::unfocused(buf, cx, &panes, focused);
         match self.focus {
             Focus::Wifi => self.details_wifi(right, buf, cx),
             Focus::Bluetooth => self.details_bluetooth(right, buf, cx),

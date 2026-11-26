@@ -17,6 +17,16 @@ pub fn dim(buf: &mut Buffer, area: Rect, cx: &Context) {
     dim_to(buf, area, cx, KEEP);
 }
 
+/// Dim every pane of `panes` but pane `focused` a little (`KEEP_INACTIVE`), after they are drawn: the
+/// panes of a `layout::focus_stack`.
+pub fn unfocused(buf: &mut Buffer, cx: &Context, panes: &[Rect], focused: usize) {
+    for (i, &pane) in panes.iter().enumerate() {
+        if i != focused {
+            dim_to(buf, pane, cx, KEEP_INACTIVE);
+        }
+    }
+}
+
 /// Dim every cell of `area`, keeping `keep` percent of each colour.
 pub fn dim_to(buf: &mut Buffer, area: Rect, cx: &Context, keep: u8) {
     let theme = cx.theme;

@@ -6,7 +6,7 @@ use git_core::{
 use git_panel::{Outcome as PanelOutcome, Panel};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
@@ -59,7 +59,6 @@ use types::*;
 pub struct App {
     root: PathBuf,
     repo: Repo,
-    theme: Theme,
     files: Panel,
     branches: Vec<RefInfo>,
     commits: Vec<CommitInfo>,
@@ -85,8 +84,9 @@ pub struct App {
     graph_w: usize,
     /// Width of the refs column in the Commits table.
     refs_w: usize,
-    /// The width every ref of the widest commit needs together (the refs column is sized from it).
-    refs_need: usize,
+    /// The width every ref of the widest commit needs together (the refs column is sized from it);
+    /// measured on the first draw after a reload, as it needs the icons of the context.
+    refs_need: Option<usize>,
     /// The columns shown, and the width of the author names.
     cols: Columns,
     author_w: usize,
@@ -125,7 +125,6 @@ impl App {
         let mut app = App {
             root,
             repo,
-            theme: Theme::load(),
             files,
             branches: Vec::new(),
             commits: Vec::new(),
@@ -145,7 +144,7 @@ impl App {
             graph_rows: Vec::new(),
             graph_w: 0,
             refs_w: 0,
-            refs_need: 0,
+            refs_need: None,
             cols: Columns::default(),
             author_w: 0,
             ref_rows: Vec::new(),
@@ -238,6 +237,9 @@ impl ui::app::Screen for App {
 
     /// The focused pane: Files is context 0, the list panes follow.
     fn context(&self) -> usize {
+        if self.shows_commit_files() {
+            return crate::keys::COMMIT_FILES_CONTEXT;
+        }
         Self::list_index(self.focus).map_or(0, |i| i + 1)
     }
 }
@@ -308,6 +310,11 @@ impl Navigable for App {
     }
 
     fn page_row_count(&self) -> usize {
+        if self.tab == Tab::Commits
+            && let Some(cf) = &self.commit_files
+        {
+            return cf.list.page_row_count();
+        }
         match Self::list_index(self.focus) {
             Some(li) => self.lists[li].page_row_count(),
             None => self.files.page_row_count(),
@@ -326,8 +333,14 @@ impl Navigable for App {
 }
 
 impl App {
-    /// The list of the focused pane: one of the app's own, or the git panel's.
+    /// The list the movement walks: the files of a commit while they show, else the focused
+    /// pane's (one of the app's own, or the git panel's).
     fn focused_list(&mut self) -> &mut dyn Navigable {
+        if self.tab == Tab::Commits
+            && let Some(cf) = self.commit_files.as_mut()
+        {
+            return &mut cf.list;
+        }
         match Self::list_index(self.focus) {
             Some(li) => &mut self.lists[li],
             None => &mut self.files,

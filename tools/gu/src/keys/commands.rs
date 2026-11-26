@@ -96,6 +96,22 @@ pub const GLOBAL: &[Action] = &[
     },
 ];
 
+/// The files of a commit (`l` on a commit): the tree folds and unfolds.
+pub(super) const COMMIT_FILES: &[Action] = &[
+    Action {
+        id: "tree.in",
+        name: "unfold",
+        desc: "unfold the folder under the cursor",
+        basic: true,
+    },
+    Action {
+        id: "tree.collapse",
+        name: "fold or up",
+        desc: "fold the open folder, else go to the folder above; at the top, back to the commits",
+        basic: true,
+    },
+];
+
 /// Movement, the diff scroll and quitting, for the list panes.
 pub(super) const COMMON: &[Action] = &[
     Action {

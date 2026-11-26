@@ -113,27 +113,23 @@ impl App {
         }
     }
 
-    /// Keys while the files of a commit show: the tree moves and folds, esc goes back to the commits.
-    pub(super) fn commit_files_key(&mut self, key: &KeyEvent) -> Outcome {
-        use ratatui::crossterm::event::KeyModifiers;
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let page = self.preview_scroll.height().max(2);
-        let Some(cf) = self.commit_files.as_mut() else { return Outcome::Continue };
+    /// Whether the files of a commit show (the Commits tab, `l` on a commit).
+    pub(super) fn shows_commit_files(&self) -> bool {
+        self.tab == Tab::Commits && self.commit_files.is_some()
+    }
+
+    /// The actions of the files of a commit: the tree folds, `back` goes back to the commits. The
+    /// movement is the shared one (the tree is the list `Navigable` walks while it shows), the
+    /// diff keys are the panes' own. `true` when `id` was one of these.
+    pub(super) fn commit_files_action(&mut self, id: &str) -> bool {
+        let Some(cf) = self.commit_files.as_mut() else { return false };
         let before = cf.list.cursor();
-        match key.code {
-            KeyCode::Char('c') if ctrl => return Outcome::Quit,
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Backspace => self.commit_files = None,
-            KeyCode::Char('j') | KeyCode::Down if !ctrl => cf.list.move_by(1),
-            KeyCode::Char('k') | KeyCode::Up if !ctrl => cf.list.move_by(-1),
-            KeyCode::Char('n') if ctrl => cf.list.move_by(1),
-            KeyCode::Char('p') if ctrl => cf.list.move_by(-1),
-            KeyCode::Char('j') if ctrl => cf.list.move_by(5),
-            KeyCode::Char('k') if ctrl => cf.list.move_by(-5),
-            KeyCode::PageDown => cf.list.move_by(page as isize),
-            KeyCode::PageUp => cf.list.move_by(-(page as isize)),
-            KeyCode::Char('g') | KeyCode::Home => cf.list.move_to_top(),
-            KeyCode::Char('G') | KeyCode::End => cf.list.move_to_bottom(),
-            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
+        let depth_of = |r: &FileRow| match r {
+            FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
+        };
+        match id {
+            "back" => self.commit_files = None,
+            "tree.in" => {
                 if let Some(FileRow::Folder { path, folded: true, .. }) =
                     cf.rows.get(cf.list.cursor())
                 {
@@ -142,40 +138,30 @@ impl App {
                     cf.rebuild();
                 }
             }
-            KeyCode::Char('h') | KeyCode::Left => {
-                // Fold an open folder; otherwise go to the parent folder; at the top, back to the commits.
-                let depth_of = |r: &FileRow| match r {
-                    FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
-                };
-                match cf.rows.get(cf.list.cursor()) {
-                    Some(FileRow::Folder { path, folded: false, .. }) => {
-                        let p = path.clone();
-                        cf.folded.insert(p);
-                        cf.rebuild();
-                    }
-                    Some(row) if depth_of(row) > 0 => {
-                        let want = depth_of(row) - 1;
-                        if let Some(i) = cf.rows[..cf.list.cursor()].iter().rposition(|r| {
-                            matches!(r, FileRow::Folder { .. }) && depth_of(r) == want
-                        }) {
-                            cf.list.set_cursor(i);
-                        }
-                    }
-                    _ => self.commit_files = None,
+            // Fold an open folder; otherwise go to the parent folder; at the top, back to the commits.
+            "tree.collapse" => match cf.rows.get(cf.list.cursor()) {
+                Some(FileRow::Folder { path, folded: false, .. }) => {
+                    let p = path.clone();
+                    cf.folded.insert(p);
+                    cf.rebuild();
                 }
-            }
-            KeyCode::Char('d') if ctrl => self.preview_scroll.half_down(),
-            KeyCode::Char('u') if ctrl => self.preview_scroll.half_up(),
-            KeyCode::Char('}') => self.jump_to_next_mark(DiffMark::Hunk),
-            KeyCode::Char('{') => self.jump_to_prev_mark(DiffMark::Hunk),
-            KeyCode::Char(')') => self.jump_to_next_mark(DiffMark::File),
-            KeyCode::Char('(') => self.jump_to_prev_mark(DiffMark::File),
-            _ => {}
+                Some(row) if depth_of(row) > 0 => {
+                    let want = depth_of(row) - 1;
+                    if let Some(i) = cf.rows[..cf.list.cursor()]
+                        .iter()
+                        .rposition(|r| matches!(r, FileRow::Folder { .. }) && depth_of(r) == want)
+                    {
+                        cf.list.set_cursor(i);
+                    }
+                }
+                _ => self.commit_files = None,
+            },
+            _ => return false,
         }
         if self.commit_files.as_ref().is_some_and(|cf| cf.list.cursor() != before) {
             self.preview_scroll.reset();
         }
-        Outcome::Continue
+        true
     }
 
     /// Fold or unfold the file whose header is at (or above) the top of the diff.

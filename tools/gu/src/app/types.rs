@@ -6,8 +6,6 @@ use super::*;
 pub(super) const TAB_LOG_LIMIT: usize = 3000;
 /// Most cells (two per lane) the graph column may take.
 pub(super) const GRAPH_MAX: usize = 24;
-/// Most cells the refs column of the Commits table may take.
-pub(super) const REFS_COL: usize = 24;
 
 /// What the screen decided after an event, for `finish` to turn into a shell request.
 #[derive(Debug, PartialEq, Eq)]
