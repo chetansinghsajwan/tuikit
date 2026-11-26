@@ -33,3 +33,14 @@ fn a_broken_file_is_reported_and_skipped() {
     assert!(problems[0].contains("bad.toml"), "{problems:?}");
     assert_eq!(cfg.leader.as_deref(), Some("x"));
 }
+
+#[test]
+fn the_animation_speed_is_read_and_the_tool_file_wins() {
+    let shared = write("speed-shared", "animation_speed = 2.0\n");
+    let own = write("speed-own", "animation_speed = 0.5\n");
+    let (cfg, problems) = Config::read(std::slice::from_ref(&shared));
+    assert!(problems.is_empty(), "{problems:?}");
+    assert_eq!(cfg.animation_speed, Some(2.0));
+    let (cfg, _) = Config::read(&[shared, own]);
+    assert_eq!(cfg.animation_speed, Some(0.5));
+}

@@ -56,6 +56,20 @@ fn start() -> Instant {
     *START.get_or_init(Instant::now)
 }
 
+/// How fast motion plays, from `animation_speed` in the config: 1.0 as designed (unset or not a
+/// positive number), 2.0 twice as fast, 0.5 half as fast; kept between 0.1 and 10.
+pub fn speed() -> f32 {
+    match crate::config::get().animation_speed {
+        Some(s) if s.is_finite() && s > 0.0 => s.clamp(0.1, 10.0),
+        _ => 1.0,
+    }
+}
+
+/// `d`, a duration of motion as designed, at the configured `speed`.
+pub fn scaled(d: Duration) -> Duration {
+    d.div_f32(speed())
+}
+
 /// The motion mode from the config; `On` when unset or unreadable.
 fn mode() -> Mode {
     crate::config::get().animations.as_deref().and_then(Mode::parse).unwrap_or_default()
@@ -274,7 +288,8 @@ impl Motion {
             return "…";
         }
         self.want();
-        FRAMES[(start().elapsed().as_millis() / STEP.as_millis()) as usize % FRAMES.len()]
+        FRAMES[(start().elapsed().as_millis() / scaled(STEP).as_millis().max(1)) as usize
+            % FRAMES.len()]
     }
 
     /// How long the event loop may wait for input: a frame while something moves, `idle` otherwise.
@@ -373,7 +388,7 @@ impl Motion {
                                     let inside = cur[..i].iter().any(|p| old.contains_key(&p.id))
                                         && cur[i..].iter().any(|n| old.contains_key(&n.id));
                                     if inside {
-                                        pane.born.insert(r.id, now + STAGGER * run);
+                                        pane.born.insert(r.id, now + scaled(STAGGER) * run);
                                         run += 1;
                                     }
                                 }
@@ -391,7 +406,7 @@ impl Motion {
 
                 // The glide: show the frames between the old and the new position.
                 if let Some(sc) = &pane.scroll {
-                    let t = progress(sc.began, now, GLIDE);
+                    let t = progress(sc.began, now, scaled(GLIDE));
                     if t >= 1.0 || sc.from.area != area {
                         pane.scroll = None;
                     } else {
@@ -418,12 +433,15 @@ impl Motion {
 
                 // Reveal and flash on the rows as drawn (not while the list glides: the rows are elsewhere).
                 if pane.scroll.is_none() {
-                    pane.born.retain(|_, b| progress(*b, now, REVEAL) < 1.0);
-                    pane.flash.retain(|_, b| progress(*b, now, FLASH) < 1.0);
+                    pane.born.retain(|_, b| progress(*b, now, scaled(REVEAL)) < 1.0);
+                    pane.flash.retain(|_, b| progress(*b, now, scaled(FLASH)) < 1.0);
                     for r in &cur {
-                        let reveal = pane.born.get(&r.id).map(|b| progress(*b, now, REVEAL));
-                        let flash =
-                            pane.flash.get(&r.id).map(|b| ease_out(progress(*b, now, FLASH)));
+                        let reveal =
+                            pane.born.get(&r.id).map(|b| progress(*b, now, scaled(REVEAL)));
+                        let flash = pane
+                            .flash
+                            .get(&r.id)
+                            .map(|b| ease_out(progress(*b, now, scaled(FLASH))));
                         if reveal.is_none() && flash.is_none() {
                             continue;
                         }
@@ -453,7 +471,7 @@ impl Motion {
             for (rect, under) in overlays {
                 let b = st.overlay_began.get(&rect).copied().unwrap_or(now);
                 began.insert(rect, b);
-                let p = progress(b, now, OVERLAY);
+                let p = progress(b, now, scaled(OVERLAY));
                 if p >= 1.0 {
                     continue;
                 }
@@ -481,7 +499,7 @@ impl Motion {
                     st.tab_fades.insert(strip, now);
                 }
                 if let Some(b) = st.tab_fades.get(&strip).copied() {
-                    let p = progress(b, now, TAB);
+                    let p = progress(b, now, scaled(TAB));
                     if p >= 1.0 {
                         st.tab_fades.remove(&strip);
                         continue;
@@ -510,10 +528,13 @@ impl Motion {
                 if !(area.left()..area.right()).any(|x| truth[(x, y)].bg == lit) {
                     continue;
                 }
-                let began =
-                    if st.first { now - FADE } else { st.seen.get(&y).copied().unwrap_or(now) };
+                let began = if st.first {
+                    now - scaled(FADE)
+                } else {
+                    st.seen.get(&y).copied().unwrap_or(now)
+                };
                 seen.insert(y, began);
-                let t = now.duration_since(began).as_secs_f32() / FADE.as_secs_f32();
+                let t = now.duration_since(began).as_secs_f32() / scaled(FADE).as_secs_f32();
                 if t < 1.0 {
                     moving = true;
                     if !gliding {

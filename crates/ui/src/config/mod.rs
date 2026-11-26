@@ -3,6 +3,7 @@
 //! ```toml
 //! leader = "space"            # the key `leader` stands for in bindings
 //! animations = "on"           # "on", "reduced" (spinner only) or "off"
+//! animation_speed = 1.0       # 2.0 moves twice as fast, 0.5 half as fast
 //!
 //! [keys]                      # action id -> key(s); an empty list unbinds the action
 //! "nav.down" = ["j", "down"]
@@ -22,11 +23,13 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// The merged configuration of a tool: the shared file overlaid by the tool's own.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Config {
     pub leader: Option<String>,
     /// `on`, `reduced` or `off` (see `anim`).
     pub animations: Option<String>,
+    /// How fast motion plays: 1.0 as designed, 2.0 twice as fast (see `anim::speed`).
+    pub animation_speed: Option<f32>,
     /// Action id -> its keys.
     pub keys: BTreeMap<String, Vec<String>>,
 }
@@ -44,6 +47,7 @@ enum Keys {
 struct File {
     leader: Option<String>,
     animations: Option<String>,
+    animation_speed: Option<f32>,
     #[serde(default)]
     keys: BTreeMap<String, Keys>,
 }
@@ -104,6 +108,9 @@ impl Config {
         }
         if f.animations.is_some() {
             self.animations = f.animations;
+        }
+        if f.animation_speed.is_some() {
+            self.animation_speed = f.animation_speed;
         }
         for (id, keys) in f.keys {
             self.keys.insert(

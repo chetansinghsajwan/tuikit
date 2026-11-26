@@ -61,13 +61,16 @@ impl Eased {
         if !self.is_moving(now) {
             return self.to;
         }
-        let t = now.saturating_duration_since(self.since).as_secs_f32() / GLIDE.as_secs_f32();
+        let t = now.saturating_duration_since(self.since).as_secs_f32()
+            / anim::scaled(GLIDE).as_secs_f32();
         self.from + (self.to - self.from) * anim::ease_out(t)
     }
 
     /// Whether the value is still on its way at `now`.
     pub fn is_moving(&self, now: Instant) -> bool {
-        anim::is_on() && self.from != self.to && now.saturating_duration_since(self.since) < GLIDE
+        anim::is_on()
+            && self.from != self.to
+            && now.saturating_duration_since(self.since) < anim::scaled(GLIDE)
     }
 }
 
