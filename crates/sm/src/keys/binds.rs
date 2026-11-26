@@ -15,5 +15,6 @@ pub const DEFAULT_BINDINGS: &[DefaultBinding] = &[
     DefaultBinding { id: "panel.memory", keys: &["2", "leader w m"] },
     DefaultBinding { id: "panel.network", keys: &["3", "leader w n"] },
     DefaultBinding { id: "panel.processes", keys: &["4", "leader w p"] },
+    DefaultBinding { id: "panel.sensors", keys: &["5", "leader w s"] },
     DefaultBinding { id: "quit", keys: &["q", "ctrl-c"] },
 ];

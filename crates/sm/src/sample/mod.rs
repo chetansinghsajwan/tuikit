@@ -1,10 +1,18 @@
-//! Readings of the machine: CPU, memory, disks, network and processes, refreshed on demand, and the
-//! history of the few values the monitor graphs. The only module that talks to `sysinfo`.
+//! Readings of the machine: CPU, memory, disks, network, sensors and processes, refreshed on demand,
+//! and the history of the few values the monitor graphs. The only module that talks to `sysinfo`.
 
 use crate::procs::Proc;
 use std::collections::VecDeque;
 use std::time::Instant;
-use sysinfo::{Disks, Networks, Pid, ProcessesToUpdate, Signal, System};
+use sysinfo::{Components, Disks, Networks, Pid, ProcessesToUpdate, Signal, System};
+
+/// The battery, which `sysinfo` does not read.
+pub mod battery;
+/// The health of the disks, read once in the background.
+pub mod health;
+
+pub use battery::Battery;
+pub use health::Health;
 
 /// How many readings of each graphed value are kept.
 const HISTORY_SIZE: usize = 300;
@@ -43,6 +51,21 @@ pub struct DiskInfo {
     pub mount: String,
     pub total: u64,
     pub used: u64,
+    /// Bytes per second read from and written to it.
+    pub read: u64,
+    pub written: u64,
+    /// What its drive says about itself, when that can be read.
+    pub health: Option<Health>,
+}
+
+/// One temperature sensor.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Temp {
+    pub label: String,
+    /// Degrees Celsius.
+    pub celsius: f32,
+    /// The temperature the sensor calls critical, when it says.
+    pub critical: Option<f32>,
 }
 
 /// The machine at one moment.
@@ -60,6 +83,8 @@ pub struct Snapshot {
     pub swap_used: u64,
     pub swap_total: u64,
     pub disks: Vec<DiskInfo>,
+    pub temps: Vec<Temp>,
+    pub battery: Option<Battery>,
     /// Bytes per second received and sent over all interfaces.
     pub download: u64,
     pub upload: u64,
@@ -71,6 +96,9 @@ pub struct Sampler {
     system: System,
     disks: Disks,
     networks: Networks,
+    /// The temperature sensors; `None` when the platform has none to read.
+    components: Option<Components>,
+    health: health::Watch,
     last: Instant,
     pub snapshot: Snapshot,
     pub memory_history: Ring,
@@ -85,10 +113,18 @@ impl Sampler {
         let system = System::new_all().map_err(|e| e.to_string())?;
         let disks = Disks::new_with_refreshed_list().map_err(|e| e.to_string())?;
         let networks = Networks::new_with_refreshed_list().map_err(|e| e.to_string())?;
+        // A machine without readable sensors still runs the monitor; the sensors pane says so.
+        let components = Components::new_with_refreshed_list().ok();
+        let mut drives: Vec<String> =
+            disks.iter().map(|d| health::whole_disk(&d.name().to_string_lossy())).collect();
+        drives.sort();
+        drives.dedup();
         let mut sampler = Sampler {
             system,
             disks,
             networks,
+            components,
+            health: health::Watch::spawn(drives),
             last: Instant::now(),
             snapshot: Snapshot::default(),
             memory_history: Ring::default(),
@@ -108,6 +144,9 @@ impl Sampler {
         self.system.refresh_processes(ProcessesToUpdate::All, true);
         self.disks.refresh(true);
         self.networks.refresh(true);
+        if let Some(c) = self.components.as_mut() {
+            c.refresh(true);
+        }
 
         let (received, sent) = self
             .networks
@@ -133,8 +172,24 @@ impl Sampler {
                 mount: d.mount_point().to_string_lossy().into_owned(),
                 total: d.total_space(),
                 used: d.total_space() - d.available_space(),
+                read: (d.usage().read_bytes as f64 / elapsed) as u64,
+                written: (d.usage().written_bytes as f64 / elapsed) as u64,
+                health: self.health.get(&health::whole_disk(&d.name().to_string_lossy())),
             })
             .collect();
+        s.temps = self
+            .components
+            .iter()
+            .flat_map(|cs| cs.iter())
+            .filter_map(|c| {
+                Some(Temp {
+                    label: c.label().to_string(),
+                    celsius: c.temperature()?,
+                    critical: c.critical(),
+                })
+            })
+            .collect();
+        s.battery = battery::read();
         s.procs = self
             .system
             .processes()

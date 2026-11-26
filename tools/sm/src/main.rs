@@ -13,7 +13,7 @@ struct Cli {
     #[arg(short, long, default_value_t = 1000, value_name = "MS", value_parser = parse_interval)]
     interval: u64,
 
-    /// Panels that start hidden: cpu, memory, network, processes (1 to 4 toggle them while running).
+    /// Panels that start hidden: cpu, memory, network, processes, sensors (1 to 5 toggle them while running).
     #[arg(long, value_delimiter = ',', value_parser = parse_panel)]
     hide: Vec<Panel>,
 }
@@ -27,7 +27,7 @@ fn parse_interval(text: &str) -> Result<u64, String> {
 /// A panel by name.
 fn parse_panel(text: &str) -> Result<Panel, String> {
     Panel::parse(text)
-        .ok_or_else(|| format!("{text} is not a panel (cpu, memory, network, processes)"))
+        .ok_or_else(|| format!("{text} is not a panel (cpu, memory, network, processes, sensors)"))
 }
 
 /// Opens the monitor and runs it. Failures exit with code 2.

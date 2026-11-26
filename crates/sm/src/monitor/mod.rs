@@ -4,11 +4,11 @@
 use crate::format;
 use crate::panels::{Panel, Panels};
 use crate::procs::{self, Options, Row, Sort};
-use crate::sample::{Sampler, Snapshot, ratio};
+use crate::sample::{Health, Sampler, Snapshot, ratio};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::time::{Duration, Instant};
@@ -31,6 +31,8 @@ enum Mode {
 
 /// The blank cells between the two columns of core meters.
 const GAP: u16 = 2;
+/// The cells a sensor's name takes before its bar; a longer name ends in `…`.
+const LABEL_W: usize = 12;
 
 /// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar filled to
 /// `shown` (0 to 1), which glides to the true ratio.
@@ -39,11 +41,13 @@ struct Gauge<'a> {
     used: u64,
     total: u64,
     shown: f32,
+    /// More about it after the numbers (a disk's reads, writes and health).
+    notes: Vec<Span<'static>>,
 }
 
 impl<'a> Gauge<'a> {
     fn new(label: &'a str, used: u64, total: u64, shown: f32) -> Self {
-        Gauge { label, used, total, shown }
+        Gauge { label, used, total, shown, notes: Vec::new() }
     }
 }
 
@@ -247,26 +251,35 @@ impl Monitor {
     /// One load on one row: its label, a bar and its percent.
     fn draw_load(cx: &ui::Context, buf: &mut Buffer, area: Rect, label: &str, ratio: f32) {
         let value = format!("{:.0}%", ratio * 100.0);
-        graph::MeterRow { label, label_width: 3, ratio, value: &value, value_width: 4 }
-            .render(cx, area, buf);
+        graph::MeterRow {
+            label,
+            label_width: 3,
+            ratio,
+            value: &value,
+            value_width: 4,
+            reversed: false,
+        }
+        .render(cx, area, buf);
     }
 
     /// One labeled meter over two rows (the label with its numbers, then the bar); returns the row of
     /// the next meter, after a blank one.
     fn draw_meter(area: Rect, buf: &mut Buffer, cx: &ui::Context, y: u16, gauge: Gauge) -> u16 {
         let theme = cx.theme;
-        let Gauge { label, used, total, shown } = gauge;
+        let Gauge { label, used, total, shown, notes } = gauge;
         if y + 1 >= area.bottom() {
             return area.bottom();
         }
         let r = ratio(used, total);
-        let line = Line::from(vec![
+        let mut spans = vec![
             Span::raw(label.to_string()),
             Span::styled(
                 format!("  {} / {}  {:.0}%", format::bytes(used), format::bytes(total), r * 100.0),
                 Style::new().fg(theme.colors.muted.into()),
             ),
-        ]);
+        ];
+        spans.extend(notes);
+        let line = Line::from(spans);
         let row = |y| Rect { y, height: 1, ..area };
         Paragraph::new(line).render(row(y), buf);
         graph::meter(
@@ -299,15 +312,91 @@ impl Monitor {
             let gauge = Gauge::new("swap", s.swap_used, s.swap_total, swap);
             y = Self::draw_meter(inner, buf, cx, y, gauge);
         }
+        let c = &cx.theme.colors;
         for (i, disk) in s.disks.iter().enumerate() {
             let fallback = ratio(disk.used, disk.total);
-            let gauge = Gauge::new(
+            let mut gauge = Gauge::new(
                 &disk.mount,
                 disk.used,
                 disk.total,
                 shown(&self.glide.disks, i, now, fallback),
             );
+            let muted = Style::new().fg(c.muted.into());
+            gauge.notes.push(Span::styled(
+                format!("  r {}  w {}", format::rate(disk.read), format::rate(disk.written)),
+                muted,
+            ));
+            match disk.health {
+                Some(Health::Good) => gauge.notes.push(Span::styled("  healthy", muted)),
+                Some(Health::Failing) => gauge.notes.push(Span::styled(
+                    "  failing",
+                    Style::new().fg(c.error.into()).add_modifier(Modifier::BOLD),
+                )),
+                None => {}
+            }
             y = Self::draw_meter(inner, buf, cx, y, gauge);
+        }
+    }
+
+    /// The sensors pane: the battery (a bar, whether it charges, how long it lasts), then every
+    /// temperature as a bar toward its critical point.
+    fn draw_sensors(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
+        let s = &self.sampler.snapshot;
+        let inner = Self::pane(cx, buf, area, "sensors", false);
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+        let muted = Style::new().fg(cx.theme.colors.muted.into());
+        if s.battery.is_none() && s.temps.is_empty() {
+            buf.set_stringn(
+                inner.x,
+                inner.y,
+                "no sensors to read",
+                usize::from(inner.width),
+                muted,
+            );
+            return;
+        }
+        let row = |y| Rect { y, height: 1, ..inner };
+        let mut y = inner.y;
+        if let Some(b) = s.battery {
+            let value = format!("{:.0}%", b.percent);
+            graph::MeterRow {
+                label: "battery",
+                label_width: LABEL_W,
+                ratio: b.percent / 100.0,
+                value: &value,
+                value_width: 4,
+                reversed: true,
+            }
+            .render(cx, row(y), buf);
+            if y + 1 < inner.bottom() {
+                // Under a minute the estimate is noise (a battery at its end of charge).
+                let left = b
+                    .time_left
+                    .filter(|t| *t >= 60)
+                    .map(|t| format!("  {} left", format::duration(t)));
+                let text = format!("{}{}", b.charge.label(), left.unwrap_or_default());
+                buf.set_stringn(inner.x, y + 1, text, usize::from(inner.width), muted);
+            }
+            // A blank row before the temperatures.
+            y += 3;
+        }
+        for t in &s.temps {
+            if y >= inner.bottom() {
+                break;
+            }
+            let value = format!("{:.0}°", t.celsius);
+            graph::MeterRow {
+                label: &t.label,
+                label_width: LABEL_W,
+                ratio: t.celsius / t.critical.filter(|c| *c > 0.0).unwrap_or(100.0),
+                value: &value,
+                value_width: 4,
+                reversed: false,
+            }
+            .render(cx, row(y), buf);
+            y += 1;
         }
     }
 
@@ -414,7 +503,7 @@ impl Monitor {
             Mode::Normal => match &self.message {
                 Some(notice) => Footer::Notice(notice),
                 None => Footer::Hint(format!(
-                    "s sort  r reverse  t tree  / filter  x terminate  X kill  1-4 panels  ? help  q quit  every {}ms",
+                    "s sort  r reverse  t tree  / filter  x terminate  X kill  1-5 panels  ? help  q quit  every {}ms",
                     self.interval.as_millis()
                 )),
             },
@@ -474,6 +563,9 @@ impl Screen for Monitor {
         if let Some(rect) = placed.memory {
             self.draw_memory(rect, buf, cx);
         }
+        if let Some(rect) = placed.sensors {
+            self.draw_sensors(rect, buf, cx);
+        }
         if let Some(rect) = placed.network {
             self.draw_network(rect, buf, cx);
         }
@@ -518,6 +610,7 @@ impl Screen for Monitor {
             "panel.memory" => self.toggle_panel(Panel::Memory),
             "panel.network" => self.toggle_panel(Panel::Network),
             "panel.processes" => self.toggle_panel(Panel::Processes),
+            "panel.sensors" => self.toggle_panel(Panel::Sensors),
             "proc.term" => self.ask_signal(Signal::Term),
             "proc.kill" => self.ask_signal(Signal::Kill),
             "quit" => return Request::Quit,

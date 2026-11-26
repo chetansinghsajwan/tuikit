@@ -61,6 +61,12 @@ pub const ACTIONS: &[Action] = &[
         basic: false,
     },
     Action {
+        id: "panel.sensors",
+        name: "toggle sensors",
+        desc: "show or hide the battery and temperatures pane",
+        basic: false,
+    },
+    Action {
         id: "panel.processes",
         name: "toggle processes",
         desc: "show or hide the process list",

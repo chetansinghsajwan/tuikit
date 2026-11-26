@@ -9,6 +9,7 @@ pub enum Panel {
     Cpu,
     Memory,
     Network,
+    Sensors,
     Processes,
 }
 
@@ -19,6 +20,7 @@ impl Panel {
             "cpu" => Some(Panel::Cpu),
             "memory" | "mem" => Some(Panel::Memory),
             "network" | "net" => Some(Panel::Network),
+            "sensors" | "temp" | "battery" => Some(Panel::Sensors),
             "processes" | "procs" => Some(Panel::Processes),
             _ => None,
         }
@@ -30,6 +32,7 @@ impl Panel {
             Panel::Cpu => "cpu",
             Panel::Memory => "memory",
             Panel::Network => "network",
+            Panel::Sensors => "sensors",
             Panel::Processes => "processes",
         }
     }
@@ -41,6 +44,7 @@ pub struct Panels {
     cpu: bool,
     memory: bool,
     network: bool,
+    sensors: bool,
     processes: bool,
 }
 
@@ -50,13 +54,14 @@ pub struct Placed {
     pub cpu: Option<Rect>,
     pub memory: Option<Rect>,
     pub network: Option<Rect>,
+    pub sensors: Option<Rect>,
     pub processes: Option<Rect>,
 }
 
 impl Default for Panels {
     /// Every panel on.
     fn default() -> Panels {
-        Panels { cpu: true, memory: true, network: true, processes: true }
+        Panels { cpu: true, memory: true, network: true, sensors: true, processes: true }
     }
 }
 
@@ -78,8 +83,10 @@ impl Panels {
     /// Turns `panel` on or off. Returns `false` and changes nothing when that would hide the last
     /// panel.
     pub fn toggle(&mut self, panel: Panel) -> bool {
-        let count =
-            [self.cpu, self.memory, self.network, self.processes].iter().filter(|on| **on).count();
+        let count = [self.cpu, self.memory, self.network, self.sensors, self.processes]
+            .iter()
+            .filter(|on| **on)
+            .count();
         let flag = self.flag_mut(panel);
         if *flag && count == 1 {
             return false;
@@ -93,6 +100,7 @@ impl Panels {
             Panel::Cpu => &self.cpu,
             Panel::Memory => &self.memory,
             Panel::Network => &self.network,
+            Panel::Sensors => &self.sensors,
             Panel::Processes => &self.processes,
         }
     }
@@ -102,14 +110,15 @@ impl Panels {
             Panel::Cpu => &mut self.cpu,
             Panel::Memory => &mut self.memory,
             Panel::Network => &mut self.network,
+            Panel::Sensors => &mut self.sensors,
             Panel::Processes => &mut self.processes,
         }
     }
 
-    /// Places the shown panels in `body`: cpu left and memory over network at the right on top, the
-    /// processes below. A hidden panel's space goes to the others.
+    /// Places the shown panels in `body`: on top cpu at the left, memory over network next to it and
+    /// the sensors at the right; the processes below. A hidden panel's space goes to the others.
     pub fn place(&self, body: Rect) -> Placed {
-        let top_is_on = self.cpu || self.memory || self.network;
+        let top_is_on = self.cpu || self.memory || self.network || self.sensors;
         let (top, bottom) = match (top_is_on, self.processes) {
             (true, true) => {
                 let height = (body.height * 2 / 5).clamp(6, 18).min(body.height.saturating_sub(3));
@@ -121,6 +130,19 @@ impl Panels {
         };
         let mut placed = Placed { processes: bottom, ..Placed::default() };
         let Some(top) = top else { return placed };
+        // The sensors take a quarter of the top at the right, or all of it alone.
+        let top = match (self.sensors, self.cpu || self.memory || self.network) {
+            (true, true) => {
+                let width = (top.width / 4).max(24).min(top.width / 2);
+                placed.sensors = Some(Rect { x: top.right() - width, width, ..top });
+                Rect { width: top.width - width, ..top }
+            }
+            (true, false) => {
+                placed.sensors = Some(top);
+                return placed;
+            }
+            (false, _) => top,
+        };
 
         let side_is_on = self.memory || self.network;
         let side = if self.cpu && side_is_on {

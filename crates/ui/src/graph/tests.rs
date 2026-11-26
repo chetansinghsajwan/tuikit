@@ -119,7 +119,14 @@ fn a_meter_row_keeps_a_blank_cell_between_its_parts() {
     let area = Rect::new(0, 0, 20, 1);
     let mut buf = Buffer::empty(area);
     crate::Component::render(
-        MeterRow { label: "7", label_width: 3, ratio: 0.5, value: "50%", value_width: 4 },
+        MeterRow {
+            label: "7",
+            label_width: 3,
+            ratio: 0.5,
+            value: "50%",
+            value_width: 4,
+            reversed: false,
+        },
         &cx,
         area,
         &mut buf,

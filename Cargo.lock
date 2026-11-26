@@ -5879,6 +5879,7 @@ name = "tuikit-sm"
 version = "0.1.0"
 dependencies = [
  "ratatui",
+ "serde_json",
  "sysinfo",
  "tui-input",
  "tuikit-ui",

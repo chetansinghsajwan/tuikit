@@ -140,13 +140,15 @@ pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: impl Fn(f32) -> Co
 /// One meter on one row: the label (muted), a bar filled to `ratio` in the heat gradient, then the
 /// value in the color of the load, with one blank cell between the parts so they never touch. The
 /// label and the value take `label_width` and `value_width` cells, so the bars of a column of rows
-/// line up; the bar takes the rest.
+/// line up; the bar takes the rest. A label longer than its width ends in `…`. With `reversed` a
+/// high value is the good one (a battery): the gradient and the value's color run the other way.
 pub struct MeterRow<'a> {
     pub label: &'a str,
     pub label_width: usize,
     pub ratio: f32,
     pub value: &'a str,
     pub value_width: usize,
+    pub reversed: bool,
 }
 
 impl Component for MeterRow<'_> {
@@ -157,16 +159,18 @@ impl Component for MeterRow<'_> {
             return;
         }
         let muted = Style::new().fg(theme.colors.muted.into());
-        buf.set_stringn(area.x, area.y, self.label, self.label_width, muted);
+        let label = crate::list::fit(self.label, self.label_width);
+        buf.set_stringn(area.x, area.y, label, self.label_width, muted);
+        let tone = |v: f32| heat(theme, if self.reversed { 1.0 - v } else { v });
         let bar = Rect {
             x: area.x + self.label_width as u16 + 1,
             width: area.width - fixed,
             height: 1,
             ..area
         };
-        meter(buf, bar, self.ratio, |place| heat(theme, place), theme.colors.border.into());
+        meter(buf, bar, self.ratio, tone, theme.colors.border.into());
         let value = format!("{:>width$}", self.value, width = self.value_width);
-        let color = Style::new().fg(heat(theme, self.ratio));
+        let color = Style::new().fg(tone(self.ratio));
         buf.set_stringn(bar.right() + 1, area.y, value, self.value_width, color);
     }
 }
