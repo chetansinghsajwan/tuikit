@@ -10,7 +10,6 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use std::path::{Path, PathBuf};
 use ui::{Component, Pane, Theme};
-use unicode_width::UnicodeWidthStr;
 
 /// The actions and their default keys.
 mod keys;
@@ -107,7 +106,7 @@ pub struct Panel {
     items: Vec<Item>,
     rows: Vec<Row>,
     /// The cursor and the scroll over `rows`; the cursor lands only on problems, not on file rows.
-    list: ui::list::List,
+    list: ui::table::Table,
     filter: Filter,
     keymap: ui::keys::Keymap,
 }
@@ -119,7 +118,7 @@ impl Panel {
             root: root.into(),
             items: Vec::new(),
             rows: Vec::new(),
-            list: ui::list::List::new(),
+            list: ui::table::Table::new(),
             filter: Filter::All,
             keymap: ui::keys::Keymap::new(leader, &keys::commands(), &[]),
         }
@@ -267,10 +266,9 @@ impl Panel {
         let empty =
             if self.items.is_empty() { "no problems" } else { "nothing at this filter (f)" };
         let (rows, items, root) = (&self.rows, &self.items, &self.root);
-        let (cursor, width) = (self.list.cursor(), usize::from(inner.width));
-        let row = |s: ui::list::Slot| match &rows[s.index] {
-            Row::File(path, n) => ui::list::ListRow {
-                left: vec![
+        let row = |i: usize| match &rows[i] {
+            Row::File(path, n) => ui::table::Row::new(vec![
+                ui::table::Cell::new(vec![
                     Span::styled(theme.icons.fold_open.glyph, Style::new().fg(c.muted.into())),
                     Span::styled(
                         // Relative to the workspace root, for a shorter heading.
@@ -278,41 +276,36 @@ impl Panel {
                         Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(format!("  {n}"), Style::new().fg(c.muted.into())),
-                ],
-                ..Default::default()
-            },
+                ])
+                .shrinking(1),
+            ]),
             Row::Item(idx) => {
                 let it = &items[*idx];
-                let selected = s.index == cursor;
-                let head = format!("{}:{}", it.line, it.col);
-                let mut source = it.source.as_deref().map(|s| format!("  {s}")).unwrap_or_default();
-                // The first line of the message, cut to the room left.
-                let fixed = 2 + 2 + head.width() + 2;
-                // The source goes when it would leave the message under 4 cells.
-                if width.saturating_sub(fixed + source.width()) < 4 {
-                    source.clear();
-                }
-                let room = width.saturating_sub(fixed + source.width());
-                let msg = ui::list::fit(it.message.lines().next().unwrap_or(""), room);
-                ui::list::ListRow {
+                // The first line of the message is what shrinks; the source at the right drops first.
+                let message = ui::table::Cell::new(vec![
+                    Span::raw("  "),
+                    Span::styled("● ", Style::new().fg(Self::sev_color(theme, it.severity))),
+                    Span::styled(
+                        format!("{}:{}", it.line, it.col),
+                        Style::new().fg(c.muted.into()),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        it.message.lines().next().unwrap_or("").to_string(),
+                        Style::new().fg(c.fg.into()),
+                    ),
+                ])
+                .shrinking(4);
+                ui::table::Row {
                     id: ui::anim::hash_of(&(it.line, it.col, &it.message)),
-                    left: vec![
-                        Span::styled(
-                            if selected { "▸ " } else { "  " },
-                            Style::new().fg(c.accent.into()),
-                        ),
-                        Span::styled("● ", Style::new().fg(Self::sev_color(theme, it.severity))),
-                        Span::styled(head, Style::new().fg(c.muted.into())),
-                        Span::raw("  "),
-                        Span::styled(msg, Style::new().fg(c.fg.into())),
-                        Span::styled(source, Style::new().fg(c.muted.into())),
-                    ],
+                    cells: vec![message, it.source.clone().unwrap_or_default().into()],
                     ..Default::default()
                 }
             }
         };
+        let columns = [ui::table::Column::list(), ui::table::Column::trailing()];
         self.list
-            .view(rows.len(), row)
+            .view(rows.len(), &columns, row)
             .pane(area)
             .focused(focused)
             .empty(empty)

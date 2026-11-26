@@ -68,16 +68,6 @@ impl Columns {
             Columns::PermTime => "permissions and time",
         }
     }
-
-    /// Cells the columns take, with the gap before the git letter.
-    pub(super) fn width(self) -> u16 {
-        match self {
-            Columns::Off => 0,
-            Columns::Full => 9 + 1 + 5 + 1 + 8 + 1,
-            Columns::SizeTime => 5 + 1 + 8 + 1,
-            Columns::PermTime => 9 + 1 + 8 + 1,
-        }
-    }
 }
 
 /// What the host should do after an event.

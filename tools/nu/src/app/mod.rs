@@ -14,8 +14,8 @@ use std::time::{Duration, Instant};
 use tui_input::Input;
 use ui::app::{Host, Navigable, Request};
 use ui::footer::Footer;
-use ui::list::List;
 use ui::prompt::Typed;
+use ui::table::Table;
 use ui::{Component, Pane, Theme};
 
 /// How often the lists are reread while the screen is open.
@@ -56,7 +56,7 @@ pub struct App {
     bt_status: BtStatus,
     devices: Vec<Device>,
     bt_error: Option<String>,
-    lists: [List; 2],
+    lists: [Table; 2],
     focus: Focus,
     mode: Mode,
     message: Option<ui::footer::Notice>,
@@ -76,7 +76,7 @@ impl App {
             bt_status: BtStatus::default(),
             devices: Vec::new(),
             bt_error: None,
-            lists: [List::new(), List::new()],
+            lists: [Table::new(), Table::new()],
             focus: Focus::Wifi,
             mode: Mode::Normal,
             message: None,

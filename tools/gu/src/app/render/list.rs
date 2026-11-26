@@ -59,16 +59,16 @@ impl App {
         }
         // The list is taken out so the rows can borrow `self` while it scrolls.
         let mut list = std::mem::take(&mut self.lists[li]);
-        let row = |s: ui::list::Slot| {
-            let (left, right) = self.row(which, s.index, cx);
-            ui::list::ListRow {
-                left: left.spans,
-                right: vec![Span::raw(right)],
-                min_left: 12,
-                ..Default::default()
-            }
+        let row = |i: usize| {
+            let (left, right) = self.row(which, i, cx);
+            ui::table::Row::new(vec![left.spans.into(), right.into()])
         };
-        list.view(n, row).pane(area).focused(focused).empty("nothing here").render(cx, inner, buf);
+        let columns = [ui::table::Column::list().min(12), ui::table::Column::trailing()];
+        list.view(n, &columns, row)
+            .pane(area)
+            .focused(focused)
+            .empty("nothing here")
+            .render(cx, inner, buf);
         self.lists[li] = list;
     }
 

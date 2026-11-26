@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The fewest cells a name keeps before the size and time columns drop, so a sidebar shows names only.
+const NAME_BEFORE_COLUMNS: u16 = 20;
+
 impl Panel {
     /// The git letter and kind to show for a row, if it has a change.
     pub(super) fn git_state(&self, row: &Row) -> Option<(char, Kind)> {
@@ -161,14 +164,11 @@ impl Panel {
             }
         }
 
-        // The folders above the top row stay pinned at the top while scrolling, so the path is
-        // never lost.
-        let active = self.active_scope();
-        // The list is taken out so the rows can read the panel while it scrolls.
+        // The list is taken out so the rows can read the panel while it scrolls. The folders above the
+        // top row stay pinned at the top while scrolling (the table's tree), so the path is never lost.
         let mut list = std::mem::take(&mut self.list);
         let sizes = &self.dir_sizes;
-        let row = |s: ui::list::Slot| {
-            let (i, width) = (s.index, s.width);
+        let row = |i: usize| {
             let row = &self.rows[i];
             let git = self.git_state(row);
             let submodule = row.is_dir
@@ -177,11 +177,11 @@ impl Panel {
                 });
             let tint = git.map(|(_, k)| pv::kind_color(theme, k));
 
-            // Size and modified-time columns sit left of the git sign, when there is room.
-            let cols = if width >= 44 { self.opts.columns.width() } else { 0 };
+            // Size and modified-time columns sit left of the git sign; the table drops them when the
+            // pane is too narrow for the name.
             let mut trailing: Vec<Span<'static>> = Vec::new();
-            if cols > 0 {
-                let mode = self.opts.columns;
+            let mode = self.opts.columns;
+            if mode != Columns::Off {
                 let muted = Style::new().fg(c.muted.into());
                 if matches!(mode, Columns::Full | Columns::PermTime) {
                     trailing.extend(meta::perm_spans(cx, &meta::perm_string(row.mode), false));
@@ -203,9 +203,7 @@ impl Panel {
             // A folder with several kinds of change shows one sign for each, the most serious on the left.
             let kinds = self.git_dir_kinds(row);
             let signs: Vec<(char, Color)> = if kinds.len() > 1 {
-                let room = (width / 3).max(1);
-                let shown = kinds.len().min(room.div_ceil(2).max(1));
-                kinds.iter().take(shown).map(|k| (k.letter(), pv::kind_color(theme, *k))).collect()
+                kinds.iter().map(|k| (k.letter(), pv::kind_color(theme, *k))).collect()
             } else if let Some((ch, kind)) = git {
                 vec![(ch, pv::kind_color(theme, kind))]
             } else {
@@ -215,7 +213,6 @@ impl Panel {
             ui::tree::FileRow {
                 depth: usize::from(row.depth),
                 name: &row.name,
-                active_guide: active.and_then(|s| s.col_at(i)),
                 is_dir: row.is_dir,
                 is_open: self.expanded.contains(&row.path),
                 is_executable: !row.is_dir && is_executable(&row.path),
@@ -230,13 +227,14 @@ impl Panel {
                 signs,
                 ..Default::default()
             }
-            .list_row(cx, width)
+            .row(cx)
         };
-        let pinned = |first| self.pinned(first);
-        list.view(self.rows.len(), row)
+        let mut columns = ui::tree::file_columns();
+        columns[0].min = NAME_BEFORE_COLUMNS;
+        list.view(self.rows.len(), &columns, row)
             .pane(area)
             .focused(focused)
-            .pinned(pinned)
+            .tree(|i| usize::from(self.rows[i].depth))
             .render(cx, inner, buf);
         self.list = list;
         // The rows on screen are known now; their folder sizes start counting.

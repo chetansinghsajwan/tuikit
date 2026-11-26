@@ -1,6 +1,7 @@
 //! Tests for tree rows: guides, folds, counts and file rows.
 
 use super::*;
+use crate::Component;
 use crate::Theme;
 
 /// The text of `spans` with the styles dropped.
@@ -25,12 +26,8 @@ fn row_text(row: &FileRow, width: u16) -> String {
     let area = Rect::new(0, 0, width, 1);
     let mut buf = Buffer::empty(area);
     let cx = crate::Context::new(&theme);
-    row.list_row(&cx, usize::from(width)).paint(
-        &crate::Context::new(&theme),
-        &mut buf,
-        &list::Rows::new(area, area),
-        0,
-    );
+    let columns = file_columns();
+    crate::table::Table::new().view(1, &columns, |_| row.row(&cx)).render(&cx, area, &mut buf);
     (0..width).map(|x| buf[(x, 0)].symbol().to_string()).collect()
 }
 
@@ -39,7 +36,7 @@ fn a_long_name_shrinks_and_the_rest_of_the_row_keeps_its_place() {
     let long = FileRow {
         name: "a-very-long-file-name-that-does-not-fit.rs",
         count: Some(7),
-        trailing: vec![Span::raw("+3 -1 ")],
+        trailing: vec![Span::raw("+3 -1")],
         signs: vec![('M', Color::Red)],
         ..Default::default()
     };
@@ -154,7 +151,10 @@ fn a_file_row_shows_only_the_options_asked_for() {
         ..Default::default()
     };
     let t = row_text(&full, 40);
-    assert!(t.trim_end().ends_with("+3 -1M"), "trailing text ends just left of the sign cell: {t}");
+    assert!(
+        t.trim_end().ends_with("+3 -1 M"),
+        "one blank between the trailing text and the sign: {t}"
+    );
 }
 
 #[test]

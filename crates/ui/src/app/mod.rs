@@ -492,7 +492,7 @@ fn run_tab_action(tabs: &mut dyn Tabbed, id: &str) {
 
 /// Carries out the shared movement `id` (a `nav.*` action) on `nav`; false when `id` is not one. The
 /// shell runs it on the screen's `Navigable`; a panel with its own action dispatch (hosted by an
-/// editor) runs it on its `List`, so no panel repeats the movement.
+/// editor) runs it on its `Table`, so no panel repeats the movement.
 pub fn run_nav(nav: &mut dyn Navigable, id: &str) -> bool {
     let page = nav.page_row_count().max(1) as isize;
     let step = nav.step_size().max(1) as isize;

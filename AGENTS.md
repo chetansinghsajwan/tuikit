@@ -18,7 +18,7 @@
     layout function that returns rects (`ui::layout`, `layout::focus_stack`, `Pane::draw`
     returning the content area), not a component that owns its children; no tree outlives the
     frame.
-  - State lives in the tool's structs (the `List` it keeps), not inside components; a component is
+  - State lives in the tool's structs (the `Table` it keeps), not inside components; a component is
     built from that state each frame.
   - Events go from the keymap to an action id to the screen, which runs it on the focused part. A
     part returns what it does not handle (a panel's `Outcome::Command`), which is the bubbling;
@@ -49,6 +49,6 @@
 - State that every list, pane or component of a kind needs belongs to the toolkit's component,
   never to a copy in each tool. Before adding a field such as `cursor`, `offset` or `top` to a
   tool, check whether a `ui` component already owns it, and extend that component if it does
-  not. A list is a `ui::list::List` the tool keeps and draws with `list.view(len, row)`; the tool
+  not. A list is a `ui::table::Table` the tool keeps and draws with `table.view(len, &columns, row)`; the tool
   passes each row's content, the list does the window, the scrolling, the pinned rows and the
   cursor marks.

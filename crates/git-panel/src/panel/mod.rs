@@ -112,7 +112,7 @@ pub struct Panel {
     root: PathBuf,
     rows: Vec<Row>,
     /// The cursor and the scroll over `rows`.
-    list: ui::list::List,
+    list: ui::table::Table,
     branch: String,
     mode: Mode,
     message: Option<ui::footer::Notice>,
@@ -168,7 +168,7 @@ impl Panel {
             repo,
             root,
             rows: Vec::new(),
-            list: ui::list::List::new(),
+            list: ui::table::Table::new(),
             branch: String::new(),
             mode: Mode::Normal,
             message: None,

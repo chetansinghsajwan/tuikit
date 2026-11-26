@@ -76,6 +76,8 @@ pub struct IconProvider {
     pub fold_open: Icon,
     /// The vertical line of tree guides and table borders.
     pub guide: Icon,
+    /// A marked row of a list or table.
+    pub mark: Icon,
     /// The horizontal rule.
     pub divider: Icon,
     /// The left and right ends of a horizontal rule that cuts across a frame.
@@ -100,6 +102,7 @@ impl Default for IconProvider {
             fold_closed: plain("▸ "),
             fold_open: plain("▾ "),
             guide: plain("│"),
+            mark: plain("●"),
             divider: plain("─"),
             divider_left: plain("├"),
             divider_right: plain("┤"),

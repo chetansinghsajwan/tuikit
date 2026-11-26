@@ -74,7 +74,7 @@ pub struct Panel {
     symbols: Vec<Symbol>,
     rows: Vec<Row>,
     /// The cursor and the scroll over `rows`.
-    list: ui::list::List,
+    list: ui::table::Table,
     /// Symbols with members that are folded, by their position in the tree.
     folded: HashSet<Vec<usize>>,
     filter: String,
@@ -97,7 +97,7 @@ impl Panel {
         Panel {
             symbols: Vec::new(),
             rows: Vec::new(),
-            list: ui::list::List::new(),
+            list: ui::table::Table::new(),
             folded: HashSet::new(),
             filter: String::new(),
             mode: Mode::Normal,
@@ -356,10 +356,9 @@ impl Panel {
             self.list.set_cursor(i);
         }
         let rows = &self.rows;
-        let row = |s: ui::list::Slot| {
-            let row = &rows[s.index];
+        let row = |i: usize| {
+            let row = &rows[i];
             let mut spans = vec![
-                ui::tree::guides(cx, row.depth),
                 ui::tree::fold_mark(cx, row.folded),
                 Span::styled(
                     format!("{} ", theme.icons.symbol(row.kind).glyph),
@@ -380,14 +379,16 @@ impl Panel {
                     Style::new().fg(c.muted.into()),
                 ));
             }
-            ui::list::ListRow {
+            ui::table::Row {
                 id: ui::anim::hash_of(&(row.depth, &row.name, theme.icons.symbol(row.kind).glyph)),
-                left: spans,
+                cells: vec![ui::table::Cell::new(spans).shrinking(2)],
                 ..Default::default()
             }
         };
+        let columns = [ui::table::Column::list()];
         self.list
-            .view(rows.len(), row)
+            .view(rows.len(), &columns, row)
+            .tree(|i| rows[i].depth)
             .pane(area)
             .focused(focused)
             .empty(why)

@@ -303,41 +303,33 @@ impl Picker {
             ..inner
         };
         self.refresh_rows(None);
-        // The guide of the scope the cursor is in is highlighted, as in the files panel.
+        // In the hierarchy the table draws the guides, highlights the scope the cursor is in and pins the
+        // rows above the top row that enclose it, so scrolling never loses the path.
         let depths: Option<Vec<usize>> = self
             .tree
             .as_ref()
             .map(|tree| tree.rows.iter().map(|r| usize::from(crate::tree::row_depth(r))).collect());
-        let scope = depths.as_ref().and_then(|d| ui::tree::active_scope(d, self.list.cursor()));
         let len = match &self.tree {
             Some(tree) => tree.rows.len(),
             None => snap_matched as usize,
         };
         // The list is taken out so the rows can read the picker while it scrolls.
         let mut list = std::mem::take(&mut self.list);
-        let row = |s: ui::list::Slot| self.list_row(cx, s.index, scope);
-        let view = list.view(len, row).pane(area).focused(true);
+        let row = |i: usize| self.list_row(cx, i);
+        let columns =
+            [ui::table::Column::mark(), ui::table::Column::list(), ui::table::Column::signs()];
+        let view = list.view(len, &columns, row).pane(area).focused(true);
         match &depths {
-            // The rows above the top row that enclose it stay pinned at the top, so scrolling never
-            // loses the path.
-            Some(depths) => view
-                .pinned(|first| ui::tree::ancestors(depths, |_| true, first))
-                .render(cx, list_area, buf),
+            Some(depths) => view.tree(|i| depths[i]).render(cx, list_area, buf),
             None => view.render(cx, list_area, buf),
         }
         self.list = list;
     }
 
     /// Row `at` of the list: a result, or in the hierarchy a folder or a heading above results.
-    fn list_row(
-        &mut self,
-        cx: &ui::Context,
-        at: usize,
-        scope: Option<ui::tree::Scope>,
-    ) -> ui::list::ListRow {
+    fn list_row(&mut self, cx: &ui::Context, at: usize) -> ui::table::Row {
         let theme = cx.theme;
         let c = &theme.colors;
-        let guide = scope.and_then(|s| s.col_at(at));
         let (idx, depth) = match self.tree.as_ref().map(|t| &t.rows[at]) {
             None => (at as u32, None),
             Some(crate::tree::Row::Item { idx, depth }) => (*idx, Some(*depth)),
@@ -349,22 +341,20 @@ impl Picker {
                 } else {
                     theme.icons.dir(last, true)
                 };
-                let mut spans = vec![Span::raw("  ")];
-                spans.extend(ui::tree::guides_marked(cx, usize::from(*depth), guide));
-                spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
-                spans.push(Span::styled(
-                    label.clone(),
-                    Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
-                ));
-                return ui::list::ListRow {
+                let spans = vec![
+                    Span::styled(format!("{} ", icon.glyph), icon.style()),
+                    Span::styled(
+                        label.clone(),
+                        Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD),
+                    ),
+                ];
+                return ui::table::Row {
                     id: ui::anim::hash_of(&(depth, label)),
-                    left: spans,
+                    cells: vec![ui::table::Cell::new(spans).shrinking(1)],
                     ..Default::default()
                 };
             }
             Some(crate::tree::Row::Head { depth, label, kind }) => {
-                let mut spans = vec![Span::raw("  ")];
-                spans.extend(ui::tree::guides_marked(cx, usize::from(*depth), guide));
                 let (glyph, style) = match kind {
                     Some(k) => (theme.icons.symbol(*k).glyph, Style::new().fg(k.color(theme))),
                     None => {
@@ -373,34 +363,30 @@ impl Picker {
                         (icon.glyph, icon.style())
                     }
                 };
-                spans.push(Span::styled(format!("{glyph} "), style));
-                spans.push(Span::styled(label.clone(), Style::new().fg(c.muted.into())));
-                return ui::list::ListRow {
+                let spans = vec![
+                    Span::styled(format!("{glyph} "), style),
+                    Span::styled(label.clone(), Style::new().fg(c.muted.into())),
+                ];
+                return ui::table::Row {
                     id: ui::anim::hash_of(&(depth, label)),
-                    left: spans,
+                    cells: vec![ui::table::Cell::new(spans).shrinking(1)],
                     ..Default::default()
                 };
             }
         };
         let Some(cand) = self.nucleo.snapshot().get_matched_item(idx).map(|it| it.data.clone())
         else {
-            return ui::list::ListRow::default();
+            return ui::table::Row::default();
         };
         let git = self.git_state(cand.path());
-        let marked = self.marked.contains(&cand.output());
-        let mut spans =
-            vec![Span::styled(if marked { "● " } else { "  " }, Style::new().fg(c.accent.into()))];
-        if let Some(depth) = depth {
-            spans.extend(ui::tree::guides_marked(cx, usize::from(depth), guide));
-        }
         let name_fg = git.map(|(_, k)| Self::git_color(theme, k)).unwrap_or(c.fg.into());
-        spans.extend(self.row_spans(&cand, name_fg, cx, idx, depth.is_some()));
-        ui::list::ListRow {
+        let spans = self.row_spans(&cand, name_fg, cx, idx, depth.is_some());
+        ui::table::Row {
             id: ui::anim::hash_of(&cand.output()),
-            left: spans,
+            cells: vec![spans.into()],
             signs: git.map(|(ch, k)| (ch, Self::git_color(theme, k))).into_iter().collect(),
-            has_sign_cell: true,
             tint: git.map(|(_, k)| Self::git_color(theme, k)),
+            is_marked: self.marked.contains(&cand.output()),
             ..Default::default()
         }
     }

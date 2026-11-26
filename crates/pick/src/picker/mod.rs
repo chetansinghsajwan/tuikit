@@ -12,7 +12,6 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,8 +47,8 @@ pub struct Picker {
     last_query: String,
     /// The cursor and the scroll over the rows drawn: the matched list, or the hierarchy's rows
     /// (whose headers the cursor skips).
-    list: ui::list::List,
-    marked: BTreeSet<String>,
+    list: ui::table::Table,
+    marked: ui::table::Marks<String>,
     git: Option<(Repo, Status)>,
     preview: Option<Preview>,
     /// Stops the running grep search.
@@ -102,8 +101,8 @@ impl Picker {
             exclude: Input::default(),
             field: Field::Query,
             last_query: String::new(),
-            list: ui::list::List::new(),
-            marked: BTreeSet::new(),
+            list: ui::table::Table::new(),
+            marked: ui::table::Marks::new(),
             git,
             preview: None,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -498,11 +497,7 @@ impl Picker {
             .find(|(_, want)| crate::keys::matches(&KeyEvent::new(*code, *modifiers), want))
         {
             let name = name.clone();
-            let picked: Vec<String> = if self.marked.is_empty() {
-                self.current().map(|c| c.output()).into_iter().collect()
-            } else {
-                self.marked.iter().cloned().collect()
-            };
+            let picked = self.marked.or_current(self.current().map(|c| c.output()));
             return Action::AcceptWith(name, picked);
         }
         if self.grep_key(ev, *code, *modifiers) {
@@ -512,11 +507,7 @@ impl Picker {
             KeyCode::Esc => return Action::Cancel,
             KeyCode::Char('c') | KeyCode::Char('g') if ctrl => return Action::Cancel,
             KeyCode::Enter => {
-                let picked: Vec<String> = if self.marked.is_empty() {
-                    self.current().map(|c| c.output()).into_iter().collect()
-                } else {
-                    self.marked.iter().cloned().collect()
-                };
+                let picked = self.marked.or_current(self.current().map(|c| c.output()));
                 return Action::Accept(picked);
             }
             KeyCode::Up => self.move_by(-1),
@@ -536,9 +527,7 @@ impl Picker {
             KeyCode::PageDown => self.move_by(self.list.page_row_count() as isize),
             KeyCode::Tab => {
                 if let Some(c) = self.current().map(|c| c.output()) {
-                    if !self.marked.remove(&c) {
-                        self.marked.insert(c);
-                    }
+                    self.marked.toggle(c);
                     self.move_by(1);
                 }
             }

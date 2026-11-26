@@ -82,28 +82,18 @@ impl Panel {
                 return;
             }
         }
-        let depths: Vec<usize> = self
-            .rows
-            .iter()
-            .map(|r| match r {
-                Row::Folder { depth, .. } | Row::File { depth, .. } => *depth,
-            })
-            .collect();
-        let scope = ui::tree::active_scope(&depths, self.list.cursor());
         let (rows, tree) = (&self.rows, self.tree);
-        let row = |s: ui::list::Slot| {
-            let active_guide = scope.and_then(|sc| sc.col_at(s.index));
-            match &rows[s.index] {
+        let row = |i: usize| {
+            match &rows[i] {
                 Row::Folder { label, depth, count, folded, .. } => ui::tree::FileRow {
                     depth: *depth,
                     name: label,
                     is_dir: true,
                     is_open: !*folded,
                     count: Some(*count),
-                    active_guide,
                     ..Default::default()
                 }
-                .list_row(cx, s.width),
+                .row(cx),
                 Row::File { change, depth } => {
                     let name = if tree {
                         change
@@ -130,15 +120,18 @@ impl Panel {
                         tint: Some(pv::kind_color(theme, change.kind())),
                         icon: change.submodule.then_some(theme.icons.submodule),
                         signs: vec![staged(change.staged), unstaged(change.unstaged)],
-                        active_guide,
                         ..Default::default()
                     }
-                    .list_row(cx, s.width)
+                    .row(cx)
                 }
             }
         };
+        let columns = ui::tree::file_columns();
         self.list
-            .view(rows.len(), row)
+            .view(rows.len(), &columns, row)
+            .tree(|i| match &rows[i] {
+                Row::Folder { depth, .. } | Row::File { depth, .. } => *depth,
+            })
             .pane(area)
             .focused(true)
             .empty("clean: nothing to commit")

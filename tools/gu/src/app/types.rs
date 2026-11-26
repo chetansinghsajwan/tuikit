@@ -167,7 +167,7 @@ pub(super) struct CommitFiles {
     pub(super) subject: String,
     pub(super) changes: Vec<git_core::FileChange>,
     pub(super) rows: Vec<FileRow>,
-    pub(super) list: List,
+    pub(super) list: Table,
     pub(super) folded: std::collections::HashSet<String>,
 }
 
@@ -216,7 +216,7 @@ impl CommitFiles {
             subject,
             changes,
             rows: Vec::new(),
-            list: List::new(),
+            list: Table::new(),
             folded: Default::default(),
         };
         cf.rebuild();
@@ -390,7 +390,7 @@ pub(super) enum DiffMark {
     File,
 }
 
-pub(super) use ui::list::List;
+pub(super) use ui::table::Table;
 
 /// The diff text drawn in the preview, kept until another entry is highlighted or the width
 /// changes.

@@ -76,10 +76,10 @@ pub struct Panel {
     expanded: BTreeSet<PathBuf>,
     rows: Vec<Row>,
     /// The cursor and the scroll over `rows`.
-    list: ui::list::List,
+    list: ui::table::Table,
     git: Option<(Repo, Status)>,
     mode: Mode,
-    marked: BTreeSet<PathBuf>,
+    marked: ui::table::Marks<PathBuf>,
     clip: Option<Clip>,
     /// Last result or error, shown in the footer until the next key.
     message: Option<ui::footer::Notice>,
@@ -112,10 +112,10 @@ impl Panel {
             opts,
             expanded: BTreeSet::new(),
             rows: Vec::new(),
-            list: ui::list::List::new(),
+            list: ui::table::Table::new(),
             git: None,
             mode: Mode::Normal,
-            marked: BTreeSet::new(),
+            marked: ui::table::Marks::new(),
             clip: None,
             message: None,
             bookmarks: Bookmarks::load(opts_bookmarks),
@@ -258,17 +258,7 @@ impl Panel {
 
     /// The marked rows, or the one under the cursor.
     pub fn targets(&self) -> Vec<PathBuf> {
-        if self.marked.is_empty() {
-            self.current().map(|p| vec![p.to_path_buf()]).unwrap_or_default()
-        } else {
-            self.marked.iter().cloned().collect()
-        }
-    }
-
-    /// The folder rows pinned above `first`, the first row that scrolls: the folders it is inside.
-    pub(super) fn pinned(&self, first: usize) -> Vec<usize> {
-        let depths: Vec<usize> = self.rows.iter().map(|r| usize::from(r.depth)).collect();
-        ui::tree::ancestors(&depths, |i| self.rows[i].is_dir, first)
+        self.marked.or_current(self.current().map(Path::to_path_buf))
     }
 
     /// The width the pane needs to show the rows on screen without cutting a name off: the longest one
@@ -284,12 +274,6 @@ impl Panel {
             .max()
             .unwrap_or(0);
         (longest as u16).saturating_add(chrome)
-    }
-
-    /// The scope the cursor is in, for the highlighted indent guide.
-    fn active_scope(&self) -> Option<ui::tree::Scope> {
-        let depths: Vec<usize> = self.rows.iter().map(|r| usize::from(r.depth)).collect();
-        ui::tree::active_scope(&depths, self.list.cursor())
     }
 
     /// Path under the cursor.

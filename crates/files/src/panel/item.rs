@@ -18,9 +18,7 @@ impl Panel {
             }
             "item.mark" => {
                 if let Some(path) = self.current().map(Path::to_path_buf) {
-                    if !self.marked.remove(&path) {
-                        self.marked.insert(path);
-                    }
+                    self.marked.toggle(path);
                     self.list.move_by(1);
                 }
             }

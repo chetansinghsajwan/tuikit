@@ -7,14 +7,13 @@
 //!   (open) or `▸` (folded), then its icon if it has one.
 //! - A **leaf** is the guides, then what the tool puts there.
 
-use crate::component::Context;
+use crate::component::{Component, Context};
 use crate::icons::Icon;
-use crate::list;
+use crate::table::{Cell, Column, Row, Table};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 
 /// The indent guides: a thin line at each level.
 pub fn guides(cx: &Context, depth: usize) -> Span<'static> {
@@ -45,18 +44,24 @@ impl Scope {
 /// deeper rows right below), else the folder that holds it. A row at the top with nothing below has none.
 /// Every tree view calls this, so the highlight needs no option and behaves the same everywhere.
 pub fn active_scope(depths: &[usize], cursor: usize) -> Option<Scope> {
-    let cur = *depths.get(cursor)?;
-    let folder = if depths.get(cursor + 1).is_some_and(|d| *d > cur) {
+    active_scope_by(depths.len(), |i| depths[i], cursor)
+}
+
+/// [`active_scope`] for a tree of `len` rows whose depths `depth` gives by row, so a table asks only for
+/// the rows it walks.
+pub fn active_scope_by(len: usize, depth: impl Fn(usize) -> usize, cursor: usize) -> Option<Scope> {
+    if cursor >= len {
+        return None;
+    }
+    let cur = depth(cursor);
+    let folder = if cursor + 1 < len && depth(cursor + 1) > cur {
         cursor
     } else {
-        depths[..cursor].iter().rposition(|d| *d + 1 == cur)?
+        (0..cursor).rev().find(|&i| depth(i) + 1 == cur)?
     };
-    let depth = depths[folder];
-    let to = depths[folder + 1..]
-        .iter()
-        .position(|d| *d <= depth)
-        .map_or(depths.len(), |n| folder + 1 + n);
-    Some(Scope { from: folder, to, col: depth })
+    let at = depth(folder);
+    let to = (folder + 1..len).find(|&i| depth(i) <= at).unwrap_or(len);
+    Some(Scope { from: folder, to, col: at })
 }
 
 /// The indentation of every line with the blank ones (`None`) filled in: a blank line takes the smaller of its
@@ -324,12 +329,9 @@ pub struct FileRow<'a> {
     pub signs: Vec<(char, Color)>,
 }
 
-/// The fewest cells of a name worth showing beside the trailing text.
-const MIN_NAME: usize = 4;
-
 /// The rows that enclose row `at` of a tree whose rows sit at `depths`, outermost first: for each
 /// level above it, the nearest row before it that `is_container` (a folder). What a tree pins above
-/// its first scrolling row (`List::view(..).pinned(..)`).
+/// its first scrolling row (`TableView::pinned`; `TableView::tree` pins by depth alone).
 pub fn ancestors(depths: &[usize], is_container: impl Fn(usize) -> bool, at: usize) -> Vec<usize> {
     let Some(&depth) = depths.get(at) else { return Vec::new() };
     let mut need = depth;
@@ -347,20 +349,65 @@ pub fn ancestors(depths: &[usize], is_container: impl Fn(usize) -> bool, at: usi
     found
 }
 
+/// The rows that enclose row `at` of a tree whose depths `depth` gives by row, outermost first: for each
+/// level above it, the nearest row before it that is shallower (its parent, in a tree). What a `Table`
+/// with `tree` pins above its first scrolling row.
+pub fn ancestors_by(depth: impl Fn(usize) -> usize, at: usize) -> Vec<usize> {
+    let mut need = depth(at);
+    let mut found = Vec::new();
+    for i in (0..at).rev() {
+        if need == 0 {
+            break;
+        }
+        let d = depth(i);
+        if d < need {
+            found.push(i);
+            need = d;
+        }
+    }
+    found.reverse();
+    found
+}
+
 impl FileRow<'_> {
-    /// The row as a [`list::ListRow`] `width` cells wide, for a `List` to draw: the indent guides, the
-    /// icon, the name (git-colored, folders bold in the accent), then the optional count, trailing text
-    /// and signs. The list marks the cursor row and the focus.
-    pub fn list_row(&self, cx: &Context, width: usize) -> list::ListRow {
-        list_row(cx, width, self)
+    /// The row for a `Table` drawn in [`file_columns`]: the icon, the name (git-colored, folders bold in
+    /// the accent; the part that shrinks), the optional count and note, the trailing text and the signs.
+    /// The table adds the indent guides (`TableView::tree`), the cursor and the focus.
+    pub fn row(&self, cx: &Context) -> Row {
+        Row {
+            id: crate::anim::hash_of(&(self.depth, self.name)),
+            // What the row shows apart from the cursor.
+            content: crate::anim::hash_of(&(
+                self.tint,
+                self.is_dir,
+                self.is_executable,
+                self.is_marked,
+                self.is_cut,
+                self.is_hidden,
+                self.is_ignored,
+                self.count,
+                self.note,
+                self.signs.clone(),
+                self.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>(),
+            )),
+            cells: vec![name_cell(cx, self), Cell::new(self.trailing.clone())],
+            tint: self.tint,
+            signs: self.signs.clone(),
+            is_marked: false,
+        }
     }
 }
 
-/// The row as a [`list::ListRow`] for a row `width` cells wide.
-fn list_row(cx: &Context, width: usize, row: &FileRow) -> list::ListRow {
+/// The columns a file row is drawn in: the name, the trailing text (sizes and times, or line counts),
+/// muted at the right and dropped first when the name would get under four cells, and the signs.
+pub fn file_columns() -> Vec<Column> {
+    vec![Column::list(), Column::trailing(), Column::signs()]
+}
+
+/// The name cell of a file row: the icon, the name (the part that shrinks), the count and the note.
+fn name_cell(cx: &Context, row: &FileRow) -> Cell {
     let theme = cx.theme;
     let c = &theme.colors;
-
     let mut name_style =
         Style::new().fg(row.tint.unwrap_or(if row.is_dir { c.accent.into() } else { c.fg.into() }));
     if row.is_dir {
@@ -386,94 +433,36 @@ fn list_row(cx: &Context, width: usize, row: &FileRow) -> list::ListRow {
             theme.icons.file(base_name, row.is_executable)
         }
     });
-    let mut spans = guides_marked(cx, row.depth, row.active_guide);
-    spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
-    let name_at = spans.len();
-    spans.push(Span::raw(""));
+    let mut spans = vec![
+        Span::styled(format!("{} ", icon.glyph), icon.style()),
+        Span::styled(row.name.to_string(), name_style),
+    ];
     if let Some(n) = row.count {
         spans.push(count(cx, n));
     }
     if let Some(note) = row.note {
         spans.push(Span::styled(format!("  {note}"), Style::new().fg(c.muted.into())));
     }
-
-    // Room for the name: what is left of the row after the guides, the icon, the count, the trailing text and
-    // the signs. The name shrinks (`…`) to fit; trailing text that would leave it under `MIN_NAME` cells
-    // is dropped, so a narrow pane keeps the name. The rest (bar, columns, signs, motion) is `list::ListRow`.
-    let signs = if row.signs.is_empty() { 1 } else { row.signs.len() * 2 };
-    let count_w =
-        row.count.map_or(0, |n| format!(" {n}").width()) + row.note.map_or(0, |n| n.width() + 2);
-    let budget = |trailing: usize| {
-        width
-            .saturating_sub(signs.max(1 + trailing + usize::from(trailing > 0)))
-            .saturating_sub(row.depth * 2 + 2 + count_w)
-    };
-    let trailing: usize = row.trailing.iter().map(|s| s.content.width()).sum();
-    let show_trailing = trailing > 0 && budget(trailing) >= MIN_NAME;
-    spans[name_at] = Span::styled(
-        crate::list::fit(row.name, budget(if show_trailing { trailing } else { 0 })),
-        name_style,
-    );
-    list::ListRow {
-        id: crate::anim::hash_of(&(row.depth, row.name)),
-        // What the row shows apart from the cursor.
-        content: crate::anim::hash_of(&(
-            row.tint,
-            row.is_dir,
-            row.is_executable,
-            row.is_marked,
-            row.is_cut,
-            row.is_hidden,
-            row.is_ignored,
-            row.count,
-            row.note,
-            row.signs.clone(),
-            row.trailing.iter().map(|s| s.content.to_string()).collect::<Vec<_>>(),
-        )),
-        left: spans,
-        right: if show_trailing { row.trailing.clone() } else { Vec::new() },
-        signs: row.signs.clone(),
-        has_sign_cell: true,
-        tint: row.tint,
-        is_selected: row.is_selected,
-        is_focused: row.is_focused,
-        ..Default::default()
-    }
+    Cell::new(spans).shrinking(1)
 }
 
-/// The same row as a [`Line`] of `width` cells, for places that build lines and not a buffer (a preview). With
-/// no width only the name part is built: no trailing text and no signs, as they need a right edge.
+/// The same row as a [`Line`] of `width` cells, for places that build lines and not a buffer (a preview),
+/// with its guides (`active_guide` highlighted). With no width only the name part is built: no trailing
+/// text and no signs, as they need a right edge.
 pub fn file_row_line(cx: &Context, row: &FileRow, width: Option<u16>) -> Line<'static> {
-    let theme = cx.theme;
-    let Some(w) = width else {
-        let mut spans = guides_marked(cx, row.depth, row.active_guide);
-        let base_name = row.name.rsplit('/').next().unwrap_or(row.name);
-        let icon = row.icon.unwrap_or_else(|| {
-            if row.is_dir {
-                theme.icons.dir(base_name, row.is_open)
-            } else {
-                theme.icons.file(base_name, row.is_executable)
-            }
-        });
-        spans.push(Span::styled(format!("{} ", icon.glyph), icon.style()));
-        let c = &theme.colors;
-        let style = if row.is_dir {
-            Style::new().fg(row.tint.unwrap_or(c.accent.into())).add_modifier(Modifier::BOLD)
-        } else {
-            Style::new().fg(row.tint.unwrap_or(c.fg.into()))
-        };
-        spans.push(Span::styled(row.name.to_string(), style));
-        if let Some(n) = row.count {
-            spans.push(count(cx, n));
-        }
-        if let Some(note) = row.note {
-            spans.push(Span::styled(format!("  {note}"), Style::new().fg(c.muted.into())));
-        }
-        return Line::from(spans);
-    };
+    let mut name = name_cell(cx, row);
+    name.prepend(guides_marked(cx, row.depth, row.active_guide));
+    let Some(w) = width else { return Line::from(name.spans) };
     let area = Rect::new(0, 0, w, 1);
     let mut buf = Buffer::empty(area);
-    list_row(cx, usize::from(w), row).paint(cx, &mut buf, &list::Rows::new(area, area), 0);
+    let mut built = row.row(cx);
+    built.cells[0] = name;
+    let columns = file_columns();
+    Table::new()
+        .view(1, &columns, |_| built.clone())
+        .focused(row.is_focused)
+        .cursor(row.is_selected)
+        .render(&Context::still(cx.theme), area, &mut buf);
     let mut runs: Vec<(Style, String)> = Vec::new();
     for x in 0..w {
         let cell = &buf[(x, 0)];

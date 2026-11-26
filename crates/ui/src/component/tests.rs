@@ -3,17 +3,17 @@
 use super::*;
 use crate::Pane;
 use crate::Theme;
-use crate::list::{ListRow, Rows};
-use ratatui::text::Span;
+use crate::table::Rows;
 use std::time::Duration;
 
-/// Draws one row into a list of `area` and finishes the frame with `cx`.
+/// Draws rows named `text` at lines `y` of a table in `area`, noting each to the motion as a table
+/// does, and finishes the frame with `cx`.
 fn frame(cx: &Context, area: Rect, rows_at: &[(u16, &'static str)]) -> Buffer {
     let mut buf = Buffer::empty(area);
     let rows = Rows::new(area, area);
     for &(y, text) in rows_at {
-        let row = ListRow { left: vec![Span::raw(text)], ..Default::default() };
-        row.render(cx, &mut buf, &rows, y);
+        buf.set_string(area.x, y, text, ratatui::style::Style::new());
+        cx.motion.note_row(rows.id(), y, crate::anim::hash_of(&text), 0, rows.bar(y));
     }
     cx.motion.finish(&mut buf, cx.theme);
     buf

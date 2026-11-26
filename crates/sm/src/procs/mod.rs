@@ -27,15 +27,8 @@ pub enum Sort {
 }
 
 impl Sort {
-    /// The next order in the cycle.
-    pub fn next(self) -> Sort {
-        match self {
-            Sort::Cpu => Sort::Memory,
-            Sort::Memory => Sort::Pid,
-            Sort::Pid => Sort::Name,
-            Sort::Name => Sort::Cpu,
-        }
-    }
+    /// Every order, in the order of their columns.
+    pub const ALL: [Sort; 4] = [Sort::Pid, Sort::Name, Sort::Cpu, Sort::Memory];
 
     /// The name shown in the title.
     pub fn label(self) -> &'static str {
@@ -47,36 +40,39 @@ impl Sort {
         }
     }
 
-    /// The title of the column this order sorts by.
+    /// The id of the column this order sorts by.
     pub fn column(self) -> &'static str {
         match self {
-            Sort::Cpu => "CPU%",
-            Sort::Memory => "MEM",
-            Sort::Pid => "PID",
-            Sort::Name => "NAME",
+            Sort::Cpu => "cpu",
+            Sort::Memory => "mem",
+            Sort::Pid => "pid",
+            Sort::Name => "name",
         }
     }
 
+    /// The order that sorts by the column `id`.
+    pub fn of_column(id: &str) -> Option<Sort> {
+        Sort::ALL.into_iter().find(|s| s.column() == id)
+    }
+
     /// Whether the largest comes first by default (load) or the smallest (pid, name).
-    fn is_descending(self) -> bool {
+    pub fn is_descending(self) -> bool {
         matches!(self, Sort::Cpu | Sort::Memory)
     }
 }
 
-/// How the list is shown: the order, whether it is reversed, the filter text and flat or tree.
-#[derive(Debug, Clone)]
-pub struct Options {
+/// The order of the list: what it is sorted by and which way. The process list's table keeps it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Order {
     pub sort: Sort,
-    pub is_reversed: bool,
-    pub filter: String,
-    pub is_tree: bool,
+    pub is_descending: bool,
 }
 
-impl Options {
-    /// Whether the list now runs from the largest to the smallest, for the sort marker.
-    pub fn is_descending(&self) -> bool {
-        self.sort.is_descending() != self.is_reversed
-    }
+/// Which processes the list shows and how: the filter text and flat or tree.
+#[derive(Debug, Clone, Default)]
+pub struct Options {
+    pub filter: String,
+    pub is_tree: bool,
 }
 
 /// A row of the list: the process (an index into the slice given to [`rows`]) and its depth.
@@ -86,35 +82,34 @@ pub struct Row {
     pub depth: usize,
 }
 
-/// Whether `a` comes before `b` under `sort`, ties broken by pid so the order never jitters.
-fn compare(a: &Proc, b: &Proc, sort: Sort, is_reversed: bool) -> Ordering {
-    let by = match sort {
+/// Whether `a` comes before `b` in `order`, ties broken by pid so the order never jitters.
+fn compare(a: &Proc, b: &Proc, order: Order) -> Ordering {
+    let by = match order.sort {
         Sort::Cpu => a.cpu.total_cmp(&b.cpu),
         Sort::Memory => a.memory.cmp(&b.memory),
         Sort::Pid => a.pid.cmp(&b.pid),
         Sort::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     };
-    let by = if sort.is_descending() { by.reverse() } else { by };
-    let by = if is_reversed { by.reverse() } else { by };
+    let by = if order.is_descending { by.reverse() } else { by };
     by.then(a.pid.cmp(&b.pid))
 }
 
 /// The rows to show. A filter (matching the name or the pid) always gives a flat list; otherwise
-/// the tree option nests children under their parent, siblings in the chosen order.
-pub fn rows(procs: &[Proc], options: &Options) -> Vec<Row> {
+/// the tree option nests children under their parent, siblings in `order`.
+pub fn rows(procs: &[Proc], options: &Options, order: Order) -> Vec<Row> {
     let filter = options.filter.trim().to_lowercase();
-    let mut order: Vec<usize> = (0..procs.len())
+    let mut shown: Vec<usize> = (0..procs.len())
         .filter(|&i| {
             filter.is_empty()
                 || procs[i].name.to_lowercase().contains(&filter)
                 || procs[i].pid.to_string() == filter
         })
         .collect();
-    order.sort_by(|&a, &b| compare(&procs[a], &procs[b], options.sort, options.is_reversed));
+    shown.sort_by(|&a, &b| compare(&procs[a], &procs[b], order));
     if !filter.is_empty() || !options.is_tree {
-        return order.into_iter().map(|index| Row { index, depth: 0 }).collect();
+        return shown.into_iter().map(|index| Row { index, depth: 0 }).collect();
     }
-    tree(procs, &order)
+    tree(procs, &shown)
 }
 
 /// `order` (already sorted) arranged depth first under each parent; a process whose parent is not

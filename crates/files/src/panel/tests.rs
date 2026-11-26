@@ -104,6 +104,12 @@ fn a_folder_with_several_kinds_of_change_shows_a_sign_for_each_in_a_fixed_order(
     }
 }
 
+/// The scope the cursor is in, as the table works it out for the highlighted indent guide.
+fn active_scope(p: &Panel) -> Option<ui::tree::Scope> {
+    let depths: Vec<usize> = p.rows.iter().map(|r| usize::from(r.depth)).collect();
+    ui::tree::active_scope(&depths, p.list.cursor())
+}
+
 #[test]
 fn the_active_indent_guide_is_the_scope_the_cursor_is_in() {
     let d = tree("guide");
@@ -112,14 +118,14 @@ fn the_active_indent_guide_is_the_scope_the_cursor_is_in() {
     let at = |p: &Panel, name: &str| p.rows.iter().position(|r| r.name == name).unwrap();
     let (src, deep) = (at(&p, "src"), at(&p, "deep"));
     // On a file: the folder that holds it, from the folder row to the end of its contents.
-    let s = p.active_scope().unwrap();
+    let s = active_scope(&p).unwrap();
     assert_eq!((s.from, s.col, s.to), (deep, 1, at(&p, "inner.txt") + 1));
     // On an open folder: its own contents. On a top-level file: no guide.
     p.list.set_cursor(src);
-    let s = p.active_scope().unwrap();
+    let s = active_scope(&p).unwrap();
     assert_eq!((s.from, s.col), (src, 0));
     p.list.set_cursor(at(&p, "README.md"));
-    assert!(p.active_scope().is_none());
+    assert!(active_scope(&p).is_none());
 }
 
 #[test]

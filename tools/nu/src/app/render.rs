@@ -51,18 +51,17 @@ impl App {
                 .render(inner, buf);
             return;
         }
-        let row = |s: ui::list::Slot| {
-            let (left, right, active) = &rows[s.index];
-            ui::list::ListRow {
-                left: left.spans.clone(),
-                right: vec![Span::raw(right.clone())],
-                min_left: 12,
+        let row = |i: usize| {
+            let (left, right, active) = &rows[i];
+            ui::table::Row {
+                cells: vec![left.spans.clone().into(), right.clone().into()],
                 tint: active.then(|| c.success.into()),
                 ..Default::default()
             }
         };
+        let columns = [ui::table::Column::list().min(12), ui::table::Column::trailing()];
         self.lists[Self::pane(focus)]
-            .view(rows.len(), row)
+            .view(rows.len(), &columns, row)
             .pane(area)
             .focused(focused)
             .render(cx, inner, buf);

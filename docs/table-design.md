@@ -1,6 +1,6 @@
 # Table design
 
-Status: proposal, 2026-11-26. Once built, the rules move into `ui-design.md` (Components, Scrolling) and this file goes.
+Status: phase 1 built, 2026-11-26. Once both phases are built, the rules move into `ui-design.md` (Components, Scrolling) and this file goes.
 
 ## Decision
 
@@ -81,11 +81,18 @@ Fit widths are measured from the rows drawn and only grow, so the columns do not
 - **Header.** A pinned row drawn from the column titles, above the tree ancestors, never scrolled; the sort column accent and bold with `▼` or `▲`.
 - **Tree.** `.tree(depth)` gives the depth of any row: the table draws the guides in the first flexible column, highlights the active scope and pins the ancestors of the top row. The tool computes neither.
 - **Sort.** The table keeps the sort column and direction; `table.sort` moves to the next sortable column and `table.reverse` flips it. The tool reads `table.sort()` and sorts its data. One set of keys and one marker everywhere.
-- **Marks.** The table keeps the marked rows by row id, so a mark survives sorting and filtering; `table.mark` toggles the cursor row, `table.mark_all` and `table.mark_none` the rest. The tool reads `table.marked()`.
+- **Marks.** A `ui::table::Marks<K>` kept next to the table holds the marked rows by the tool's own key (a path, a name), so a mark survives sorting, filtering and folding; the row says `is_marked` and the table draws it in `Column::mark`.
 - **Cell mode** (`Selection::Cell`). The cursor has a column too; the cursor cell is the bright one and its row the faint one; left and right move it and the table scrolls sideways to keep it in view.
 - **Motion.** Rows report themselves to `cx.motion` by id and content, as list rows do now.
 
-The actions go in `ui::keys` under `table.` and are run by `ui::app::run_nav`, so every table has the same keys (`usage-design.md`).
+The movement actions are the shell's (`Navigable`, `ui::app::run_nav`). Sorting and marking stay the tool's actions with their existing ids and keys (`sort.next`, `item.mark`), which call `Table::sort_next`, `reverse_sort` and `Marks::toggle`, so no user's key config breaks.
+
+## Changes from the proposal
+
+- **Marks live next to the table, not in it.** files and pick mark paths and strings that outlive the rows on screen (a file in a folded folder), and a row id can not be turned back into a path; `Marks<K>` keeps the tool's key instead.
+- **No `table.*` actions.** The tools' own sort and mark ids stay, so key configs keep working.
+- **A flexible column's minimum counts the part that shrinks.** The widest part of its cells that does not shrink (guides, icon, count) is added, which keeps the old rule that a name keeps four cells before the trailing text drops.
+- **gu's commit list keeps its own columns inside one cell for now.** Its hash, graph, refs, author and time columns are worked out by gu (`fit_columns`); moving them into `Column`s is a follow-up.
 
 ## Phases
 

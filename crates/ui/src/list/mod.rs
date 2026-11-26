@@ -1,58 +1,10 @@
-//! List rows: the one place that decides how a row of a list is laid out and
-//! highlighted, so every tool's lists (files, pick, git, diagnostics) look alike.
-//!
-//! A row's *bar* (its background) spans the pane's padding on both sides, so the
-//! highlight touches the borders; its *content* stays inside the padding, giving
-//! the text a one-cell margin within the bar.
+//! The rules every list and table shares: how a row's bar is colored, how text that does not fit is
+//! cut, and how a cursor moves. The rows themselves are drawn by `ui::table::Table`.
 
-use crate::component::Context;
 use crate::theme::{Theme, mix};
-use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
-
-/// The `List` component: the scrolling list a tool keeps, and its view.
-mod view;
-pub use view::{List, ListView, Slot};
-
-/// The geometry of one list: where its row bars and row contents go, so every tool lines up alike.
-/// Internal to `List`, which is the only thing that places rows.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Rows {
-    inner: Rect,
-    left: u16,
-    right: u16,
-}
-
-impl Rows {
-    /// `pane` is the whole pane, `inner` the list's area inside its border and padding.
-    pub(crate) fn new(pane: Rect, inner: Rect) -> Rows {
-        let left = inner.x.saturating_sub(pane.x + 1).min(1);
-        let right = pane.right().saturating_sub(inner.right() + 1).min(1);
-        Rows { inner, left, right }
-    }
-
-    /// Which list this is, for the motion: where its content starts.
-    pub(crate) fn id(&self) -> (u16, u16) {
-        (self.inner.x, self.inner.y)
-    }
-
-    /// The row's background at `y`, reaching into the padding on both sides.
-    pub(crate) fn bar(&self, y: u16) -> Rect {
-        Rect {
-            x: self.inner.x - self.left,
-            y,
-            width: self.inner.width + self.left + self.right,
-            height: 1,
-        }
-    }
-
-    /// The row's content area at `y`, inside the padding.
-    pub(crate) fn content(&self, y: u16) -> Rect {
-        Rect { y, height: 1, ..self.inner }
-    }
-}
 
 /// The style of a row's bar: a faded blue (the accent) for the hovered row, a faded
 /// tint of `tint` (a git color, say) for a row that has one, nothing otherwise.
@@ -90,37 +42,6 @@ pub fn fit(text: &str, width: usize) -> String {
     out
 }
 
-/// One row of any list: the single component every tool's list rows are drawn with (files, commits, pick
-/// results, diagnostics, symbols, networks). The tool passes the content and what it wants; the row decides
-/// the bar and highlight, the room (the left content shrinks with a `…`, the right column and the signs keep
-/// their place, one blank cell always between them) and reports itself to `anim` so scrolling, folds and
-/// changes move smoothly. Nothing here is the tool's to repeat.
-#[derive(Default)]
-pub struct ListRow {
-    /// What identifies the row across frames (its path, hash, name) and what it shows apart from the
-    /// cursor, for the motion. Leave both 0 and the text of `left` and `right` stands in.
-    pub id: u64,
-    pub content: u64,
-    /// The content, left to right. The end of it gives way when the row is narrow.
-    pub left: Vec<Span<'static>>,
-    /// A column right-aligned at the end (sizes, times, counts); dropped when it would leave `min_left` cells.
-    pub right: Vec<Span<'static>>,
-    pub min_left: usize,
-    /// Signs at the right edge, the most serious first (git letters).
-    pub signs: Vec<(char, Color)>,
-    /// The last cell is kept for signs even when this row has none, so right columns line up across rows.
-    pub has_sign_cell: bool,
-    pub tint: Option<Color>,
-    pub is_selected: bool,
-    /// The pane has the focus; a selected row of an unfocused pane is the faint current row.
-    pub is_focused: bool,
-}
-
-/// The plain text of `spans` with the styles dropped, for measuring and for default row identity.
-fn text_of(spans: &[Span]) -> String {
-    spans.iter().map(|s| s.content.as_ref()).collect()
-}
-
 /// `spans` cut to `limit` cells, with a `…` where the cut falls.
 pub fn clip_spans(spans: Vec<Span<'static>>, limit: usize) -> Vec<Span<'static>> {
     if spans.iter().map(|s| s.content.width()).sum::<usize>() <= limit {
@@ -144,121 +65,11 @@ pub fn clip_spans(spans: Vec<Span<'static>>, limit: usize) -> Vec<Span<'static>>
     out
 }
 
-impl ListRow {
-    /// Draw the row at line `y` of the list `rows` and report it to the motion of `cx`. Not a
-    /// `Component`: a row is placed by its list's geometry, so only `List` draws it.
-    pub(crate) fn render(
-        self,
-        cx: &Context,
-        buf: &mut ratatui::buffer::Buffer,
-        rows: &Rows,
-        y: u16,
-    ) {
-        let (id, content) = if self.id == 0 && self.content == 0 {
-            (
-                crate::anim::hash_of(&text_of(&self.left)),
-                crate::anim::hash_of(&text_of(&self.right)),
-            )
-        } else {
-            (self.id, self.content)
-        };
-        self.paint(cx, buf, rows, y);
-        cx.motion.note_row(rows.id(), y, id, content, rows.bar(y));
-    }
-
-    /// Draw the row without the motion: for a row built off screen (a preview).
-    pub(crate) fn paint(
-        self,
-        cx: &Context,
-        buf: &mut ratatui::buffer::Buffer,
-        rows: &Rows,
-        y: u16,
-    ) {
-        let theme = cx.theme;
-        use ratatui::text::Line;
-        use ratatui::widgets::{Paragraph, Widget};
-        let base = if self.is_selected && !self.is_focused {
-            active(theme)
-        } else {
-            style(theme, self.is_selected && self.is_focused, self.tint)
-        };
-        buf.set_style(rows.bar(y), base);
-        let area = rows.content(y);
-        let width = usize::from(area.width);
-        let cell = usize::from(self.has_sign_cell);
-        let signs = if self.signs.is_empty() { cell } else { self.signs.len() * 2 };
-        let right_w: usize = self.right.iter().map(|s| s.content.width()).sum();
-        // One blank cell between the left content and the right column, and the column clear of the signs.
-        let with_right = signs.max(cell + right_w + 1);
-        let show_right = right_w > 0 && width.saturating_sub(with_right) >= self.min_left;
-        let limit = width.saturating_sub(if show_right { with_right } else { signs });
-        let left = clip_spans(self.left, limit);
-        Paragraph::new(Line::from(left))
-            .style(base)
-            .render(Rect { width: limit as u16, ..area }, buf);
-        if show_right {
-            let x = area.right().saturating_sub((cell + right_w) as u16);
-            let right: Vec<Span> = self
-                .right
-                .iter()
-                .map(|s| {
-                    Span::styled(
-                        s.content.to_string(),
-                        Style::new().fg(theme.colors.muted.into()).patch(s.style),
-                    )
-                })
-                .collect();
-            Paragraph::new(Line::from(right))
-                .style(base)
-                .render(Rect { x, width: right_w as u16, ..area }, buf);
-        }
-        let mut x = area.right().saturating_sub(1);
-        for (i, (ch, color)) in self.signs.iter().enumerate().rev() {
-            buf.set_string(x, area.y, ch.to_string(), base.fg(*color));
-            x = x.saturating_sub(if i == 0 { 0 } else { 2 });
-        }
-    }
-}
-
 /// The cursor `delta` rows from `cursor` in a list of `len` rows, stopping at the first and the last
 /// row (0 for an empty list). The one rule every list moves by.
 pub fn move_cursor(cursor: usize, delta: isize, len: usize) -> usize {
     let last = len.saturating_sub(1) as isize;
     (cursor as isize + delta).clamp(0, last) as usize
-}
-
-/// The first visible row that keeps `cursor` inside a window of `page` rows of a list of `len`
-/// rows, `scroll_margin` rows from both edges (except at the ends of the list), scrolling as little
-/// as possible from `first_visible_row`, and never so far that the window runs past the last row (a
-/// list that shrank under its old scroll). The one rule every list scrolls by.
-pub(crate) fn follow_cursor(
-    cursor: usize,
-    first_visible_row: usize,
-    page: usize,
-    len: usize,
-    scroll_off: usize,
-) -> usize {
-    let margin = scroll_margin(page, scroll_off);
-    let last = len.saturating_sub(1);
-    let first_visible_row = first_visible_row.min(len.saturating_sub(page));
-    if cursor < first_visible_row + margin {
-        cursor.saturating_sub(margin)
-    } else if (cursor + margin).min(last) >= first_visible_row + page {
-        (cursor + margin).min(last) + 1 - page
-    } else {
-        first_visible_row
-    }
-}
-
-/// How many rows a `List` keeps visible between the cursor and the edge while it scrolls (vim's
-/// `scrolloff`) unless told otherwise (`List::with_scroll_off`), so there is always context ahead of
-/// the cursor.
-pub const SCROLL_OFF: usize = 4;
-
-/// The rows kept between the cursor and the edge of a window of `page` rows: `scroll_off`, less in a
-/// window too small to hold it on both sides of the cursor.
-pub(crate) fn scroll_margin(page: usize, scroll_off: usize) -> usize {
-    scroll_off.min(page.saturating_sub(1) / 2)
 }
 
 /// The row that is current while its pane does not have the focus (the file open in the editor): a

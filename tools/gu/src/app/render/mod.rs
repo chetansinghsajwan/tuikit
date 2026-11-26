@@ -63,17 +63,9 @@ impl App {
         let counts = ui::tree::CountWidths::of(
             cf.changes.iter().map(|f| (!f.binary).then_some((f.added, f.removed))),
         );
-        let depths: Vec<usize> = cf
-            .rows
-            .iter()
-            .map(|r| match r {
-                FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
-            })
-            .collect();
-        let scope = ui::tree::active_scope(&depths, cf.list.cursor());
         let rows = &cf.rows;
-        let row = |s: ui::list::Slot| {
-            let file_row = match &rows[s.index] {
+        let row = |i: usize| {
+            let file_row = match &rows[i] {
                 FileRow::Folder { label, depth, count, folded, .. } => ui::tree::FileRow {
                     depth: *depth,
                     name: label,
@@ -84,18 +76,13 @@ impl App {
                 },
                 FileRow::File { change, depth } => {
                     let color = pv::kind_color(theme, change.kind);
-                    // The line counts in aligned columns, left of the sign (when there is room for them).
-                    let trailing = if inner.width < 30 {
-                        Vec::new()
-                    } else {
-                        let mut t = ui::tree::line_counts(
-                            cx,
-                            (!change.binary).then_some((change.added, change.removed)),
-                            counts,
-                        );
-                        t.push(Span::raw(" "));
-                        t
-                    };
+                    // The line counts in aligned columns, left of the sign (the table drops them when
+                    // there is no room).
+                    let trailing = ui::tree::line_counts(
+                        cx,
+                        (!change.binary).then_some((change.added, change.removed)),
+                        counts,
+                    );
                     ui::tree::FileRow {
                         depth: *depth,
                         name: change.path.rsplit('/').next().unwrap_or(&change.path),
@@ -106,11 +93,14 @@ impl App {
                     }
                 }
             };
-            ui::tree::FileRow { active_guide: scope.and_then(|sc| sc.col_at(s.index)), ..file_row }
-                .list_row(cx, s.width)
+            file_row.row(cx)
         };
+        let columns = ui::tree::file_columns();
         cf.list
-            .view(rows.len(), row)
+            .view(rows.len(), &columns, row)
+            .tree(|i| match &rows[i] {
+                FileRow::Folder { depth, .. } | FileRow::File { depth, .. } => *depth,
+            })
             .pane(area)
             .focused(true)
             .empty("no files changed")

@@ -67,7 +67,7 @@ pub struct App {
     /// The repos opened above this one (entering a submodule pushes, `leader U` pops).
     parents: Vec<PathBuf>,
     /// Cursor and scroll of the branches, commits, stashes and submodules panes.
-    lists: [List; 4],
+    lists: [Table; 4],
     focus: Focus,
     mode: Mode,
     message: Option<ui::footer::Notice>,

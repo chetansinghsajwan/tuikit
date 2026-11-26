@@ -3,7 +3,7 @@
 
 use crate::format;
 use crate::panels::{Panel, Panels};
-use crate::procs::{self, Options, Row, Sort};
+use crate::procs::{self, Options, Order, Row, Sort};
 use crate::sample::{Health, Sampler, Snapshot, ratio};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
@@ -15,12 +15,11 @@ use std::time::{Duration, Instant};
 use sysinfo::Signal;
 use tui_input::Input;
 use ui::app::{Host, Navigable, Request, Screen};
-use ui::columns::{Column, Columns};
 use ui::footer::{Footer, Notice};
 use ui::graph::Eased;
-use ui::list::{List, ListRow, Slot};
 use ui::prompt::Typed;
-use ui::{Component, Pane, graph, tree};
+use ui::table::{Cell, Column, Table, Width};
+use ui::{Component, Pane, graph};
 
 /// What the footer is busy with: nothing, a filter being typed, or a signal waiting for a yes.
 enum Mode {
@@ -117,8 +116,8 @@ pub struct Monitor {
     options: Options,
     mode: Mode,
     message: Option<Notice>,
-    /// The cursor and the scroll over the process rows.
-    list: List,
+    /// The cursor, the scroll and the sort of the process rows.
+    list: Table,
     /// The process under the cursor, so a refresh that reorders the list keeps the cursor on it.
     selected: Option<u32>,
 }
@@ -137,22 +136,26 @@ impl Monitor {
             panels: Panels::without(hidden),
             glide,
             frame_time: Instant::now(),
-            options: Options {
-                sort: Sort::Cpu,
-                is_reversed: false,
-                filter: String::new(),
-                is_tree: false,
-            },
+            options: Options::default(),
             mode: Mode::Normal,
             message: None,
-            list: List::new(),
+            list: Table::new().with_sort(Sort::Cpu.column(), Sort::Cpu.is_descending()),
             selected: None,
         })
     }
 
     /// The rows of the process list now.
     fn rows(&self) -> Vec<Row> {
-        procs::rows(&self.sampler.snapshot.procs, &self.options)
+        procs::rows(&self.sampler.snapshot.procs, &self.options, self.order())
+    }
+
+    /// The order the process table is sorted in.
+    fn order(&self) -> Order {
+        let sort = self.list.sort();
+        Order {
+            sort: sort.and_then(|s| Sort::of_column(s.column)).unwrap_or(Sort::Cpu),
+            is_descending: sort.is_none_or(|s| s.descending),
+        }
     }
 
     /// Moves the cursor back onto the process it was on after the list changed; when that process
@@ -423,26 +426,16 @@ impl Monitor {
         }
     }
 
-    /// The columns of the process list, the sorted one marked.
-    fn process_columns(options: &Options) -> Columns {
-        Columns::new(
-            vec![Column::right("PID", 7)],
-            "NAME",
-            vec![Column::right("CPU%", 5), Column::right("MEM", 7), Column::left("STATE", 8)],
-            20,
-        )
-        .sorted_by(options.sort.column(), options.is_descending())
-    }
-
     /// The process pane: a header, then the rows with the cursor.
     fn draw_procs(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
         let theme = cx.theme;
         let rows = self.rows();
+        let columns = process_columns();
         let title = format!(
             "processes {}  by {}{}{}",
             rows.len(),
-            self.options.sort.label(),
-            if self.options.is_reversed { " reversed" } else { "" },
+            self.order().sort.label(),
+            if self.list.is_sort_reversed(&columns) { " reversed" } else { "" },
             if self.options.filter.is_empty() {
                 String::new()
             } else {
@@ -454,38 +447,31 @@ impl Monitor {
         if inner.height < 2 {
             return;
         }
-        let muted = Style::new().fg(theme.colors.muted.into());
-        let columns = Self::process_columns(&self.options);
-        columns.draw_header(cx, buf, inner);
-
-        let list = Rect { y: inner.y + 1, height: inner.height - 1, ..inner };
         let procs = &self.sampler.snapshot.procs;
-        let depths: Vec<usize> = rows.iter().map(|r| r.depth).collect();
-        let scope = tree::active_scope(&depths, self.list.cursor());
-        let row = |s: Slot| {
-            let row = &rows[s.index];
-            let p = &procs[row.index];
+        let row = |i: usize| {
+            let p = &procs[rows[i].index];
             let cpu_color = graph::heat(theme, p.cpu / 100.0);
-            let guides =
-                tree::guides_marked(cx, row.depth, scope.and_then(|sc| sc.col_at(s.index)));
-            let mut left = columns.lead_cells(vec![Span::styled(p.pid.to_string(), muted)]);
-            left.extend(guides);
-            left.push(Span::raw(p.name.clone()));
             // The row keeps its identity (the pid) and never flashes when the numbers change.
-            ListRow {
+            ui::table::Row {
                 id: u64::from(p.pid) + 1,
                 content: 1,
-                left,
-                right: columns.trail_cells(vec![
-                    Span::styled(format!("{:.1}", p.cpu), Style::new().fg(cpu_color)),
-                    Span::raw(format::bytes(p.memory)),
-                    Span::raw(p.status.clone()),
-                ]),
-                min_left: columns.min_left(),
-                ..ListRow::default()
+                cells: vec![
+                    Cell::from(p.pid.to_string()),
+                    Cell::from(p.name.clone()),
+                    Cell::from(Span::styled(format!("{:.1}", p.cpu), Style::new().fg(cpu_color))),
+                    Cell::from(format::bytes(p.memory)),
+                    Cell::from(p.status.clone()),
+                ],
+                ..ui::table::Row::default()
             }
         };
-        self.list.view(rows.len(), row).pane(area).focused(true).render(cx, list, buf);
+        self.list
+            .view(rows.len(), &columns, row)
+            .header(true)
+            .tree(|i| rows[i].depth)
+            .pane(area)
+            .focused(true)
+            .render(cx, inner, buf);
     }
 
     /// The footer line: a prompt, a question, a message, or the hints.
@@ -590,11 +576,11 @@ impl Screen for Monitor {
     fn run_action(&mut self, id: &'static str, _host: &mut dyn Host) -> Request {
         match id {
             "sort.next" => {
-                self.options.sort = self.options.sort.next();
+                self.list.sort_next(&process_columns());
                 self.follow_selected();
             }
             "sort.reverse" => {
-                self.options.is_reversed = !self.options.is_reversed;
+                self.list.reverse_sort();
                 self.follow_selected();
             }
             "view.tree" => {
@@ -643,6 +629,25 @@ impl Screen for Monitor {
     fn navigable(&mut self) -> Option<&mut dyn Navigable> {
         Some(self)
     }
+}
+
+/// The columns of the process list. The sort moves through them in this order, each in the direction it
+/// starts in (load largest first, pid and name smallest first); the right ones drop first when narrow.
+fn process_columns() -> Vec<Column> {
+    let sortable = |c: Column, sort: Sort| c.sortable(sort.is_descending());
+    vec![
+        sortable(Column::new("pid", "PID", Width::Fixed(7)).right().muted(), Sort::Pid),
+        sortable(Column::new("name", "NAME", Width::Flex(1)).min(12), Sort::Name),
+        sortable(
+            Column::new("cpu", "CPU%", Width::Fixed(5)).right().muted().priority(1),
+            Sort::Cpu,
+        ),
+        sortable(
+            Column::new("mem", "MEM", Width::Fixed(7)).right().muted().priority(2),
+            Sort::Memory,
+        ),
+        Column::new("state", "STATE", Width::Fixed(8)).muted().priority(3),
+    ]
 }
 
 /// The process rows are what the shared movement walks.
