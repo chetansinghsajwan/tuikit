@@ -1,6 +1,7 @@
 //! Tests for the problems list.
 
 use super::*;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Builds a problem in `path` under the fake workspace root `/ws`, at column 3.
 fn item(path: &str, line: u32, sev: Severity, msg: &str) -> Item {
@@ -48,7 +49,7 @@ fn draw(p: &mut Panel) -> Vec<String> {
 
 #[test]
 fn groups_by_file_sorted_by_path_then_line_with_counts_in_the_title() {
-    let mut p = Panel::new("/ws");
+    let mut p = Panel::new("/ws", "space");
     p.set_items(sample());
     let l = draw(&mut p);
     let pos =
@@ -75,7 +76,7 @@ fn groups_by_file_sorted_by_path_then_line_with_counts_in_the_title() {
 
 #[test]
 fn navigation_skips_file_rows_and_enter_opens_the_place() {
-    let mut p = Panel::new("/ws");
+    let mut p = Panel::new("/ws", "space");
     p.set_items(sample());
     assert_eq!(
         p.handle_event(&key(KeyCode::Enter)),
@@ -100,7 +101,7 @@ fn navigation_skips_file_rows_and_enter_opens_the_place() {
 
 #[test]
 fn the_filter_cycles_and_the_cursor_stays_on_the_same_problem() {
-    let mut p = Panel::new("/ws");
+    let mut p = Panel::new("/ws", "space");
     p.set_items(sample());
     // Stand on the warning in b.rs.
     p.handle_event(&key(KeyCode::Char('G')));
@@ -129,7 +130,7 @@ fn the_filter_cycles_and_the_cursor_stays_on_the_same_problem() {
 
 #[test]
 fn an_unchanged_list_keeps_state_and_a_changed_one_keeps_the_cursor_on_its_problem() {
-    let mut p = Panel::new("/ws");
+    let mut p = Panel::new("/ws", "space");
     p.set_items(sample());
     p.handle_event(&key(KeyCode::Down));
     p.handle_event(&key(KeyCode::Down));
@@ -155,7 +156,7 @@ fn an_unchanged_list_keeps_state_and_a_changed_one_keeps_the_cursor_on_its_probl
 
 #[test]
 fn long_messages_are_cut_with_an_ellipsis() {
-    let mut p = Panel::new("/ws");
+    let mut p = Panel::new("/ws", "space");
     p.set_items(vec![item("a.rs", 1, Severity::Error, &"very long message ".repeat(20))]);
     let l = draw(&mut p);
     assert!(l.iter().any(|r| r.contains('…') && r.contains("very long")), "{l:#?}");

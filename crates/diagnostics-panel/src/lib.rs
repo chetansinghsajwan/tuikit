@@ -4,13 +4,16 @@
 //! costs a comparison) and reacts to the `Action`s.
 
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::Event;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use std::path::{Path, PathBuf};
 use ui::{Component, Pane, Theme};
 use unicode_width::UnicodeWidthStr;
+
+/// The actions and their default keys.
+mod keys;
 
 /// Most severe first (`Error < Warning < ...` in sort order).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,10 +50,13 @@ pub enum Action {
     },
     /// Give the keyboard back (Esc, `q`).
     Close,
+    /// The palette or the help were asked for (hosts that draw them handle these).
+    Palette,
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Which severities the list shows. The `f` key cycles through them.
+/// Which severities the list shows. `view.severity` cycles through them.
 enum Filter {
     All,
     /// Errors and warnings.
@@ -103,18 +109,30 @@ pub struct Panel {
     /// The cursor and the scroll over `rows`; the cursor lands only on problems, not on file rows.
     list: ui::list::List,
     filter: Filter,
+    keymap: ui::keys::Keymap,
 }
 
 impl Panel {
-    /// `root`: the workspace; file names are shown relative to it.
-    pub fn new(root: impl Into<PathBuf>) -> Panel {
+    /// `root`: the workspace; file names are shown relative to it. Key prefixes start with `leader`.
+    pub fn new(root: impl Into<PathBuf>, leader: &str) -> Panel {
         Panel {
             root: root.into(),
             items: Vec::new(),
             rows: Vec::new(),
             list: ui::list::List::new(),
             filter: Filter::All,
+            keymap: ui::keys::Keymap::new(leader, &keys::commands(), &[]),
         }
+    }
+
+    /// The pending key-prefix menu, for the host to draw.
+    pub fn menu(&self) -> Option<ui::keys::Menu> {
+        self.keymap.menu()
+    }
+
+    /// Every action with its keys, for the host's help screen.
+    pub fn keys_rows(&self) -> Vec<ui::keys::Row> {
+        self.keymap.rows()
     }
 
     /// Replace the list. A list equal to the current one is ignored, so hosts can
@@ -182,33 +200,32 @@ impl Panel {
 
     /// Handles a key press and tells the host what to do (open a place, close, or nothing).
     pub fn handle_event(&mut self, ev: &Event) -> Action {
-        let Some(KeyEvent { code, modifiers, .. }) = ui::keys::pressed(ev) else {
+        let Some(key) = ui::keys::pressed(ev) else { return Action::None };
+        match self.keymap.feed(key) {
+            ui::keys::Feed::Run(id) => self.run(id),
+            _ => Action::None,
+        }
+    }
+
+    /// Runs one action by id. Also lets the host run an action picked from its palette.
+    pub fn run(&mut self, id: &'static str) -> Action {
+        if ui::app::run_nav(&mut self.list, id) {
             return Action::None;
-        };
-        let ctrl = modifiers.contains(KeyModifiers::CONTROL);
-        match code {
-            KeyCode::Esc | KeyCode::Char('q') => return Action::Close,
-            KeyCode::Char('c') if ctrl => return Action::Close,
-            KeyCode::Char('k') if ctrl => self.list.move_by(-5),
-            KeyCode::Char('j') if ctrl => self.list.move_by(5),
-            KeyCode::Up | KeyCode::Char('k') => self.list.move_by(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.list.move_by(1),
-            KeyCode::Char('p') if ctrl => self.list.move_by(-1),
-            KeyCode::Char('n') if ctrl => self.list.move_by(1),
-            KeyCode::PageUp => self.list.move_by(-(self.list.page_row_count() as isize)),
-            KeyCode::PageDown => self.list.move_by(self.list.page_row_count() as isize),
-            KeyCode::Home | KeyCode::Char('g') => self.list.move_to_top(),
-            KeyCode::End | KeyCode::Char('G') => self.list.move_to_bottom(),
-            KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
+        }
+        match id {
+            "item.open" => {
                 if let Some(it) = self.current() {
                     return Action::Open { path: it.path.clone(), line: it.line, col: it.col };
                 }
             }
-            KeyCode::Char('f') => {
+            "view.severity" => {
                 let keep = self.current().cloned();
                 self.filter = self.filter.next();
                 self.rebuild(keep);
             }
+            "palette" => return Action::Palette,
+            "help" => return Action::Help,
+            "quit" => return Action::Close,
             _ => {}
         }
         Action::None
