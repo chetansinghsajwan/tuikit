@@ -121,17 +121,27 @@ struct State {
 /// thread, so the state sits in a `RefCell` and needs no lock.
 pub struct Motion {
     state: RefCell<State>,
+    /// Whether drawing notes what it drew. A still motion (`Motion::still`) notes nothing, for a host
+    /// that never calls `finish`, so nothing piles up between frames.
+    noting: bool,
 }
 
 impl Default for Motion {
     fn default() -> Self {
-        Motion { state: RefCell::new(State { first: true, ..State::default() }) }
+        Motion { state: RefCell::new(State { first: true, ..State::default() }), noting: true }
     }
 }
 
 thread_local! {
     /// The process-wide `Motion`, the one `Context::new` hands out.
     static DEFAULT: &'static Motion = Box::leak(Box::default());
+    /// The still `Motion` that `Context::still` hands out.
+    static STILL: &'static Motion = Box::leak(Box::new(Motion::still()));
+}
+
+/// The process-wide still `Motion`, for hosts that draw without motion (see `Motion::still`).
+pub fn still_motion() -> &'static Motion {
+    STILL.with(|m| *m)
 }
 
 /// The process-wide `Motion`: what the shell finishes each frame and what `Context::new` hands out.
@@ -242,6 +252,12 @@ impl Motion {
         Motion::default()
     }
 
+    /// A motion that notes nothing and moves nothing: for a host (an editor) that draws tuikit parts
+    /// in its own frames and never calls `finish`.
+    pub fn still() -> Motion {
+        Motion { noting: false, ..Motion::default() }
+    }
+
     fn want(&self) {
         self.state.borrow_mut().wanted = true;
     }
@@ -277,12 +293,18 @@ impl Motion {
     /// `content` what it shows apart from the cursor. `finish` then glides a scrolled list, reveals rows
     /// a fold opened and flashes rows whose content changed.
     pub fn note_row(&self, pane: (u16, u16), y: u16, id: u64, content: u64, bar: Rect) {
+        if !self.noting {
+            return;
+        }
         self.state.borrow_mut().rows.entry(pane).or_default().push(RowRec { y, id, content, bar });
     }
 
     /// An overlay (popup, menu) is about to be drawn into `rect`: remember what lies under it, so it
     /// fades in over it.
     pub fn overlay(&self, buf: &Buffer, rect: Rect) {
+        if !self.noting {
+            return;
+        }
         let rect = rect.intersection(buf.area);
         let under = (rect.top()..rect.bottom())
             .flat_map(|y| (rect.left()..rect.right()).map(move |x| (x, y)))
@@ -294,6 +316,9 @@ impl Motion {
     /// A tab strip at `strip` shows tab `active` over `content`; when the tab changes, the content fades
     /// in.
     pub fn tab(&self, strip: (u16, u16), active: usize, content: Rect) {
+        if !self.noting {
+            return;
+        }
         self.state.borrow_mut().tabs.push((strip, active, content));
     }
 

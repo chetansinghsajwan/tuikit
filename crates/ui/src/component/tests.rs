@@ -47,3 +47,15 @@ fn each_motion_keeps_its_own_memory() {
     assert!(!b.take_redraw(), "the still list does not move");
     assert_eq!(b.poll_timeout(Duration::from_secs(1)), Duration::from_secs(1));
 }
+
+#[test]
+fn a_still_context_notes_nothing_so_nothing_moves() {
+    let theme = Theme::default();
+    let cx = Context::still(&theme);
+    let area = Rect::new(0, 0, 10, 8);
+    let rows: Vec<(u16, &str)> = vec![(0, "a"), (1, "b"), (2, "c"), (3, "d"), (4, "e")];
+    frame(&cx, area, &rows);
+    let scrolled: Vec<(u16, &str)> = rows.iter().map(|&(y, t)| (y + 3, t)).collect();
+    frame(&cx, area, &scrolled);
+    assert!(!cx.motion.take_redraw(), "no glide without notes");
+}

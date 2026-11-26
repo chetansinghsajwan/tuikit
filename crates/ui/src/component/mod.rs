@@ -23,6 +23,12 @@ impl<'a> Context<'a> {
         Context { theme, motion: anim::default_motion() }
     }
 
+    /// A context on `theme` that draws without motion, for a host that draws tuikit parts in its own
+    /// frames and never finishes a motion (an editor): nothing is noted between frames.
+    pub fn still(theme: &'a Theme) -> Context<'a> {
+        Context { theme, motion: anim::still_motion() }
+    }
+
     /// A context on `theme` with its own `motion`, for tests and for drawing off screen.
     pub fn with_motion(theme: &'a Theme, motion: &'a Motion) -> Context<'a> {
         Context { theme, motion }
