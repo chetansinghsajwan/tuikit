@@ -17,11 +17,19 @@ use unicode_width::UnicodeWidthStr;
 pub struct Cell {
     pub spans: Vec<Span<'static>>,
     pub shrink: Option<usize>,
+    /// The side of the cell the text sits on, instead of its column's (a number in a text column).
+    pub align: Option<Align>,
 }
 
 impl Cell {
     pub fn new(spans: Vec<Span<'static>>) -> Cell {
-        Cell { spans, shrink: None }
+        Cell { spans, shrink: None, align: None }
+    }
+
+    /// The text sits at the right of the cell, whatever its column says (a number).
+    pub fn right(mut self) -> Cell {
+        self.align = Some(Align::Right);
+        self
     }
 
     /// The span at `index` is the one that shrinks (with `…`) when the cell is too narrow.
@@ -231,10 +239,26 @@ pub(crate) fn bar_style(cx: &Context, tint: Option<Color>, state: State) -> Styl
     }
 }
 
-/// The columns of one frame and where each is placed (`None`: not drawn).
+/// The columns of one frame and where each is placed (`None`: not drawn), and whether a `│` is drawn
+/// between them.
 pub(crate) struct Placement<'a> {
     pub columns: &'a [Column],
     pub placed: &'a [Option<Placed>],
+    pub separator: bool,
+}
+
+impl Placement<'_> {
+    /// Draws the `│` between the columns drawn on line `y` of a row starting at `x`.
+    fn separators(&self, cx: &Context, buf: &mut Buffer, x: u16, y: u16, base: Style) {
+        if !self.separator {
+            return;
+        }
+        let style = base.fg(cx.theme.colors.muted.into());
+        let glyph = cx.theme.icons.guide.glyph;
+        for at in self.placed.iter().flatten().skip(1) {
+            buf.set_string(x + at.x - 2, y, glyph, style);
+        }
+    }
 }
 
 /// Paints `cells` (the row's content per column) on line `y` of `rows`, each column where `at` places
@@ -248,6 +272,7 @@ pub(crate) fn paint(
     base: Style,
     state: State,
 ) {
+    let place = at;
     let (columns, placed) = (at.columns, at.placed);
     let theme = cx.theme;
     let muted = Style::new().fg(theme.colors.muted.into());
@@ -257,6 +282,7 @@ pub(crate) fn paint(
         let (Some(at), Some(cell)) = (placed[i], cell) else { continue };
         let column = &columns[i];
         let width = usize::from(at.width);
+        let align = cell.align.unwrap_or(column.align);
         let mut spans = cell.fit(width);
         if column.muted {
             spans =
@@ -264,7 +290,7 @@ pub(crate) fn paint(
         }
         let used: usize = spans.iter().map(|s| s.content.width()).sum();
         let pad = width.saturating_sub(used) as u16;
-        let x = area.x + at.x + if column.align == Align::Right { pad } else { 0 };
+        let x = area.x + at.x + if align == Align::Right { pad } else { 0 };
         let mut cell_base = base;
         if state.is_selected && state.cell == Some(i) {
             cell_base = style(theme, state.is_focused, None);
@@ -274,6 +300,7 @@ pub(crate) fn paint(
             .style(cell_base)
             .render(Rect { x, y, width: at.width - pad, height: 1 }, buf);
     }
+    place.separators(cx, buf, area.x, y, base);
 }
 
 /// The header: each column's title where its cells go, muted, the sort column accent and bold with `▼`
@@ -282,10 +309,10 @@ pub(crate) fn header(
     cx: &Context,
     buf: &mut Buffer,
     area: Rect,
-    columns: &[Column],
-    placed: &[Option<Placed>],
+    place: &Placement,
     sort: Option<super::Sort>,
 ) {
+    let (columns, placed) = (place.columns, place.placed);
     let theme = cx.theme;
     for (i, column) in columns.iter().enumerate() {
         let Some(at) = placed[i] else { continue };
@@ -303,6 +330,7 @@ pub(crate) fn header(
         Paragraph::new(Line::from(text))
             .render(Rect { x, y: area.y, width: at.width - pad, height: 1 }, buf);
     }
+    place.separators(cx, buf, area.x, area.y, Style::new());
 }
 
 /// The width a column's title takes in the header, with room for the sort marker if it can sort.

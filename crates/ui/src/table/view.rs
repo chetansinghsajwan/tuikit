@@ -1,7 +1,7 @@
 //! One frame of a table: it scrolls to keep the cursor in view, asks for the visible rows, lays the
 //! columns out once for all of them, and draws the header, the tree guides, the rows and the cursor.
 
-use super::layout::{Column, GAP, Kind, Overflow, Width, resolve};
+use super::layout::{Column, GAP, Kind, Overflow, Placed, SEPARATED_GAP, Width, resolve};
 use super::row::{self, Cell, Row, Rows, State, title_width};
 use super::scroll::{follow_cursor, scroll_margin};
 use super::state::Table;
@@ -25,6 +25,8 @@ pub struct TableView<'l, F> {
     focused: bool,
     cursor: bool,
     header: bool,
+    separator: bool,
+    numbered: bool,
     empty: Option<&'l str>,
     pinned: Option<Pinned<'l>>,
     depth: Option<Depth<'l>>,
@@ -40,6 +42,8 @@ impl<'l, F: FnMut(usize) -> Row> TableView<'l, F> {
             focused: false,
             cursor: true,
             header: false,
+            separator: false,
+            numbered: false,
             empty: None,
             pinned: None,
             depth: None,
@@ -68,6 +72,18 @@ impl<'l, F: FnMut(usize) -> Row> TableView<'l, F> {
     /// A header line with the column titles and the sort marker, above the rows.
     pub fn header(mut self, header: bool) -> Self {
         self.header = header;
+        self
+    }
+
+    /// A `│` between the columns (a spreadsheet), in place of the one blank cell.
+    pub fn separator(mut self, separator: bool) -> Self {
+        self.separator = separator;
+        self
+    }
+
+    /// A gutter of row numbers (from 1) at the left, muted, outside the columns.
+    pub fn numbered(mut self, numbered: bool) -> Self {
+        self.numbered = numbered;
         self
     }
 
@@ -103,8 +119,15 @@ impl<F: FnMut(usize) -> Row> Component for TableView<'_, F> {
         let header = self.header && area.height > 1;
         let body =
             if header { Rect { y: area.y + 1, height: area.height - 1, ..area } } else { area };
-        let room = usize::from(body.width);
         let table = &mut *self.table;
+        // The row numbers sit left of the columns: as many digits as the last row has, at least 2.
+        let digits = table.len.max(1).to_string().len().max(2);
+        let gutter = if self.numbered { digits + 1 } else { 0 };
+        let room = usize::from(body.width).saturating_sub(gutter);
+        let gap = if self.separator { SEPARATED_GAP } else { GAP };
+        let place = |placed: Vec<Option<Placed>>| -> Vec<Option<Placed>> {
+            placed.into_iter().map(|p| p.map(|p| Placed { x: p.x + gutter as u16, ..p })).collect()
+        };
         let page = usize::from(body.height);
         table.page = page;
         table.shown.clear();
@@ -115,8 +138,10 @@ impl<F: FnMut(usize) -> Row> Component for TableView<'_, F> {
         if table.len == 0 {
             if header {
                 let wants = wants(table, columns, &[], header);
-                let placed = resolve(columns, &wants, room, table.overflow, table.first_col);
-                row::header(cx, buf, area, columns, &placed, table.sort);
+                let placed =
+                    place(resolve(columns, &wants, room, (table.overflow, table.first_col), gap));
+                let at = row::Placement { columns, placed: &placed, separator: self.separator };
+                row::header(cx, buf, area, &at, table.sort);
             }
             if let Some(text) = self.empty {
                 let style = Style::new().fg(cx.theme.colors.muted.into());
@@ -173,15 +198,17 @@ impl<F: FnMut(usize) -> Row> Component for TableView<'_, F> {
         {
             // Scroll sideways as little as keeps the cursor's column whole on screen.
             table.first_col = table.first_col.min(col);
-            let span = |from: usize| wants[from..=col].iter().sum::<usize>() + (col - from) * GAP;
+            let span = |from: usize| wants[from..=col].iter().sum::<usize>() + (col - from) * gap;
             while table.first_col < col && span(table.first_col) > room {
                 table.first_col += 1;
             }
         }
-        let placed = resolve(columns, &wants, room, table.overflow, table.first_col);
+        let placed = place(resolve(columns, &wants, room, (table.overflow, table.first_col), gap));
+        let at = row::Placement { columns, placed: &placed, separator: self.separator };
         if header {
-            row::header(cx, buf, area, columns, &placed, table.sort);
+            row::header(cx, buf, area, &at, table.sort);
         }
+        let muted = cx.theme.colors.muted.into();
         let geometry = Rows::new(self.pane.unwrap_or(area), body);
         for (line, (index, row, cells)) in rows.into_iter().enumerate() {
             let y = body.y + line as u16;
@@ -192,8 +219,10 @@ impl<F: FnMut(usize) -> Row> Component for TableView<'_, F> {
             };
             let base = row::bar_style(cx, row.tint, state);
             let (id, content) = row.identity();
-            let at = row::Placement { columns, placed: &placed };
             row::paint(cx, buf, (&geometry, y), &at, cells, base, state);
+            if self.numbered {
+                buf.set_string(body.x, y, format!("{:>digits$}", index + 1), base.fg(muted));
+            }
             cx.motion.note_row(geometry.id(), y, id, content, geometry.bar(y));
         }
     }
@@ -218,12 +247,13 @@ fn wants(
                 Width::Fit { max } => {
                     let seen = cells.map(Cell::width).max().unwrap_or(0);
                     let title = if header { title_width(column) } else { 0 };
-                    let kept =
-                        table.fit.iter().find(|(id, _)| *id == column.id).map_or(0, |(_, w)| *w);
+                    // Kept by id and place, so columns that share an id (a spreadsheet's) keep their own.
+                    let at = |&&(id, n, _): &&(&str, usize, u16)| id == column.id && n == i;
+                    let kept = table.fit.iter().find(at).map_or(0, |&(_, _, w)| w);
                     let w = (seen.max(title).min(usize::from(max)) as u16).max(kept);
-                    match table.fit.iter_mut().find(|(id, _)| *id == column.id) {
-                        Some((_, kept)) => *kept = w,
-                        None => table.fit.push((column.id, w)),
+                    match table.fit.iter_mut().find(|(id, n, _)| *id == column.id && *n == i) {
+                        Some((_, _, kept)) => *kept = w,
+                        None => table.fit.push((column.id, i, w)),
                     }
                     usize::from(w).max(min)
                 }

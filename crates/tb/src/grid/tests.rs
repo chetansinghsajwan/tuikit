@@ -116,10 +116,20 @@ fn quit_asks_when_modified_and_save_writes_the_file() {
 }
 
 #[test]
-fn fit_cuts_pads_and_right_aligns() {
-    assert_eq!(fit("abcdef", 4, false), "abc…");
-    assert_eq!(fit("ab", 4, false), "ab  ");
-    assert_eq!(fit("12", 4, true), "  12");
+fn numbers_sit_right_and_the_header_stays_on_top_while_scrolling() {
+    let text: String = std::iter::once("name,qty\n".to_string())
+        .chain((0..30).map(|i| format!("item{i},{i}\n")))
+        .collect();
+    let mut g = grid(&text);
+    press(&mut g, "G");
+    let theme = ui::Theme::load();
+    let area = Rect::new(0, 0, 30, 8);
+    let mut buf = Buffer::empty(area);
+    g.grid.render(area, &mut buf, &ui::Context::new(&theme), true);
+    let lines: Vec<String> =
+        (0..8).map(|y| (0..30).map(|x| buf[(x, y)].symbol().to_string()).collect()).collect();
+    assert!(lines[1].contains("name") && lines[1].contains("qty"), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("item29 │  29")), "{lines:#?}");
 }
 
 #[test]

@@ -33,8 +33,8 @@ pub struct Table {
     /// The rows the last frame drew, top to bottom (pinned rows first).
     pub(crate) shown: Vec<usize>,
     pub(crate) sort: Option<Sort>,
-    /// The widths `Width::Fit` columns grew to, by column id.
-    pub(crate) fit: Vec<(&'static str, u16)>,
+    /// The widths `Width::Fit` columns grew to, by column id and place.
+    pub(crate) fit: Vec<(&'static str, usize, u16)>,
     /// The cursor's column in cell mode (`None`: the cursor is a whole row).
     pub(crate) col: Option<usize>,
     /// How many columns the last frame had, for column moves.
@@ -151,6 +151,14 @@ impl Table {
     pub fn set_cursor(&mut self, row: usize) {
         self.cursor = row;
         self.clamp();
+    }
+
+    /// The table now has `cols` columns, for column moves before the next frame tells it.
+    pub fn set_cols(&mut self, cols: usize) {
+        self.cols = cols;
+        if let Some(col) = self.col {
+            self.col = Some(col.min(cols.saturating_sub(1)));
+        }
     }
 
     /// Puts the cursor on column `col` in cell mode.

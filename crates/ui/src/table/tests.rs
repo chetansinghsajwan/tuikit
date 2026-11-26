@@ -150,7 +150,7 @@ fn placed(columns: &[Column], room: usize) -> Vec<Option<(u16, u16)>> {
             Width::Flex(_) => usize::from(c.min),
         })
         .collect();
-    resolve(columns, &wants, room, Overflow::Drop, 0)
+    resolve(columns, &wants, room, (Overflow::Drop, 0), super::layout::GAP)
         .into_iter()
         .map(|p| p.map(|Placed { x, width }| (x, width)))
         .collect()
@@ -221,7 +221,7 @@ fn a_fit_column_grows_with_what_it_has_seen_and_never_shrinks_back() {
     };
     assert_eq!(draw(&mut table, "1.2M"), "a               1.2M");
     assert_eq!(draw(&mut table, "3K"), "a                 3K");
-    assert_eq!(table.fit, vec![("size", 4)], "the column stays 4 wide");
+    assert_eq!(table.fit, vec![("size", 1, 4)], "the column stays 4 wide");
     table.reset_widths();
     assert!(table.fit.is_empty());
 }
@@ -347,4 +347,26 @@ fn the_scroll_margin_shrinks_in_a_small_window() {
 fn a_smaller_scroll_off_keeps_fewer_rows_ahead() {
     assert_eq!(scroll_margin(30, 1), 1);
     assert_eq!(follow_cursor(12, 0, 10, 50, 1), 4);
+}
+
+#[test]
+fn a_spreadsheet_numbers_its_rows_separates_its_columns_and_aligns_numbers_right() {
+    let columns: Vec<Column> =
+        (0..2).map(|_| Column::new("col", "", Width::Fit { max: 8 }).min(3)).collect();
+    let mut table = Table::new().with_cells();
+    let theme = Theme::default();
+    let motion = crate::anim::Motion::new();
+    let area = Rect::new(0, 0, 16, 2);
+    let mut buf = Buffer::empty(area);
+    let row = |i: usize| match i {
+        0 => Row::new(vec!["name".into(), "qty".into()]),
+        _ => Row::new(vec!["apple".into(), Cell::from("7").right()]),
+    };
+    table.view(2, &columns, row).numbered(true).separator(true).render(
+        &Context::with_motion(&theme, &motion),
+        area,
+        &mut buf,
+    );
+    assert_eq!(line(&buf, 0), " 1 name  │ qty");
+    assert_eq!(line(&buf, 1), " 2 apple │   7");
 }

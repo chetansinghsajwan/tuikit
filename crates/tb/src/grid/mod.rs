@@ -5,20 +5,19 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
 use std::path::PathBuf;
 use tui_input::Input;
 use ui::app::{Navigable, Request};
 use ui::footer::Footer;
 use ui::prompt::Typed;
+use ui::table::{Cell, Column, Row, Width};
 use ui::{Component, Pane};
-use unicode_width::UnicodeWidthStr;
 
 /// The widest a column is drawn.
-const MAX_COL: usize = 32;
+const MAX_COL: u16 = 32;
 /// The narrowest a column is drawn, so empty columns stay visible.
-const MIN_COL: usize = 3;
-/// How many rows are measured for the width of a column.
-const MEASURE_ROWS: usize = 2000;
+const MIN_COL: u16 = 3;
 /// How many changes undo remembers, to bound memory on big tables.
 const UNDO_DEPTH: usize = 100;
 
@@ -38,17 +37,14 @@ enum Confirm {
     Quit,
 }
 
-/// The table editor: the table, the cursor, the scroll position, undo history and mode.
+/// The table editor: the table, the cursor and scroll (a `ui::table::Table` in cell mode), undo history
+/// and mode.
 pub struct Grid {
     table: Table,
     path: Option<PathBuf>,
     header: bool,
-    /// The cell the cursor is in.
-    cur: (usize, usize),
-    top: usize,
-    left: usize,
-    /// How many body rows fit (set when drawn).
-    page: usize,
+    /// The cell cursor, the scroll both ways and the column widths.
+    view: ui::table::Table,
     undo: Vec<(Table, (usize, usize))>,
     redo: Vec<(Table, (usize, usize))>,
     saved: Table,
@@ -61,22 +57,21 @@ pub struct Grid {
 impl Grid {
     /// Makes an editor for `table`, saved to `path` (if any).
     pub fn new(table: Table, path: Option<PathBuf>) -> Grid {
-        Grid {
+        let mut grid = Grid {
             saved: table.clone(),
             table,
             path,
             header: true,
-            cur: (0, 0),
-            top: 0,
-            left: 0,
-            page: 10,
+            view: ui::table::Table::new().with_cells(),
             undo: Vec::new(),
             redo: Vec::new(),
             mode: Mode::Normal,
             find: String::new(),
             copied: String::new(),
             message: None,
-        }
+        };
+        grid.clamp();
+        grid
     }
 
     /// Reads a csv, tsv or psv file into an editor; a missing file starts as an empty table.
@@ -98,7 +93,14 @@ impl Grid {
 
     /// The cell the cursor is in, as (row, column).
     pub fn cursor(&self) -> (usize, usize) {
-        self.cur
+        (self.view.cursor(), self.view.col())
+    }
+
+    /// Puts the cursor on the cell (row, column), or the nearest one in the table.
+    fn set_cursor(&mut self, (row, col): (usize, usize)) {
+        self.clamp();
+        self.view.set_cursor(row);
+        self.view.set_col(col);
     }
 
     /// Whether the table differs from what was last saved.
@@ -116,39 +118,25 @@ impl Grid {
         self.message = Some(ui::footer::Notice::new(text, error));
     }
 
-    /// The row count, at least 1 so the cursor always has a place.
-    fn rows(&self) -> usize {
-        self.table.row_count().max(1)
-    }
-
     /// The column count, at least 1 so the cursor always has a place.
     fn cols(&self) -> usize {
         self.table.col_count().max(1)
     }
 
-    /// Remember the table before a change.
+    /// Remember the table before a change. The column widths start over, as the cells change.
     fn change(&mut self) {
-        self.undo.push((self.table.clone(), self.cur));
+        self.undo.push((self.table.clone(), self.cursor()));
         if self.undo.len() > UNDO_DEPTH {
             self.undo.remove(0);
         }
         self.redo.clear();
+        self.view.reset_widths();
     }
 
-    /// Pulls the cursor back inside the table after a change shrank it.
+    /// Tells the view the table's size, which pulls the cursor back inside after a change shrank it.
     fn clamp(&mut self) {
-        self.cur.0 = self.cur.0.min(self.rows() - 1);
-        self.cur.1 = self.cur.1.min(self.cols() - 1);
-    }
-
-    /// Moves the cursor by `delta` rows, stopping at the first and last.
-    fn go_rows(&mut self, delta: isize) {
-        self.cur.0 = ui::list::move_cursor(self.cur.0, delta, self.rows());
-    }
-
-    /// Moves the cursor by `delta` columns, stopping at the first and last.
-    fn go_cols(&mut self, delta: isize) {
-        self.cur.1 = ui::list::move_cursor(self.cur.1, delta, self.cols());
+        self.view.set_len(self.table.row_count());
+        self.view.set_cols(self.cols());
     }
 
     /// Handles a key press for the open prompt or question; in normal mode it does nothing.
@@ -159,7 +147,8 @@ impl Grid {
                 match ui::prompt::typed(&mut input, ev) {
                     Typed::Submit(text) => {
                         self.change();
-                        self.table.set(self.cur.0, self.cur.1, &text);
+                        let (r, c) = self.cursor();
+                        self.table.set(r, c, &text);
                     }
                     Typed::Cancel => {}
                     Typed::Editing => self.mode = Mode::Edit(input),
@@ -196,13 +185,13 @@ impl Grid {
         match what {
             Confirm::DeleteRow => {
                 self.change();
-                self.table.delete_row(self.cur.0);
+                self.table.delete_row(self.cursor().0);
                 self.clamp();
                 self.show_message("deleted the row", false);
             }
             Confirm::DeleteCol => {
                 self.change();
-                self.table.delete_col(self.cur.1);
+                self.table.delete_col(self.cursor().1);
                 self.clamp();
                 self.show_message("deleted the column", false);
             }
@@ -213,68 +202,67 @@ impl Grid {
 
     /// Runs one of the editor's own actions by id.
     fn run_action_id(&mut self, id: &'static str) -> Request {
+        let (r, c) = self.cursor();
         match id {
-            "nav.left" => self.go_cols(-1),
-            "nav.right" => self.go_cols(1),
-            "nav.first_col" => self.cur.1 = 0,
-            "nav.last_col" => self.cur.1 = self.cols() - 1,
-            "cell.edit" => {
-                self.mode = Mode::Edit(Input::new(self.table.value(self.cur.0, self.cur.1)))
-            }
+            "nav.left" => self.view.move_col_by(-1),
+            "nav.right" => self.view.move_col_by(1),
+            "nav.first_col" => self.view.set_col(0),
+            "nav.last_col" => self.view.set_col(self.cols() - 1),
+            "cell.edit" => self.mode = Mode::Edit(Input::new(self.table.value(r, c))),
             "cell.clear" => {
                 self.change();
-                self.table.set(self.cur.0, self.cur.1, "");
+                self.table.set(r, c, "");
             }
             "cell.copy" => {
-                self.copied = self.table.value(self.cur.0, self.cur.1);
+                self.copied = self.table.value(r, c);
                 let _ = ui::clipboard::copy(&self.copied);
                 self.show_message("copied", false);
             }
             "cell.paste" => {
                 self.change();
                 let text = self.copied.clone();
-                self.table.set(self.cur.0, self.cur.1, &text);
+                self.table.set(r, c, &text);
             }
             "row.add" => {
                 self.change();
-                self.table.insert_row(self.cur.0 + 1);
-                self.cur.0 += 1;
+                self.table.insert_row(r + 1);
+                self.set_cursor((r + 1, c));
             }
             "row.add_above" => {
                 self.change();
-                self.table.insert_row(self.cur.0);
+                self.table.insert_row(r);
             }
             "row.delete" => self.mode = Mode::Confirm(Confirm::DeleteRow),
-            "row.up" if self.cur.0 > 0 => {
+            "row.up" if r > 0 => {
                 self.change();
-                self.table.move_row(self.cur.0, self.cur.0 - 1);
-                self.cur.0 -= 1;
+                self.table.move_row(r, r - 1);
+                self.set_cursor((r - 1, c));
             }
-            "row.down" if self.cur.0 + 1 < self.table.row_count() => {
+            "row.down" if r + 1 < self.table.row_count() => {
                 self.change();
-                self.table.move_row(self.cur.0, self.cur.0 + 1);
-                self.cur.0 += 1;
+                self.table.move_row(r, r + 1);
+                self.set_cursor((r + 1, c));
             }
             "col.add" => {
                 self.change();
-                self.table.insert_col(self.cur.1 + 1);
-                self.cur.1 += 1;
+                self.table.insert_col(c + 1);
+                self.set_cursor((r, c + 1));
             }
             "col.delete" => self.mode = Mode::Confirm(Confirm::DeleteCol),
-            "col.left" if self.cur.1 > 0 => {
+            "col.left" if c > 0 => {
                 self.change();
-                self.table.move_col(self.cur.1, self.cur.1 - 1);
-                self.cur.1 -= 1;
+                self.table.move_col(c, c - 1);
+                self.set_cursor((r, c - 1));
             }
-            "col.right" if self.cur.1 + 1 < self.table.col_count() => {
+            "col.right" if c + 1 < self.table.col_count() => {
                 self.change();
-                self.table.move_col(self.cur.1, self.cur.1 + 1);
-                self.cur.1 += 1;
+                self.table.move_col(c, c + 1);
+                self.set_cursor((r, c + 1));
             }
             "sort.asc" | "sort.desc" => {
                 self.change();
-                self.table.sort_by(self.cur.1, id == "sort.desc", self.header);
-                self.show_message(format!("sorted by column {}", self.cur.1 + 1), false);
+                self.table.sort_by(c, id == "sort.desc", self.header);
+                self.show_message(format!("sorted by column {}", c + 1), false);
             }
             "view.header" => {
                 self.header = !self.header;
@@ -288,17 +276,17 @@ impl Grid {
             "find.prev" => self.find_next(false),
             "undo" => match self.undo.pop() {
                 Some((t, cur)) => {
-                    self.redo.push((std::mem::replace(&mut self.table, t), self.cur));
-                    self.cur = cur;
-                    self.clamp();
+                    self.redo.push((std::mem::replace(&mut self.table, t), (r, c)));
+                    self.view.reset_widths();
+                    self.set_cursor(cur);
                 }
                 None => self.show_message("nothing to undo", true),
             },
             "redo" => match self.redo.pop() {
                 Some((t, cur)) => {
-                    self.undo.push((std::mem::replace(&mut self.table, t), self.cur));
-                    self.cur = cur;
-                    self.clamp();
+                    self.undo.push((std::mem::replace(&mut self.table, t), (r, c)));
+                    self.view.reset_widths();
+                    self.set_cursor(cur);
                 }
                 None => self.show_message("nothing to redo", true),
             },
@@ -340,35 +328,24 @@ impl Grid {
         let needle = self.find.to_lowercase();
         let (rows, cols) = (self.table.row_count(), self.table.col_count());
         let total = rows * cols;
-        let at = self.cur.0 * cols + self.cur.1;
+        let (r, c) = self.cursor();
+        let at = r * cols + c;
         for step in 1..=total {
             let i = if forward { (at + step) % total } else { (at + total - step % total) % total };
             let (r, c) = (i / cols, i % cols);
             if self.table.value(r, c).to_lowercase().contains(&needle) {
-                self.cur = (r, c);
+                self.set_cursor((r, c));
                 return;
             }
         }
         self.show_message(format!("{} not found", self.find), true);
     }
 
-    /// The drawn width of each column, from its longest cell within sane bounds.
-    fn widths(&self) -> Vec<usize> {
-        (0..self.cols())
-            .map(|c| {
-                (0..self.table.row_count().min(MEASURE_ROWS))
-                    .map(|r| self.table.value(r, c).replace('\n', " ").width())
-                    .max()
-                    .unwrap_or(0)
-                    .clamp(MIN_COL, MAX_COL)
-            })
-            .collect()
-    }
-
     /// Draws the table with a row-number gutter, the header and a footer, scrolling to keep the
     /// cursor in view.
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context, focused: bool) {
         let theme = cx.theme;
+        let (cur_row, cur_col) = self.cursor();
         let c = &theme.colors;
         let name = self
             .path
@@ -397,16 +374,16 @@ impl Grid {
                 cursor: i.visual_cursor(),
             },
             Mode::Confirm(w) => Footer::Question(match w {
-                Confirm::DeleteRow => format!("Delete row {}? d again", self.cur.0 + 1),
-                Confirm::DeleteCol => format!("Delete column {}? d again", self.cur.1 + 1),
+                Confirm::DeleteRow => format!("Delete row {}? d again", cur_row + 1),
+                Confirm::DeleteCol => format!("Delete column {}? d again", cur_col + 1),
                 Confirm::Quit => "Unsaved changes. q again to discard".to_string(),
             }),
             Mode::Normal => match &self.message {
                 Some(notice) => Footer::Notice(notice),
                 None => Footer::Hint(format!(
                     "R{} C{}  {} rows × {} cols{}",
-                    self.cur.0 + 1,
-                    self.cur.1 + 1,
+                    cur_row + 1,
+                    cur_col + 1,
                     self.table.row_count(),
                     self.table.col_count(),
                     if self.modified() { "  modified" } else { "" }
@@ -415,120 +392,40 @@ impl Grid {
         };
         footer.render(cx, footer_row, buf);
 
-        let widths = self.widths();
-        let digits = self.table.row_count().to_string().len().max(2);
-        let gutter = digits + 1;
+        // The view draws the rows: the row numbers, the columns (as wide as their cells, within
+        // bounds) with a `│` between, the cursor cell and its row, the header row pinned on top.
         let header = self.header && self.table.row_count() > 0;
-        let head_rows = usize::from(header);
-        self.page = (usize::from(inner.height)).saturating_sub(head_rows).max(1);
-
-        // Scroll to keep the cursor cell on screen.
-        let body_row = self.cur.0.saturating_sub(head_rows);
-        if self.cur.0 >= head_rows {
-            if body_row < self.top {
-                self.top = body_row;
-            } else if body_row >= self.top + self.page {
-                self.top = body_row + 1 - self.page;
-            }
-        }
-        let avail = usize::from(inner.width).saturating_sub(gutter);
-        if self.cur.1 < self.left {
-            self.left = self.cur.1;
-        }
-        // Move `left` right until the cursor column fits.
-        while self.left < self.cur.1
-            && widths[self.left..=self.cur.1].iter().map(|w| w + 3).sum::<usize>() > avail
-        {
-            self.left += 1;
-        }
-
-        let muted = Style::new().fg(c.muted.into());
-        let numeric = |r: usize, col: usize| {
-            let v = self.table.value(r, col);
-            !v.is_empty() && v.trim().parse::<f64>().is_ok()
-        };
-        let draw_row = |r: usize, y: u16, buf: &mut Buffer| {
+        let columns: Vec<Column> = (0..self.table.col_count())
+            .map(|_| Column::new("col", "", Width::Fit { max: MAX_COL }).min(MIN_COL))
+            .collect();
+        let table = &self.table;
+        let row = |r: usize| {
             let is_head = header && r == 0;
-            let bar_style = if r == self.cur.0 { ui::list::active(theme) } else { Style::new() };
-            let bar = Rect {
-                y,
-                height: 1,
-                ..Rect {
-                    x: inner.x.saturating_sub(1).max(area.x + 1),
-                    width: inner.width + 1,
-                    ..inner
-                }
+            let style = if is_head {
+                Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
+            } else {
+                Style::new().fg(c.fg.into())
             };
-            buf.set_style(bar, bar_style);
-            buf.set_string(inner.x, y, format!("{:>w$} ", r + 1, w = digits), muted);
-            let mut x = inner.x + gutter as u16;
-            #[allow(clippy::needless_range_loop)] // `col` also indexes the table
-            for col in self.left..self.cols() {
-                if x >= inner.right() {
-                    break;
-                }
-                let w = widths[col];
-                let text = self.table.value(r, col).replace('\n', "⏎");
-                let room = (inner.right() - x) as usize;
-                let shown = fit(&text, w.min(room), numeric(r, col) && !is_head);
-                let mut style = if is_head {
-                    Style::new().fg(c.accent.into()).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::new().fg(c.fg.into())
-                };
-                if (r, col) == self.cur {
-                    style = ui::list::style(theme, true, None).fg(c.fg.into());
-                } else if r == self.cur.0 {
-                    style = style.patch(bar_style);
-                }
-                buf.set_string(x, y, &shown, style);
-                x += w as u16;
-                if x < inner.right() {
-                    buf.set_string(x + 1, y, "│", muted);
-                }
-                x += 3;
-            }
+            let cells = (0..table.col_count())
+                .map(|col| {
+                    let value = table.value(r, col);
+                    let numeric = !value.is_empty() && value.trim().parse::<f64>().is_ok();
+                    let cell = Cell::from(Span::styled(value.replace('\n', "⏎"), style));
+                    if numeric && !is_head { cell.right() } else { cell }
+                })
+                .collect();
+            Row::new(cells)
         };
-        let mut y = inner.y;
-        if header {
-            draw_row(0, y, buf);
-            y += 1;
-        }
-        for r in (self.top + head_rows)
-            ..self.table.row_count().max(head_rows).min(self.top + head_rows + self.page)
-        {
-            if y >= inner.bottom() {
-                break;
-            }
-            draw_row(r, y, buf);
-            y += 1;
-        }
-        if self.table.row_count() == 0 {
-            buf.set_string(inner.x + 1, inner.y, "empty table (a adds a row)", muted);
-        }
+        self.view
+            .view(table.row_count(), &columns, row)
+            .pane(area)
+            .focused(focused)
+            .numbered(true)
+            .separator(true)
+            .pinned(|first| if header && first > 0 { vec![0] } else { Vec::new() })
+            .empty("empty table (a adds a row)")
+            .render(cx, inner, buf);
     }
-}
-
-/// `text` cut with `…` to `width` columns, padded to it (numbers at the right).
-fn fit(text: &str, width: usize, right: bool) -> String {
-    let mut out = String::new();
-    let mut w = 0;
-    let total = text.width();
-    for ch in text.chars() {
-        let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
-        let limit = if total > width { width.saturating_sub(1) } else { width };
-        if w + cw > limit {
-            break;
-        }
-        out.push(ch);
-        w += cw;
-    }
-    if total > width {
-        out.push('…');
-        w += 1;
-    }
-    let pad = " ".repeat(width.saturating_sub(w));
-    if right { format!("{pad}{out}") } else { format!("{out}{pad}") }
 }
 
 /// Lets the shared app shell host the grid: it owns the keymap and the overlays, the grid draws
@@ -569,19 +466,19 @@ impl ui::app::Screen for Grid {
 /// The rows are what the shared movement walks.
 impl Navigable for Grid {
     fn move_by(&mut self, delta: isize) {
-        self.go_rows(delta);
+        self.view.move_by(delta);
     }
 
     fn page_row_count(&self) -> usize {
-        self.page
+        self.view.page_row_count()
     }
 
     fn move_to_top(&mut self) {
-        self.cur.0 = 0;
+        self.view.move_to_top();
     }
 
     fn move_to_bottom(&mut self) {
-        self.cur.0 = self.rows() - 1;
+        self.view.move_to_bottom();
     }
 }
 

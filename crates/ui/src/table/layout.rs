@@ -143,23 +143,26 @@ pub(crate) struct Placed {
 
 /// The blank cells between two columns: the toolkit's one blank cell.
 pub(crate) const GAP: usize = 1;
+/// The cells between two columns with the separator on: ` │ `.
+pub(crate) const SEPARATED_GAP: usize = 3;
 
 /// Where each of `columns` goes in a row `room` cells wide (`None`: not drawn), given the width each
 /// wants (`wants`: the fixed or measured width, or a flexible column's minimum). With
-/// `Overflow::Scroll` the columns before `first` are scrolled off to the left.
+/// `Overflow::Scroll` the columns before `first` are scrolled off to the left; `gap` is the cells
+/// between two columns.
 pub(crate) fn resolve(
     columns: &[Column],
     wants: &[usize],
     room: usize,
-    overflow: Overflow,
-    first: usize,
+    (overflow, first): (Overflow, usize),
+    gap: usize,
 ) -> Vec<Option<Placed>> {
     let mut width: Vec<usize> = wants.to_vec();
     let mut shown: Vec<bool> =
         (0..columns.len()).map(|i| overflow == Overflow::Drop || i >= first).collect();
     let total = |width: &[usize], shown: &[bool]| {
         let on: Vec<usize> = (0..columns.len()).filter(|&i| shown[i] && width[i] > 0).collect();
-        on.iter().map(|&i| width[i]).sum::<usize>() + on.len().saturating_sub(1) * GAP
+        on.iter().map(|&i| width[i]).sum::<usize>() + on.len().saturating_sub(1) * gap
     };
     if overflow == Overflow::Drop {
         while total(&width, &shown) > room {
@@ -189,7 +192,7 @@ pub(crate) fn resolve(
                 extra * weight(&columns[i]) / weights
             };
             // A flexible column that wanted nothing had no gap counted for it.
-            let share = if width[i] == 0 && share > 0 { share.saturating_sub(GAP) } else { share };
+            let share = if width[i] == 0 && share > 0 { share.saturating_sub(gap) } else { share };
             width[i] += share;
             given += share;
         }
@@ -213,7 +216,7 @@ pub(crate) fn resolve(
         }
         let w = width[i].min(room - x);
         placed[i] = Some(Placed { x: x as u16, width: w as u16 });
-        x += w + GAP;
+        x += w + gap;
     }
     placed
 }
