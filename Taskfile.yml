@@ -19,7 +19,9 @@ tasks:
   test:
     desc: Run the tests.
     cmds:
-      - cargo nextest run --workspace --locked --no-tests=pass
+      # A git hook (pre-push) exports GIT_DIR and friends; the tests run git in temporary repos, and
+      # with those set their `git init` and commits would land in this repo instead.
+      - env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR -u GIT_OBJECT_DIRECTORY -u GIT_PREFIX cargo nextest run --workspace --locked --no-tests=pass
   scan:
     desc: Run the vulnerability scanners.
     cmds:
