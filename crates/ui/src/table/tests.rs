@@ -179,7 +179,9 @@ fn columns_drop_by_priority_when_they_do_not_fit() {
 
 #[test]
 fn the_header_lines_up_with_the_rows_and_marks_the_sort() {
-    let columns = procs();
+    // The sort mark follows the title after a blank cell, so the sorted column is a cell wider.
+    let mut columns = procs();
+    columns[2] = Column::new("cpu", "CPU", Width::Fixed(5)).right().priority(1).sortable(true);
     let mut table = Table::new().with_sort("cpu", true);
     let theme = Theme::default();
     let motion = crate::anim::Motion::new();
@@ -191,8 +193,24 @@ fn the_header_lines_up_with_the_rows_and_marks_the_sort() {
         area,
         &mut buf,
     );
-    assert_eq!(line(&buf, 0), "  PID NAME         CPU▼ STATE");
+    assert_eq!(line(&buf, 0), "  PID NAME        CPU ▼ STATE");
     assert_eq!(line(&buf, 1), "   42 init          1.5 Run");
+}
+
+#[test]
+fn a_filled_cell_tints_its_cells_from_the_left_up_to_its_share() {
+    let columns = vec![Column::new("cpu", "CPU", Width::Fixed(4)).right()];
+    let mut table = Table::new();
+    let theme = Theme::default();
+    let motion = crate::anim::Motion::new();
+    let area = Rect::new(0, 0, 4, 1);
+    let mut buf = Buffer::empty(area);
+    let row = |_| Row::new(vec![Cell::from("50").right().filled(0.5)]);
+    table.view(1, &columns, row).render(&Context::with_motion(&theme, &motion), area, &mut buf);
+    let bg = |x| buf[(x, 0)].bg;
+    assert_ne!(bg(0), bg(3), "the left half is tinted");
+    assert_ne!(bg(1), bg(3));
+    assert_eq!(bg(2), bg(3), "the right half is the row's own background");
 }
 
 #[test]

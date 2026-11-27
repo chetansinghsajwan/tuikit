@@ -1,6 +1,14 @@
 //! Graphs and meters: the one place that draws a history of values as bars and a ratio as a filled
 //! bar, so every tool that shows a load (CPU, memory, a transfer rate) draws it the same way.
 
+/// The scale at the left edge of a graph.
+mod axis;
+/// Two histories drawn as one graph.
+mod pair;
+
+pub use axis::axis;
+pub use pair::history_pair;
+
 use crate::anim;
 use crate::component::{Component, Context};
 use crate::theme::{Theme, mix};
@@ -116,23 +124,26 @@ pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: impl Fn(f32)
     }
 }
 
-/// Draws a bar of `ratio` (0 to 1) across one row of `area`: the filled part, each cell colored by
-/// `color` from its place along the bar (0 at the left edge, 1 at the right: `heat` makes it a
-/// gradient), the rest as a faint track in `track`.
+/// Draws a bar of `ratio` (0 to 1) across one row of `area`: a thin horizontal line, heavy where it is
+/// filled (each cell colored by `color` from its place along the bar, 0 at the left edge and 1 at the
+/// right: `heat` makes it a gradient, in half cells), the rest a light line in `track`. The bar only
+/// grows sideways; it never fills a cell upward.
 pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: impl Fn(f32) -> Color, track: Color) {
     if area.width == 0 || area.height == 0 {
         return;
     }
     let ratio = if ratio.is_finite() { ratio.clamp(0.0, 1.0) } else { 0.0 };
-    let eighths = (ratio * f32::from(area.width) * 8.0).round() as usize;
+    let halves = (ratio * f32::from(area.width) * 2.0).round() as usize;
+    let halves = if ratio > 0.0 { halves.max(1) } else { 0 };
     for i in 0..area.width {
-        let here = eighths.saturating_sub(usize::from(i) * 8).min(8);
+        let here = halves.saturating_sub(usize::from(i) * 2).min(2);
         let cell = &mut buf[(area.x + i, area.y)];
         if here == 0 {
-            cell.set_char('▁').set_style(Style::new().fg(track));
+            cell.set_char('─').set_style(Style::new().fg(track));
         } else {
             let place = (f32::from(i) + 0.5) / f32::from(area.width);
-            cell.set_char(glyph(here)).set_style(Style::new().fg(color(place)));
+            let glyph = if here == 2 { '━' } else { '╸' };
+            cell.set_char(glyph).set_style(Style::new().fg(color(place)));
         }
     }
 }
@@ -141,11 +152,12 @@ pub fn meter(buf: &mut Buffer, area: Rect, ratio: f32, color: impl Fn(f32) -> Co
 /// value in the color of the load, with one blank cell between the parts so they never touch. The
 /// label and the value take `label_width` and `value_width` cells, so the bars of a column of rows
 /// line up; the bar takes the rest. A label longer than its width ends in `…`. With `reversed` a
-/// high value is the good one (a battery): the gradient and the value's color run the other way.
+/// high value is the good one (a battery): the gradient and the value's color run the other way. A
+/// `ratio` of `None` is a reading that is not available: an empty track, and `value` muted.
 pub struct MeterRow<'a> {
     pub label: &'a str,
     pub label_width: usize,
-    pub ratio: f32,
+    pub ratio: Option<f32>,
     pub value: &'a str,
     pub value_width: usize,
     pub reversed: bool,
@@ -168,9 +180,13 @@ impl Component for MeterRow<'_> {
             height: 1,
             ..area
         };
-        meter(buf, bar, self.ratio, tone, theme.colors.border.into());
+        let ratio = self.ratio.unwrap_or(0.0);
+        meter(buf, bar, ratio, tone, theme.colors.border.into());
         let value = format!("{:>width$}", self.value, width = self.value_width);
-        let color = Style::new().fg(tone(self.ratio));
+        let color = match self.ratio {
+            Some(ratio) => Style::new().fg(tone(ratio)),
+            None => muted,
+        };
         buf.set_stringn(bar.right() + 1, area.y, value, self.value_width, color);
     }
 }

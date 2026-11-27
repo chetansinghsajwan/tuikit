@@ -43,9 +43,21 @@ fn meter_fills_from_the_left_and_leaves_a_track() {
     let area = Rect::new(0, 0, 4, 1);
     let mut buf = Buffer::empty(area);
     meter(&mut buf, area, 0.5, |_| Color::Green, Color::DarkGray);
-    assert_eq!(buf[(0, 0)].symbol(), "█");
-    assert_eq!(buf[(1, 0)].symbol(), "█");
-    assert_eq!(buf[(2, 0)].symbol(), "▁");
+    assert_eq!(buf[(0, 0)].symbol(), "━");
+    assert_eq!(buf[(1, 0)].symbol(), "━");
+    assert_eq!(buf[(2, 0)].symbol(), "─");
+}
+
+#[test]
+fn meter_ends_in_a_half_cell_and_never_hides_a_small_load() {
+    let area = Rect::new(0, 0, 4, 1);
+    let mut buf = Buffer::empty(area);
+    meter(&mut buf, area, 0.375, |_| Color::Green, Color::DarkGray);
+    assert_eq!(buf[(0, 0)].symbol(), "━");
+    assert_eq!(buf[(1, 0)].symbol(), "╸");
+    assert_eq!(buf[(2, 0)].symbol(), "─");
+    meter(&mut buf, area, 0.001, |_| Color::Green, Color::DarkGray);
+    assert_eq!(buf[(0, 0)].symbol(), "╸");
 }
 
 #[test]
@@ -122,7 +134,7 @@ fn a_meter_row_keeps_a_blank_cell_between_its_parts() {
         MeterRow {
             label: "7",
             label_width: 3,
-            ratio: 0.5,
+            ratio: Some(0.5),
             value: "50%",
             value_width: 4,
             reversed: false,
@@ -134,4 +146,67 @@ fn a_meter_row_keeps_a_blank_cell_between_its_parts() {
     let row: String = (0..20).map(|x| buf[(x, 0)].symbol().to_string()).collect();
     assert!(row.starts_with("7   "), "label, its width, then one blank: {row:?}");
     assert_eq!(&row[row.len() - 5..], "  50%", "one blank before the value");
+}
+
+#[test]
+fn an_unavailable_meter_row_is_an_empty_track_and_a_muted_value() {
+    let theme = Theme::default();
+    let cx = crate::Context::new(&theme);
+    let area = Rect::new(0, 0, 20, 1);
+    let mut buf = Buffer::empty(area);
+    crate::Component::render(
+        MeterRow {
+            label: "battery",
+            label_width: 7,
+            ratio: None,
+            value: "n/a",
+            value_width: 4,
+            reversed: false,
+        },
+        &cx,
+        area,
+        &mut buf,
+    );
+    let row: String = (0..20).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+    assert!(row.contains('─') && !row.contains('━'), "{row:?}");
+    assert!(row.ends_with(" n/a"), "{row:?}");
+    assert_eq!(buf[(19, 0)].fg, Color::from(theme.colors.muted));
+}
+
+#[test]
+fn history_pair_blends_where_both_overlap_and_keeps_the_taller_color_above() {
+    let area = Rect::new(0, 0, 1, 2);
+    let mut buf = Buffer::empty(area);
+    let (a, b) = (Color::Rgb(200, 0, 0), Color::Rgb(0, 0, 200));
+    history_pair(&mut buf, area, (&[1.0], &[0.5]), (a, b));
+    assert_eq!(buf[(0, 1)].symbol(), "█");
+    assert_eq!(buf[(0, 1)].fg, Color::Rgb(100, 0, 100), "both fill the lower cell");
+    assert_eq!(buf[(0, 0)].symbol(), "█");
+    assert_eq!(buf[(0, 0)].fg, a, "only the taller one reaches the upper cell");
+}
+
+#[test]
+fn history_pair_draws_a_series_alone_in_its_own_color() {
+    let area = Rect::new(0, 0, 2, 1);
+    let mut buf = Buffer::empty(area);
+    history_pair(&mut buf, area, (&[0.5, 0.0], &[0.0, 1.0]), (Color::Red, Color::Blue));
+    assert_eq!(buf[(0, 0)].symbol(), "▄");
+    assert_eq!(buf[(0, 0)].fg, Color::Red);
+    assert_eq!(buf[(1, 0)].symbol(), "█");
+    assert_eq!(buf[(1, 0)].fg, Color::Blue, "only the second series has a reading");
+}
+
+#[test]
+fn axis_labels_the_top_and_bottom_and_returns_the_graph_area() {
+    let theme = Theme::default();
+    let cx = crate::Context::new(&theme);
+    let area = Rect::new(0, 0, 12, 3);
+    let mut buf = Buffer::empty(area);
+    let rest = axis(&cx, &mut buf, area, "1.2M/s", "0");
+    assert_eq!(rest, Rect::new(7, 0, 5, 3));
+    let top: String = (0..6).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+    assert_eq!(top, "1.2M/s");
+    assert_eq!(buf[(5, 2)].symbol(), "0", "right aligned under the top label");
+    let narrow = Rect::new(0, 0, 8, 3);
+    assert_eq!(axis(&cx, &mut buf, narrow, "1.2M/s", "0"), narrow, "no room: no scale");
 }

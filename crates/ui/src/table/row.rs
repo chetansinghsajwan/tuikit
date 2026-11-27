@@ -4,6 +4,7 @@
 use super::layout::{Align, Column, Kind, Placed};
 use crate::component::Context;
 use crate::list::{active, clip_spans, fit, style};
+use crate::theme::mix;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -19,11 +20,21 @@ pub struct Cell {
     pub shrink: Option<usize>,
     /// The side of the cell the text sits on, instead of its column's (a number in a text column).
     pub align: Option<Align>,
+    /// A load shown as a bar behind the text, filled to this share (0 to 1) of the cell.
+    pub fill: Option<f32>,
 }
 
 impl Cell {
     pub fn new(spans: Vec<Span<'static>>) -> Cell {
-        Cell { spans, shrink: None, align: None }
+        Cell { spans, shrink: None, align: None, fill: None }
+    }
+
+    /// A bar behind the text, filled from the left to `ratio` (0 to 1) of the cell in the heat
+    /// gradient (green to red along the cell), tinted so the text stays readable: a load in a
+    /// column of loads (CPU, memory), where the eye compares the bars before it reads the numbers.
+    pub fn filled(mut self, ratio: f32) -> Cell {
+        self.fill = Some(ratio);
+        self
     }
 
     /// The text sits at the right of the cell, whatever its column says (a number).
@@ -283,6 +294,7 @@ pub(crate) fn paint(
         let column = &columns[i];
         let width = usize::from(at.width);
         let align = cell.align.unwrap_or(column.align);
+        let fill = cell.fill;
         let mut spans = cell.fit(width);
         if column.muted {
             spans =
@@ -299,12 +311,38 @@ pub(crate) fn paint(
         Paragraph::new(Line::from(spans))
             .style(cell_base)
             .render(Rect { x, y, width: at.width - pad, height: 1 }, buf);
+        if let Some(ratio) = fill {
+            paint_fill(cx, buf, Rect { x: area.x + at.x, y, width: at.width, height: 1 }, ratio);
+        }
     }
     place.separators(cx, buf, area.x, y, base);
 }
 
+/// The bar behind a cell (`Cell::filled`): the cells from the left up to `ratio` of `at` take the
+/// heat color of their place, mixed into the theme's ground so the text over it stays readable.
+fn paint_fill(cx: &Context, buf: &mut Buffer, at: Rect, ratio: f32) {
+    let theme = cx.theme;
+    let ratio = if ratio.is_finite() { ratio.clamp(0.0, 1.0) } else { 0.0 };
+    let cells = (ratio * f32::from(at.width)).round() as u16;
+    let cells = if ratio > 0.0 { cells.max(1) } else { 0 };
+    for i in 0..cells.min(at.width) {
+        let place = (f32::from(i) + 0.5) / f32::from(at.width);
+        let heat = crate::graph::heat(theme, place);
+        let ground = theme.colors.bg.into();
+        // Without truecolor the tint cannot be mixed: the cell takes the heat color whole.
+        let tint = match mix(heat, ground, FILL_TINT) {
+            Color::Rgb(..) => mix(heat, ground, FILL_TINT),
+            _ => heat,
+        };
+        buf[(at.x + i, at.y)].set_bg(tint);
+    }
+}
+
+/// How much of the heat color a `Cell::filled` bar takes; the rest is the ground.
+const FILL_TINT: u8 = 45;
+
 /// The header: each column's title where its cells go, muted, the sort column accent and bold with `▼`
-/// (largest first) or `▲`.
+/// (largest first) or `▲` after a blank cell.
 pub(crate) fn header(
     cx: &Context,
     buf: &mut Buffer,
@@ -318,7 +356,7 @@ pub(crate) fn header(
         let Some(at) = placed[i] else { continue };
         let span = match sort {
             Some(s) if s.column == column.id => Span::styled(
-                format!("{}{}", column.title, if s.descending { '▼' } else { '▲' }),
+                format!("{} {}", column.title, if s.descending { '▼' } else { '▲' }),
                 Style::new().fg(theme.colors.accent.into()).add_modifier(Modifier::BOLD),
             ),
             _ => Span::styled(column.title.to_string(), Style::new().fg(theme.colors.muted.into())),
@@ -335,5 +373,5 @@ pub(crate) fn header(
 
 /// The width a column's title takes in the header, with room for the sort marker if it can sort.
 pub(crate) fn title_width(column: &Column) -> usize {
-    column.title.width() + usize::from(column.sort.is_some() && !column.title.is_empty())
+    column.title.width() + 2 * usize::from(column.sort.is_some() && !column.title.is_empty())
 }
