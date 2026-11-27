@@ -3,19 +3,31 @@
 
 use crate::procs::Proc;
 use std::collections::VecDeque;
-use std::time::Instant;
-use sysinfo::{Components, Disks, Networks, Pid, ProcessesToUpdate, Signal, System};
+use std::time::{Duration, Instant};
+use sysinfo::{
+    Components, Disks, Networks, Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System,
+    UpdateKind, Users,
+};
 
 /// The battery, which `sysinfo` does not read.
 pub mod battery;
+/// One process in full.
+pub mod details;
+/// The graphics card, read in the background.
+pub mod gpu;
 /// The health of the disks, read once in the background.
 pub mod health;
 
 pub use battery::Battery;
+pub use details::Details;
+pub use gpu::Gpu;
 pub use health::Health;
 
 /// How many readings of each graphed value are kept.
 const HISTORY_SIZE: usize = 300;
+
+/// How often the battery is added to its history: it moves slowly, so a graph of it covers hours.
+const BATTERY_EVERY: Duration = Duration::from_secs(60);
 
 /// The last readings of one value, oldest first.
 #[derive(Debug, Clone, Default)]
@@ -32,12 +44,6 @@ impl Ring {
         self.values.push_back(value);
     }
 
-    /// The largest reading, but never less than `floor` (so a quiet network does not draw its noise
-    /// at full height): what the top of a graph of this ring stands for.
-    pub fn peak(&self, floor: f32) -> f32 {
-        self.values.iter().copied().fold(floor, f32::max)
-    }
-
     /// The readings as 0 to 1 for a graph whose top stands for `peak`.
     pub fn scaled_to(&self, peak: f32) -> Vec<f32> {
         self.values.iter().map(|v| v / peak).collect()
@@ -46,6 +52,12 @@ impl Ring {
     /// The readings as they are.
     pub fn values(&self) -> Vec<f32> {
         self.values.iter().copied().collect()
+    }
+
+    /// The largest of the last `count` readings (what a graph `count` columns wide shows), never
+    /// less than `floor`.
+    pub fn peak_of_last(&self, count: usize, floor: f32) -> f32 {
+        self.values.iter().rev().take(count).copied().fold(floor, f32::max)
     }
 }
 
@@ -89,6 +101,7 @@ pub struct Snapshot {
     pub disks: Vec<DiskInfo>,
     pub temps: Vec<Temp>,
     pub battery: Option<Battery>,
+    pub gpu: Option<Gpu>,
     /// Bytes per second received and sent over all interfaces.
     pub download: u64,
     pub upload: u64,
@@ -103,10 +116,15 @@ pub struct Sampler {
     /// The temperature sensors; `None` when the platform has none to read.
     components: Option<Components>,
     health: health::Watch,
+    gpu: gpu::Watch,
+    users: Users,
     last: Instant,
+    last_battery: Option<Instant>,
     pub snapshot: Snapshot,
     pub cpu_history: Ring,
     pub memory_history: Ring,
+    /// The battery's percent over hours: one reading a minute.
+    pub battery_history: Ring,
     pub download_history: Ring,
     pub upload_history: Ring,
 }
@@ -130,10 +148,14 @@ impl Sampler {
             networks,
             components,
             health: health::Watch::spawn(drives),
+            gpu: gpu::Watch::spawn(),
+            users: Users::new_with_refreshed_list().map_err(|e| e.to_string())?,
             last: Instant::now(),
+            last_battery: None,
             snapshot: Snapshot::default(),
             cpu_history: Ring::default(),
             memory_history: Ring::default(),
+            battery_history: Ring::default(),
             download_history: Ring::default(),
             upload_history: Ring::default(),
         };
@@ -147,7 +169,17 @@ impl Sampler {
         self.last = Instant::now();
         self.system.refresh_cpu_all();
         self.system.refresh_memory();
-        self.system.refresh_processes(ProcessesToUpdate::All, true);
+        self.system.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing()
+                .with_memory()
+                .with_cpu()
+                .with_disk_usage()
+                .with_exe(UpdateKind::OnlyIfNotSet)
+                .with_user(UpdateKind::OnlyIfNotSet)
+                .with_tasks(),
+        );
         self.disks.refresh(true);
         self.networks.refresh(true);
         if let Some(c) = self.components.as_mut() {
@@ -196,6 +228,7 @@ impl Sampler {
             })
             .collect();
         s.battery = battery::read();
+        s.gpu = self.gpu.get();
         s.procs = self
             .system
             .processes()
@@ -209,6 +242,9 @@ impl Sampler {
                 cpu: p.cpu_usage(),
                 memory: p.memory(),
                 status: p.status().to_string(),
+                user: p
+                    .user_id()
+                    .map_or_else(|| "-".to_string(), |uid| user_name(&self.users, uid)),
                 threads: p.tasks().map(|t| t.len()),
                 read: (p.disk_usage().read_bytes as f64 / elapsed) as u64,
                 written: (p.disk_usage().written_bytes as f64 / elapsed) as u64,
@@ -216,6 +252,12 @@ impl Sampler {
             })
             .collect();
 
+        if let Some(b) = s.battery
+            && self.last_battery.is_none_or(|at| at.elapsed() >= BATTERY_EVERY)
+        {
+            self.last_battery = Some(Instant::now());
+            self.battery_history.push(b.percent / 100.0);
+        }
         self.cpu_history.push(s.cpu / 100.0);
         self.memory_history.push(ratio(s.memory_used, s.memory_total));
         self.download_history.push(s.download as f32);
@@ -226,6 +268,11 @@ impl Sampler {
     pub fn signal(&self, pid: u32, signal: Signal) -> bool {
         self.system.process(Pid::from_u32(pid)).and_then(|p| p.kill_with(signal)).unwrap_or(false)
     }
+}
+
+/// The name of the user `uid`, or its number when the machine does not know it.
+fn user_name(users: &Users, uid: &sysinfo::Uid) -> String {
+    users.get_user_by_id(uid).map_or_else(|| uid.to_string(), |u| u.name().to_string())
 }
 
 /// `used` over `total` as 0 to 1; 0 when there is no total (no swap).

@@ -37,6 +37,7 @@ sysinfo = { version = "0.40.4", default-features = false, features = [
   "disk",
   "network",
   "component",
+  "user",
 ] }
 toml = "1.1.8"
 tui-input = "0.15.5"

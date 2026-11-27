@@ -121,7 +121,7 @@ impl Panels {
         let top_is_on = self.cpu || self.memory || self.network || self.sensors;
         let (top, bottom) = match (top_is_on, self.processes) {
             (true, true) => {
-                let height = (body.height * 2 / 5).clamp(6, 18).min(body.height.saturating_sub(3));
+                let height = (body.height / 2).clamp(8, 26).min(body.height.saturating_sub(3));
                 let top = Rect { height, ..body };
                 (Some(top), Some(Rect { y: top.bottom(), height: body.height - height, ..body }))
             }

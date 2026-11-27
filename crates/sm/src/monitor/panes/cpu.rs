@@ -46,7 +46,7 @@ impl Monitor {
         let core_rows = (s.cores.len() as u16).div_ceil(2);
         let graph_rows = rest.height.saturating_sub(core_rows + 1).clamp(1, GRAPH_ROWS);
         let area = Rect { height: graph_rows.min(rest.height), ..rest };
-        let area = graph::axis(cx, buf, area, "100%", "0");
+        let area = graph::axis(cx, buf, area, &[(1.0, "100%"), (0.5, "50%"), (0.0, "0")]);
         let history = self.sampler.cpu_history.values();
         graph::history(buf, area, &history, |v| graph::heat(theme, v));
 

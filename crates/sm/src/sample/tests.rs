@@ -14,12 +14,14 @@ fn ring_drops_the_oldest_reading_when_full() {
 }
 
 #[test]
-fn the_peak_is_never_less_than_the_floor() {
+fn the_peak_of_the_last_readings_ignores_older_ones_and_keeps_the_floor() {
     let mut ring = Ring::default();
-    ring.push(50.0);
-    ring.push(100.0);
-    assert_eq!(ring.peak(1000.0), 1000.0);
-    assert_eq!(ring.peak(10.0), 100.0);
+    for v in [900.0, 5.0, 50.0, 20.0] {
+        ring.push(v);
+    }
+    assert_eq!(ring.peak_of_last(3, 0.0), 50.0, "the 900 is out of sight");
+    assert_eq!(ring.peak_of_last(4, 0.0), 900.0);
+    assert_eq!(ring.peak_of_last(3, 100.0), 100.0);
 }
 
 #[test]

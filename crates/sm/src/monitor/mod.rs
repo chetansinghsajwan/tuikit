@@ -27,7 +27,13 @@ mod panes;
 enum Mode {
     Normal,
     Filter(Input),
-    Confirm { pid: u32, name: String, signal: Signal },
+    Confirm {
+        pid: u32,
+        name: String,
+        signal: Signal,
+    },
+    /// The popup with everything about one process.
+    Details(u32),
 }
 
 /// The blank cells between the two columns of core meters.
@@ -123,6 +129,15 @@ impl Monitor {
         self.message = Some(Notice::new(text, is_error));
     }
 
+    /// Opens the details of the process under the cursor.
+    fn open_details(&mut self) {
+        let rows = self.rows();
+        let Some(row) = rows.get(self.list.cursor()) else { return };
+        let pid = self.sampler.snapshot.procs[row.index].pid;
+        self.sampler.load_details(pid);
+        self.mode = Mode::Details(pid);
+    }
+
     /// Asks before sending `signal` to the process under the cursor.
     fn ask_signal(&mut self, signal: Signal) {
         let rows = self.rows();
@@ -143,10 +158,11 @@ impl Monitor {
                 "Send {} to {name} ({pid})? y confirms",
                 if *signal == Signal::Kill { "SIGKILL" } else { "SIGTERM" }
             )),
+            Mode::Details(_) => Footer::Hint("esc close".to_string()),
             Mode::Normal => match &self.message {
                 Some(notice) => Footer::Notice(notice),
                 None => Footer::Hint(format!(
-                    "s sort  r reverse  t tree  / filter  x terminate  X kill  1-5 panels  ? help  q quit  every {}ms",
+                    "s sort  r reverse  t tree  / filter  enter details  x terminate  X kill  1-5 panels  ? help  q quit  every {}ms",
                     self.interval.as_millis()
                 )),
             },
@@ -181,6 +197,14 @@ impl Monitor {
                     } else {
                         self.say(format!("could not signal {name} ({pid})"), true);
                     }
+                }
+            }
+            Mode::Details(pid) => {
+                let closes = ui::keys::pressed(ev).is_some_and(|key| {
+                    matches!(key.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'i'))
+                });
+                if !closes {
+                    self.mode = Mode::Details(pid);
                 }
             }
             Mode::Normal => {}
@@ -219,6 +243,9 @@ impl Screen for Monitor {
             cx.motion.request_frame();
         }
         self.draw_footer(footer, buf, cx);
+        if let Mode::Details(pid) = self.mode {
+            self.draw_details(pid, area, buf, cx);
+        }
     }
 
     /// A filter or a question is open: the keys are theirs.
@@ -254,6 +281,7 @@ impl Screen for Monitor {
             "panel.network" => self.toggle_panel(Panel::Network),
             "panel.processes" => self.toggle_panel(Panel::Processes),
             "panel.sensors" => self.toggle_panel(Panel::Sensors),
+            "proc.details" => self.open_details(),
             "proc.term" => self.ask_signal(Signal::Term),
             "proc.kill" => self.ask_signal(Signal::Kill),
             "quit" => return Request::Quit,

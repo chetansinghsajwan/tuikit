@@ -8,7 +8,10 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ui::table::{Cell, Column, Width};
-use ui::{Component, Pane};
+use ui::{Component, Pane, graph};
+
+/// How many threads make a process red.
+const THREADS_HOT: f32 = 128.0;
 
 impl Monitor {
     /// The process pane: a line of facts (how many, the filter), then the rows with the cursor. The
@@ -34,6 +37,7 @@ impl Monitor {
         let muted = Style::new().fg(theme.colors.muted.into());
         let inner = Self::info(buf, inner, vec![Span::styled(facts, muted)]);
         let procs = &self.sampler.snapshot.procs;
+        let memory_total = self.sampler.snapshot.memory_total.max(1) as f32;
         let row = |i: usize| {
             let p = &procs[rows[i].index];
             // The row keeps its identity (the pid) and never flashes when the numbers change.
@@ -42,12 +46,30 @@ impl Monitor {
                 content: 1,
                 cells: vec![
                     Cell::from(p.pid.to_string()),
+                    Cell::from(p.user.clone()),
                     Cell::from(p.name.clone()),
-                    Cell::from(format!("{:.1}", p.cpu)).right().filled(p.cpu / 100.0),
-                    Cell::from(format::bytes(p.memory)),
-                    Cell::from(p.threads.map_or("-".to_string(), |n| n.to_string())),
-                    Cell::from(format::rate(p.read)),
-                    Cell::from(format::rate(p.written)),
+                    // A number that measures a load is colored by how hot it is.
+                    Cell::from(graph::reading(theme, format!("{:.1}", p.cpu), p.cpu / 100.0)),
+                    // A process is a small share of the machine: a quarter of it is red.
+                    Cell::from(graph::reading(
+                        theme,
+                        format::bytes(p.memory),
+                        p.memory as f32 / memory_total * 4.0,
+                    )),
+                    Cell::from(match p.threads {
+                        Some(n) => graph::reading(theme, n.to_string(), n as f32 / THREADS_HOT),
+                        None => Span::raw("-"),
+                    }),
+                    Cell::from(graph::reading(
+                        theme,
+                        format::rate(p.read),
+                        format::rate_load(p.read),
+                    )),
+                    Cell::from(graph::reading(
+                        theme,
+                        format::rate(p.written),
+                        format::rate_load(p.written),
+                    )),
                     Cell::from(format::duration(p.run_time)),
                     Cell::from(p.status.clone()),
                 ],
@@ -73,6 +95,7 @@ pub(in crate::monitor) fn columns() -> Vec<Column> {
     };
     vec![
         sortable(Column::new("pid", "PID", Width::Fixed(7)).right().muted(), Sort::Pid),
+        Column::new("user", "USER", Width::Fit { max: 12 }).muted().priority(4),
         sortable(Column::new("name", "NAME", Width::Flex(1)).min(12), Sort::Name),
         // The title and the sort mark after a blank cell take 6.
         sortable(number("cpu", "CPU%", 6, 1), Sort::Cpu),

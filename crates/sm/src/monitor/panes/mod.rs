@@ -3,6 +3,8 @@
 
 /// The CPU pane.
 mod cpu;
+/// The details popup of one process.
+mod details;
 /// The memory pane.
 mod memory;
 /// The network pane.

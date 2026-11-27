@@ -36,6 +36,12 @@ pub const ACTIONS: &[Action] = &[
         basic: false,
     },
     Action {
+        id: "proc.details",
+        name: "details",
+        desc: "show everything about the process: its user, command, folder, memory and children",
+        basic: false,
+    },
+    Action {
         id: "proc.term",
         name: "terminate",
         desc: "ask the process to stop (SIGTERM; asks first)",

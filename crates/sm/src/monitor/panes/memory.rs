@@ -11,6 +11,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use ui::graph;
 
+/// The most rows the memory history takes.
+const HISTORY_ROWS: u16 = 4;
+
 /// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar filled to
 /// `shown` (0 to 1), which glides to the true ratio.
 struct Gauge<'a> {
@@ -37,19 +40,19 @@ impl Monitor {
         if y + 1 >= area.bottom() {
             return area.bottom();
         }
-        let text = match usage {
-            Some((used, total)) => format!(
-                "  {} / {}  {:.0}%",
-                format::bytes(used),
-                format::bytes(total),
-                ratio(used, total) * 100.0
-            ),
-            None => "  n/a".to_string(),
-        };
-        let mut spans = vec![
-            Span::raw(label.to_string()),
-            Span::styled(text, Style::new().fg(theme.colors.muted.into())),
-        ];
+        let muted = Style::new().fg(theme.colors.muted.into());
+        let mut spans = vec![Span::raw(label.to_string())];
+        match usage {
+            Some((used, total)) => {
+                let r = ratio(used, total);
+                spans.push(Span::styled(
+                    format!("  {} / {}  ", format::bytes(used), format::bytes(total)),
+                    muted,
+                ));
+                spans.push(graph::reading(theme, format!("{:.0}%", r * 100.0), r));
+            }
+            None => spans.push(Span::styled("  n/a", muted)),
+        }
         spans.extend(notes);
         let row = |y| Rect { y, height: 1, ..area };
         Paragraph::new(Line::from(spans)).render(row(y), buf);
@@ -79,6 +82,7 @@ impl Monitor {
         let mut y = inner.y;
         let gauge = Gauge::new("mem", Some((s.memory_used, s.memory_total)), memory);
         y = Self::draw_meter(inner, buf, cx, y, gauge);
+        y = self.draw_memory_history(inner, buf, cx, y);
         // A machine without swap has none to show: the pane says so.
         let usage = (s.swap_total > 0).then_some((s.swap_used, s.swap_total));
         y = Self::draw_meter(inner, buf, cx, y, Gauge::new("swap", usage, swap));
@@ -107,5 +111,24 @@ impl Monitor {
             }
             y = Self::draw_meter(inner, buf, cx, y, gauge);
         }
+    }
+
+    /// The history of memory use as a graph under its meter, when the pane is tall enough to keep
+    /// the swap meter below it (a graph under two rows is not worth the room); returns the row after
+    /// it.
+    fn draw_memory_history(&self, inner: Rect, buf: &mut Buffer, cx: &ui::Context, y: u16) -> u16 {
+        let theme = cx.theme;
+        let swap_rows = 3;
+        let rows = inner.bottom().saturating_sub(y + swap_rows).min(HISTORY_ROWS);
+        if rows < 2 {
+            return y;
+        }
+        let total = self.sampler.snapshot.memory_total;
+        let (high, middle) = (format::bytes(total), format::bytes(total / 2));
+        let area = Rect { y, height: rows, ..inner };
+        let area = graph::axis(cx, buf, area, &[(1.0, &high), (0.5, &middle), (0.0, "0")]);
+        let history = self.sampler.memory_history.values();
+        graph::history(buf, area, &history, |v| graph::heat(theme, v));
+        y + rows + 1
     }
 }

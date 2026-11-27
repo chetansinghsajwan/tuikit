@@ -15,6 +15,8 @@ pub struct Proc {
     /// Resident memory, in bytes.
     pub memory: u64,
     pub status: String,
+    /// The user it runs as.
+    pub user: String,
     /// How many threads it runs, when the platform says.
     pub threads: Option<usize>,
     /// Bytes per second it reads from and writes to disk.

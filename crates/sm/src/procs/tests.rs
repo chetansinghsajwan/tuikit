@@ -10,6 +10,7 @@ fn proc(pid: u32, parent: Option<u32>, name: &str, cpu: f32, memory: u64) -> Pro
         cpu,
         memory,
         status: "Run".into(),
+        user: "root".into(),
         threads: Some(1),
         read: 0,
         written: 0,

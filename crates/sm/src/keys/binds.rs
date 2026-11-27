@@ -9,6 +9,7 @@ pub const DEFAULT_BINDINGS: &[DefaultBinding] = &[
     DefaultBinding { id: "view.tree", keys: &["t", "leader v t"] },
     DefaultBinding { id: "filter.start", keys: &["/", "f"] },
     DefaultBinding { id: "filter.clear", keys: &["esc"] },
+    DefaultBinding { id: "proc.details", keys: &["enter", "i", "leader p i"] },
     DefaultBinding { id: "proc.term", keys: &["x", "leader p t"] },
     DefaultBinding { id: "proc.kill", keys: &["X", "leader p k"] },
     DefaultBinding { id: "panel.cpu", keys: &["1", "leader w c"] },
