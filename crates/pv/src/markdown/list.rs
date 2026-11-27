@@ -45,10 +45,15 @@ impl Out {
         self.bullet = None;
     }
 
-    /// The checkbox of a task list item.
+    /// The checkbox of a task list item, with two blank cells after it (the glyph is drawn wide in
+    /// most fonts, so one blank cell touches the text); the wrapped lines indent to match.
     pub(super) fn task_marker(&mut self, done: bool, cx: &ui::Context) {
         let theme = cx.theme;
         let accent = Color::from(theme.colors.accent);
-        self.bullet = Some(Span::styled(if done { "☑ " } else { "☐ " }, Style::new().fg(accent)));
+        let marker = if done { "☑  " } else { "☐  " };
+        self.bullet = Some(Span::styled(marker, Style::new().fg(accent)));
+        if let Some(pad) = self.indent.last_mut() {
+            *pad = Span::raw(" ".repeat(marker.width()));
+        }
     }
 }
