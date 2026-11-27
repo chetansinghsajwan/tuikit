@@ -14,12 +14,21 @@ fn ring_drops_the_oldest_reading_when_full() {
 }
 
 #[test]
-fn scaled_never_divides_by_less_than_the_floor() {
+fn the_peak_is_never_less_than_the_floor() {
     let mut ring = Ring::default();
     ring.push(50.0);
     ring.push(100.0);
-    assert_eq!(ring.scaled(1000.0), [0.05, 0.1]);
-    assert_eq!(ring.scaled(10.0), [0.5, 1.0]);
+    assert_eq!(ring.peak(1000.0), 1000.0);
+    assert_eq!(ring.peak(10.0), 100.0);
+}
+
+#[test]
+fn readings_scale_to_a_peak_shared_with_another_ring() {
+    let mut ring = Ring::default();
+    ring.push(50.0);
+    ring.push(100.0);
+    assert_eq!(ring.scaled_to(1000.0), [0.05, 0.1]);
+    assert_eq!(ring.scaled_to(100.0), [0.5, 1.0]);
 }
 
 #[test]

@@ -32,11 +32,15 @@ impl Ring {
         self.values.push_back(value);
     }
 
-    /// The readings as 0 to 1 for a graph, scaled by the largest reading but never by less than
-    /// `floor` (so a quiet network does not draw its noise at full height).
-    pub fn scaled(&self, floor: f32) -> Vec<f32> {
-        let max = self.values.iter().copied().fold(floor, f32::max);
-        self.values.iter().map(|v| v / max).collect()
+    /// The largest reading, but never less than `floor` (so a quiet network does not draw its noise
+    /// at full height): what the top of a graph of this ring stands for.
+    pub fn peak(&self, floor: f32) -> f32 {
+        self.values.iter().copied().fold(floor, f32::max)
+    }
+
+    /// The readings as 0 to 1 for a graph whose top stands for `peak`.
+    pub fn scaled_to(&self, peak: f32) -> Vec<f32> {
+        self.values.iter().map(|v| v / peak).collect()
     }
 
     /// The readings as they are.
@@ -101,6 +105,7 @@ pub struct Sampler {
     health: health::Watch,
     last: Instant,
     pub snapshot: Snapshot,
+    pub cpu_history: Ring,
     pub memory_history: Ring,
     pub download_history: Ring,
     pub upload_history: Ring,
@@ -127,6 +132,7 @@ impl Sampler {
             health: health::Watch::spawn(drives),
             last: Instant::now(),
             snapshot: Snapshot::default(),
+            cpu_history: Ring::default(),
             memory_history: Ring::default(),
             download_history: Ring::default(),
             upload_history: Ring::default(),
@@ -203,9 +209,14 @@ impl Sampler {
                 cpu: p.cpu_usage(),
                 memory: p.memory(),
                 status: p.status().to_string(),
+                threads: p.tasks().map(|t| t.len()),
+                read: (p.disk_usage().read_bytes as f64 / elapsed) as u64,
+                written: (p.disk_usage().written_bytes as f64 / elapsed) as u64,
+                run_time: p.run_time(),
             })
             .collect();
 
+        self.cpu_history.push(s.cpu / 100.0);
         self.memory_history.push(ratio(s.memory_used, s.memory_total));
         self.download_history.push(s.download as f32);
         self.upload_history.push(s.upload as f32);

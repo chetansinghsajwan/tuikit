@@ -1,25 +1,27 @@
 //! The monitor screen: the CPU, memory, network and process panes, and the state that is the
 //! user's (cursor, sort, filter, tree, a signal waiting for a yes).
 
-use crate::format;
 use crate::panels::{Panel, Panels};
 use crate::procs::{self, Options, Order, Row, Sort};
-use crate::sample::{Health, Sampler, Snapshot, ratio};
+use crate::sample::Sampler;
+use glide::Glide;
+use panes::process_columns;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{Event, KeyCode};
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
 use std::time::{Duration, Instant};
 use sysinfo::Signal;
 use tui_input::Input;
+use ui::Component;
 use ui::app::{Host, Navigable, Request, Screen};
 use ui::footer::{Footer, Notice};
-use ui::graph::Eased;
 use ui::prompt::Typed;
-use ui::table::{Cell, Column, Table, Width};
-use ui::{Component, Pane, graph};
+use ui::table::Table;
+
+/// The values the bars show, each gliding to the latest reading.
+mod glide;
+/// The panes, one file each.
+mod panes;
 
 /// What the footer is busy with: nothing, a filter being typed, or a signal waiting for a yes.
 enum Mode {
@@ -32,76 +34,6 @@ enum Mode {
 const GAP: u16 = 2;
 /// The cells a sensor's name takes before its bar; a longer name ends in `…`.
 const LABEL_W: usize = 12;
-
-/// A labeled amount used out of a total, drawn as two rows: the numbers, then a bar filled to
-/// `shown` (0 to 1), which glides to the true ratio.
-struct Gauge<'a> {
-    label: &'a str,
-    used: u64,
-    total: u64,
-    shown: f32,
-    /// More about it after the numbers (a disk's reads, writes and health).
-    notes: Vec<Span<'static>>,
-}
-
-impl<'a> Gauge<'a> {
-    fn new(label: &'a str, used: u64, total: u64, shown: f32) -> Self {
-        Gauge { label, used, total, shown, notes: Vec::new() }
-    }
-}
-
-/// The values the bars show, each gliding to the latest reading instead of jumping.
-#[derive(Default)]
-struct Glide {
-    cpu: Option<Eased>,
-    cores: Vec<Eased>,
-    memory: Option<Eased>,
-    swap: Option<Eased>,
-    disks: Vec<Eased>,
-}
-
-impl Glide {
-    /// Sends every bar toward the readings of `s`.
-    fn retarget(&mut self, s: &Snapshot, now: Instant) {
-        let cores: Vec<f32> = s.cores.iter().map(|c| c / 100.0).collect();
-        let disks: Vec<f32> = s.disks.iter().map(|d| ratio(d.used, d.total)).collect();
-        Self::follow(&mut self.cores, &cores, now);
-        Self::follow(&mut self.disks, &disks, now);
-        let cpu = s.cpu / 100.0;
-        self.cpu.get_or_insert(Eased::new(cpu)).set(cpu, now);
-        let memory = ratio(s.memory_used, s.memory_total);
-        self.memory.get_or_insert(Eased::new(memory)).set(memory, now);
-        let swap = ratio(s.swap_used, s.swap_total);
-        self.swap.get_or_insert(Eased::new(swap)).set(swap, now);
-    }
-
-    /// Makes `bars` as many as `targets` (new ones start at their target) and sets each target.
-    fn follow(bars: &mut Vec<Eased>, targets: &[f32], now: Instant) {
-        bars.truncate(targets.len());
-        for (i, target) in targets.iter().enumerate() {
-            match bars.get_mut(i) {
-                Some(bar) => bar.set(*target, now),
-                None => bars.push(Eased::new(*target)),
-            }
-        }
-    }
-
-    /// Whether any bar is still on its way.
-    fn is_moving(&self, now: Instant) -> bool {
-        self.cores
-            .iter()
-            .chain(&self.disks)
-            .chain(self.cpu.iter())
-            .chain(self.memory.iter())
-            .chain(self.swap.iter())
-            .any(|bar| bar.is_moving(now))
-    }
-}
-
-/// The value of bar `i` of `bars` at `now`, or `fallback` when there is no such bar.
-fn shown(bars: &[Eased], i: usize, now: Instant, fallback: f32) -> f32 {
-    bars.get(i).map_or(fallback, |bar| bar.value(now))
-}
 
 /// The monitor: readings plus what the user chose to see.
 pub struct Monitor {
@@ -197,281 +129,6 @@ impl Monitor {
         let Some(row) = rows.get(self.list.cursor()) else { return };
         let p = &self.sampler.snapshot.procs[row.index];
         self.mode = Mode::Confirm { pid: p.pid, name: p.name.clone(), signal };
-    }
-
-    /// A pane titled `title` over `area`, returning its inner area (the pane is drawn).
-    fn pane(cx: &ui::Context, buf: &mut Buffer, area: Rect, title: &str, focused: bool) -> Rect {
-        let theme = cx.theme;
-        let mut pane = Pane::new().title(title).focused(focused);
-        if let Some(icon) = theme.icons.title(title) {
-            pane = pane.icon(icon);
-        }
-        pane.draw(cx, area, buf)
-    }
-
-    /// The CPU pane: the load of the whole machine, then the cores in two columns, all as horizontal bars.
-    fn draw_cpu(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let s = &self.sampler.snapshot;
-        let title = format!(
-            "cpu {:.0}%  load {:.2} {:.2} {:.2}  up {}",
-            s.cpu,
-            s.load.0,
-            s.load.1,
-            s.load.2,
-            format::duration(s.uptime)
-        );
-        let inner = Self::pane(cx, buf, area, &title, false);
-        if inner.height == 0 || inner.width == 0 {
-            return;
-        }
-        // Horizontal bars only: the whole machine, a blank row, then the cores in two columns.
-        let total = self.glide.cpu.map_or(s.cpu / 100.0, |bar| bar.value(self.frame_time));
-        Self::draw_load(cx, buf, Rect { height: 1, ..inner }, "all", total);
-        let top = inner.y + 2;
-        let core_rows = (s.cores.len() as u16).div_ceil(2).min(inner.bottom().saturating_sub(top));
-        if core_rows == 0 {
-            return;
-        }
-        // A gap of two cells between the columns keeps a value off the next label.
-        let half = inner.width.saturating_sub(GAP) / 2;
-        for (i, load) in s.cores.iter().enumerate() {
-            let row = i as u16 % core_rows;
-            let column = i as u16 / core_rows;
-            if column > 1 {
-                break;
-            }
-            let cell = Rect {
-                x: inner.x + column * (half + GAP),
-                y: top + row,
-                width: if column == 0 { half } else { inner.width - half - GAP },
-                height: 1,
-            };
-            let ratio = shown(&self.glide.cores, i, self.frame_time, load / 100.0);
-            Self::draw_load(cx, buf, cell, &i.to_string(), ratio);
-        }
-    }
-
-    /// One load on one row: its label, a bar and its percent.
-    fn draw_load(cx: &ui::Context, buf: &mut Buffer, area: Rect, label: &str, ratio: f32) {
-        let value = format!("{:.0}%", ratio * 100.0);
-        graph::MeterRow {
-            label,
-            label_width: 3,
-            ratio,
-            value: &value,
-            value_width: 4,
-            reversed: false,
-        }
-        .render(cx, area, buf);
-    }
-
-    /// One labeled meter over two rows (the label with its numbers, then the bar); returns the row of
-    /// the next meter, after a blank one.
-    fn draw_meter(area: Rect, buf: &mut Buffer, cx: &ui::Context, y: u16, gauge: Gauge) -> u16 {
-        let theme = cx.theme;
-        let Gauge { label, used, total, shown, notes } = gauge;
-        if y + 1 >= area.bottom() {
-            return area.bottom();
-        }
-        let r = ratio(used, total);
-        let mut spans = vec![
-            Span::raw(label.to_string()),
-            Span::styled(
-                format!("  {} / {}  {:.0}%", format::bytes(used), format::bytes(total), r * 100.0),
-                Style::new().fg(theme.colors.muted.into()),
-            ),
-        ];
-        spans.extend(notes);
-        let line = Line::from(spans);
-        let row = |y| Rect { y, height: 1, ..area };
-        Paragraph::new(line).render(row(y), buf);
-        graph::meter(
-            buf,
-            row(y + 1),
-            shown,
-            |place| graph::heat(theme, place),
-            theme.colors.border.into(),
-        );
-        // A blank row before the next meter.
-        y + 3
-    }
-
-    /// The memory pane: memory, swap and every disk.
-    fn draw_memory(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let s = &self.sampler.snapshot;
-        let inner = Self::pane(cx, buf, area, "memory", false);
-        if inner.height == 0 || inner.width == 0 {
-            return;
-        }
-        let now = self.frame_time;
-        let mem_ratio = ratio(s.memory_used, s.memory_total);
-        let swap_ratio = ratio(s.swap_used, s.swap_total);
-        let memory = self.glide.memory.map_or(mem_ratio, |bar| bar.value(now));
-        let swap = self.glide.swap.map_or(swap_ratio, |bar| bar.value(now));
-        let mut y = inner.y;
-        let gauge = Gauge::new("mem", s.memory_used, s.memory_total, memory);
-        y = Self::draw_meter(inner, buf, cx, y, gauge);
-        if s.swap_total > 0 {
-            let gauge = Gauge::new("swap", s.swap_used, s.swap_total, swap);
-            y = Self::draw_meter(inner, buf, cx, y, gauge);
-        }
-        let c = &cx.theme.colors;
-        for (i, disk) in s.disks.iter().enumerate() {
-            let fallback = ratio(disk.used, disk.total);
-            let mut gauge = Gauge::new(
-                &disk.mount,
-                disk.used,
-                disk.total,
-                shown(&self.glide.disks, i, now, fallback),
-            );
-            let muted = Style::new().fg(c.muted.into());
-            gauge.notes.push(Span::styled(
-                format!("  r {}  w {}", format::rate(disk.read), format::rate(disk.written)),
-                muted,
-            ));
-            match disk.health {
-                Some(Health::Good) => gauge.notes.push(Span::styled("  healthy", muted)),
-                Some(Health::Failing) => gauge.notes.push(Span::styled(
-                    "  failing",
-                    Style::new().fg(c.error.into()).add_modifier(Modifier::BOLD),
-                )),
-                None => {}
-            }
-            y = Self::draw_meter(inner, buf, cx, y, gauge);
-        }
-    }
-
-    /// The sensors pane: the battery (a bar, whether it charges, how long it lasts), then every
-    /// temperature as a bar toward its critical point.
-    fn draw_sensors(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let s = &self.sampler.snapshot;
-        let inner = Self::pane(cx, buf, area, "sensors", false);
-        if inner.height == 0 || inner.width == 0 {
-            return;
-        }
-        let muted = Style::new().fg(cx.theme.colors.muted.into());
-        if s.battery.is_none() && s.temps.is_empty() {
-            buf.set_stringn(
-                inner.x,
-                inner.y,
-                "no sensors to read",
-                usize::from(inner.width),
-                muted,
-            );
-            return;
-        }
-        let row = |y| Rect { y, height: 1, ..inner };
-        let mut y = inner.y;
-        if let Some(b) = s.battery {
-            let value = format!("{:.0}%", b.percent);
-            graph::MeterRow {
-                label: "battery",
-                label_width: LABEL_W,
-                ratio: b.percent / 100.0,
-                value: &value,
-                value_width: 4,
-                reversed: true,
-            }
-            .render(cx, row(y), buf);
-            if y + 1 < inner.bottom() {
-                // Under a minute the estimate is noise (a battery at its end of charge).
-                let left = b
-                    .time_left
-                    .filter(|t| *t >= 60)
-                    .map(|t| format!("  {} left", format::duration(t)));
-                let text = format!("{}{}", b.charge.label(), left.unwrap_or_default());
-                buf.set_stringn(inner.x, y + 1, text, usize::from(inner.width), muted);
-            }
-            // A blank row before the temperatures.
-            y += 3;
-        }
-        for t in &s.temps {
-            if y >= inner.bottom() {
-                break;
-            }
-            let value = format!("{:.0}°", t.celsius);
-            graph::MeterRow {
-                label: &t.label,
-                label_width: LABEL_W,
-                ratio: t.celsius / t.critical.filter(|c| *c > 0.0).unwrap_or(100.0),
-                value: &value,
-                value_width: 4,
-                reversed: false,
-            }
-            .render(cx, row(y), buf);
-            y += 1;
-        }
-    }
-
-    /// The network pane: download over upload, each a label and a history graph.
-    fn draw_network(&self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
-        let s = &self.sampler.snapshot;
-        let inner = Self::pane(cx, buf, area, "network", false);
-        if inner.height < 2 || inner.width == 0 {
-            return;
-        }
-        let half = inner.height / 2;
-        let parts = [
-            ("▼", s.download, &self.sampler.download_history, theme.colors.info),
-            ("▲", s.upload, &self.sampler.upload_history, theme.colors.accent),
-        ];
-        for (n, (sign, now, history, color)) in parts.into_iter().enumerate() {
-            let top = inner.y + n as u16 * half;
-            let height = if n == 0 { half } else { inner.bottom() - top };
-            let label = format!("{sign} {}", format::rate(now));
-            buf.set_string(inner.x, top, label, Style::new().fg(color.into()));
-            let graph_area = Rect { y: top + 1, height: height - 1, ..inner };
-            graph::history(buf, graph_area, &history.scaled(4096.0), |_| color.into());
-        }
-    }
-
-    /// The process pane: a header, then the rows with the cursor.
-    fn draw_procs(&mut self, area: Rect, buf: &mut Buffer, cx: &ui::Context) {
-        let theme = cx.theme;
-        let rows = self.rows();
-        let columns = process_columns();
-        let title = format!(
-            "processes {}  by {}{}{}",
-            rows.len(),
-            self.order().sort.label(),
-            if self.list.is_sort_reversed(&columns) { " reversed" } else { "" },
-            if self.options.filter.is_empty() {
-                String::new()
-            } else {
-                format!("  filter {}", self.options.filter)
-            }
-        );
-        let pane = Pane::new().title(&title).focused(true);
-        let inner = pane.draw(cx, area, buf);
-        if inner.height < 2 {
-            return;
-        }
-        let procs = &self.sampler.snapshot.procs;
-        let row = |i: usize| {
-            let p = &procs[rows[i].index];
-            let cpu_color = graph::heat(theme, p.cpu / 100.0);
-            // The row keeps its identity (the pid) and never flashes when the numbers change.
-            ui::table::Row {
-                id: u64::from(p.pid) + 1,
-                content: 1,
-                cells: vec![
-                    Cell::from(p.pid.to_string()),
-                    Cell::from(p.name.clone()),
-                    Cell::from(Span::styled(format!("{:.1}", p.cpu), Style::new().fg(cpu_color))),
-                    Cell::from(format::bytes(p.memory)),
-                    Cell::from(p.status.clone()),
-                ],
-                ..ui::table::Row::default()
-            }
-        };
-        self.list
-            .view(rows.len(), &columns, row)
-            .header(true)
-            .tree(|i| rows[i].depth)
-            .pane(area)
-            .focused(true)
-            .render(cx, inner, buf);
     }
 
     /// The footer line: a prompt, a question, a message, or the hints.
@@ -631,25 +288,6 @@ impl Screen for Monitor {
     }
 }
 
-/// The columns of the process list. The sort moves through them in this order, each in the direction it
-/// starts in (load largest first, pid and name smallest first); the right ones drop first when narrow.
-fn process_columns() -> Vec<Column> {
-    let sortable = |c: Column, sort: Sort| c.sortable(sort.is_descending());
-    vec![
-        sortable(Column::new("pid", "PID", Width::Fixed(7)).right().muted(), Sort::Pid),
-        sortable(Column::new("name", "NAME", Width::Flex(1)).min(12), Sort::Name),
-        sortable(
-            Column::new("cpu", "CPU%", Width::Fixed(5)).right().muted().priority(1),
-            Sort::Cpu,
-        ),
-        sortable(
-            Column::new("mem", "MEM", Width::Fixed(7)).right().muted().priority(2),
-            Sort::Memory,
-        ),
-        Column::new("state", "STATE", Width::Fixed(8)).muted().priority(3),
-    ]
-}
-
 /// The process rows are what the shared movement walks.
 /// Every move also notes the process the cursor lands on, so it stays on it as the list changes.
 impl Navigable for Monitor {
@@ -672,3 +310,7 @@ impl Navigable for Monitor {
         self.remember(&self.rows());
     }
 }
+
+/// Tests for the monitor screen.
+#[cfg(test)]
+mod tests;

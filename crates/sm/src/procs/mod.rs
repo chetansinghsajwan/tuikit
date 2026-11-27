@@ -15,6 +15,13 @@ pub struct Proc {
     /// Resident memory, in bytes.
     pub memory: u64,
     pub status: String,
+    /// How many threads it runs, when the platform says.
+    pub threads: Option<usize>,
+    /// Bytes per second it reads from and writes to disk.
+    pub read: u64,
+    pub written: u64,
+    /// Seconds since it started.
+    pub run_time: u64,
 }
 
 /// What the list is ordered by.
