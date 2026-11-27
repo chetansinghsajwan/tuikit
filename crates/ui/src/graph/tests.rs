@@ -116,7 +116,7 @@ fn meter_colors_each_cell_by_its_place() {
 }
 
 #[test]
-fn history_colors_each_column_by_its_value() {
+fn history_colors_a_one_row_column_by_its_value() {
     let area = Rect::new(0, 0, 2, 1);
     let mut buf = Buffer::empty(area);
     history(&mut buf, area, &[0.2, 0.9], |v| if v < 0.5 { Color::Green } else { Color::Red });
@@ -174,13 +174,13 @@ fn an_unavailable_meter_row_is_an_empty_track_and_a_muted_value() {
 }
 
 #[test]
-fn history_pair_blends_where_both_overlap_and_keeps_the_taller_color_above() {
+fn history_pair_colors_the_overlap_apart_and_keeps_the_taller_color_above() {
     let area = Rect::new(0, 0, 1, 2);
     let mut buf = Buffer::empty(area);
-    let (a, b) = (Color::Rgb(200, 0, 0), Color::Rgb(0, 0, 200));
-    history_pair(&mut buf, area, (&[1.0], &[0.5]), (a, b));
+    let (a, b, both) = (Color::Rgb(200, 0, 0), Color::Rgb(0, 0, 200), Color::Rgb(255, 255, 255));
+    history_pair(&mut buf, area, (&[1.0], &[0.5]), (a, b, both));
     assert_eq!(buf[(0, 1)].symbol(), "█");
-    assert_eq!(buf[(0, 1)].fg, Color::Rgb(100, 0, 100), "both fill the lower cell");
+    assert_eq!(buf[(0, 1)].fg, both, "both fill the lower cell");
     assert_eq!(buf[(0, 0)].symbol(), "█");
     assert_eq!(buf[(0, 0)].fg, a, "only the taller one reaches the upper cell");
 }
@@ -189,7 +189,12 @@ fn history_pair_blends_where_both_overlap_and_keeps_the_taller_color_above() {
 fn history_pair_draws_a_series_alone_in_its_own_color() {
     let area = Rect::new(0, 0, 2, 1);
     let mut buf = Buffer::empty(area);
-    history_pair(&mut buf, area, (&[0.5, 0.0], &[0.0, 1.0]), (Color::Red, Color::Blue));
+    history_pair(
+        &mut buf,
+        area,
+        (&[0.5, 0.0], &[0.0, 1.0]),
+        (Color::Red, Color::Blue, Color::White),
+    );
     assert_eq!(buf[(0, 0)].symbol(), "▄");
     assert_eq!(buf[(0, 0)].fg, Color::Red);
     assert_eq!(buf[(1, 0)].symbol(), "█");
@@ -197,16 +202,97 @@ fn history_pair_draws_a_series_alone_in_its_own_color() {
 }
 
 #[test]
-fn axis_labels_the_top_and_bottom_and_returns_the_graph_area() {
+fn axis_labels_the_top_the_middle_and_the_bottom_and_returns_the_graph_area() {
     let theme = Theme::default();
     let cx = crate::Context::new(&theme);
-    let area = Rect::new(0, 0, 12, 3);
+    let area = Rect::new(0, 0, 12, 5);
     let mut buf = Buffer::empty(area);
-    let rest = axis(&cx, &mut buf, area, "1.2M/s", "0");
-    assert_eq!(rest, Rect::new(7, 0, 5, 3));
-    let top: String = (0..6).map(|x| buf[(x, 0)].symbol().to_string()).collect();
-    assert_eq!(top, "1.2M/s");
-    assert_eq!(buf[(5, 2)].symbol(), "0", "right aligned under the top label");
+    let ticks = [(1.0, "1.2M/s"), (0.5, "600K/s"), (0.0, "0")];
+    let rest = axis(&cx, &mut buf, area, &ticks);
+    assert_eq!(rest, Rect::new(7, 0, 5, 5));
+    let row = |y| (0..6).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>();
+    assert_eq!(row(0), "1.2M/s");
+    assert_eq!(row(2), "600K/s");
+    assert_eq!(buf[(5, 4)].symbol(), "0", "right aligned under the others");
     let narrow = Rect::new(0, 0, 8, 3);
-    assert_eq!(axis(&cx, &mut buf, narrow, "1.2M/s", "0"), narrow, "no room: no scale");
+    assert_eq!(axis(&cx, &mut buf, narrow, &ticks), narrow, "no room: no scale");
+}
+
+#[test]
+fn a_short_axis_keeps_the_top_and_drops_the_tick_that_shares_its_row() {
+    let theme = Theme::default();
+    let cx = crate::Context::new(&theme);
+    let area = Rect::new(0, 0, 12, 1);
+    let mut buf = Buffer::empty(area);
+    axis(&cx, &mut buf, area, &[(1.0, "100%"), (0.0, "0")]);
+    assert_eq!(buf[(0, 0)].symbol(), "1");
+    assert_eq!(buf[(3, 0)].symbol(), "%");
+}
+
+#[test]
+fn a_scale_steps_up_to_the_next_round_value() {
+    let steps = [1.0, 5.0, 10.0, 50.0];
+    assert_eq!(step_up(&steps, 0.0), 1.0);
+    assert_eq!(step_up(&steps, 5.0), 5.0);
+    assert_eq!(step_up(&steps, 5.1), 10.0);
+    assert_eq!(step_up(&steps, 500.0), 50.0, "beyond the last step it stays on it");
+}
+
+#[test]
+fn a_reading_takes_the_heat_color_of_its_load() {
+    let theme = Theme::default();
+    assert_eq!(reading(&theme, "90", 0.0).style.fg, Some(heat(&theme, 0.0)));
+    assert_eq!(reading(&theme, "90", 1.0).style.fg, Some(heat(&theme, 1.0)));
+    assert_eq!(reading(&theme, "90", 1.0).content, "90");
+}
+
+#[test]
+fn history_runs_the_gradient_up_every_column_whatever_its_height() {
+    let area = Rect::new(0, 0, 2, 4);
+    let mut buf = Buffer::empty(area);
+    let level = |l: f32| {
+        if l <= 0.25 {
+            Color::Green
+        } else if l <= 0.75 {
+            Color::Yellow
+        } else {
+            Color::Red
+        }
+    };
+    history(&mut buf, area, &[1.0, 0.5], level);
+    let column = |x| (0..4).map(|y| buf[(x, y)].fg).collect::<Vec<_>>();
+    assert_eq!(
+        column(0),
+        [Color::Red, Color::Yellow, Color::Yellow, Color::Green],
+        "full: foot to top"
+    );
+    assert_eq!(
+        column(1),
+        [Color::Reset, Color::Reset, Color::Yellow, Color::Green],
+        "half: cut at its value"
+    );
+}
+
+#[test]
+fn the_overlap_color_differs_from_both_series_and_from_their_blend() {
+    let (a, b, light) = (Color::Rgb(200, 0, 0), Color::Rgb(0, 0, 200), Color::Rgb(240, 240, 240));
+    let both = overlap_color(a, b, light);
+    assert_ne!(both, a);
+    assert_ne!(both, b);
+    assert_ne!(both, crate::theme::mix(b, a, 50));
+}
+
+#[test]
+fn a_cell_both_series_end_in_shows_the_overlap_when_it_is_most_of_it() {
+    let area = Rect::new(0, 0, 1, 1);
+    let (a, b, both) = (Color::Red, Color::Blue, Color::White);
+    let mut buf = Buffer::empty(area);
+    history_pair(&mut buf, area, (&[0.75], &[0.625]), (a, b, both));
+    assert_eq!((buf[(0, 0)].symbol(), buf[(0, 0)].fg), ("▆", both));
+    history_pair(&mut buf, area, (&[0.75], &[0.125]), (a, b, both));
+    assert_eq!(
+        (buf[(0, 0)].symbol(), buf[(0, 0)].fg),
+        ("▆", a),
+        "a sliver of overlap: the taller's own"
+    );
 }

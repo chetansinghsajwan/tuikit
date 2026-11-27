@@ -5,9 +5,12 @@
 mod axis;
 /// Two histories drawn as one graph.
 mod pair;
+/// Round values for the top of a graph.
+mod scale;
 
 pub use axis::axis;
-pub use pair::history_pair;
+pub use pair::{history_pair, overlap_color};
+pub use scale::step_up;
 
 use crate::anim;
 use crate::component::{Component, Context};
@@ -15,6 +18,7 @@ use crate::theme::{Theme, mix};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
+use ratatui::text::Span;
 use std::time::{Duration, Instant};
 
 /// How long a bar takes to glide to a new value.
@@ -36,6 +40,12 @@ pub fn heat(theme: &Theme, load: f32) -> Color {
         _ if share < 0.5 => from,
         _ => to,
     }
+}
+
+/// `text` as a span in the heat color of `load` (0 to 1): a number that measures a load, colored by
+/// how hot it is like the bar beside it.
+pub fn reading(theme: &Theme, text: impl Into<String>, load: f32) -> Span<'static> {
+    Span::styled(text.into(), Style::new().fg(heat(theme, load)))
 }
 
 /// A value that glides to each new target instead of jumping, for bars that are fed a reading now and
@@ -101,8 +111,9 @@ pub fn filled_eighths(value: f32, height: u16) -> usize {
 
 /// Draws `values` (each 0 to 1, oldest first) as columns in `area`, the newest at the right edge.
 /// Older values that do not fit are dropped; when there are fewer values than columns the left
-/// part stays empty. `color` gives the color of a column from its value (`heat` for a gradient, a
-/// constant for a flat color).
+/// part stays empty. `color` gives the color of a cell from the level it reaches in the graph, 0 at
+/// the bottom edge to 1 at the top (`heat` makes every column the same gradient, green at the foot
+/// to red at the top, cut where its value ends; a constant gives a flat color).
 pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: impl Fn(f32) -> Color) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -118,7 +129,9 @@ pub fn history(buf: &mut Buffer, area: Rect, values: &[f32], color: impl Fn(f32)
             if here == 0 {
                 break;
             }
-            buf[(x, y)].set_char(glyph(here)).set_style(Style::new().fg(color(*value)));
+            let level =
+                (usize::from(row) * 8 + here) as f32 / (usize::from(area.height) * 8) as f32;
+            buf[(x, y)].set_char(glyph(here)).set_style(Style::new().fg(color(level)));
             left -= here;
         }
     }

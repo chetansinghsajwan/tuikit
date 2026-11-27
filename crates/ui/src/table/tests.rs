@@ -198,22 +198,6 @@ fn the_header_lines_up_with_the_rows_and_marks_the_sort() {
 }
 
 #[test]
-fn a_filled_cell_tints_its_cells_from_the_left_up_to_its_share() {
-    let columns = vec![Column::new("cpu", "CPU", Width::Fixed(4)).right()];
-    let mut table = Table::new();
-    let theme = Theme::default();
-    let motion = crate::anim::Motion::new();
-    let area = Rect::new(0, 0, 4, 1);
-    let mut buf = Buffer::empty(area);
-    let row = |_| Row::new(vec![Cell::from("50").right().filled(0.5)]);
-    table.view(1, &columns, row).render(&Context::with_motion(&theme, &motion), area, &mut buf);
-    let bg = |x| buf[(x, 0)].bg;
-    assert_ne!(bg(0), bg(3), "the left half is tinted");
-    assert_ne!(bg(1), bg(3));
-    assert_eq!(bg(2), bg(3), "the right half is the row's own background");
-}
-
-#[test]
 fn a_name_shrinks_before_what_sits_beside_it() {
     let cell =
         Cell::new(vec![Span::raw("> "), Span::raw("a-long-name"), Span::raw(" 12")]).shrinking(1);
