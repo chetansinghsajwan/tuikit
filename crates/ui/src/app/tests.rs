@@ -238,13 +238,17 @@ fn the_help_lists_the_shared_and_the_own_actions() {
     }
 }
 
+/// An id used twice is reported by `Commands::problems`, which the dispatcher turns into a panic at
+/// startup. The test reads the report and does not panic: a panic that unwinds through the shell's
+/// frames aborts the test process on macOS ("failed to initiate panic").
 #[test]
-#[should_panic(expected = "registered twice")]
-fn an_action_id_registered_twice_fails_at_startup() {
+fn an_action_id_registered_twice_is_reported() {
     const CLASH: &[Action] = &[Action { id: "nav.up", name: "up", desc: "again", basic: false }];
     const KEYS: &[DefaultBinding] = &[DefaultBinding { id: "nav.up", keys: &["x"] }];
-    let mut s = Fake::default();
-    let _ = Shell::new("fake").commands(Commands::of(CLASH, KEYS)).dispatcher(&mut s);
+    let mut set = Commands::of(CLASH, KEYS);
+    assert!(set.problems().is_empty());
+    set.add(CLASH, &[]);
+    assert_eq!(set.problems(), ["duplicate action nav.up"]);
 }
 
 #[test]
